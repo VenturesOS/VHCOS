@@ -69,6 +69,7 @@ function App() {
           <Route path="/recruiter" element={<DashboardLayout allowedRoles={["recruiter"]} />}>
             <Route index element={<RecruiterDashboard />} />
             <Route path="jobs" element={<RecruiterJobsPage />} />
+            <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="pipeline" element={<PipelinePage />} />
             <Route path="candidates" element={<RecruiterCandidatesPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
