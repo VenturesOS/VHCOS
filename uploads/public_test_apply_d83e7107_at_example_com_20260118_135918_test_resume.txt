@@ -1,0 +1,16 @@
+Test resume for VHC Talent OS
+Name: John Test Candidate
+Email: testpublic@example.com
+Phone: +91 9876543210
+Location: New Delhi, India
+
+Skills: Python, JavaScript, React, Node.js, MongoDB, FastAPI
+
+Experience:
+- Software Engineer at Tech Corp (2020-2023)
+  - Built web applications using React and Node.js
+  - Implemented REST APIs with FastAPI
+  
+Education:
+- B.Tech Computer Science, IIT Delhi (2016-2020)
+
