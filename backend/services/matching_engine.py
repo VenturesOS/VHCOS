@@ -30,7 +30,7 @@ async def parse_resume_with_ai(resume_text: str) -> Dict:
     Returns structured candidate data.
     """
     try:
-        chat = get_chat_client()
+        chat = get_chat_client("You are an expert resume parser. Extract structured data from resumes accurately.")
         
         prompt = f"""Parse the following resume and extract structured data. Return ONLY valid JSON with this exact structure:
 {{
@@ -63,7 +63,7 @@ async def parse_resume_with_ai(resume_text: str) -> Dict:
 Resume text:
 {resume_text[:8000]}"""  # Limit to 8000 chars
         
-        response = await chat.send_message_async(
+        response = chat.send_message(
             message=UserMessage(content=prompt)
         )
         
@@ -94,7 +94,7 @@ async def parse_job_description_with_ai(jd_text: str) -> Dict:
     Parse job description using GPT-5.2 to extract structured requirements.
     """
     try:
-        chat = get_chat_client()
+        chat = get_chat_client("You are an expert job description parser. Extract structured requirements accurately.")
         
         prompt = f"""Parse the following job description and extract structured requirements. Return ONLY valid JSON with this exact structure:
 {{
@@ -116,7 +116,7 @@ async def parse_job_description_with_ai(jd_text: str) -> Dict:
 Job Description:
 {jd_text[:8000]}"""
         
-        response = await chat.send_message_async(
+        response = chat.send_message(
             message=UserMessage(content=prompt)
         )
         
@@ -159,7 +159,7 @@ async def calculate_candidate_job_match(
                     "explanation": f"Candidate excluded: {filter_result['reason']}"
                 }
         
-        chat = get_chat_client()
+        chat = get_chat_client("You are an expert recruiter AI that evaluates candidate-job fit.")
         
         prompt = f"""Analyze the match between this candidate and job. Return ONLY valid JSON:
 
@@ -190,7 +190,7 @@ Return JSON:
     "explanation": "2-3 sentence explanation of the match"
 }}"""
         
-        response = await chat.send_message_async(
+        response = chat.send_message(
             message=UserMessage(content=prompt)
         )
         
