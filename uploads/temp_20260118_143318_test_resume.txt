@@ -1,0 +1,20 @@
+John Doe
+Software Engineer
+johndoe@example.com
++91 9876543210
+
+SKILLS:
+Python, JavaScript, React, Node.js, MongoDB, FastAPI
+
+EXPERIENCE:
+Senior Software Engineer at TechCorp (2022-Present)
+- 3 years
+- Led development of microservices architecture
+
+Junior Developer at StartupABC (2019-2022)
+- 3 years
+- Developed frontend using React
+
+EDUCATION:
+B.Tech in Computer Science - IIT Delhi (2019)
+
