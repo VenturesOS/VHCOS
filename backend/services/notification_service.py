@@ -332,12 +332,22 @@ async def trigger_job_notifications_background(
     # Get all candidates from data bank who have alerts enabled
     candidates_with_alerts = []
     async for alert in db.job_alerts.find({"is_active": True, "email_enabled": True}, {"_id": 0}):
-        candidate = await db.candidate_bank.find_one({"id": alert["candidate_id"]}, {"_id": 0})
+        # Try to find candidate by multiple criteria
+        candidate = await db.candidate_bank.find_one({
+            "$or": [
+                {"id": alert["candidate_id"]},
+                {"linked_user_id": alert["candidate_id"]},
+                {"email": alert.get("candidate_email")}
+            ]
+        }, {"_id": 0})
+        
         if candidate:
             candidates_with_alerts.append({
                 "candidate": candidate,
                 "alert": alert
             })
+        else:
+            logger.debug(f"[NOTIFY-BG] No candidate bank record for alert subscriber: {alert.get('candidate_email')}")
     
     if not candidates_with_alerts:
         logger.info(f"[NOTIFY-BG] No candidates with active alerts")
