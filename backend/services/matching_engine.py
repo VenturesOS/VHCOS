@@ -127,11 +127,20 @@ async def parse_job_description_with_ai(jd_text: str) -> Dict:
 Job Description:
 {jd_text[:8000]}"""
         
-        response = chat.send_message(
-            message=UserMessage(content=prompt)
+        logger.info(f"[JD PARSE] Sending prompt to GPT-5.2, length: {len(prompt)}")
+        
+        response = await chat.send_message(
+            message=UserMessage(text=prompt)
         )
         
-        response_text = response.content.strip()
+        logger.info(f"[JD PARSE] Raw LLM response: {response[:500] if response else 'EMPTY'}")
+        
+        # Response is the text directly
+        response_text = response.strip() if response else ""
+        
+        if not response_text:
+            logger.error("[JD PARSE] LLM returned empty response!")
+            return {"success": False, "error": "LLM returned empty response"}
         
         if "```json" in response_text:
             json_str = response_text.split("```json")[1].split("```")[0]
@@ -140,11 +149,17 @@ Job Description:
         else:
             json_str = response_text
         
+        logger.info(f"[JD PARSE] Extracted JSON string: {json_str[:300] if json_str else 'EMPTY'}")
+        
         parsed = json.loads(json_str.strip())
+        logger.info(f"[JD PARSE] Successfully parsed JSON with keys: {list(parsed.keys())}")
         return {"success": True, "data": parsed}
         
+    except json.JSONDecodeError as e:
+        logger.error(f"[JD PARSE] JSON parse error: {e}")
+        return {"success": False, "error": f"Failed to parse AI response: {str(e)}"}
     except Exception as e:
-        logger.error(f"JD parsing error: {e}")
+        logger.error(f"[JD PARSE] Error: {type(e).__name__}: {e}")
         return {"success": False, "error": str(e)}
 
 
