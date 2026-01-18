@@ -7,6 +7,7 @@ import json
 import hashlib
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone
+import uuid
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import logging
 
@@ -15,11 +16,12 @@ logger = logging.getLogger(__name__)
 # Initialize Emergent LLM
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
-def get_chat_client():
+def get_chat_client(system_msg: str = "You are an expert recruiter AI that extracts structured data from text."):
     """Get Emergent Chat client for GPT-5.2"""
     return LlmChat(
         api_key=EMERGENT_KEY,
-        model="gpt-5.2"
+        session_id=str(uuid.uuid4()),
+        system_message=system_msg
     )
 
 async def parse_resume_with_ai(resume_text: str) -> Dict:
