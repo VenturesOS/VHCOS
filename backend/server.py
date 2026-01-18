@@ -186,6 +186,23 @@ class ApplicationUpdate(BaseModel):
     stage: Optional[str] = None
     rejection_reason: Optional[str] = None  # For tracking why rejected/not qualified
 
+class ApplicationDetailUpdate(BaseModel):
+    """Model for controlled editing of applicant details by Admin/Employer/Recruiter"""
+    current_salary: Optional[int] = None  # INR
+    notice_period: Optional[str] = None
+    skills: Optional[List[str]] = None
+    experience_summary: Optional[str] = None  # Brief summary of experience
+
+class AuditLogEntry(BaseModel):
+    """Audit log entry for tracking changes"""
+    field: str
+    old_value: Optional[Any] = None
+    new_value: Optional[Any] = None
+    updated_by_id: str
+    updated_by_name: str
+    updated_by_role: str
+    timestamp: str
+
 class NoteCreate(BaseModel):
     content: str
 
