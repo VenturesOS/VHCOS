@@ -218,6 +218,92 @@ class MessageResponse(BaseModel):
     is_read: bool = False
     created_at: str
 
+# ============== CANDIDATE DATA BANK MODELS ==============
+
+class CandidateBankRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    email: str
+    name: str
+    phone: Optional[str] = None
+    phone_normalized: Optional[str] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    skills: List[str] = []
+    experience_years: int = 0
+    experience: List[dict] = []
+    education: List[dict] = []
+    location: Optional[str] = None
+    certifications: List[str] = []
+    active_resume_id: Optional[str] = None
+    resume_versions: List[dict] = []
+    resume_fingerprints: List[str] = []
+    source: str = "self"  # self, employer, recruiter, parsing
+    linked_user_id: Optional[str] = None
+    visibility: dict = {}  # employer_ids, recruiter_ids with access
+    match_cache: List[dict] = []  # cached match results
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+    last_updated_by: Optional[str] = None
+
+class CandidateBankUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    skills: Optional[List[str]] = None
+    experience_years: Optional[int] = None
+    experience: Optional[List[dict]] = None
+    education: Optional[List[dict]] = None
+    location: Optional[str] = None
+    certifications: Optional[List[str]] = None
+
+class AuditLogEntry(BaseModel):
+    id: str
+    candidate_id: str
+    field_changed: str
+    old_value: Any
+    new_value: Any
+    updated_by_role: str
+    updated_by_id: str
+    updated_by_name: str
+    timestamp: str
+    source: str  # self_update, employer_update, recruiter_update, resume_parsing
+
+class MatchRequest(BaseModel):
+    job_id: Optional[str] = None
+    jd_text: Optional[str] = None
+    must_have_location: Optional[str] = None
+    must_have_qualification: Optional[str] = None
+    must_have_skills: Optional[List[str]] = None
+    min_experience: Optional[int] = None
+    max_experience: Optional[int] = None
+
+class MatchResult(BaseModel):
+    candidate_id: str
+    candidate_name: str
+    candidate_email: str
+    score: int
+    skill_match_score: Optional[int] = None
+    experience_match_score: Optional[int] = None
+    matched_skills: List[str] = []
+    missing_skills: List[str] = []
+    strengths: List[str] = []
+    gaps: List[str] = []
+    explanation: str
+    filtered_out: bool = False
+    filter_reason: Optional[str] = None
+
+class JobMatchForCandidate(BaseModel):
+    job_id: str
+    job_title: str
+    company_name: Optional[str] = None
+    location: str
+    score: int
+    explanation: str
+    matched_skills: List[str] = []
+
 # ============== HELPERS ==============
 
 def hash_password(password: str) -> str:
