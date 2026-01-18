@@ -1,0 +1,190 @@
+{
+  "identity": {
+    "persona": "E1: The Anti-AI Designer",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is King",
+      "Zoom In",
+      "Negative Space",
+      "Contrast"
+    ],
+    "anti_patterns": [
+      "Purple/Teal CTA defaults",
+      "Inter everywhere (for headings)",
+      "Center-Everything Disease",
+      "Gradient Overload"
+    ]
+  },
+  "project_info": {
+    "name": "VHC Talent OS",
+    "description": "A production-ready recruitment portal with role-based access for Admin, Recruiter, Employer, and Candidate.",
+    "app_type": "SaaS Dashboard",
+    "target_audience": "HR professionals, recruiters, employers, job seekers (Enterprise B2B)",
+    "emotional_tone": "Clean, Neutral, Professional, Trust-oriented, Efficient"
+  },
+  "design_system": {
+    "theme": "light",
+    "typography": {
+      "font_family": {
+        "headings": "Manrope, sans-serif",
+        "body": "Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "weights": {
+        "light": 300,
+        "regular": 400,
+        "medium": 500,
+        "semibold": 600,
+        "bold": 700,
+        "black": 900
+      },
+      "usage": {
+        "h1": "text-4xl md:text-5xl font-bold tracking-tight text-slate-900 font-heading",
+        "h2": "text-3xl font-semibold tracking-tight text-slate-900 font-heading",
+        "h3": "text-2xl font-semibold text-slate-900 font-heading",
+        "body": "text-base text-slate-600 leading-relaxed font-body",
+        "small": "text-sm text-slate-500 font-body",
+        "label": "text-xs font-medium uppercase tracking-wider text-slate-500 font-body"
+      }
+    },
+    "colors": {
+      "brand": {
+        "primary": "#7CB342",
+        "primary_hover": "#689F38",
+        "secondary": "#9ACD32",
+        "accent": "#DCFCE7"
+      },
+      "neutral": {
+        "background": "#F8FAFC",
+        "surface": "#FFFFFF",
+        "border": "#E2E8F0",
+        "text_primary": "#0F172A",
+        "text_secondary": "#64748B",
+        "text_tertiary": "#94A3B8"
+      },
+      "semantic": {
+        "success": "#22C55E",
+        "warning": "#F59E0B",
+        "error": "#EF4444",
+        "info": "#3B82F6"
+      },
+      "palette_name": "Organic Enterprise"
+    },
+    "spacing": {
+      "base_scale": "4px",
+      "container_padding": "p-6 md:p-8 lg:p-12",
+      "section_gap": "gap-8 md:gap-12",
+      "component_gap": "gap-4"
+    },
+    "shadows": {
+      "card": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+      "card_hover": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+      "dropdown": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)"
+    },
+    "radius": {
+      "default": "0.5rem",
+      "card": "0.75rem",
+      "button": "0.5rem",
+      "input": "0.5rem"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#7CB342] hover:bg-[#689F38] text-white font-medium shadow-sm transition-all active:scale-95",
+      "secondary": "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm",
+      "ghost": "hover:bg-slate-100 text-slate-600 hover:text-slate-900",
+      "destructive": "bg-red-500 text-white hover:bg-red-600 shadow-sm"
+    },
+    "cards": {
+      "base": "bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200",
+      "dashboard_widget": "flex flex-col p-6 h-full justify-between bg-white border border-slate-100 shadow-sm rounded-xl"
+    },
+    "inputs": {
+      "base": "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7CB342] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    },
+    "navigation": {
+      "sidebar": "w-64 bg-white border-r border-slate-200 h-screen fixed left-0 top-0 flex flex-col z-40",
+      "sidebar_item": "flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-600 rounded-lg hover:bg-slate-50 hover:text-[#7CB342] transition-colors",
+      "sidebar_item_active": "bg-[#DCFCE7] text-[#7CB342]"
+    },
+    "kanban": {
+      "board": "flex h-full gap-6 overflow-x-auto p-6 bg-slate-50/50",
+      "column": "flex flex-col w-80 shrink-0 gap-4",
+      "column_header": "flex items-center justify-between px-1 py-2 font-semibold text-slate-700",
+      "card": "bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-all group relative"
+    }
+  },
+  "layout_strategies": {
+    "dashboard_grid": {
+      "type": "Bento Grid",
+      "classes": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+      "rules": "Use col-span-2 for main charts, col-span-1 for stats. Ensure full height alignment."
+    },
+    "page_structure": {
+      "wrapper": "min-h-screen bg-[#F8FAFC]",
+      "main_content": "pl-64 transition-all duration-300"
+    }
+  },
+  "assets": {
+    "logo": {
+      "url": "https://customer-assets.emergentagent.com/job_hire-hub-33/artifacts/umsjvfj8_VHC_logo-removebg_edited_edited.png",
+      "alt": "VHC Talent OS Logo"
+    },
+    "images": {
+      "office_team": [
+        "https://images.unsplash.com/photo-1760611656007-f767a8082758?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBvZmZpY2UlMjB0ZWFtJTIwbWVldGluZ3xlbnwwfHx8fDE3Njg3MjI5NjB8MA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1758518725921-1eb74ed293be?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBvZmZpY2UlMjB0ZWFtJTIwbWVldGluZ3xlbnwwfHx8fDE3Njg3MjI5NjB8MA&ixlib=rb-4.1.0&q=85"
+      ],
+      "recruitment": [
+        "https://images.unsplash.com/photo-1758520144437-f068ecaf0d83?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjByZWNydWl0ZXIlMjBpbnRlcnZpZXd8ZW58MHx8fHwxNzY4NzIyOTYyfDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1758520144427-ddb02ac74e9d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjByZWNydWl0ZXIlMjBpbnRlcnZpZXd8ZW58MHx8fHwxNzY4NzIyOTYyfDA&ixlib=rb-4.1.0&q=85"
+      ],
+      "diverse_team": [
+        "https://images.unsplash.com/photo-1739298061757-7a3339cee982?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwxfHxkaXZlcnNlJTIwYnVzaW5lc3MlMjB0ZWFtJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY4NzIyOTY1fDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1758518731468-98e90ffd7430?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwyfHxkaXZlcnNlJTIwYnVzaW5lc3MlMjB0ZWFtJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY4NzIyOTY1fDA&ixlib=rb-4.1.0&q=85"
+      ]
+    },
+    "icons": "lucide-react"
+  },
+  "tech_stack": {
+    "frontend": "React",
+    "styling": "Tailwind CSS",
+    "components": "Shadcn UI",
+    "backend": "FastAPI",
+    "database": "MongoDB"
+  },
+  "instructions_to_main_agent": [
+    "Install 'lucide-react' for icons.",
+    "Install 'recharts' for dashboard charts.",
+    "Install 'react-beautiful-dnd' or '@hello-pangea/dnd' for Kanban board.",
+    "Use 'Manrope' font for all headings (h1-h3) and 'Inter' for body text.",
+    "Implement the Sidebar as a fixed component on the left.",
+    "Use the 'Bento Grid' layout for the Dashboard Overview.",
+    "Ensure all interactive elements have hover states defined in the 'components' section.",
+    "Use the provided Logo URL in the sidebar header.",
+    "Strictly follow the color palette. Do not use default Tailwind blues/indigos.",
+    "Add 'data-testid' to all interactive elements."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: 'transition: all'. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add '.App { text-align: center; }' in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use 'sonner' for toasts. Sonner component are located in '/app/src/components/ui/sonner.tsx'"
+  ]
+}
