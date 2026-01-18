@@ -51,13 +51,21 @@ export default function JobApplicantsPage() {
     }
   }, [jobId]);
 
-  const loadApplicants = async () => {
+  const loadApplicants = async (updateSelectedId = null) => {
     setLoading(true);
     try {
       const res = await jobAPI.getApplicants(jobId);
       setJobData(res.data.job);
       setApplicants(res.data.applicants);
       setStageCounts(res.data.stage_counts);
+      
+      // If we have a selected applicant, update it with fresh data
+      if (updateSelectedId) {
+        const updatedApplicant = res.data.applicants.find(a => a.id === updateSelectedId);
+        if (updatedApplicant) {
+          setSelectedApplicant(updatedApplicant);
+        }
+      }
     } catch (error) {
       toast.error('Failed to load applicants');
       console.error(error);
