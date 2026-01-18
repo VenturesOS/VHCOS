@@ -59,6 +59,7 @@ function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="jobs" element={<AdminJobsPage />} />
+            <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="candidates" element={<AdminCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="companies" element={<CompaniesPage />} />
