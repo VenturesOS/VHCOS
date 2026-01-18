@@ -5,6 +5,14 @@ Build a production-ready recruitment portal called VHC Talent OS with role-based
 
 ## Phase-1 Status: ✅ OPERATIONALLY COMPLETE
 
+### Public Website Integration (Complete - January 18, 2026)
+- ✅ **Public Careers Page** (`/website/careers.html`): Dynamic job listings from backend
+- ✅ **Public Jobs API** (`/api/public/jobs`): No auth required, with search/filter
+- ✅ **Public Apply Flow** (`/api/public/apply`): No login required, resume parsed by AI
+- ✅ **Talent Pool Upload** (`/api/public/upload-resume`): Join talent pool without applying
+- ✅ **Login Dropdown**: Employer, Recruiter, Candidate (NO Admin exposed)
+- ✅ **Bot Protection**: Rate limiting (5/min apply, 3/hr upload), Honeypot, CAPTCHA-ready
+
 ### Phase-1 Scope (Completed)
 - ✅ Role-Based Authentication (Admin, Recruiter, Employer, Candidate)
 - ✅ Role-Based Dashboards with proper terminology
