@@ -82,9 +82,20 @@ export default function RecruiterJobsPage() {
                     </span>
                   </div>
                 </div>
-                <span className={`badge ${job.status === 'active' ? 'badge-active' : 'badge-inactive'}`}>
-                  {job.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-[#7CB342] hover:bg-[#689F38]"
+                    onClick={() => navigate(`/recruiter/jobs/${job.id}/applicants`)}
+                    data-testid={`view-applicants-${job.id}`}
+                  >
+                    <Eye className="w-4 h-4 mr-1" /> View Applicants
+                  </Button>
+                  <span className={`badge ${job.status === 'active' ? 'badge-active' : 'badge-inactive'}`}>
+                    {job.status}
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
