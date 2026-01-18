@@ -1,349 +1,119 @@
-<analysis>
-**original_problem_statement:**
-The user wants to build a production-ready, role-based recruitment portal called VHC Talent OS.
+<analysis>**original_problem_statement:**
+The user wants to build a production-ready, role-based recruitment portal called VHC Talent OS. Phase 1 involved building the core application with role-based access, dashboards, and security hardening. Phase 2 focuses on integrating an AI Matching Engine, a Candidate Data Bank, and a notification system. Subsequent requests have focused on operational readiness, UI/UX improvements, currency localization, and integrating a public-facing website with a secure, bot-protected application flow. The latest request is to enhance the candidate application process with an editable review step and add a dedicated applicant review screen for employers.
 
-**PRODUCT REQUIREMENTS (Phase-1 & 2)**
-- **Roles**: Admin, Recruiter, Employer, Candidate.
-- **Authentication**: JWT-based email/password login with role-based access control.
-- **Dashboards**: Dedicated dashboards for each role with specific functionalities:
-    - **Admin**: Full control over users, jobs, candidates, companies, and system settings.
-    - **Recruiter**: Manage assigned jobs, upload resumes, and move candidates through a pipeline (Applied, Shortlisted, Interview, Offered, Hired).
-    - **Employer**: Post jobs, view applicants, and see basic job analytics.
-    - **Candidate**: Create a profile, upload a resume, apply for jobs, and track application status.
-- **Branding**: Clean, professional UI using a color palette derived from the provided VHC logo.
-- **Tech Stack**: FastAPI (Backend), React (Frontend), MongoDB (Database).
-- **Security**: Hardened access control, secure admin creation (environment-based seeding), and mandatory password reset on first login for all new users.
-- **AI Matching Engine (Phase-2b)**:
-    - Parse job descriptions and resumes using OpenAI GPT-5.2.
-    - Find Matching Candidates feature for Employers/Recruiters with filterable must-have conditions.
-    - Automatic job matching for candidates based on their resumes.
-- **Candidate Data Bank (Phase-2b)**:
-    - A centralized, single source of truth for all candidate data.
-    - Logic for deduplicating candidates based on email, phone, or resume hash.
-    - Audit trail for all data changes.
-    - History of resume versions for each candidate.
+**PRODUCT REQUIREMENTS (current focus)**
+- **Candidate Apply & Resume Review**: When a candidate applies, parse their resume and collect their current salary (INR) and notice period. Before final submission, display the parsed data in an editable review screen for the candidate to correct.
+- **Applicant Review Screen**: For each job, create a dedicated Applicants screen for employers/recruiters.
+- **Career Stability Indicator**: On the applicant review screen, display a colored dot (green/yellow/red) indicating the candidate's job stability based on their work history.
+- **Website Landing & Header Fix**: The public website should be the default entry point, and the header navigation order should be corrected.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application for VHC Talent OS has been built with a FastAPI backend and a React frontend. The application features complete role-based access control (RBAC) for Admin, Recruiter, Employer, and Candidate roles, each with a dedicated and functional dashboard. A comprehensive security hardening pass has been completed, which included removing hardcoded credentials, implementing environment-variable-based user seeding, and enforcing a mandatory password reset on the first login.
-
-The initial scaffolding for the Phase-2b AI Matching Engine and Candidate Data Bank has been created, including new backend services, API endpoints, database models, and frontend components.
+A full-stack application (FastAPI backend, React frontend, MongoDB) for VHC Talent OS is operational. It includes:
+- Complete Role-Based Access Control (RBAC) for Admin, Recruiter, Employer, and Candidate roles with dedicated, functional dashboards.
+- A fully functional AI Matching Engine (GPT-5.2 via ) for parsing job descriptions and resumes, and matching candidates to jobs.
+- An asynchronous email notification system and a candidate-managed job alerts feature.
+- A public-facing website with a dynamic careers page that fetches jobs from the backend. This includes a secure apply without signup flow protected by CAPTCHA and backend rate-limiting.
+- The UI has been updated for Phase-1 operational readiness, with improved terminology and workflows for recruiters and employers.
+- The system's currency is standardized to INR, with correct formatting on both input and display.
 
 **Last working item**:
-- **Last item agent was working:** The agent was actively debugging the implementation of the AI resume/job description parsing feature. The core issue lies within the  library usage for interfacing with GPT-5.2. The agent encountered and fixed several errors related to the  class, such as an unexpected  argument and an incorrect method call ( instead of ). The agent was in the process of re-testing the parsing endpoint after applying the fixes.
+- **Last item agent was working:** The agent began implementing the enhanced candidate apply flow. This involves creating a two-step process where a candidate's resume is first parsed, and then they are presented with an editable review screen to confirm or correct the AI-extracted data, along with providing their current salary and notice period. The agent started by modifying the backend.
 - **Status:** IN PROGRESS
-- **Agent Testing Done:** N (Testing was in progress, but the feature is not yet functional)
-- **Which testing method agent to use?** backend testing agent. The primary method should be using  to directly test the  endpoint to isolate and verify the backend logic in .
+- **Agent Testing Done:** N
+- **Which testing method agent to use?** both. First, use  to test the new and modified backend API endpoints ( and ). After implementing the frontend UI for the review step, use the  tool for visual verification, followed by the  to conduct an end-to-end test of the new application flow.
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-- **Issue 1:** AI Job Description Parsing Fails to Return Data (P0)
-
-  - **Issues Detail:**
-    - **Issue 1:** The  endpoint, which is crucial for the AI Matching Engine, is not correctly parsing job descriptions. After fixing initial crashes, the endpoint now runs without error but returns an empty result (). This blocks all subsequent AI matching functionality.
-        - **Attempted fixes:**
-            1. Removed the  keyword argument from the  constructor call, as it was not a valid parameter.
-            2. Replaced the incorrect  method call with the correct  method on the  object.
-        - **Next debug checklist:**
-            1.  **Inspect Service Logic**: Review the  function in . Verify the prompt being sent to the LLM and how the response is being processed.
-            2.  **Check Logs**: Examine the backend supervisor logs (==> /var/log/supervisor/backend.err.log <==
-  File "/usr/local/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
-    self.run()
-  File "/usr/local/lib/python3.11/multiprocessing/process.py", line 108, in run
-    self._target(*self._args, **self._kwargs)
-  File "/root/.venv/lib/python3.11/site-packages/uvicorn/_subprocess.py", line 76, in subprocess_started
-    target(sockets=sockets)
-  File "/root/.venv/lib/python3.11/site-packages/uvicorn/server.py", line 61, in run
-    return asyncio.run(self.serve(sockets=sockets))
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/runners.py", line 190, in run
-    return runner.run(main)
-           ^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/runners.py", line 118, in run
-    return self._loop.run_until_complete(task)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
-    return future.result()
-           ^^^^^^^^^^^^^^^
-  File "/root/.venv/lib/python3.11/site-packages/uvicorn/server.py", line 68, in serve
-    config.load()
-  File "/root/.venv/lib/python3.11/site-packages/uvicorn/config.py", line 467, in load
-    self.loaded_app = import_from_string(self.app)
-                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/root/.venv/lib/python3.11/site-packages/uvicorn/importer.py", line 21, in import_from_string
-    module = importlib.import_module(module_str)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 940, in exec_module
-  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-  File "/app/backend/server.py", line 909, in <module>
-    from services.matching_engine import (
-  File "/app/backend/services/matching_engine.py", line 10, in <module>
-    from emergentintegrations.llm.chat import Chat, Message
-ImportError: cannot import name 'Chat' from 'emergentintegrations.llm.chat' (/root/.venv/lib/python3.11/site-packages/emergentintegrations/llm/chat.py)
-WARNING:  WatchFiles detected changes in 'services/matching_engine.py'. Reloading...
-INFO:     Started server process [6906]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [6906]
-INFO:     Stopping reloader process [6828]
-INFO:     Will watch for changes in these directories: ['/app/backend']
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:     Started reloader process [6939] using WatchFiles
-INFO:     Started server process [6941]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-2026-01-18 09:45:39,021 - services.matching_engine - ERROR - JD parsing error: LlmChat.__init__() got an unexpected keyword argument 'model'
-2026-01-18 09:45:45,274 - services.matching_engine - ERROR - JD parsing error: LlmChat.__init__() got an unexpected keyword argument 'model'
-WARNING:  WatchFiles detected changes in 'services/matching_engine.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [6941]
-INFO:     Started server process [7115]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [7115]
-INFO:     Stopping reloader process [6939]
-INFO:     Will watch for changes in these directories: ['/app/backend']
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:     Started reloader process [7134] using WatchFiles
-INFO:     Started server process [7136]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-2026-01-18 09:46:17,978 - services.matching_engine - ERROR - JD parsing error: 'LlmChat' object has no attribute 'send_message_async'
-WARNING:  WatchFiles detected changes in 'services/matching_engine.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [7136]
-INFO:     Started server process [7248]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [7248]
-INFO:     Stopping reloader process [7134]
-INFO:     Will watch for changes in these directories: ['/app/backend']
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:     Started reloader process [7260] using WatchFiles
-INFO:     Started server process [7262]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-2026-01-18 09:47:15,451 - services.matching_engine - ERROR - JD parsing error: UserMessage.__init__() got an unexpected keyword argument 'content'
-INFO:     Will watch for changes in these directories: ['/app/backend']
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:     Started reloader process [48] using WatchFiles
-
-==> /var/log/supervisor/backend.out.log <==
-INFO:     10.64.131.242:58608 - "GET /api/stats/admin HTTP/1.1" 200 OK
-INFO:     10.64.134.10:43396 - "GET /api/stats/admin HTTP/1.1" 200 OK
-INFO:     10.64.131.254:49352 - "GET /api/companies HTTP/1.1" 200 OK
-INFO:     10.64.131.254:49352 - "GET /api/companies HTTP/1.1" 200 OK
-INFO:     10.64.134.5:39974 - "GET /api/candidates HTTP/1.1" 200 OK
-INFO:     10.64.131.254:45530 - "GET /api/candidates HTTP/1.1" 200 OK
-INFO:     10.64.131.254:54502 - "GET /api/users HTTP/1.1" 200 OK
-INFO:     10.64.131.254:54502 - "GET /api/users HTTP/1.1" 200 OK
-INFO:     10.64.134.5:50454 - "GET /api/candidates HTTP/1.1" 200 OK
-INFO:     10.64.131.254:54502 - "GET /api/candidates HTTP/1.1" 200 OK
-INFO:     10.64.129.225:55664 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.129.225:55664 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.225:55668 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.212:55318 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.225:55668 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.225:59956 - "POST /api/auth/reset-password HTTP/1.1" 200 OK
-INFO:     10.64.129.212:37878 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.129.225:57888 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.225:57904 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.226:37516 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.212:37878 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.225:57904 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.212:37878 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.225:57904 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.226:37516 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.225:57904 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.226:37516 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.226:37516 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.212:58400 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.226:37516 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.226:37516 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.212:58400 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.226:37516 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.225:54540 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.225:54532 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.225:54532 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.212:58400 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.225:54540 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.225:54532 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.141:49506 - "POST /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.140:43510 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.139:35872 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.141:34098 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.141:34098 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.140:40250 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.139:34062 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.140:40250 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.139:34062 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.141:34098 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.141:34098 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.141:34098 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.139:34062 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.139:34062 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.141:34098 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.140:40250 - "GET /api/jobs HTTP/1.1" 200 OK
-INFO:     10.64.129.140:40250 - "GET /api/stats/employer HTTP/1.1" 200 OK
-INFO:     10.64.129.139:38084 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.129.139:38084 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.129.140:38750 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.141:34104 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.139:38084 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.141:43624 - "POST /api/auth/reset-password HTTP/1.1" 200 OK
-INFO:     10.64.129.141:45944 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.129.141:45944 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.129.139:56088 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.139:56088 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.139:56088 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     10.64.129.139:56088 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.129.140:49964 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.140:49964 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.129.141:45944 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.129.140:49964 - "GET /api/jobs/browse HTTP/1.1" 200 OK
-INFO:     10.64.129.139:56090 - "GET /api/jobs/browse HTTP/1.1" 200 OK
-INFO:     10.64.129.141:48194 - "POST /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.131.242:59910 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.134.10:53852 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.131.254:56152 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.131.242:59910 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.134.10:41102 - "GET /api/messages HTTP/1.1" 200 OK
-INFO:     10.64.131.254:40294 - "GET /api/messages?sent=true HTTP/1.1" 200 OK
-INFO:     10.64.131.242:40250 - "GET /api/messages HTTP/1.1" 200 OK
-INFO:     10.64.131.254:40294 - "GET /api/messages?sent=true HTTP/1.1" 200 OK
-INFO:     10.64.131.254:40294 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.134.5:48894 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.134.5:48894 - "GET /api/jobs/browse HTTP/1.1" 200 OK
-INFO:     10.64.134.10:41102 - "GET /api/jobs/browse HTTP/1.1" 200 OK
-INFO:     10.64.131.242:40250 - "GET /api/profile HTTP/1.1" 200 OK
-INFO:     10.64.131.242:40250 - "GET /api/profile HTTP/1.1" 200 OK
-INFO:     10.64.131.254:40294 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.134.5:48894 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.131.242:40250 - "GET /api/stats/candidate HTTP/1.1" 200 OK
-INFO:     10.64.131.254:40294 - "GET /api/applications HTTP/1.1" 200 OK
-INFO:     10.64.134.10:37890 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.129.139:56360 - "POST /api/ai/parse-jd HTTP/1.1" 500 Internal Server Error
-INFO:     10.64.129.139:36314 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.134.5:51584 - "POST /api/ai/parse-jd HTTP/1.1" 500 Internal Server Error
-INFO:     10.64.129.140:60364 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.129.141:47898 - "POST /api/ai/parse-jd HTTP/1.1" 500 Internal Server Error
-INFO:     10.64.129.225:52866 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     10.64.131.242:57428 - "POST /api/ai/parse-jd HTTP/1.1" 500 Internal Server Error) for any silent errors or warnings from the  library.
-            3.  **Direct API Test**: Execute a  command directly against the  endpoint with a sample job description JSON payload. Analyze the raw response from the server.
-            4.  **LLM Call Verification**: Add temporary logging within  to print the exact response received from the  call before any processing occurs. This will determine if the LLM is returning an empty response or if the issue is in the parsing of the LLM's output.
-        - **Why fix this issue and what will be achieved with the fix?** Fixing this will unblock the entire AI Matching Engine and Candidate Data Bank feature set, which is the primary goal of the current development phase.
-        - **Status:** IN PROGRESS
-        - **Is recurring issue?** Y (The agent has attempted to fix this multiple times)
-        - **Should Test frontend/backend/both after fix?** backend
-        - **Blocked on other issue:** None
+There are no outstanding bugs. The work in progress is a feature implementation.
 
 **In progress Task List**:
-- **Task 1:** Complete AI Matching Engine & Candidate Data Bank (P0)
-    - **Where to resume:** Resume by debugging the job description parsing in  as detailed in Issue 1 above.
-    - **What will be achieved with this?** This will deliver the core functionality of Phase-2b, providing AI-powered candidate-to-job matching, a centralized candidate database with deduplication, and the associated UI components for all user roles.
+- **Task 1:** Implement Candidate Apply & Resume Review Flow (P0)
+    - **Where to resume:**
+        1.  **Backend**: The  Pydantic model and a new endpoint  have been added to . This logic is incomplete and untested. The next step is to finalize the implementation of both  (to return parsed data) and  (to accept corrected data and finalize the application) and test them thoroughly.
+        2.  **Frontend**: The frontend implementation has not started. Modify  to handle the new two-step flow. This requires changing the Apply Now modal to capture the resume, call the first API, and then display a new Review Your Application UI with editable fields for the parsed data, salary, and notice period before final submission.
+    - **What will be achieved with this?** This will significantly improve the accuracy of candidate data by allowing candidates to correct AI parsing errors and will capture critical salary and notice period information at the time of application.
     - **Status:** IN PROGRESS
     - **Should Test frontend/backend/both after fix?** both
-    - **Blocked on something:** Blocked on Issue 1: AI Job Description Parsing Fails to Return Data.
+    - **Blocked on something:** None
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks:**
-    - **P1: Notifications:** Implement email notifications for candidates when new matching jobs are posted. Add hooks for future WhatsApp notifications.
+    - **P1: Applicant Review Screen**: Create a dedicated Applicants screen accessible from the job management page for employers and recruiters to review all candidates who have applied for a specific job.
+    - **P2: Career Stability Indicator**: Implement the business logic to calculate a candidate's career stability (based on job tenure) and display it as a colored dot on the new applicant review screen.
+    - **P3: Website Landing & Header Fix**: Configure the application so that the default root URL () serves the public website. Update the header navigation links on the public website to the specified order: .
 - **Future Tasks:**
-    - WhatsApp Automation
-    - Email Campaign Automation
-    - CRM Sync
-    - Payment & Billing
-    - Client Dashboards
-    - Advanced Analytics Engine
-    - n8n / workflow automation hooks
+    - WhatsApp Automation for notifications.
+    - Email Campaign Automation for marketing.
+    - CRM Synchronization.
+    - Payment & Billing integration.
+    - Advanced Analytics Engine.
+    - n8n / workflow automation hooks.
+    - Refactor the  monolith into a modular structure using FastAPI's .
 
 **Completed work in this session**
-- **Full Application Scaffolding**: Built the VHC Talent OS with FastAPI backend and React frontend.
-- **Role-Based Authentication**: Implemented JWT-based auth and RBAC for Admin, Recruiter, Employer, and Candidate roles.
-- **Role Dashboards**: Created dedicated, functional dashboards for each role.
-- **Security Hardening**:
-    - Removed all test users and hardcoded credentials.
-    - Implemented environment-variable-based admin user seeding.
-    - Implemented a mandatory password reset on first login flow for all users.
-    - Generated secure, one-time credentials for key roles for user verification.
-- **AI Feature Preparation**:
-    - Created backend service .
-    - Added new API endpoints for AI parsing and matching.
-    - Created frontend components: , , .
+- **AI Matching Engine Fixed**: Resolved a critical bug in  where AI parsing returned empty data. The end-to-end AI workflow (JD parsing, resume parsing, candidate matching) is now fully functional.
+- **Email Notifications & Job Alerts System**: Implemented an asynchronous notification service and a candidate-facing UI to manage job alert preferences.
+- **Phase-1 UI/UX Overhaul**: Aligned Employer and Recruiter dashboards with documented operational procedures, improving clarity, terminology, and workflows for pilot readiness.
+- **Currency System Update to INR**: Successfully switched the application's default currency from USD to INR, including UI display, input fields, and number formatting.
+- **Public Website Integration**: Deployed a public-facing static website, integrated a dynamic Careers page fetching live jobs from the backend, and added a secure login dropdown menu.
+- **Bot Protection & Public Apply Flow**: Implemented an anonymous apply flow with Cloudflare Turnstile CAPTCHA, backend rate-limiting, and honeypot fields to prevent abuse.
 
 **Earlier issues found/mentioned but not fixed**
-None. All previously identified issues, such as the post-registration navigation bug, were addressed and resolved.
+None.
 
 **Known issue recurrence from previous fork**
-None. This is the first session for this project.
+None.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Backend**: FastAPI, MongoDB (via Motor), Pydantic, JWT (pyjwt), Role-Based Access Control (RBAC).
-- **Frontend**: React, React Router, Shadcn/UI, Tailwind CSS.
-- **AI Integration**:  library to connect to GPT-5.2.
-- **Architecture**: Monolithic server () with a separate services layer for business logic. Component-based React frontend.
+- **Backend**: FastAPI, MongoDB (Motor), Pydantic, JWT, RBAC, BackgroundTasks for async jobs,  for rate limiting.
+- **Frontend**: React, React Router, Shadcn/UI, Tailwind CSS, Axios.
+- **AI Integration**:  library for GPT-5.2.
+- **Notifications**: Resend (for email), Twilio (stubbed for WhatsApp).
+- **Bot Protection**: Cloudflare Turnstile.
+- **Deployment**: The application consists of a React frontend and a FastAPI backend running as separate services, with a public-facing static site now served via the React app's  folder.
 
 **key DB schema**
 - **users**: 
 - **jobs**: 
 - **candidates**: 
-- **companies**: 
 - **applications**: 
-- **audit_logs**: 
+- **job_alerts**: 
+- **notification_logs**: 
 
 **changes in tech stack**
-None.
+- Added  for email notifications.
+- Added  for WhatsApp notifications (stubbed).
+- Added  and its dependencies for backend rate limiting.
 
 **All files of reference**
-- : The main monolith containing all backend logic, models, and API routes. Heavily modified to add security features and AI endpoints.
-- : New file containing the logic for the AI Matching Engine. **This is the location of the current bug.**
-- : Contains all frontend routing, updated with routes for new AI/Data Bank pages.
-- : Auth context, updated to handle the  flag.
-- : Updated to redirect users to the password reset page if required.
-- : New component for the mandatory password reset flow.
+- : Heavily modified to add notification logic, public APIs, rate limiting, and the new two-step apply endpoints.
+- : New file containing the core logic for matching jobs to candidates and dispatching notifications.
+- : New file for handling email sending via Resend.
+- : New page for candidates to manage their job alerts.
+- : New utility for formatting salaries in INR.
+- : The static careers page, heavily modified with JavaScript to dynamically fetch jobs, display a CAPTCHA-protected apply modal, and handle submissions.
+- : Updated with the status of all completed and pending tasks.
 
 **Areas that need refactoring**
-- The  file has grown to over 900 lines and contains all models, routes, and application logic. It should be broken down into smaller, more manageable modules using FastAPI's  for better organization and maintainability.
+-  is now over 2000 lines long and urgently needs to be broken down into smaller, manageable modules using FastAPI's . This should be prioritized after the current feature set is stable.
 
 **key api endpoints**
-- 
--  (Admin only)
-- 
-- 
-- : **(IN-PROGRESS/BROKEN)** Endpoint for parsing job descriptions.
-- : Endpoint for finding candidates matching a job.
-- : Endpoint for finding jobs matching a candidate's profile.
-- : Endpoint for the admin to view the candidate data bank.
+-  (GET, POST): Manages candidate job alert settings.
+-  (GET): Publicly lists all active jobs (no auth required).
+-  (POST): Initiates a public job application by parsing a resume.
+-  (POST): Finalizes a public job application with candidate-corrected data.
+- : Finds matching candidates for a specific job.
 
 **Critical Info for New Agent**
-- The application's core functionality (Auth, CRUD for roles) is complete and security-hardened.
-- The current, high-priority task is to fix the AI-powered job description parsing in . This is blocking the entire Phase-2b feature set.
-- The  library is used for LLM interaction. The agent was debugging the  class. The issue is no longer a crash but a silent failure where no data is returned.
--  is a large monolith; be mindful that changes might have wide-ranging effects. Refactoring it should be considered a future task.
+- The immediate task is to complete the two-step candidate apply flow. The backend has been partially modified, but requires completion and testing. The frontend part is yet to be started.
+- All subsequent tasks in the user's latest request (Applicant Review Screen, Stability Indicator, Website Fixes) should be addressed after the apply flow is complete.
+- Be aware that Resend and Twilio API keys are placeholders. Notification-sending logic will execute and log actions, but no actual emails or messages will be sent.
+- The  file is very large. Be cautious when making changes. Refactoring is a future task, so avoid it for now.
 
 **documents and test reports created in this job**
 - 
@@ -353,20 +123,22 @@ None.
 - 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  ****: User provided detailed requirements for implementing the AI matching engine and a centralized candidate data bank. (IN PROGRESS)
-2.  ****: User requested secure, temporary credentials for Recruiter, Employer, and Candidate roles to visually verify their dashboards. (COMPLETED)
-3.  ****: Agent confirmed the existence and functionality of all four role-based dashboards. (COMPLETED)
-4.  ****: User requested a full security pass, including removing test users, enforcing password resets, and removing hardcoded credentials. (COMPLETED)
-5.  ****: User asked for verification of the existence and access control for each role's dashboard. (COMPLETED)
-6.  ****: Agent declared Phase 1 complete. (COMPLETED)
-7.  User message history before this point relates to the initial build and debugging of the Phase 1 application.
+1.  **Request:** Implement Phase-1 enhancements: editable resume review screen, capture salary/notice period, add applicant review screen with stability indicator, and fix public website landing/header. (IN PROGRESS)
+2.  **Request:** Integrate a public-facing website, add a dynamic careers page, a secure login menu, an apply without signup flow, and bot protection. (COMPLETED)
+3.  **Request:** Update the system to use INR as the primary currency for all salary displays and inputs. (COMPLETED)
+4.  **Request:** Align the UI/UX with provided documentation for Phase-1 operational readiness (Employer demos, Recruiter workflows). (COMPLETED)
+5.  **User Message:** give me admin login ID. (COMPLETED)
+6.  **User Message:** Proceed with P1 (Email Notifications & Job Alerts). (COMPLETED)
 
 **Project Health Check:**
-- **Broken**: The AI Matching Engine feature is currently broken due to a bug in the job description parsing service ().
-- **Mocked**: No mocked components are currently in use.
+- **Broken**: None.
+- **Mocked**: Email () and WhatsApp () notifications are mocked. The services log that a notification would be sent, but no API keys are configured, so no external messages are dispatched.
 
 **3rd Party Integrations**
-- **OpenAI GPT-5.2**: Integrated via the  library. Uses the Emergent LLM Key.
+- **OpenAI GPT-5.2**: Uses Emergent LLM Key via  for AI parsing and matching.
+- **Resend**: Integrated for email notifications. Requires a user-provided API key (currently mocked).
+- **Twilio**: Stubbed for future WhatsApp notifications. Requires user-provided Account SID and Auth Token.
+- **Cloudflare Turnstile**: Integrated on the public apply form for bot protection. Keys are handled by the frontend implementation.
 
 **Testing status**
 - **Testing agent used after significant changes**: YES
@@ -375,14 +147,12 @@ None.
     - 
     - 
     - 
-- **Known regressions**: None in the core application. The new AI feature is not a regression but a new, incomplete implementation.
+    - 
+- **Known regressions**: The last test run had an expected failure on the public application endpoint due to the successful implementation of rate-limiting. This is correct behavior, not a regression.
 
 **Credentials to test flow:**
-Use the credentials provided by the agent in its last confirmation. Note that all users will be forced to reset their password on their first login.
-- **Recruiter**:  /  -> 
-- **Employer**:  /  -> 
-- **Candidate**:  /  -> 
+- **Admin Email:** 
+- **Admin Password:** 
 
 **What agent forgot to execute**
-The agent has followed the user's instructions sequentially and has not forgotten any requested tasks. It correctly identified that the AI parsing was not yet implemented (as requested in a new phase) and began working on it.
-</analysis>
+The agent is currently working on the user's most recent request and has not forgotten any tasks. The plan is to complete the features sequentially as requested.</analysis>
