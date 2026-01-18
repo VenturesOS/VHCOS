@@ -41,6 +41,7 @@ import BrowseJobsPage from "./pages/candidate/BrowseJobsPage";
 import ApplicationsPage from "./pages/candidate/ApplicationsPage";
 import MessagesPage from "./pages/candidate/MessagesPage";
 import MatchingJobsPage from "./pages/candidate/MatchingJobsPage";
+import NotificationSettingsPage from "./pages/candidate/NotificationSettingsPage";
 
 function App() {
   return (
