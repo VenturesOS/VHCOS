@@ -114,7 +114,7 @@ export default function JobApplicantsPage() {
             {jobData?.salary_min && (
               <span className="flex items-center gap-1">
                 <DollarSign className="h-4 w-4" /> 
-                {formatINR(jobData.salary_min)} - {formatINR(jobData.salary_max)}
+                {formatSalaryINR(jobData.salary_min)} - {formatSalaryINR(jobData.salary_max)}
               </span>
             )}
           </div>
@@ -244,7 +244,7 @@ function ApplicantCard({ applicant, jobData, onClick }) {
               )}
               {applicant.current_salary && (
                 <span className="flex items-center gap-1 font-medium text-slate-700">
-                  <DollarSign className="h-3 w-3" /> {formatINR(applicant.current_salary)}
+                  <DollarSign className="h-3 w-3" /> {formatSalaryINR(applicant.current_salary)}
                 </span>
               )}
               {applicant.notice_period && (
@@ -361,7 +361,7 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
             <div className="bg-slate-50 rounded-lg p-3">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Current Salary (INR)</p>
               <p className="font-semibold text-lg">
-                {applicant.current_salary ? formatINR(applicant.current_salary) : 'Not provided'}
+                {applicant.current_salary ? formatSalaryINR(applicant.current_salary) : 'Not provided'}
               </p>
             </div>
             <div className="bg-slate-50 rounded-lg p-3">
