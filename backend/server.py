@@ -1085,6 +1085,7 @@ async def get_job_applicants(
             "candidate_phone": app.get("candidate_phone") or (candidate_data.get("phone") if candidate_data else None),
             "headline": app.get("headline") or (candidate_data.get("headline") if candidate_data else None),
             "summary": candidate_data.get("summary") if candidate_data else None,
+            "experience_summary": app.get("experience_summary") or (candidate_data.get("summary") if candidate_data else None),
             "skills": app_skills,
             "experience_years": app.get("experience_years") or (candidate_data.get("experience_years") if candidate_data else None),
             "location": app.get("location") or (candidate_data.get("location") if candidate_data else None),
@@ -1098,7 +1099,10 @@ async def get_job_applicants(
             "career_stability": career_stability,
             "applied_at": app.get("applied_at") or app.get("created_at"),
             "updated_at": app.get("updated_at"),
-            "notes": app.get("notes", [])
+            "notes": app.get("notes", []),
+            "edit_history": app.get("edit_history", []),
+            "last_edited_by": app.get("last_edited_by"),
+            "manually_edited": app.get("manually_edited", False)
         }
         
         enriched_applicants.append(enriched)
