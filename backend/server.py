@@ -1945,6 +1945,380 @@ async def manually_trigger_notifications(
     return {"message": "Notification task started", "job_id": job_id}
 
 
+# ============== PUBLIC API (NO AUTH REQUIRED) ==============
+
+# Rate limiting storage (in-memory for Phase-1, use Redis in production)
+rate_limit_store = {}
+
+def check_rate_limit(identifier: str, limit: int = 10, window: int = 60) -> bool:
+    """
+    Simple rate limiter. Returns True if allowed, False if rate limited.
+    identifier: IP or unique key
+    limit: max requests per window
+    window: time window in seconds
+    """
+    import time
+    now = time.time()
+    key = f"rate:{identifier}"
+    
+    if key not in rate_limit_store:
+        rate_limit_store[key] = []
+    
+    # Clean old entries
+    rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window]
+    
+    if len(rate_limit_store[key]) >= limit:
+        return False
+    
+    rate_limit_store[key].append(now)
+    return True
+
+
+class PublicApplicationCreate(BaseModel):
+    """Public job application without login"""
+    job_id: str
+    email: EmailStr
+    name: str
+    phone: Optional[str] = None
+    cover_letter: Optional[str] = None
+    # Honeypot field - should be empty
+    website: Optional[str] = None
+    # Turnstile token for bot protection
+    turnstile_token: Optional[str] = None
+
+
+@api_router.get("/public/jobs")
+async def get_public_jobs(
+    search: Optional[str] = None,
+    location: Optional[str] = None,
+    job_type: Optional[str] = None,
+    limit: int = 50
+):
+    """
+    Get active job listings (PUBLIC - NO AUTH REQUIRED).
+    For careers page on public website.
+    """
+    query = {"status": "active"}
+    
+    if search:
+        query["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"department": {"$regex": search, "$options": "i"}}
+        ]
+    
+    if location:
+        query["location"] = {"$regex": location, "$options": "i"}
+    
+    if job_type:
+        query["job_type"] = job_type
+    
+    jobs = await db.jobs.find(query, {"_id": 0}).limit(limit).to_list(limit)
+    
+    # Enrich with company names
+    for job in jobs:
+        if job.get("company_id"):
+            company = await db.companies.find_one({"id": job["company_id"]}, {"_id": 0, "name": 1})
+            job["company_name"] = company.get("name", "VHC Client") if company else "VHC Client"
+        else:
+            job["company_name"] = "VHC Client"
+    
+    return jobs
+
+
+@api_router.get("/public/jobs/{job_id}")
+async def get_public_job_detail(job_id: str):
+    """
+    Get single job detail (PUBLIC - NO AUTH REQUIRED).
+    """
+    job = await db.jobs.find_one({"id": job_id, "status": "active"}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Add company name
+    if job.get("company_id"):
+        company = await db.companies.find_one({"id": job["company_id"]}, {"_id": 0, "name": 1})
+        job["company_name"] = company.get("name", "VHC Client") if company else "VHC Client"
+    else:
+        job["company_name"] = "VHC Client"
+    
+    return job
+
+
+from fastapi import Request
+
+@api_router.post("/public/apply")
+async def public_apply(
+    request: Request,
+    job_id: str = Form(...),
+    email: str = Form(...),
+    name: str = Form(...),
+    phone: Optional[str] = Form(None),
+    cover_letter: Optional[str] = Form(None),
+    resume: UploadFile = File(...),
+    website: Optional[str] = Form(None),  # Honeypot
+    turnstile_token: Optional[str] = Form(None)
+):
+    """
+    Public job application (NO LOGIN REQUIRED).
+    - Resume is parsed immediately
+    - Candidate account creation is OPTIONAL
+    - Application linked to Candidate Data Bank
+    """
+    # Get client IP for rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    
+    # Rate limit: 5 applications per minute per IP
+    if not check_rate_limit(f"apply:{client_ip}", limit=5, window=60):
+        raise HTTPException(status_code=429, detail="Too many applications. Please try again later.")
+    
+    # Honeypot check - if website field is filled, it's a bot
+    if website:
+        logger.warning(f"[BOT] Honeypot triggered from {client_ip}")
+        # Return success to not tip off bots, but don't process
+        return {"success": True, "message": "Application submitted successfully", "application_id": str(uuid.uuid4())}
+    
+    # Verify job exists
+    job = await db.jobs.find_one({"id": job_id, "status": "active"}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or no longer active")
+    
+    # Validate email
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    
+    # Save resume file
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    safe_email = email.replace('@', '_at_').replace('.', '_')
+    filename = f"public_{safe_email}_{timestamp}_{resume.filename}"
+    upload_dir = Path("/app/uploads")
+    upload_dir.mkdir(exist_ok=True)
+    
+    file_path = upload_dir / filename
+    async with aiofiles.open(file_path, 'wb') as f:
+        content = await resume.read()
+        await f.write(content)
+    
+    # Extract resume text
+    resume_text = ""
+    try:
+        if filename.lower().endswith('.pdf'):
+            doc = fitz.open(str(file_path))
+            for page in doc:
+                resume_text += page.get_text()
+            doc.close()
+        elif filename.lower().endswith('.txt'):
+            async with aiofiles.open(file_path, 'r', errors='ignore') as f:
+                resume_text = await f.read()
+    except Exception as e:
+        logger.error(f"[PUBLIC APPLY] Resume text extraction failed: {e}")
+    
+    # Parse resume with AI
+    parsed_data = {}
+    try:
+        from services.matching_engine import parse_resume_with_ai
+        result = await parse_resume_with_ai(resume_text[:8000])
+        if result.get("success"):
+            parsed_data = result.get("data", {})
+    except Exception as e:
+        logger.error(f"[PUBLIC APPLY] AI parsing failed: {e}")
+    
+    # Check if candidate already exists in data bank
+    existing_candidate = await db.candidate_bank.find_one({
+        "$or": [
+            {"email": email},
+            {"phone": phone} if phone else {"email": email}
+        ]
+    }, {"_id": 0})
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if existing_candidate:
+        candidate_id = existing_candidate["id"]
+        # Update with new resume if parsed
+        if parsed_data:
+            await db.candidate_bank.update_one(
+                {"id": candidate_id},
+                {"$set": {
+                    "skills": parsed_data.get("skills", existing_candidate.get("skills", [])),
+                    "experience_years": parsed_data.get("experience_years", existing_candidate.get("experience_years", 0)),
+                    "updated_at": now
+                }}
+            )
+    else:
+        # Create new candidate in data bank
+        candidate_id = str(uuid.uuid4())
+        candidate_doc = {
+            "id": candidate_id,
+            "name": parsed_data.get("name") or name,
+            "email": email,
+            "phone": parsed_data.get("phone") or phone,
+            "headline": parsed_data.get("headline"),
+            "summary": parsed_data.get("summary"),
+            "skills": parsed_data.get("skills", []),
+            "experience_years": parsed_data.get("experience_years", 0),
+            "experience": parsed_data.get("experience", []),
+            "education": parsed_data.get("education", []),
+            "location": parsed_data.get("location"),
+            "source": "public_application",
+            "source_job_id": job_id,
+            "resume_url": f"/api/uploads/{filename}",
+            "resume_text": resume_text[:5000],
+            "is_active": True,
+            "linked_user_id": None,  # Not linked to any user account
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.candidate_bank.insert_one(candidate_doc)
+    
+    # Create application
+    application_id = str(uuid.uuid4())
+    application_doc = {
+        "id": application_id,
+        "job_id": job_id,
+        "candidate_id": candidate_id,
+        "candidate_name": parsed_data.get("name") or name,
+        "candidate_email": email,
+        "resume_url": f"/api/uploads/{filename}",
+        "cover_letter": cover_letter,
+        "stage": "applied",
+        "source": "public_website",
+        "notes": [],
+        "applied_at": now,
+        "updated_at": now
+    }
+    await db.applications.insert_one(application_doc)
+    
+    # Update job applicant count
+    await db.jobs.update_one({"id": job_id}, {"$inc": {"applicant_count": 1}})
+    
+    logger.info(f"[PUBLIC APPLY] New application from {email} for job {job_id}")
+    
+    return {
+        "success": True,
+        "message": "Application submitted successfully! We'll review your profile and get back to you.",
+        "application_id": application_id,
+        "candidate_id": candidate_id,
+        "parsed_skills": parsed_data.get("skills", [])[:5]
+    }
+
+
+@api_router.post("/public/upload-resume")
+async def public_upload_resume(
+    request: Request,
+    email: str = Form(...),
+    name: str = Form(...),
+    phone: Optional[str] = Form(None),
+    resume: UploadFile = File(...),
+    website: Optional[str] = Form(None),  # Honeypot
+):
+    """
+    Public resume upload to candidate data bank (NO LOGIN REQUIRED).
+    For candidates who want to be in the talent pool without applying to specific job.
+    """
+    # Get client IP for rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    
+    # Rate limit: 3 uploads per hour per IP
+    if not check_rate_limit(f"upload:{client_ip}", limit=3, window=3600):
+        raise HTTPException(status_code=429, detail="Too many uploads. Please try again later.")
+    
+    # Honeypot check
+    if website:
+        logger.warning(f"[BOT] Honeypot triggered from {client_ip}")
+        return {"success": True, "message": "Resume uploaded successfully"}
+    
+    # Save and process similar to apply
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    safe_email = email.replace('@', '_at_').replace('.', '_')
+    filename = f"pool_{safe_email}_{timestamp}_{resume.filename}"
+    upload_dir = Path("/app/uploads")
+    upload_dir.mkdir(exist_ok=True)
+    
+    file_path = upload_dir / filename
+    async with aiofiles.open(file_path, 'wb') as f:
+        content = await resume.read()
+        await f.write(content)
+    
+    # Extract and parse
+    resume_text = ""
+    try:
+        if filename.lower().endswith('.pdf'):
+            doc = fitz.open(str(file_path))
+            for page in doc:
+                resume_text += page.get_text()
+            doc.close()
+        elif filename.lower().endswith('.txt'):
+            async with aiofiles.open(file_path, 'r', errors='ignore') as f:
+                resume_text = await f.read()
+    except Exception as e:
+        logger.error(f"Resume extraction failed: {e}")
+    
+    parsed_data = {}
+    try:
+        from services.matching_engine import parse_resume_with_ai
+        result = await parse_resume_with_ai(resume_text[:8000])
+        if result.get("success"):
+            parsed_data = result.get("data", {})
+    except Exception as e:
+        logger.error(f"AI parsing failed: {e}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check existing
+    existing = await db.candidate_bank.find_one({"email": email}, {"_id": 0})
+    if existing:
+        candidate_id = existing["id"]
+        await db.candidate_bank.update_one(
+            {"id": candidate_id},
+            {"$set": {
+                "name": parsed_data.get("name") or name,
+                "skills": parsed_data.get("skills", existing.get("skills", [])),
+                "experience_years": parsed_data.get("experience_years", existing.get("experience_years", 0)),
+                "resume_url": f"/api/uploads/{filename}",
+                "updated_at": now
+            }}
+        )
+    else:
+        candidate_id = str(uuid.uuid4())
+        candidate_doc = {
+            "id": candidate_id,
+            "name": parsed_data.get("name") or name,
+            "email": email,
+            "phone": parsed_data.get("phone") or phone,
+            "headline": parsed_data.get("headline"),
+            "summary": parsed_data.get("summary"),
+            "skills": parsed_data.get("skills", []),
+            "experience_years": parsed_data.get("experience_years", 0),
+            "experience": parsed_data.get("experience", []),
+            "education": parsed_data.get("education", []),
+            "location": parsed_data.get("location"),
+            "source": "talent_pool_upload",
+            "resume_url": f"/api/uploads/{filename}",
+            "resume_text": resume_text[:5000],
+            "is_active": True,
+            "linked_user_id": None,
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.candidate_bank.insert_one(candidate_doc)
+    
+    return {
+        "success": True,
+        "message": "Resume uploaded to our talent pool! We'll reach out when matching opportunities arise.",
+        "candidate_id": candidate_id,
+        "parsed_skills": parsed_data.get("skills", [])[:5]
+    }
+
+
 # ============== SETTINGS ==============
 
 @api_router.get("/settings")
