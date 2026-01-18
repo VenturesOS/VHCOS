@@ -124,3 +124,5 @@ watchfiles==1.1.1
 websockets==15.0.1
 yarl==1.22.0
 zipp==3.23.0
+resend==2.19.0
+twilio==9.9.1
