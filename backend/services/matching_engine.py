@@ -216,11 +216,25 @@ Return JSON:
     "explanation": "2-3 sentence explanation of the match"
 }}"""
         
-        response = chat.send_message(
-            message=UserMessage(content=prompt)
+        logger.info(f"[MATCH CALC] Sending prompt to GPT-5.2")
+        
+        response = await chat.send_message(
+            message=UserMessage(text=prompt)
         )
         
-        response_text = response.content.strip()
+        logger.info(f"[MATCH CALC] Raw LLM response: {response[:500] if response else 'EMPTY'}")
+        
+        # Response is the text directly
+        response_text = response.strip() if response else ""
+        
+        if not response_text:
+            logger.error("[MATCH CALC] LLM returned empty response!")
+            return {
+                "score": 0,
+                "matched": False,
+                "error": "LLM returned empty response",
+                "explanation": "Unable to calculate match - no AI response"
+            }
         
         if "```json" in response_text:
             json_str = response_text.split("```json")[1].split("```")[0]
