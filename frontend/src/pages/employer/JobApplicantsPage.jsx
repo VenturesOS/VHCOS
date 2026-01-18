@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Users, Mail, Phone, MapPin, Briefcase, DollarSign, 
   Clock, FileText, CheckCircle, XCircle, AlertCircle, Pause,
-  TrendingDown, UserX, ChevronRight, Star
+  TrendingDown, UserX, ChevronRight, Star, Edit2
 } from 'lucide-react';
 
 // Stage configuration with colors and icons
