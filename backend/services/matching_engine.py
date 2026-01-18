@@ -63,12 +63,20 @@ async def parse_resume_with_ai(resume_text: str) -> Dict:
 Resume text:
 {resume_text[:8000]}"""  # Limit to 8000 chars
         
-        response = chat.send_message(
-            message=UserMessage(content=prompt)
+        logger.info(f"[RESUME PARSE] Sending prompt to GPT-5.2, length: {len(prompt)}")
+        
+        response = await chat.send_message(
+            message=UserMessage(text=prompt)
         )
         
-        # Extract JSON from response
-        response_text = response.content.strip()
+        logger.info(f"[RESUME PARSE] Raw LLM response: {response[:500] if response else 'EMPTY'}")
+        
+        # Extract JSON from response - response is the text directly
+        response_text = response.strip() if response else ""
+        
+        if not response_text:
+            logger.error("[RESUME PARSE] LLM returned empty response!")
+            return {"success": False, "error": "LLM returned empty response"}
         
         # Try to find JSON in response
         if "```json" in response_text:
@@ -78,14 +86,17 @@ Resume text:
         else:
             json_str = response_text
         
+        logger.info(f"[RESUME PARSE] Extracted JSON string: {json_str[:300] if json_str else 'EMPTY'}")
+        
         parsed = json.loads(json_str.strip())
+        logger.info(f"[RESUME PARSE] Successfully parsed JSON with keys: {list(parsed.keys())}")
         return {"success": True, "data": parsed}
         
     except json.JSONDecodeError as e:
-        logger.error(f"JSON parse error in resume parsing: {e}")
-        return {"success": False, "error": "Failed to parse AI response"}
+        logger.error(f"[RESUME PARSE] JSON parse error: {e}, response was: {response_text[:500] if response_text else 'EMPTY'}")
+        return {"success": False, "error": f"Failed to parse AI response: {str(e)}"}
     except Exception as e:
-        logger.error(f"Resume parsing error: {e}")
+        logger.error(f"[RESUME PARSE] Error: {type(e).__name__}: {e}")
         return {"success": False, "error": str(e)}
 
 
