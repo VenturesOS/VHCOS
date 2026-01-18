@@ -1,0 +1,25 @@
+
+Jane Smith
+Senior Software Engineer
+janesmith_test@example.com
++91 9876543210
+
+LOCATION: Bangalore, India
+
+PROFESSIONAL HEADLINE: Senior Full Stack Developer with 8 years experience
+
+SKILLS:
+Python, JavaScript, React, Node.js, MongoDB, FastAPI, AWS, Docker, Kubernetes
+
+EXPERIENCE:
+Senior Software Engineer at TechCorp (2020-Present)
+- 4 years
+- Led development of microservices architecture
+- Managed team of 5 developers
+
+Software Developer at StartupXYZ (2016-2020)
+- 4 years
+- Developed frontend using React and backend using Node.js
+
+EDUCATION:
+B.Tech in Computer Science - IIT Bangalore (2016)
