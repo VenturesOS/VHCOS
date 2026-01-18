@@ -59,6 +59,7 @@ const navItems = {
     { icon: Sparkles, label: 'Jobs For You', path: '/candidate/matching-jobs' },
     { icon: FileText, label: 'Applications', path: '/candidate/applications' },
     { icon: Mail, label: 'Messages', path: '/candidate/messages' },
+    { icon: Bell, label: 'Job Alerts', path: '/candidate/notifications' },
   ],
 };
 
