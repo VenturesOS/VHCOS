@@ -37,10 +37,10 @@ const navItems = {
   ],
   recruiter: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/recruiter' },
-    { icon: Briefcase, label: 'Jobs', path: '/recruiter/jobs' },
+    { icon: Briefcase, label: 'Mandates', path: '/recruiter/jobs' },
     { icon: ClipboardList, label: 'Pipeline', path: '/recruiter/pipeline' },
     { icon: UserCircle, label: 'Candidates', path: '/recruiter/candidates' },
-    { icon: Sparkles, label: 'AI Matching', path: '/recruiter/find-candidates' },
+    { icon: Sparkles, label: 'AI Screening', path: '/recruiter/find-candidates' },
     { icon: Database, label: 'Candidate Bank', path: '/recruiter/candidate-bank' },
   ],
   employer: [
@@ -48,8 +48,7 @@ const navItems = {
     { icon: Briefcase, label: 'My Jobs', path: '/employer/jobs' },
     { icon: UserPlus, label: 'Post Job', path: '/employer/jobs/new' },
     { icon: ClipboardList, label: 'Applicants', path: '/employer/applicants' },
-    { icon: Sparkles, label: 'AI Matching', path: '/employer/find-candidates' },
-    { icon: Database, label: 'Candidate Bank', path: '/employer/candidate-bank' },
+    { icon: Sparkles, label: 'Find Candidates', path: '/employer/find-candidates' },
     { icon: BarChart3, label: 'Analytics', path: '/employer/analytics' },
   ],
   candidate: [
