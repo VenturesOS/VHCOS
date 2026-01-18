@@ -1,0 +1,19 @@
+Jane Smith
+Email: jane.smith@publictest.com
+Phone: +91 9876543210
+
+Senior Frontend Developer with 5 years of experience.
+
+SKILLS
+JavaScript, TypeScript, React, Vue.js, Node.js, CSS, HTML, Tailwind
+
+EXPERIENCE
+Senior Frontend Developer - Tech Corp (2021-Present)
+- Built React applications
+- Led team of 3 developers
+
+Frontend Developer - Startup Inc (2019-2021)
+- Developed Vue.js applications
+
+EDUCATION
+B.Tech Computer Science - IIT Delhi (2019)
