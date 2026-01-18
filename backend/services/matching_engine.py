@@ -66,7 +66,7 @@ Resume text:
         logger.info(f"[RESUME PARSE] Sending prompt to GPT-5.2, length: {len(prompt)}")
         
         response = await chat.send_message(
-            message=UserMessage(text=prompt)
+            user_message=UserMessage(text=prompt)
         )
         
         logger.info(f"[RESUME PARSE] Raw LLM response: {response[:500] if response else 'EMPTY'}")
@@ -130,7 +130,7 @@ Job Description:
         logger.info(f"[JD PARSE] Sending prompt to GPT-5.2, length: {len(prompt)}")
         
         response = await chat.send_message(
-            message=UserMessage(text=prompt)
+            user_message=UserMessage(text=prompt)
         )
         
         logger.info(f"[JD PARSE] Raw LLM response: {response[:500] if response else 'EMPTY'}")
@@ -219,7 +219,7 @@ Return JSON:
         logger.info(f"[MATCH CALC] Sending prompt to GPT-5.2")
         
         response = await chat.send_message(
-            message=UserMessage(text=prompt)
+            user_message=UserMessage(text=prompt)
         )
         
         logger.info(f"[MATCH CALC] Raw LLM response: {response[:500] if response else 'EMPTY'}")
