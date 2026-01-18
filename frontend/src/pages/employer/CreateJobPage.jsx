@@ -125,22 +125,30 @@ export default function CreateJobPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Salary Min (USD)</Label>
-                <Input
-                  type="number"
-                  value={formData.salary_min}
-                  onChange={(e) => handleChange('salary_min', e.target.value)}
-                  placeholder="e.g., 80000"
-                />
+                <Label>Salary Min (₹ INR / Year)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">₹</span>
+                  <Input
+                    type="number"
+                    value={formData.salary_min}
+                    onChange={(e) => handleChange('salary_min', e.target.value)}
+                    placeholder="e.g., 500000"
+                    className="pl-8"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>Salary Max (USD)</Label>
-                <Input
-                  type="number"
-                  value={formData.salary_max}
-                  onChange={(e) => handleChange('salary_max', e.target.value)}
-                  placeholder="e.g., 120000"
-                />
+                <Label>Salary Max (₹ INR / Year)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">₹</span>
+                  <Input
+                    type="number"
+                    value={formData.salary_max}
+                    onChange={(e) => handleChange('salary_max', e.target.value)}
+                    placeholder="e.g., 1200000"
+                    className="pl-8"
+                  />
+                </div>
               </div>
             </div>
 
