@@ -52,7 +52,7 @@ export default function NotificationSettingsPage() {
     setSuccess('');
     
     try {
-      const endpoint = preferences.is_active ? '/api/alerts/preferences' : '/api/alerts/preferences';
+      const endpoint = preferences.is_active ? '/alerts/preferences' : '/alerts/preferences';
       const method = preferences.is_active ? 'put' : 'post';
       
       await api[method](endpoint, {
@@ -79,7 +79,7 @@ export default function NotificationSettingsPage() {
     setError('');
     
     try {
-      const endpoint = preferences.is_active ? '/api/alerts/pause' : '/api/alerts/resume';
+      const endpoint = preferences.is_active ? '/alerts/pause' : '/alerts/resume';
       await api.post(endpoint);
       setSuccess(preferences.is_active ? 'Alerts paused' : 'Alerts resumed');
       fetchPreferences();
@@ -100,7 +100,7 @@ export default function NotificationSettingsPage() {
     setError('');
     
     try {
-      await api.post('/api/alerts/whatsapp/opt-in', {
+      await api.post('/alerts/whatsapp/opt-in', {
         whatsapp_number: whatsappNumber,
         opt_in: true
       });
@@ -118,7 +118,7 @@ export default function NotificationSettingsPage() {
     setError('');
     
     try {
-      await api.post('/api/alerts/whatsapp/opt-out');
+      await api.post('/alerts/whatsapp/opt-out');
       setSuccess('WhatsApp notifications disabled');
       fetchPreferences();
     } catch (err) {
