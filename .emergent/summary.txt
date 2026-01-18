@@ -1,64 +1,64 @@
 <analysis>**original_problem_statement:**
-The user wants to build a production-ready, role-based recruitment portal called VHC Talent OS. Phase 1 involved building the core application with role-based access, dashboards, and security hardening. Phase 2 focuses on integrating an AI Matching Engine, a Candidate Data Bank, and a notification system. Subsequent requests have focused on operational readiness, UI/UX improvements, currency localization, and integrating a public-facing website with a secure, bot-protected application flow. The latest request is to enhance the candidate application process with an editable review step and add a dedicated applicant review screen for employers.
+The user wants to build a production-ready, role-based recruitment portal called VHC Talent OS.
+- **Phase 1 (Completed):** Build the core application with role-based access, dashboards, AI Matching Engine, notification system, and a public-facing website with a secure application flow.
+- **Phase 1.5 (In Progress):** Harden the application by adding controlled editing capabilities for candidate details (salary, notice period, skills) for Admin, Employer, and Recruiter roles, complete with an audit trail.
 
 **PRODUCT REQUIREMENTS (current focus)**
-- **Candidate Apply & Resume Review**: When a candidate applies, parse their resume and collect their current salary (INR) and notice period. Before final submission, display the parsed data in an editable review screen for the candidate to correct.
-- **Applicant Review Screen**: For each job, create a dedicated Applicants screen for employers/recruiters.
-- **Career Stability Indicator**: On the applicant review screen, display a colored dot (green/yellow/red) indicating the candidate's job stability based on their work history.
-- **Website Landing & Header Fix**: The public website should be the default entry point, and the header navigation order should be corrected.
+1.  **Visibility**: Admin, Employer, and Recruiter must be able to view a candidate's current salary (INR), notice period, skills, and experience summary on the Applicant Review screen.
+2.  **Controlled Editing**: These roles must be able to edit the same fields, but only within an explicit Edit Details mode. The view should be read-only by default.
+3.  **Data Precedence**: Manual edits must always override AI-parsed data. Subsequent resume parsing should not overwrite manual edits.
+4.  **Audit & Safety**: Log every edit (field, old value, new value, user, timestamp) and display a Last updated by indicator in the UI.
+5.  **UX Constraints**: Editing is restricted to the specified fields. Identity fields (email/phone), job history, and the resume file itself cannot be changed in this flow.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application (FastAPI backend, React frontend, MongoDB) for VHC Talent OS is operational. It includes:
-- Complete Role-Based Access Control (RBAC) for Admin, Recruiter, Employer, and Candidate roles with dedicated, functional dashboards.
-- A fully functional AI Matching Engine (GPT-5.2 via ) for parsing job descriptions and resumes, and matching candidates to jobs.
-- An asynchronous email notification system and a candidate-managed job alerts feature.
-- A public-facing website with a dynamic careers page that fetches jobs from the backend. This includes a secure apply without signup flow protected by CAPTCHA and backend rate-limiting.
-- The UI has been updated for Phase-1 operational readiness, with improved terminology and workflows for recruiters and employers.
-- The system's currency is standardized to INR, with correct formatting on both input and display.
+A full-stack application (FastAPI backend, React frontend, MongoDB) for VHC Talent OS is operational.
+- **Completed Phase 1**: Includes full RBAC (Admin, Recruiter, Employer, Candidate), a functional AI Matching Engine for resume parsing and candidate matching, an email notification system, and a public website integrated with the backend.
+- **Enhanced Apply Flow**: A two-step candidate application process is live. It parses a resume, allows the candidate to review and edit the extracted data, and collects current salary and notice period before final submission.
+- **Applicant Review Screen**: A dedicated screen for employers/recruiters to view all applicants for a specific job, including match scores and a career stability indicator.
+- **Career Stability Indicator**: A colored dot (green/yellow/red) indicates a candidate's job stability based on their work history, with a descriptive tooltip.
+- **Public Website**: The public site is the default entry point (), with a corrected header navigation order.
 
 **Last working item**:
-- **Last item agent was working:** The agent began implementing the enhanced candidate apply flow. This involves creating a two-step process where a candidate's resume is first parsed, and then they are presented with an editable review screen to confirm or correct the AI-extracted data, along with providing their current salary and notice period. The agent started by modifying the backend.
+- **Last item agent was working:** The agent was implementing **Phase-1.5 Hardening**. This involved adding the functionality for Admins, Employers, and Recruiters to view and edit candidate details (salary, notice period, skills, summary) from the applicant review screen. The implementation includes a new backend endpoint with audit logging and a major update to the frontend applicant detail dialog to support a read-only view and an Edit Details mode.
 - **Status:** IN PROGRESS
 - **Agent Testing Done:** N
-- **Which testing method agent to use?** both. First, use  to test the new and modified backend API endpoints ( and ). After implementing the frontend UI for the review step, use the  tool for visual verification, followed by the  to conduct an end-to-end test of the new application flow.
+- **Which testing method agent to use?** both.
+    1.  **Backend**: Use  to test the new PUT endpoint , ensuring it correctly updates data and creates an audit log entry.
+    2.  **Frontend**: Use the  tool to visually verify the new Edit Details UI. Then, use the  for an end-to-end test of the edit flow: toggling edit mode, saving changes, and verifying the UI reflects the update and the last updated by information.
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
 There are no outstanding bugs. The work in progress is a feature implementation.
 
 **In progress Task List**:
-- **Task 1:** Implement Candidate Apply & Resume Review Flow (P0)
-    - **Where to resume:**
-        1.  **Backend**: The  Pydantic model and a new endpoint  have been added to . This logic is incomplete and untested. The next step is to finalize the implementation of both  (to return parsed data) and  (to accept corrected data and finalize the application) and test them thoroughly.
-        2.  **Frontend**: The frontend implementation has not started. Modify  to handle the new two-step flow. This requires changing the Apply Now modal to capture the resume, call the first API, and then display a new Review Your Application UI with editable fields for the parsed data, salary, and notice period before final submission.
-    - **What will be achieved with this?** This will significantly improve the accuracy of candidate data by allowing candidates to correct AI parsing errors and will capture critical salary and notice period information at the time of application.
+- **Task 1:** Implement Controlled Candidate Detail Preview & Edit (Phase 1.5) (P0)
+    - **Where to resume:** The agent has just completed the code implementation for both the backend and frontend. The next immediate step is to begin testing.
+        1.  **Verify Frontend Build**: Ensure the frontend compiles successfully after the major changes to .
+        2.  **Test Backend Endpoint**: Use  to send a PUT request to  and verify that the application and candidate documents are updated in the database and that an  log is created.
+        3.  **Test Frontend Flow**: Log in as an Admin/Employer, navigate to the applicant review page for a job with applicants, open an applicant's detail dialog, click Edit Details, change the values, save, and confirm that the UI updates correctly and shows the Last updated by field.
+    - **What will be achieved with this?** This will give recruiters and employers the necessary control to correct or enrich candidate data, improving data quality and tracking changes with a clear audit trail.
     - **Status:** IN PROGRESS
     - **Should Test frontend/backend/both after fix?** both
     - **Blocked on something:** None
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks:**
-    - **P1: Applicant Review Screen**: Create a dedicated Applicants screen accessible from the job management page for employers and recruiters to review all candidates who have applied for a specific job.
-    - **P2: Career Stability Indicator**: Implement the business logic to calculate a candidate's career stability (based on job tenure) and display it as a colored dot on the new applicant review screen.
-    - **P3: Website Landing & Header Fix**: Configure the application so that the default root URL () serves the public website. Update the header navigation links on the public website to the specified order: .
 - **Future Tasks:**
     - WhatsApp Automation for notifications.
     - Email Campaign Automation for marketing.
     - CRM Synchronization.
-    - Payment & Billing integration.
+    - Payment & Billing integration (Stripe).
     - Advanced Analytics Engine.
     - n8n / workflow automation hooks.
     - Refactor the  monolith into a modular structure using FastAPI's .
 
 **Completed work in this session**
-- **AI Matching Engine Fixed**: Resolved a critical bug in  where AI parsing returned empty data. The end-to-end AI workflow (JD parsing, resume parsing, candidate matching) is now fully functional.
-- **Email Notifications & Job Alerts System**: Implemented an asynchronous notification service and a candidate-facing UI to manage job alert preferences.
-- **Phase-1 UI/UX Overhaul**: Aligned Employer and Recruiter dashboards with documented operational procedures, improving clarity, terminology, and workflows for pilot readiness.
-- **Currency System Update to INR**: Successfully switched the application's default currency from USD to INR, including UI display, input fields, and number formatting.
-- **Public Website Integration**: Deployed a public-facing static website, integrated a dynamic Careers page fetching live jobs from the backend, and added a secure login dropdown menu.
-- **Bot Protection & Public Apply Flow**: Implemented an anonymous apply flow with Cloudflare Turnstile CAPTCHA, backend rate-limiting, and honeypot fields to prevent abuse.
+- **P0: Candidate Apply & Resume Review Flow**: Implemented a two-step application process where candidates can review and correct AI-parsed data and provide salary/notice period. (Verified & Approved)
+- **P1: Applicant Review Screen**: Created a dedicated screen for employers/recruiters to review all applicants for a job, with key details and action buttons. (Verified & Approved)
+- **P2: Career Stability Indicator**: Implemented logic to calculate and display a candidate's job stability as a colored dot with an enhanced Shadcn UI tooltip. (Verified & Approved)
+- **P3: Website Landing & Header Fix**: Configured the public website as the default entry point and corrected the header navigation link order across all static pages. (Verified & Approved)
+- **PRD Update**: Updated  to mark Phase-1 as complete.
 
 **Earlier issues found/mentioned but not fixed**
 None.
@@ -70,89 +70,86 @@ None.
 
 
 **Key Technical Concepts**
-- **Backend**: FastAPI, MongoDB (Motor), Pydantic, JWT, RBAC, BackgroundTasks for async jobs,  for rate limiting.
+- **Backend**: FastAPI, MongoDB (Motor), Pydantic, JWT, RBAC, BackgroundTasks, .
 - **Frontend**: React, React Router, Shadcn/UI, Tailwind CSS, Axios.
 - **AI Integration**:  library for GPT-5.2.
-- **Notifications**: Resend (for email), Twilio (stubbed for WhatsApp).
+- **Notifications**: Resend (mocked).
 - **Bot Protection**: Cloudflare Turnstile.
-- **Deployment**: The application consists of a React frontend and a FastAPI backend running as separate services, with a public-facing static site now served via the React app's  folder.
 
 **key DB schema**
+- **applications**: 
 - **users**: 
 - **jobs**: 
 - **candidates**: 
-- **applications**: 
-- **job_alerts**: 
-- **notification_logs**: 
 
 **changes in tech stack**
-- Added  for email notifications.
-- Added  for WhatsApp notifications (stubbed).
-- Added  and its dependencies for backend rate limiting.
+None in this session.
 
 **All files of reference**
-- : Heavily modified to add notification logic, public APIs, rate limiting, and the new two-step apply endpoints.
-- : New file containing the core logic for matching jobs to candidates and dispatching notifications.
-- : New file for handling email sending via Resend.
-- : New page for candidates to manage their job alerts.
-- : New utility for formatting salaries in INR.
-- : The static careers page, heavily modified with JavaScript to dynamically fetch jobs, display a CAPTCHA-protected apply modal, and handle submissions.
-- : Updated with the status of all completed and pending tasks.
+- : Heavily modified to add the two-step apply flow, the enriched job applicants endpoint, the career stability logic fix, and the new endpoint for updating applicant details with an audit trail.
+- : Created for P1, then significantly updated for the P2 tooltip enhancement and rewritten for the Phase 1.5 controlled edit mode.
+- : Updated with new routes for the applicant review page and the public website landing page.
+- : Updated with new API client functions for fetching applicants and editing details.
+- : Rewritten to implement the two-step apply flow UI.
+- : All static HTML files were updated to fix the header navigation order.
+- : Updated to link to the new applicants page.
+- : Updated to link to the new applicants page.
+- : Updated to reflect Phase-1 completion.
 
-**Areas that need refactoring**
--  is now over 2000 lines long and urgently needs to be broken down into smaller, manageable modules using FastAPI's . This should be prioritized after the current feature set is stable.
+**Areas that need refactoring**:
+-  is now extremely large and complex. It urgently needs to be broken down into smaller modules using FastAPI's . This is a documented future task.
 
 **key api endpoints**
--  (GET, POST): Manages candidate job alert settings.
--  (GET): Publicly lists all active jobs (no auth required).
--  (POST): Initiates a public job application by parsing a resume.
--  (POST): Finalizes a public job application with candidate-corrected data.
-- : Finds matching candidates for a specific job.
+-  (POST)
+-  (POST)
+-  (GET)
+- ** (PUT) - NEW, UNTESTED**
+-  (POST)
 
 **Critical Info for New Agent**
-- The immediate task is to complete the two-step candidate apply flow. The backend has been partially modified, but requires completion and testing. The frontend part is yet to be started.
-- All subsequent tasks in the user's latest request (Applicant Review Screen, Stability Indicator, Website Fixes) should be addressed after the apply flow is complete.
-- Be aware that Resend and Twilio API keys are placeholders. Notification-sending logic will execute and log actions, but no actual emails or messages will be sent.
-- The  file is very large. Be cautious when making changes. Refactoring is a future task, so avoid it for now.
+- You are starting **Phase 1.5**. The code has been written but is completely untested.
+- Your immediate priority is to thoroughly test the new Controlled Edit feature. Follow the test plan outlined in the Last working item section.
+- Start by verifying the backend endpoint () works as expected using .
+- Then, move to the frontend and test the full user flow for editing an applicant's details.
+- Be aware that a login issue with the  account was fixed during the session. The root cause was a mismatch between  and  fields, which has been resolved.
 
 **documents and test reports created in this job**
 - 
 - 
-- 
-- 
-- 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **Request:** Implement Phase-1 enhancements: editable resume review screen, capture salary/notice period, add applicant review screen with stability indicator, and fix public website landing/header. (IN PROGRESS)
-2.  **Request:** Integrate a public-facing website, add a dynamic careers page, a secure login menu, an apply without signup flow, and bot protection. (COMPLETED)
-3.  **Request:** Update the system to use INR as the primary currency for all salary displays and inputs. (COMPLETED)
-4.  **Request:** Align the UI/UX with provided documentation for Phase-1 operational readiness (Employer demos, Recruiter workflows). (COMPLETED)
-5.  **User Message:** give me admin login ID. (COMPLETED)
-6.  **User Message:** Proceed with P1 (Email Notifications & Job Alerts). (COMPLETED)
+10. **Request:** Start Phase-1.5 Hardening: Controlled Salary, Notice Period & Candidate Detail Preview/Edit. (IN PROGRESS)
+9.  **User Message:** Confirmed. Phase-1 is APPROVED and OFFICIALLY SIGNED OFF. (COMPLETED)
+8.  **Agent Action:** Asked user to confirm completion of all Phase-1 tasks.
+7.  **User Message:** Confirmed. P3 is approved and signed off. (COMPLETED)
+6.  **Agent Action:** Asked user to confirm completion of P3.
+5.  **User Message:** Confirmed. P2 is approved and signed off. (COMPLETED)
+4.  **Agent Action:** Asked user to confirm completion of P2.
+3.  **User Message:** Confirmed. P1 is approved and signed off. (COMPLETED)
+2.  **Agent Action:** Asked user to confirm completion of P1.
+1.  **User Message:** Confirmed. P0 is approved and signed off. (COMPLETED)
 
 **Project Health Check:**
 - **Broken**: None.
-- **Mocked**: Email () and WhatsApp () notifications are mocked. The services log that a notification would be sent, but no API keys are configured, so no external messages are dispatched.
+- **Mocked**: Email () and WhatsApp () notifications are mocked.
 
 **3rd Party Integrations**
-- **OpenAI GPT-5.2**: Uses Emergent LLM Key via  for AI parsing and matching.
-- **Resend**: Integrated for email notifications. Requires a user-provided API key (currently mocked).
-- **Twilio**: Stubbed for future WhatsApp notifications. Requires user-provided Account SID and Auth Token.
-- **Cloudflare Turnstile**: Integrated on the public apply form for bot protection. Keys are handled by the frontend implementation.
+- **OpenAI GPT-5.2**: Uses Emergent LLM Key via .
+- **Resend**: Integrated for email notifications (mocked).
+- **Twilio**: Stubbed for future WhatsApp notifications (mocked).
+- **Cloudflare Turnstile**: Integrated for bot protection on the public apply form.
 
 **Testing status**
-- **Testing agent used after significant changes**: YES
-- **Troubleshoot agent used after agent stuck in loop**: NO
-- **Test files created**:
-    - 
-    - 
-    - 
-    - 
-- **Known regressions**: The last test run had an expected failure on the public application endpoint due to the successful implementation of rate-limiting. This is correct behavior, not a regression.
+- **Testing agent used after significant changes**: YES (for P1).
+- **Troubleshoot agent used after agent stuck in loop**: NO.
+- **Test files created**: 
+- **Known regressions**: None. Test failures related to rate-limiting during P0 were identified as expected behavior, not regressions.
 
 **Credentials to test flow:**
 - **Admin Email:** 
 - **Admin Password:** 
+- **Employer Email:** 
+- **Employer Password:** 
 
 **What agent forgot to execute**
-The agent is currently working on the user's most recent request and has not forgotten any tasks. The plan is to complete the features sequentially as requested.</analysis>
+The agent has not forgotten any tasks and is proceeding according to the user's explicit instructions.</analysis>
