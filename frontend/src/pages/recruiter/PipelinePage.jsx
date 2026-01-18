@@ -100,14 +100,14 @@ export default function PipelinePage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-heading text-3xl font-bold text-slate-900">Candidate Pipeline</h1>
-          <p className="text-slate-500 mt-1">Drag candidates between stages</p>
+          <p className="text-slate-500 mt-1">Drag candidates between stages to update status</p>
         </div>
         <Select value={selectedJob} onValueChange={setSelectedJob}>
           <SelectTrigger className="w-64" data-testid="job-filter-select">
-            <SelectValue placeholder="Filter by job" />
+            <SelectValue placeholder="Filter by mandate" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Jobs</SelectItem>
+            <SelectItem value="all">All Mandates</SelectItem>
             {jobs.map((job) => (
               <SelectItem key={job.id} value={job.id}>
                 {job.title}
@@ -115,6 +115,15 @@ export default function PipelinePage() {
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Help Tip */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700 flex items-start gap-3">
+        <ClipboardList className="w-5 h-5 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium">Workflow Tip</p>
+          <p className="text-blue-600">Drag candidate cards to move them through the pipeline. Click on a card to view details and add notes.</p>
+        </div>
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
