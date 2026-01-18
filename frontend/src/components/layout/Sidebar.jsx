@@ -15,7 +15,9 @@ import {
   BarChart3,
   UserPlus,
   Menu,
-  X
+  X,
+  Sparkles,
+  Database
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -28,6 +30,7 @@ const navItems = {
     { icon: Users, label: 'Users', path: '/admin/users' },
     { icon: Briefcase, label: 'Jobs', path: '/admin/jobs' },
     { icon: UserCircle, label: 'Candidates', path: '/admin/candidates' },
+    { icon: Database, label: 'Candidate Bank', path: '/admin/candidate-bank' },
     { icon: Building2, label: 'Companies', path: '/admin/companies' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
@@ -36,18 +39,23 @@ const navItems = {
     { icon: Briefcase, label: 'Jobs', path: '/recruiter/jobs' },
     { icon: ClipboardList, label: 'Pipeline', path: '/recruiter/pipeline' },
     { icon: UserCircle, label: 'Candidates', path: '/recruiter/candidates' },
+    { icon: Sparkles, label: 'AI Matching', path: '/recruiter/find-candidates' },
+    { icon: Database, label: 'Candidate Bank', path: '/recruiter/candidate-bank' },
   ],
   employer: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/employer' },
     { icon: Briefcase, label: 'My Jobs', path: '/employer/jobs' },
     { icon: UserPlus, label: 'Post Job', path: '/employer/jobs/new' },
     { icon: ClipboardList, label: 'Applicants', path: '/employer/applicants' },
+    { icon: Sparkles, label: 'AI Matching', path: '/employer/find-candidates' },
+    { icon: Database, label: 'Candidate Bank', path: '/employer/candidate-bank' },
     { icon: BarChart3, label: 'Analytics', path: '/employer/analytics' },
   ],
   candidate: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/candidate' },
     { icon: UserCircle, label: 'My Profile', path: '/candidate/profile' },
     { icon: Search, label: 'Browse Jobs', path: '/candidate/jobs' },
+    { icon: Sparkles, label: 'Jobs For You', path: '/candidate/matching-jobs' },
     { icon: FileText, label: 'Applications', path: '/candidate/applications' },
     { icon: Mail, label: 'Messages', path: '/candidate/messages' },
   ],
