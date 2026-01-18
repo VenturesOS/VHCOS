@@ -63,16 +63,22 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     created_at: str
     is_active: bool = True
+    requires_password_reset: bool = False
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     is_active: Optional[bool] = None
 
+class PasswordReset(BaseModel):
+    current_password: str
+    new_password: str
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    requires_password_reset: bool = False
 
 class JobBase(BaseModel):
     title: str
