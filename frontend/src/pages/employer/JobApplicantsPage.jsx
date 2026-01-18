@@ -324,10 +324,20 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
                 </span>
               </div>
               {applicant.career_stability && (
-                <div 
-                  className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white ${STABILITY_COLORS[applicant.career_stability.score]}`}
-                  title={applicant.career_stability.tooltip}
-                />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div 
+                        className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white cursor-help ${STABILITY_COLORS[applicant.career_stability.score]}`}
+                        data-testid="stability-indicator-detail"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <p className="font-semibold">Career Stability: {applicant.career_stability.score.charAt(0).toUpperCase() + applicant.career_stability.score.slice(1)}</p>
+                      <p className="text-xs text-muted-foreground">{applicant.career_stability.tooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
             <div className="flex-1">
@@ -381,10 +391,19 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
             </div>
             <div className="bg-slate-50 rounded-lg p-3">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Career Stability</p>
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${STABILITY_COLORS[applicant.career_stability?.score] || 'bg-gray-300'}`} />
-                <p className="font-semibold">{applicant.career_stability?.score || 'N/A'}</p>
-              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 cursor-help">
+                      <div className={`w-3 h-3 rounded-full ${STABILITY_COLORS[applicant.career_stability?.score] || 'bg-gray-300'}`} />
+                      <p className="font-semibold capitalize">{applicant.career_stability?.score || 'N/A'}</p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{applicant.career_stability?.tooltip || 'No stability data available'}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 
