@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { jobAPI } from '../../lib/api';
 import { Card, CardContent } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Eye } from 'lucide-react';
 
 export default function RecruiterJobsPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadJobs();
