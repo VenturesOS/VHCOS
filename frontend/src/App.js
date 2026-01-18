@@ -80,6 +80,7 @@ function App() {
             <Route index element={<EmployerDashboard />} />
             <Route path="jobs" element={<EmployerJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
+            <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="applicants" element={<ApplicantsPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
