@@ -29,8 +29,12 @@ export default function Login() {
     try {
       const userData = await login(email, password);
       toast.success(`Welcome back, ${userData.name}!`);
-      // Use window.location for a clean navigation to avoid React Router race conditions
-      window.location.href = `/${userData.role}`;
+      // Check if password reset is required
+      if (userData.requires_password_reset) {
+        window.location.href = '/reset-password';
+      } else {
+        window.location.href = `/${userData.role}`;
+      }
     } catch (error) {
       const message = error.response?.data?.detail || 'Login failed. Please try again.';
       toast.error(message);
