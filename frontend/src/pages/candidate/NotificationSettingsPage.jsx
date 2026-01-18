@@ -161,28 +161,25 @@ export default function NotificationSettingsPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-96">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7CB342]"></div>
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center min-h-96">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7CB342]"></div>
+      </div>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6" data-testid="notification-settings-page">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Notification Settings</h1>
-            <p className="text-gray-600">Manage your job alerts and notification preferences</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {preferences?.is_active ? (
-              <Badge className="bg-green-100 text-green-800">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                Alerts Active
-              </Badge>
+    <div className="space-y-6" data-testid="notification-settings-page">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Notification Settings</h1>
+          <p className="text-gray-600">Manage your job alerts and notification preferences</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {preferences?.is_active ? (
+            <Badge className="bg-green-100 text-green-800">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Alerts Active
+            </Badge>
             ) : (
               <Badge variant="secondary">
                 <Pause className="w-3 h-3 mr-1" />
