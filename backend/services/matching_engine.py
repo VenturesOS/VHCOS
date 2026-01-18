@@ -243,14 +243,25 @@ Return JSON:
         else:
             json_str = response_text
         
+        logger.info(f"[MATCH CALC] Extracted JSON string: {json_str[:300] if json_str else 'EMPTY'}")
+        
         match_result = json.loads(json_str.strip())
         match_result["matched"] = match_result.get("score", 0) >= 50
         match_result["filtered_out"] = False
         
+        logger.info(f"[MATCH CALC] Successfully calculated match score: {match_result.get('score')}")
         return match_result
         
+    except json.JSONDecodeError as e:
+        logger.error(f"[MATCH CALC] JSON parse error: {e}")
+        return {
+            "score": 0,
+            "matched": False,
+            "error": f"JSON parse error: {str(e)}",
+            "explanation": "Unable to calculate match"
+        }
     except Exception as e:
-        logger.error(f"Match calculation error: {e}")
+        logger.error(f"[MATCH CALC] Error: {type(e).__name__}: {e}")
         return {
             "score": 0,
             "matched": False,
