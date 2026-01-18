@@ -991,6 +991,7 @@ class ApplicantReviewResponse(BaseModel):
     candidate_phone: Optional[str] = None
     headline: Optional[str] = None
     summary: Optional[str] = None
+    experience_summary: Optional[str] = None  # Editable summary text
     skills: Optional[List[str]] = None
     experience_years: Optional[int] = None
     location: Optional[str] = None
@@ -1005,6 +1006,9 @@ class ApplicantReviewResponse(BaseModel):
     applied_at: Optional[str] = None
     updated_at: Optional[str] = None
     notes: List[Dict] = []
+    edit_history: List[Dict] = []  # Audit trail
+    last_edited_by: Optional[Dict] = None  # {name, role, timestamp}
+    manually_edited: bool = False  # Flag indicating manual edits exist
 
 @api_router.get("/jobs/{job_id}/applicants")
 async def get_job_applicants(
