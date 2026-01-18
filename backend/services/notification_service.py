@@ -350,7 +350,7 @@ async def trigger_job_notifications_background(
             logger.debug(f"[NOTIFY-BG] No candidate bank record for alert subscriber: {alert.get('candidate_email')}")
     
     if not candidates_with_alerts:
-        logger.info(f"[NOTIFY-BG] No candidates with active alerts")
+        logger.info("[NOTIFY-BG] No candidates with active alerts")
         return
     
     # Match each candidate against the job

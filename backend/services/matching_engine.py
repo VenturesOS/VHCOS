@@ -216,7 +216,7 @@ Return JSON:
     "explanation": "2-3 sentence explanation of the match"
 }}"""
         
-        logger.info(f"[MATCH CALC] Sending prompt to GPT-5.2")
+        logger.info("[MATCH CALC] Sending prompt to GPT-5.2")
         
         response = await chat.send_message(
             user_message=UserMessage(text=prompt)

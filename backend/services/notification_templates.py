@@ -235,7 +235,7 @@ def render_email_template(template_name: str, variables: Dict) -> Optional[Dict]
             "html": html,
             "text": text
         }
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -257,7 +257,7 @@ def render_whatsapp_template(template_name: str, variables: Dict) -> Optional[Di
             "body": body,
             "category": template["category"]
         }
-    except Exception as e:
+    except Exception:
         return None
 
 
