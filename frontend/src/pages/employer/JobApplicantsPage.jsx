@@ -180,6 +180,7 @@ export default function JobApplicantsPage() {
         jobData={jobData}
         onClose={() => setSelectedApplicant(null)}
         onUpdateStage={handleUpdateStage}
+        onRefresh={loadApplicants}
       />
     </div>
   );
