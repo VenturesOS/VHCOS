@@ -904,6 +904,605 @@ async def get_candidate_stats(current_user: dict = Depends(require_role(["candid
         "unread_messages": unread_messages
     }
 
+# ============== AI MATCHING ENGINE ==============
+
+from services.matching_engine import (
+    parse_resume_with_ai,
+    parse_job_description_with_ai,
+    calculate_candidate_job_match,
+    apply_must_have_filters,
+    generate_resume_fingerprint,
+    find_similar_candidate
+)
+
+def extract_text_from_pdf(file_path: Path) -> str:
+    """Extract text from PDF file"""
+    try:
+        doc = fitz.open(file_path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        return text
+    except Exception as e:
+        logger.error(f"PDF extraction error: {e}")
+        return ""
+
+def normalize_phone(phone: str) -> str:
+    """Normalize phone number for deduplication"""
+    if not phone:
+        return ""
+    return "".join(filter(str.isdigit, phone))[-10:]
+
+async def create_audit_log(
+    candidate_id: str,
+    field: str,
+    old_val: Any,
+    new_val: Any,
+    user: dict,
+    source: str
+):
+    """Create audit trail entry for candidate data changes"""
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "candidate_id": candidate_id,
+        "field_changed": field,
+        "old_value": str(old_val) if old_val else None,
+        "new_value": str(new_val) if new_val else None,
+        "updated_by_role": user["role"],
+        "updated_by_id": user["id"],
+        "updated_by_name": user["name"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": source
+    }
+    await db.audit_logs.insert_one(log_entry)
+
+# Data update priority: candidate > employer > recruiter > parsing
+UPDATE_PRIORITY = {
+    "candidate": 4,
+    "employer": 3,
+    "recruiter": 2,
+    "admin": 5,
+    "parsing": 1
+}
+
+async def should_update_field(
+    candidate_id: str,
+    field: str,
+    new_source: str,
+    db
+) -> bool:
+    """Check if update should proceed based on priority rules"""
+    # Get last update source for this field
+    last_log = await db.audit_logs.find_one(
+        {"candidate_id": candidate_id, "field_changed": field},
+        sort=[("timestamp", -1)]
+    )
+    
+    if not last_log:
+        return True
+    
+    last_source_role = last_log.get("updated_by_role", "parsing")
+    last_priority = UPDATE_PRIORITY.get(last_source_role, 1)
+    new_priority = UPDATE_PRIORITY.get(new_source, 1)
+    
+    return new_priority >= last_priority
+
+@api_router.post("/ai/parse-resume")
+async def ai_parse_resume(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Parse resume using AI and optionally add to candidate data bank"""
+    if not file.filename.lower().endswith(('.pdf', '.doc', '.docx', '.txt')):
+        raise HTTPException(status_code=400, detail="Only PDF, DOC, DOCX, TXT files allowed")
+    
+    # Save file temporarily
+    file_id = str(uuid.uuid4())
+    file_ext = Path(file.filename).suffix
+    temp_path = UPLOAD_DIR / f"temp_{file_id}{file_ext}"
+    
+    async with aiofiles.open(temp_path, 'wb') as f:
+        content = await file.read()
+        await f.write(content)
+    
+    # Extract text
+    if file_ext.lower() == '.pdf':
+        resume_text = extract_text_from_pdf(temp_path)
+    else:
+        async with aiofiles.open(temp_path, 'r', errors='ignore') as f:
+            resume_text = await f.read()
+    
+    if not resume_text.strip():
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Could not extract text from file")
+    
+    # Parse with AI
+    result = await parse_resume_with_ai(resume_text)
+    
+    if not result["success"]:
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=result.get("error", "Parsing failed"))
+    
+    # Generate fingerprint
+    fingerprint = generate_resume_fingerprint(resume_text)
+    result["data"]["resume_fingerprint"] = fingerprint
+    
+    temp_path.unlink(missing_ok=True)
+    
+    return {"success": True, "parsed_data": result["data"]}
+
+@api_router.post("/ai/parse-jd")
+async def ai_parse_job_description(
+    jd_text: str = Form(None),
+    file: UploadFile = File(None),
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Parse job description using AI"""
+    text_to_parse = jd_text
+    
+    if file:
+        file_ext = Path(file.filename).suffix
+        temp_path = UPLOAD_DIR / f"temp_jd_{uuid.uuid4()}{file_ext}"
+        
+        async with aiofiles.open(temp_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+        
+        if file_ext.lower() == '.pdf':
+            text_to_parse = extract_text_from_pdf(temp_path)
+        else:
+            async with aiofiles.open(temp_path, 'r', errors='ignore') as f:
+                text_to_parse = await f.read()
+        
+        temp_path.unlink(missing_ok=True)
+    
+    if not text_to_parse or not text_to_parse.strip():
+        raise HTTPException(status_code=400, detail="No job description text provided")
+    
+    result = await parse_job_description_with_ai(text_to_parse)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error", "Parsing failed"))
+    
+    return {"success": True, "parsed_data": result["data"]}
+
+@api_router.post("/matching/find-candidates", response_model=List[MatchResult])
+async def find_matching_candidates(
+    match_req: MatchRequest,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Find candidates matching job requirements with AI scoring"""
+    
+    # Get job requirements
+    job_data = None
+    if match_req.job_id:
+        job = await db.jobs.find_one({"id": match_req.job_id}, {"_id": 0})
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        # Parse existing job description
+        jd_result = await parse_job_description_with_ai(job.get("description", "") + " " + job.get("requirements", ""))
+        if jd_result["success"]:
+            job_data = jd_result["data"]
+    elif match_req.jd_text:
+        jd_result = await parse_job_description_with_ai(match_req.jd_text)
+        if jd_result["success"]:
+            job_data = jd_result["data"]
+    
+    if not job_data:
+        raise HTTPException(status_code=400, detail="Could not parse job requirements")
+    
+    # Build must-have filters
+    must_have = {}
+    if match_req.must_have_location:
+        must_have["location"] = match_req.must_have_location
+    if match_req.must_have_qualification:
+        must_have["required_qualification"] = match_req.must_have_qualification
+    if match_req.must_have_skills:
+        must_have["mandatory_skills"] = match_req.must_have_skills
+    if match_req.min_experience is not None:
+        must_have["min_experience"] = match_req.min_experience
+    if match_req.max_experience is not None:
+        must_have["max_experience"] = match_req.max_experience
+    
+    # Get candidates based on role visibility
+    query = {}
+    if current_user["role"] == "employer":
+        query["$or"] = [
+            {"visibility.employer_ids": current_user["id"]},
+            {"source": "self"}  # Self-registered candidates visible to employers
+        ]
+    elif current_user["role"] == "recruiter":
+        query["$or"] = [
+            {"visibility.recruiter_ids": current_user["id"]},
+            {"created_by": current_user["id"]},
+            {"source": "self"}
+        ]
+    
+    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(500)
+    
+    results = []
+    for candidate in candidates:
+        match_result = await calculate_candidate_job_match(candidate, job_data, must_have if must_have else None)
+        
+        results.append(MatchResult(
+            candidate_id=candidate["id"],
+            candidate_name=candidate["name"],
+            candidate_email=candidate["email"],
+            score=match_result.get("score", 0),
+            skill_match_score=match_result.get("skill_match_score"),
+            experience_match_score=match_result.get("experience_match_score"),
+            matched_skills=match_result.get("matched_skills", []),
+            missing_skills=match_result.get("missing_skills", []),
+            strengths=match_result.get("strengths", []),
+            gaps=match_result.get("gaps", []),
+            explanation=match_result.get("explanation", ""),
+            filtered_out=match_result.get("filtered_out", False),
+            filter_reason=match_result.get("filter_reason")
+        ))
+    
+    # Sort by score descending, filtered_out last
+    results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
+    
+    # Store match results for analytics
+    if match_req.job_id:
+        await db.match_results.insert_one({
+            "id": str(uuid.uuid4()),
+            "job_id": match_req.job_id,
+            "searched_by": current_user["id"],
+            "searched_by_role": current_user["role"],
+            "total_candidates": len(candidates),
+            "matched_count": len([r for r in results if r.score >= 50 and not r.filtered_out]),
+            "filters_applied": must_have,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return results
+
+@api_router.get("/matching/jobs-for-candidate", response_model=List[JobMatchForCandidate])
+async def get_matching_jobs_for_candidate(
+    current_user: dict = Depends(require_role(["candidate"]))
+):
+    """Get matching jobs for current candidate based on their profile"""
+    
+    # Get candidate from data bank
+    candidate = await db.candidate_bank.find_one(
+        {"linked_user_id": current_user["id"]},
+        {"_id": 0}
+    )
+    
+    if not candidate:
+        # Fallback to candidate_profiles
+        profile = await db.candidate_profiles.find_one(
+            {"user_id": current_user["id"]},
+            {"_id": 0}
+        )
+        if not profile:
+            return []
+        candidate = profile
+    
+    # Get active jobs
+    jobs = await db.jobs.find({"status": "active"}, {"_id": 0}).to_list(100)
+    
+    results = []
+    for job in jobs:
+        # Parse job requirements
+        jd_text = f"{job.get('title', '')} {job.get('description', '')} {job.get('requirements', '')}"
+        jd_result = await parse_job_description_with_ai(jd_text)
+        
+        if not jd_result["success"]:
+            continue
+        
+        job_data = jd_result["data"]
+        match_result = await calculate_candidate_job_match(candidate, job_data)
+        
+        if match_result.get("score", 0) >= 30:  # Only show relevant matches
+            results.append(JobMatchForCandidate(
+                job_id=job["id"],
+                job_title=job["title"],
+                company_name=job.get("company_name"),
+                location=job.get("location", ""),
+                score=match_result.get("score", 0),
+                explanation=match_result.get("explanation", ""),
+                matched_skills=match_result.get("matched_skills", [])
+            ))
+    
+    # Sort by score
+    results.sort(key=lambda x: x.score, reverse=True)
+    
+    return results[:20]  # Return top 20 matches
+
+# ============== CANDIDATE DATA BANK ==============
+
+@api_router.post("/candidate-bank/add")
+async def add_to_candidate_bank(
+    file: UploadFile = File(...),
+    email: str = Form(None),
+    name: str = Form(None),
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Add candidate to data bank from resume upload with deduplication"""
+    
+    # Parse resume
+    if not file.filename.lower().endswith(('.pdf', '.doc', '.docx', '.txt')):
+        raise HTTPException(status_code=400, detail="Only PDF, DOC, DOCX, TXT files allowed")
+    
+    file_id = str(uuid.uuid4())
+    file_ext = Path(file.filename).suffix
+    file_path = UPLOAD_DIR / f"resume_{file_id}{file_ext}"
+    
+    async with aiofiles.open(file_path, 'wb') as f:
+        content = await file.read()
+        await f.write(content)
+    
+    # Extract and parse
+    if file_ext.lower() == '.pdf':
+        resume_text = extract_text_from_pdf(file_path)
+    else:
+        async with aiofiles.open(file_path, 'r', errors='ignore') as f:
+            resume_text = await f.read()
+    
+    fingerprint = generate_resume_fingerprint(resume_text)
+    
+    parse_result = await parse_resume_with_ai(resume_text)
+    if not parse_result["success"]:
+        raise HTTPException(status_code=500, detail="Failed to parse resume")
+    
+    parsed_data = parse_result["data"]
+    candidate_email = email or parsed_data.get("email")
+    candidate_name = name or parsed_data.get("name")
+    
+    if not candidate_email:
+        raise HTTPException(status_code=400, detail="Could not determine candidate email")
+    
+    # Check for duplicates
+    dup_check = await find_similar_candidate(
+        db,
+        email=candidate_email,
+        phone=parsed_data.get("phone"),
+        resume_fingerprint=fingerprint
+    )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    resume_version = {
+        "id": file_id,
+        "filename": file.filename,
+        "path": str(file_path),
+        "fingerprint": fingerprint,
+        "uploaded_at": now,
+        "uploaded_by": current_user["id"],
+        "is_active": True
+    }
+    
+    if dup_check["found"]:
+        # Update existing candidate
+        existing = dup_check["candidate"]
+        
+        # Deactivate old resume, add new
+        update_data = {
+            "resume_versions": existing.get("resume_versions", []) + [resume_version],
+            "active_resume_id": file_id,
+            "updated_at": now,
+            "last_updated_by": current_user["id"]
+        }
+        
+        # Add fingerprint if new
+        if fingerprint not in existing.get("resume_fingerprints", []):
+            update_data["resume_fingerprints"] = existing.get("resume_fingerprints", []) + [fingerprint]
+        
+        # Update fields based on priority
+        source = current_user["role"]
+        for field in ["skills", "experience", "education", "experience_years", "location", "certifications"]:
+            if parsed_data.get(field) and await should_update_field(existing["id"], field, source, db):
+                old_val = existing.get(field)
+                new_val = parsed_data[field]
+                if old_val != new_val:
+                    update_data[field] = new_val
+                    await create_audit_log(existing["id"], field, old_val, new_val, current_user, f"{source}_update")
+        
+        # Add visibility
+        vis_key = f"{current_user['role']}_ids"
+        current_vis = existing.get("visibility", {}).get(vis_key, [])
+        if current_user["id"] not in current_vis:
+            update_data[f"visibility.{vis_key}"] = current_vis + [current_user["id"]]
+        
+        await db.candidate_bank.update_one(
+            {"id": existing["id"]},
+            {"$set": update_data}
+        )
+        
+        return {
+            "action": "updated",
+            "candidate_id": existing["id"],
+            "match_type": dup_check["match_type"],
+            "message": f"Updated existing candidate (matched by {dup_check['match_type']})"
+        }
+    
+    else:
+        # Create new candidate
+        candidate_id = str(uuid.uuid4())
+        
+        candidate_doc = {
+            "id": candidate_id,
+            "email": candidate_email.lower(),
+            "name": candidate_name or "Unknown",
+            "phone": parsed_data.get("phone"),
+            "phone_normalized": normalize_phone(parsed_data.get("phone", "")),
+            "headline": parsed_data.get("headline"),
+            "summary": parsed_data.get("summary"),
+            "skills": parsed_data.get("skills", []),
+            "experience_years": parsed_data.get("experience_years", 0),
+            "experience": parsed_data.get("experience", []),
+            "education": parsed_data.get("education", []),
+            "location": parsed_data.get("location"),
+            "certifications": parsed_data.get("certifications", []),
+            "active_resume_id": file_id,
+            "resume_versions": [resume_version],
+            "resume_fingerprints": [fingerprint],
+            "source": current_user["role"],
+            "linked_user_id": None,
+            "visibility": {
+                f"{current_user['role']}_ids": [current_user["id"]]
+            },
+            "match_cache": [],
+            "created_at": now,
+            "updated_at": now,
+            "created_by": current_user["id"],
+            "last_updated_by": current_user["id"]
+        }
+        
+        await db.candidate_bank.insert_one(candidate_doc)
+        
+        return {
+            "action": "created",
+            "candidate_id": candidate_id,
+            "message": "New candidate added to data bank"
+        }
+
+@api_router.get("/candidate-bank", response_model=List[CandidateBankRecord])
+async def get_candidate_bank(
+    search: Optional[str] = None,
+    skills: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get candidates from data bank based on role visibility"""
+    
+    query = {}
+    
+    # Role-based visibility
+    if current_user["role"] == "admin":
+        pass  # Full access
+    elif current_user["role"] == "employer":
+        query["$or"] = [
+            {"visibility.employer_ids": current_user["id"]},
+            {"source": "self"}
+        ]
+    elif current_user["role"] == "recruiter":
+        query["$or"] = [
+            {"visibility.recruiter_ids": current_user["id"]},
+            {"created_by": current_user["id"]},
+            {"source": "self"}
+        ]
+    elif current_user["role"] == "candidate":
+        query["linked_user_id"] = current_user["id"]
+    else:
+        return []
+    
+    # Search filter
+    if search:
+        query["$and"] = query.get("$and", []) + [{
+            "$or": [
+                {"name": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}},
+                {"skills": {"$regex": search, "$options": "i"}}
+            ]
+        }]
+    
+    # Skills filter
+    if skills:
+        skill_list = [s.strip() for s in skills.split(",")]
+        query["skills"] = {"$in": skill_list}
+    
+    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(500)
+    return [CandidateBankRecord(**c) for c in candidates]
+
+@api_router.get("/candidate-bank/{candidate_id}")
+async def get_candidate_bank_record(
+    candidate_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get single candidate from data bank with visibility check"""
+    
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    # Check visibility
+    if current_user["role"] == "admin":
+        pass
+    elif current_user["role"] == "employer":
+        if current_user["id"] not in candidate.get("visibility", {}).get("employer_ids", []) and candidate.get("source") != "self":
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user["role"] == "recruiter":
+        vis = candidate.get("visibility", {})
+        if (current_user["id"] not in vis.get("recruiter_ids", []) and 
+            candidate.get("created_by") != current_user["id"] and
+            candidate.get("source") != "self"):
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user["role"] == "candidate":
+        if candidate.get("linked_user_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    return candidate
+
+@api_router.put("/candidate-bank/{candidate_id}")
+async def update_candidate_bank_record(
+    candidate_id: str,
+    update_data: CandidateBankUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update candidate in data bank with priority rules and audit"""
+    
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    # Determine source based on role and ownership
+    if current_user["role"] == "candidate" and candidate.get("linked_user_id") == current_user["id"]:
+        source = "candidate"
+    else:
+        source = current_user["role"]
+    
+    update_dict = {}
+    for field, value in update_data.model_dump().items():
+        if value is not None:
+            if await should_update_field(candidate_id, field, source, db):
+                old_val = candidate.get(field)
+                if old_val != value:
+                    update_dict[field] = value
+                    await create_audit_log(candidate_id, field, old_val, value, current_user, f"{source}_update")
+    
+    if update_dict:
+        update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+        update_dict["last_updated_by"] = current_user["id"]
+        
+        await db.candidate_bank.update_one(
+            {"id": candidate_id},
+            {"$set": update_dict}
+        )
+    
+    return {"message": "Candidate updated", "fields_updated": list(update_dict.keys())}
+
+@api_router.get("/candidate-bank/{candidate_id}/audit-log")
+async def get_candidate_audit_log(
+    candidate_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Get audit trail for candidate"""
+    
+    logs = await db.audit_logs.find(
+        {"candidate_id": candidate_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(100)
+    
+    return logs
+
+@api_router.get("/candidate-bank/{candidate_id}/resume-history")
+async def get_candidate_resume_history(
+    candidate_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get resume version history for candidate"""
+    
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    return {
+        "active_resume_id": candidate.get("active_resume_id"),
+        "resume_versions": candidate.get("resume_versions", [])
+    }
+
 # ============== SETTINGS ==============
 
 @api_router.get("/settings")
