@@ -338,11 +338,37 @@ async def login(credentials: UserLogin):
         requires_password_reset=requires_reset
     )
     
-    return TokenResponse(access_token=access_token, user=user_response)
+    return TokenResponse(access_token=access_token, user=user_response, requires_password_reset=requires_reset)
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(**current_user)
+
+@api_router.post("/auth/reset-password")
+async def reset_password(reset_data: PasswordReset, current_user: dict = Depends(get_current_user)):
+    """Reset password - validates current password and sets new one"""
+    # Get user with password
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    
+    if not verify_password(reset_data.current_password, user["password"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    if len(reset_data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    
+    if reset_data.current_password == reset_data.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+    
+    # Update password and clear reset flag
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {
+            "password": hash_password(reset_data.new_password),
+            "requires_password_reset": False
+        }}
+    )
+    
+    return {"message": "Password reset successfully"}
 
 # ============== USER MANAGEMENT (ADMIN) ==============
 
