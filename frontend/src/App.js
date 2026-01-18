@@ -101,9 +101,9 @@ function App() {
             <Route path="settings/notifications" element={<NotificationSettingsPage />} />
           </Route>
 
-          {/* Default Redirect */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Default Redirect - Public Website is the landing page */}
+          <Route path="/" element={<Navigate to="/website/Index.html" replace />} />
+          <Route path="*" element={<Navigate to="/website/Index.html" replace />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />
