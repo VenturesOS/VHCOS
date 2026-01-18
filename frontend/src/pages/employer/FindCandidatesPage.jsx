@@ -374,6 +374,35 @@ export default function FindCandidatesPage() {
                 <h4 className="font-medium mb-2">AI Assessment</h4>
                 <p className="text-sm text-slate-600">{selectedCandidate.explanation}</p>
               </div>
+
+              {/* Action Buttons - Phase 1: Advisory Only */}
+              <div className="border-t pt-4 mt-4">
+                <p className="text-xs text-slate-400 mb-3 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  AI recommendation is advisory. Final decision requires human approval.
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 text-slate-600 hover:bg-slate-100"
+                    onClick={() => {
+                      toast.info('Candidate marked for further review');
+                      setSelectedCandidate(null);
+                    }}
+                  >
+                    Save for Later
+                  </Button>
+                  <Button
+                    className="flex-1 bg-[#7CB342] hover:bg-[#689F38]"
+                    onClick={() => {
+                      toast.success('Candidate shortlisted! Recruiter will follow up.');
+                      setSelectedCandidate(null);
+                    }}
+                  >
+                    Shortlist Candidate
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>
