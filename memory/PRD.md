@@ -3,81 +3,109 @@
 ## Overview
 VHC Talent OS is a production-ready, role-based recruitment portal built for VHC Talent Advisory. The system supports Executive Search, Specialist Hiring, and People Advisory services across India and the United States.
 
-## Original Problem Statement
-Build a recruitment portal with:
-- Role-based access control (Admin, Recruiter, Employer, Candidate)
-- AI-powered matching engine for job descriptions and resumes
-- Candidate Data Bank for talent pool management
-- Notification system for job alerts
-- Public-facing website with secure application flow
-- Phase-1 operational readiness for internal and pilot use
-
 ---
 
 ## Phase-1 Status: ✅ COMPLETE (Signed Off: January 18, 2026)
 
 ### P0: Candidate Apply & Resume Review Flow ✅
-**Completed:** Two-step application process
-- Step 1: Resume upload → AI parsing via GPT-5.2
-- Step 2: Editable review form (name, email, phone, location, headline, skills)
-- New fields: Current Salary (INR), Notice Period
-- Data persisted in `applications` and `candidate_bank` collections
-- Bot protection via Cloudflare Turnstile CAPTCHA
+- Two-step application process with AI parsing
+- Editable review form with salary/notice period capture
 
 ### P1: Applicant Review Screen ✅
-**Completed:** Per-job applicant management
-- Endpoint: `GET /api/jobs/{job_id}/applicants`
-- Displays: Match score, must-have indicators, salary, notice period
-- Stage tabs with counts (Applied, Shortlisted, Interview, etc.)
+- Per-job applicant management with match scores
 - Manual actions: Shortlist, Reject, Hold, Over Budget, Not Qualified
-- Accessible by Admin, Employer, and Recruiter roles
 
 ### P2: Career Stability Indicator ✅
-**Completed:** Visual job stability assessment
-- Green: 0-1 quick job changes (≤1 year tenure)
-- Yellow: 2-3 quick job changes
-- Red: More than 3 quick job changes
-- Displayed as colored dot with tooltip on applicant cards
-- Informational only - no auto-reject logic
+- Green/Yellow/Red indicators based on job tenure
+- Informational only - no auto-reject
 
 ### P3: Website Landing & Header Fix ✅
-**Completed:** Public website configuration
-- Root `/` redirects to `/website/Index.html`
-- Header order: Home | About | Services | Industries | Career | Contact | Global Hiring | Login
-- Sticky header across all pages
-- Login button navigates to portal login
+- Root URL redirects to public website
+- Header: Home | About | Services | Industries | Career | Contact | Global Hiring | Login
 
 ---
 
-## System Architecture
+## Phase-1.5 Status: ✅ COMPLETE (January 18, 2026)
 
-### Tech Stack
-- **Backend:** FastAPI (Python), MongoDB (Motor)
-- **Frontend:** React, React Router, Shadcn/UI, Tailwind CSS
-- **AI Integration:** GPT-5.2 via `emergentintegrations`
-- **Notifications:** Resend (email), Twilio (WhatsApp - stubbed)
-- **Bot Protection:** Cloudflare Turnstile
+### Controlled Salary, Notice Period & Candidate Detail Preview/Edit
 
-### Database Collections
-- `users` - User accounts with RBAC
-- `jobs` - Job postings
-- `applications` - Job applications with salary/notice period
-- `candidate_bank` - Talent pool with parsed profiles
-- `job_alerts` - Candidate notification preferences
-- `notification_logs` - Delivery tracking
+**Visibility (Admin, Employer, Recruiter can VIEW):**
+- Current salary (INR)
+- Notice period
+- Skills
+- Experience summary
 
-### Key API Endpoints
+**Controlled Editing (Explicit "Edit Details" mode):**
+- Current salary (INR) - number input
+- Notice period - dropdown select
+- Skills - add/remove with tags
+- Experience summary - textarea
+
+**Data Precedence (STRICT):**
+```
+Candidate self-edit > Employer edit > Recruiter edit > Resume parsing
+```
+- `manually_edited` flag prevents parsing overwrites
+- Manual edits always take precedence
+
+**Audit Trail:**
+- Every edit logged with:
+  - Field changed
+  - Old value
+  - New value
+  - Updated by (name, role, user_id)
+  - Timestamp
+- "Last updated by" displayed in UI
+- Edit history endpoint: `GET /api/applications/{id}/edit-history`
+
+**UX Constraints Respected:**
+- No resume file replacement
+- No identity field edits (email/phone)
+- No job history date changes
+- Read-only view by default
+
+---
+
+## API Endpoints (Phase-1.5)
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/public/parse-resume` | POST | Parse resume (Step 1) |
-| `/api/public/apply` | POST | Submit application (Step 2) |
-| `/api/jobs/{id}/applicants` | GET | Get enriched applicants |
-| `/api/applications/{id}` | PUT | Update application stage |
-| `/api/matching/find-candidates/{job_id}` | GET | AI matching |
+| `/api/applications/{id}/details` | PUT | Update applicant details with audit |
+| `/api/applications/{id}/edit-history` | GET | Get full edit audit trail |
 
 ---
 
-## User Credentials (Test Accounts)
+## Database Schema Updates (Phase-1.5)
+
+Applications collection now includes:
+```javascript
+{
+  // ... existing fields
+  "experience_summary": "string",  // Editable summary text
+  "edit_history": [                // Audit trail
+    {
+      "field": "current_salary",
+      "old_value": null,
+      "new_value": 1800000,
+      "updated_by_id": "user-id",
+      "updated_by_name": "System Admin",
+      "updated_by_role": "admin",
+      "timestamp": "2026-01-18T16:28:53.454Z"
+    }
+  ],
+  "last_edited_by": {
+    "name": "System Admin",
+    "role": "admin",
+    "user_id": "user-id",
+    "timestamp": "2026-01-18T16:28:53.454Z"
+  },
+  "manually_edited": true          // Prevents parsing overwrites
+}
+```
+
+---
+
+## Test Credentials
 
 | Role | Email | Password |
 |------|-------|----------|
@@ -86,76 +114,24 @@ Build a recruitment portal with:
 
 ---
 
-## Phase-2 Backlog (NOT STARTED - Awaiting Instruction)
+## Phase-2 Backlog (NOT STARTED)
 
-### P2-1: WhatsApp Automation
-- Twilio integration for candidate notifications
-- Opt-in/opt-out management
-
-### P2-2: Email Campaign Automation
-- Bulk email capabilities for marketing
-- Template management
-
-### P2-3: CRM Synchronization
-- Integration with external CRM systems
-
-### P2-4: Payment & Billing
-- Stripe integration for subscription/usage billing
-
-### P2-5: Advanced Analytics Engine
-- Dashboard analytics and reporting
-
-### P2-6: Workflow Automation
-- n8n integration hooks
-
-### P2-7: Backend Refactoring
-- Break `server.py` into modular APIRouters
-- Improve code organization
-
----
-
-## File Structure
-```
-/app/
-├── backend/
-│   ├── server.py          # Main FastAPI application
-│   ├── services/
-│   │   ├── matching_engine.py
-│   │   ├── email_service.py
-│   │   └── notification_service.py
-│   └── tests/
-├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── admin/
-│   │   │   ├── employer/
-│   │   │   │   └── JobApplicantsPage.jsx
-│   │   │   ├── recruiter/
-│   │   │   └── candidate/
-│   │   └── lib/
-│   │       └── currency.js   # INR formatting
-│   └── public/website/       # Static public site
-└── public-website/
-    └── vhc-website/          # Source website files
-```
-
----
-
-## Constraints (Phase-1 Locked)
-- No backend refactoring
-- No database schema changes
-- No changes to AI parsing/matching logic
-- UI/UX and additive changes only
-- Informational indicators only (no auto-reject)
+- WhatsApp Automation
+- Email Campaign Automation
+- CRM Synchronization
+- Payment & Billing (Stripe)
+- Advanced Analytics
+- Backend Refactoring
 
 ---
 
 ## Notes
-- Email notifications (Resend) and WhatsApp (Twilio) are MOCKED - API keys not configured
-- Currency standardized to INR with Indian number formatting
-- Rate limiting active on public endpoints (5 requests/minute)
+- Email (Resend) and WhatsApp (Twilio) notifications are MOCKED
+- Currency standardized to INR
+- Rate limiting active on public endpoints
 
 ---
 
 *Last Updated: January 18, 2026*
-*Phase-1 Sign-Off: Approved*
+*Phase-1: Signed Off*
+*Phase-1.5: Complete*
