@@ -1554,6 +1554,396 @@ async def get_candidate_resume_history(
         "resume_versions": candidate.get("resume_versions", [])
     }
 
+# ============== JOB ALERTS & NOTIFICATIONS ==============
+
+from services.notification_service import (
+    notify_candidate_of_job_match,
+    process_job_notifications,
+    trigger_job_notifications_background,
+    send_alert_confirmation_email,
+    get_candidate_notification_preferences
+)
+from services.whatsapp_service import validate_phone_number, is_whatsapp_enabled
+
+@api_router.get("/alerts/preferences", response_model=JobAlertPreferences)
+async def get_alert_preferences(current_user: dict = Depends(require_role(["candidate"]))):
+    """Get candidate's job alert preferences"""
+    prefs = await db.job_alerts.find_one({"candidate_id": current_user["id"]}, {"_id": 0})
+    
+    if not prefs:
+        # Get candidate profile to populate default skills
+        profile = await db.candidate_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0})
+        default_skills = profile.get("skills", []) if profile else []
+        
+        # Also check candidate_bank for skills
+        if not default_skills:
+            bank_record = await db.candidate_bank.find_one(
+                {"$or": [{"linked_user_id": current_user["id"]}, {"email": current_user["email"]}]},
+                {"_id": 0}
+            )
+            if bank_record:
+                default_skills = bank_record.get("skills", [])
+        
+        # Create default preferences
+        now = datetime.now(timezone.utc).isoformat()
+        prefs = {
+            "id": str(uuid.uuid4()),
+            "candidate_id": current_user["id"],
+            "candidate_email": current_user["email"],
+            "is_active": False,  # Not active until explicitly enabled
+            "email_enabled": True,
+            "skills": default_skills[:10],  # Limit to 10 skills
+            "location_preference": None,
+            "experience_min": None,
+            "experience_max": None,
+            "job_types": [],
+            "frequency": "instant",
+            "whatsapp_opt_in": False,
+            "whatsapp_number": None,
+            "whatsapp_opt_in_timestamp": None,
+            "notification_channels": ["email"],
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.job_alerts.insert_one(prefs)
+    
+    return JobAlertPreferences(**prefs)
+
+
+@api_router.post("/alerts/preferences", response_model=JobAlertPreferences)
+async def create_or_update_alert_preferences(
+    prefs_data: JobAlertCreate,
+    current_user: dict = Depends(require_role(["candidate"]))
+):
+    """Create or update job alert preferences (opt-in to alerts)"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    existing = await db.job_alerts.find_one({"candidate_id": current_user["id"]}, {"_id": 0})
+    
+    update_dict = {k: v for k, v in prefs_data.model_dump().items() if v is not None}
+    update_dict["updated_at"] = now
+    update_dict["is_active"] = True  # Activating alerts
+    
+    if existing:
+        await db.job_alerts.update_one(
+            {"candidate_id": current_user["id"]},
+            {"$set": update_dict}
+        )
+        prefs = await db.job_alerts.find_one({"candidate_id": current_user["id"]}, {"_id": 0})
+    else:
+        # Get default skills from profile
+        profile = await db.candidate_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0})
+        default_skills = profile.get("skills", []) if profile else []
+        
+        prefs = {
+            "id": str(uuid.uuid4()),
+            "candidate_id": current_user["id"],
+            "candidate_email": current_user["email"],
+            "is_active": True,
+            "email_enabled": update_dict.get("email_enabled", True),
+            "skills": update_dict.get("skills", default_skills[:10]),
+            "location_preference": update_dict.get("location_preference"),
+            "experience_min": update_dict.get("experience_min"),
+            "experience_max": update_dict.get("experience_max"),
+            "job_types": update_dict.get("job_types", []),
+            "frequency": update_dict.get("frequency", "instant"),
+            "whatsapp_opt_in": False,
+            "whatsapp_number": None,
+            "whatsapp_opt_in_timestamp": None,
+            "notification_channels": ["email"],
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.job_alerts.insert_one(prefs)
+    
+    # Send confirmation email
+    asyncio.create_task(send_alert_confirmation_email(
+        db=db,
+        candidate_email=current_user["email"],
+        candidate_name=current_user.get("name", "Candidate"),
+        preferences=prefs
+    ))
+    
+    return JobAlertPreferences(**prefs)
+
+
+@api_router.put("/alerts/preferences", response_model=JobAlertPreferences)
+async def update_alert_preferences(
+    prefs_data: JobAlertCreate,
+    current_user: dict = Depends(require_role(["candidate"]))
+):
+    """Update existing job alert preferences"""
+    existing = await db.job_alerts.find_one({"candidate_id": current_user["id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Alert preferences not found. Create them first.")
+    
+    update_dict = {k: v for k, v in prefs_data.model_dump().items() if v is not None}
+    update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.job_alerts.update_one(
+        {"candidate_id": current_user["id"]},
+        {"$set": update_dict}
+    )
+    
+    prefs = await db.job_alerts.find_one({"candidate_id": current_user["id"]}, {"_id": 0})
+    return JobAlertPreferences(**prefs)
+
+
+@api_router.delete("/alerts/preferences")
+async def delete_alert_preferences(current_user: dict = Depends(require_role(["candidate"]))):
+    """Unsubscribe from all job alerts (soft delete - sets is_active to false)"""
+    result = await db.job_alerts.update_one(
+        {"candidate_id": current_user["id"]},
+        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Alert preferences not found")
+    
+    return {"message": "Successfully unsubscribed from job alerts"}
+
+
+@api_router.post("/alerts/pause")
+async def pause_alerts(current_user: dict = Depends(require_role(["candidate"]))):
+    """Temporarily pause job alerts"""
+    await db.job_alerts.update_one(
+        {"candidate_id": current_user["id"]},
+        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Job alerts paused"}
+
+
+@api_router.post("/alerts/resume")
+async def resume_alerts(current_user: dict = Depends(require_role(["candidate"]))):
+    """Resume paused job alerts"""
+    await db.job_alerts.update_one(
+        {"candidate_id": current_user["id"]},
+        {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Job alerts resumed"}
+
+
+# ============== WHATSAPP OPT-IN/OUT ==============
+
+@api_router.post("/alerts/whatsapp/opt-in", response_model=JobAlertPreferences)
+async def whatsapp_opt_in(
+    opt_in_data: WhatsAppOptIn,
+    current_user: dict = Depends(require_role(["candidate"]))
+):
+    """
+    Opt-in to WhatsApp notifications.
+    REQUIRES explicit consent and valid phone number.
+    """
+    if not is_whatsapp_enabled():
+        raise HTTPException(
+            status_code=400, 
+            detail="WhatsApp notifications are not configured on this system"
+        )
+    
+    # Validate phone number
+    validated_phone = validate_phone_number(opt_in_data.whatsapp_number)
+    if not validated_phone:
+        raise HTTPException(status_code=400, detail="Invalid phone number format. Use E.164 format (e.g., +919876543210)")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Ensure alert preferences exist
+    existing = await db.job_alerts.find_one({"candidate_id": current_user["id"]})
+    if not existing:
+        # Create default preferences first
+        prefs = {
+            "id": str(uuid.uuid4()),
+            "candidate_id": current_user["id"],
+            "candidate_email": current_user["email"],
+            "is_active": True,
+            "email_enabled": True,
+            "skills": [],
+            "location_preference": None,
+            "experience_min": None,
+            "experience_max": None,
+            "job_types": [],
+            "frequency": "instant",
+            "whatsapp_opt_in": True,
+            "whatsapp_number": validated_phone,
+            "whatsapp_opt_in_timestamp": now,
+            "notification_channels": ["email", "whatsapp"],
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.job_alerts.insert_one(prefs)
+    else:
+        # Update existing with WhatsApp opt-in
+        update_data = {
+            "whatsapp_opt_in": True,
+            "whatsapp_number": validated_phone,
+            "whatsapp_opt_in_timestamp": now,
+            "notification_channels": list(set(existing.get("notification_channels", []) + ["whatsapp"])),
+            "updated_at": now
+        }
+        await db.job_alerts.update_one(
+            {"candidate_id": current_user["id"]},
+            {"$set": update_data}
+        )
+    
+    prefs = await db.job_alerts.find_one({"candidate_id": current_user["id"]}, {"_id": 0})
+    return JobAlertPreferences(**prefs)
+
+
+@api_router.post("/alerts/whatsapp/opt-out")
+async def whatsapp_opt_out(current_user: dict = Depends(require_role(["candidate"]))):
+    """
+    Opt-out of WhatsApp notifications.
+    Email notifications remain unaffected.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    existing = await db.job_alerts.find_one({"candidate_id": current_user["id"]})
+    if existing:
+        channels = existing.get("notification_channels", ["email"])
+        if "whatsapp" in channels:
+            channels.remove("whatsapp")
+        
+        await db.job_alerts.update_one(
+            {"candidate_id": current_user["id"]},
+            {"$set": {
+                "whatsapp_opt_in": False,
+                "notification_channels": channels,
+                "updated_at": now
+            }}
+        )
+    
+    return {"message": "Successfully opted out of WhatsApp notifications"}
+
+
+@api_router.put("/alerts/whatsapp/number")
+async def update_whatsapp_number(
+    opt_in_data: WhatsAppOptIn,
+    current_user: dict = Depends(require_role(["candidate"]))
+):
+    """Update WhatsApp phone number (must already be opted in)"""
+    existing = await db.job_alerts.find_one({"candidate_id": current_user["id"]})
+    if not existing or not existing.get("whatsapp_opt_in"):
+        raise HTTPException(status_code=400, detail="Please opt-in to WhatsApp first")
+    
+    validated_phone = validate_phone_number(opt_in_data.whatsapp_number)
+    if not validated_phone:
+        raise HTTPException(status_code=400, detail="Invalid phone number format")
+    
+    await db.job_alerts.update_one(
+        {"candidate_id": current_user["id"]},
+        {"$set": {
+            "whatsapp_number": validated_phone,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "WhatsApp number updated", "number": validated_phone}
+
+
+# ============== NOTIFICATION HISTORY ==============
+
+@api_router.get("/notifications/history")
+async def get_notification_history(
+    limit: int = 20,
+    current_user: dict = Depends(require_role(["candidate"]))
+):
+    """Get notification history for current candidate"""
+    notifications = await db.notification_logs.find(
+        {"recipient_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    return notifications
+
+
+@api_router.get("/admin/notifications/stats")
+async def get_notification_stats(current_user: dict = Depends(require_role(["admin"]))):
+    """Get notification statistics (admin only)"""
+    # Total notifications sent
+    total_sent = await db.notification_logs.count_documents({"status": "sent"})
+    total_failed = await db.notification_logs.count_documents({"status": "failed"})
+    total_skipped = await db.notification_logs.count_documents({"status": "skipped"})
+    
+    # By channel
+    email_sent = await db.notification_logs.count_documents({"channel": "email", "status": "sent"})
+    whatsapp_sent = await db.notification_logs.count_documents({"channel": "whatsapp", "status": "sent"})
+    
+    # Active alert subscribers
+    active_subscribers = await db.job_alerts.count_documents({"is_active": True})
+    whatsapp_opted_in = await db.job_alerts.count_documents({"whatsapp_opt_in": True})
+    
+    return {
+        "total_sent": total_sent,
+        "total_failed": total_failed,
+        "total_skipped": total_skipped,
+        "email_sent": email_sent,
+        "whatsapp_sent": whatsapp_sent,
+        "active_subscribers": active_subscribers,
+        "whatsapp_opted_in": whatsapp_opted_in
+    }
+
+
+# ============== TRIGGER NOTIFICATIONS ON JOB EVENTS ==============
+
+import asyncio
+
+# Override job creation to trigger notifications
+_original_create_job = None
+
+@api_router.post("/jobs/with-notifications", response_model=JobResponse)
+async def create_job_with_notifications(
+    job_data: JobCreate,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Create a new job and trigger notifications to matching candidates.
+    This is an alternative endpoint that includes notification triggering.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    job_id = str(uuid.uuid4())
+    
+    # Get company_id for employers
+    company_id = None
+    if current_user["role"] == "employer":
+        company_id = current_user.get("company_id")
+    
+    job_doc = {
+        "id": job_id,
+        **job_data.model_dump(),
+        "company_id": company_id,
+        "posted_by": current_user["id"],
+        "status": "active",
+        "applicant_count": 0,
+        "created_at": now
+    }
+    
+    await db.jobs.insert_one(job_doc)
+    
+    # Trigger notifications in background (non-blocking)
+    asyncio.create_task(trigger_job_notifications_background(db, job_id))
+    
+    return JobResponse(**job_doc)
+
+
+@api_router.post("/jobs/{job_id}/notify-candidates")
+async def manually_trigger_notifications(
+    job_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Manually trigger notifications for a job.
+    Useful for re-notifying or notifying after job update.
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Trigger in background
+    asyncio.create_task(trigger_job_notifications_background(db, job_id))
+    
+    return {"message": "Notification task started", "job_id": job_id}
+
+
 # ============== SETTINGS ==============
 
 @api_router.get("/settings")
