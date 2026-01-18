@@ -846,6 +846,138 @@ async def add_note(app_id: str, note_data: NoteCreate, current_user: dict = Depe
     return {"message": "Note added successfully", "note": note}
 
 
+@api_router.put("/applications/{app_id}/details")
+async def update_application_details(
+    app_id: str, 
+    update_data: ApplicationDetailUpdate, 
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Controlled editing of applicant details (salary, notice period, skills, experience summary).
+    
+    Data Precedence: Candidate self-edit > Employer edit > Recruiter edit > Resume parsing
+    - Manual edits override parsed data
+    - Resume parsing will NEVER overwrite manual edits (manually_edited flag)
+    
+    All edits are logged with full audit trail.
+    """
+    # Get current application
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update_dict = {}
+    audit_entries = []
+    
+    # Process each field that can be edited
+    editable_fields = {
+        "current_salary": update_data.current_salary,
+        "notice_period": update_data.notice_period,
+        "skills": update_data.skills,
+        "experience_summary": update_data.experience_summary
+    }
+    
+    for field, new_value in editable_fields.items():
+        if new_value is not None:
+            old_value = application.get(field)
+            
+            # Only log if value actually changed
+            if old_value != new_value:
+                update_dict[field] = new_value
+                
+                # Create audit entry
+                audit_entry = {
+                    "field": field,
+                    "old_value": old_value,
+                    "new_value": new_value,
+                    "updated_by_id": current_user["id"],
+                    "updated_by_name": current_user["name"],
+                    "updated_by_role": current_user["role"],
+                    "timestamp": now
+                }
+                audit_entries.append(audit_entry)
+    
+    if not update_dict:
+        return {"message": "No changes detected", "application_id": app_id}
+    
+    # Set metadata
+    update_dict["updated_at"] = now
+    update_dict["manually_edited"] = True  # Flag to prevent parsing overwrites
+    update_dict["last_edited_by"] = {
+        "name": current_user["name"],
+        "role": current_user["role"],
+        "user_id": current_user["id"],
+        "timestamp": now
+    }
+    
+    # Update application with audit trail
+    result = await db.applications.update_one(
+        {"id": app_id},
+        {
+            "$set": update_dict,
+            "$push": {"edit_history": {"$each": audit_entries}}
+        }
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Also update candidate_bank if the candidate exists there
+    if application.get("candidate_id"):
+        candidate_update = {}
+        if "current_salary" in update_dict:
+            candidate_update["current_salary"] = update_dict["current_salary"]
+        if "notice_period" in update_dict:
+            candidate_update["notice_period"] = update_dict["notice_period"]
+        if "skills" in update_dict:
+            candidate_update["skills"] = update_dict["skills"]
+        if "experience_summary" in update_dict:
+            candidate_update["summary"] = update_dict["experience_summary"]
+        
+        if candidate_update:
+            candidate_update["updated_at"] = now
+            candidate_update["manually_edited"] = True
+            await db.candidate_bank.update_one(
+                {"id": application["candidate_id"]},
+                {"$set": candidate_update}
+            )
+    
+    # Fetch updated application
+    updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    
+    return {
+        "message": "Application details updated successfully",
+        "application_id": app_id,
+        "changes": [
+            {"field": e["field"], "old_value": e["old_value"], "new_value": e["new_value"]}
+            for e in audit_entries
+        ],
+        "updated_by": {
+            "name": current_user["name"],
+            "role": current_user["role"]
+        },
+        "application": ApplicationResponse(**updated_application)
+    }
+
+
+@api_router.get("/applications/{app_id}/edit-history")
+async def get_application_edit_history(
+    app_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Get the full edit history (audit trail) for an application."""
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0, "edit_history": 1, "last_edited_by": 1})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    return {
+        "application_id": app_id,
+        "edit_history": application.get("edit_history", []),
+        "last_edited_by": application.get("last_edited_by")
+    }
+
+
 # ============== JOB APPLICANTS (Per-Job Review Screen) ==============
 
 class ApplicantReviewResponse(BaseModel):
