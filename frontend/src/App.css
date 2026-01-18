@@ -1,34 +1,299 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* VHC Talent OS - Main App Styles */
+
+/* Layout */
+.app-layout {
+  min-height: 100vh;
+  background-color: var(--vhc-background);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.main-content {
+  padding-left: 256px;
+  min-height: 100vh;
+  transition: padding-left 0.3s ease;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+@media (max-width: 1024px) {
+  .main-content {
+    padding-left: 0;
+  }
 }
 
-.App-link {
-    color: #61dafb;
+/* Dashboard Grid */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1.5rem;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+@media (min-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Stat Card */
+.stat-card {
+  background: white;
+  border: 1px solid var(--vhc-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card-value {
+  font-family: 'Manrope', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--vhc-text-primary);
+  line-height: 1.2;
+}
+
+.stat-card-label {
+  font-size: 0.875rem;
+  color: var(--vhc-text-secondary);
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vhc-text-secondary);
+  border-bottom: 1px solid var(--vhc-border);
+  background: var(--vhc-background);
+}
+
+.data-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--vhc-border);
+  font-size: 0.875rem;
+  color: var(--vhc-text-primary);
+}
+
+.data-table tr:hover td {
+  background: var(--vhc-background);
+}
+
+/* Badge styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-applied { background: #DBEAFE; color: #1D4ED8; }
+.badge-shortlisted { background: #FEF3C7; color: #B45309; }
+.badge-interview { background: #EDE9FE; color: #7C3AED; }
+.badge-offered { background: #DCFCE7; color: #15803D; }
+.badge-hired { background: #D1FAE5; color: #047857; }
+.badge-rejected { background: #FEE2E2; color: #B91C1C; }
+.badge-active { background: #DCFCE7; color: #15803D; }
+.badge-inactive { background: #F3F4F6; color: #6B7280; }
+
+/* Form styles */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--vhc-text-primary);
+}
+
+.form-input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--vhc-border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--vhc-primary);
+  box-shadow: 0 0 0 3px rgba(124, 179, 66, 0.15);
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--vhc-text-tertiary);
+  margin-bottom: 1rem;
+}
+
+.empty-state-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--vhc-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.empty-state-text {
+  font-size: 0.875rem;
+  color: var(--vhc-text-secondary);
+}
+
+/* Loading spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--vhc-border);
+  border-top-color: var(--vhc-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Kanban Board */
+.kanban-board {
+  display: flex;
+  gap: 1.5rem;
+  overflow-x: auto;
+  padding: 1.5rem;
+  min-height: calc(100vh - 200px);
+}
+
+.kanban-column {
+  flex-shrink: 0;
+  width: 320px;
+  background: var(--vhc-background);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-column-header {
+  padding: 1rem;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--vhc-border);
+}
+
+.kanban-column-content {
+  flex: 1;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+}
+
+.kanban-card {
+  background: white;
+  border: 1px solid var(--vhc-border);
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: grab;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.kanban-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.kanban-card.dragging {
+  opacity: 0.8;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Search input */
+.search-input-wrapper {
+  position: relative;
+}
+
+.search-input-wrapper svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--vhc-text-tertiary);
+}
+
+.search-input {
+  width: 100%;
+  padding-left: 40px;
+}
+
+/* Notification dot */
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--vhc-error);
+  border-radius: 50%;
+  position: absolute;
+  top: -2px;
+  right: -2px;
 }
