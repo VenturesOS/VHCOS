@@ -824,6 +824,157 @@ async def add_note(app_id: str, note_data: NoteCreate, current_user: dict = Depe
     
     return {"message": "Note added successfully", "note": note}
 
+
+# ============== JOB APPLICANTS (Per-Job Review Screen) ==============
+
+class ApplicantReviewResponse(BaseModel):
+    """Enhanced applicant data for review screen"""
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    job_id: str
+    candidate_id: str
+    candidate_name: Optional[str] = None
+    candidate_email: Optional[str] = None
+    candidate_phone: Optional[str] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    skills: Optional[List[str]] = None
+    experience_years: Optional[int] = None
+    location: Optional[str] = None
+    current_salary: Optional[int] = None  # INR
+    notice_period: Optional[str] = None
+    resume_url: Optional[str] = None
+    cover_letter: Optional[str] = None
+    stage: str = "applied"
+    match_score: Optional[int] = None  # 0-100 percentage
+    must_haves_met: Optional[List[Dict]] = None  # [{requirement: str, met: bool}]
+    career_stability: Optional[Dict] = None  # {score: green/yellow/red, quick_changes: int}
+    applied_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    notes: List[Dict] = []
+
+@api_router.get("/jobs/{job_id}/applicants")
+async def get_job_applicants(
+    job_id: str, 
+    stage: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Get all applicants for a specific job with enriched data for review.
+    Returns candidate details, match scores, must-have indicators, salary, and notice period.
+    """
+    # Verify job exists and user has access
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # For employers, verify they own the job
+    if current_user["role"] == "employer" and job.get("posted_by") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view applicants for this job")
+    
+    # Build query
+    query = {"job_id": job_id}
+    if stage:
+        query["stage"] = stage
+    
+    # Get all applications for this job
+    applications = await db.applications.find(query, {"_id": 0}).to_list(1000)
+    
+    # Parse job requirements for must-have matching
+    job_requirements = []
+    if job.get("requirements"):
+        job_requirements = [r.strip().lower() for r in job.get("requirements", "").split(",") if r.strip()]
+    
+    enriched_applicants = []
+    
+    for app in applications:
+        # Get additional candidate data from candidate_bank if available
+        candidate_data = await db.candidate_bank.find_one(
+            {"$or": [
+                {"id": app.get("candidate_id")},
+                {"email": app.get("candidate_email")}
+            ]},
+            {"_id": 0}
+        )
+        
+        # Calculate match score based on skills overlap
+        app_skills = app.get("skills") or (candidate_data.get("skills") if candidate_data else []) or []
+        app_skills_lower = [s.lower() for s in app_skills]
+        
+        # Calculate must-haves met
+        must_haves_met = []
+        matched_requirements = 0
+        for req in job_requirements:
+            is_met = any(req in skill or skill in req for skill in app_skills_lower)
+            must_haves_met.append({"requirement": req, "met": is_met})
+            if is_met:
+                matched_requirements += 1
+        
+        # Calculate match score (percentage of requirements met)
+        match_score = int((matched_requirements / len(job_requirements) * 100)) if job_requirements else 0
+        
+        # Get career stability from candidate_bank or calculate
+        career_stability = None
+        if candidate_data and candidate_data.get("experience"):
+            career_stability = calculate_career_stability(candidate_data.get("experience", []))
+        
+        # Build enriched response
+        enriched = {
+            "id": app.get("id"),
+            "job_id": app.get("job_id"),
+            "candidate_id": app.get("candidate_id"),
+            "candidate_name": app.get("candidate_name") or (candidate_data.get("name") if candidate_data else None),
+            "candidate_email": app.get("candidate_email") or (candidate_data.get("email") if candidate_data else None),
+            "candidate_phone": app.get("candidate_phone") or (candidate_data.get("phone") if candidate_data else None),
+            "headline": app.get("headline") or (candidate_data.get("headline") if candidate_data else None),
+            "summary": candidate_data.get("summary") if candidate_data else None,
+            "skills": app_skills,
+            "experience_years": app.get("experience_years") or (candidate_data.get("experience_years") if candidate_data else None),
+            "location": app.get("location") or (candidate_data.get("location") if candidate_data else None),
+            "current_salary": app.get("current_salary") or (candidate_data.get("current_salary") if candidate_data else None),
+            "notice_period": app.get("notice_period") or (candidate_data.get("notice_period") if candidate_data else None),
+            "resume_url": app.get("resume_url") or (candidate_data.get("resume_url") if candidate_data else None),
+            "cover_letter": app.get("cover_letter"),
+            "stage": app.get("stage", "applied"),
+            "match_score": match_score,
+            "must_haves_met": must_haves_met,
+            "career_stability": career_stability,
+            "applied_at": app.get("applied_at") or app.get("created_at"),
+            "updated_at": app.get("updated_at"),
+            "notes": app.get("notes", [])
+        }
+        
+        enriched_applicants.append(enriched)
+    
+    # Sort by match score (highest first), then by applied date
+    enriched_applicants.sort(key=lambda x: (-(x.get("match_score") or 0), x.get("applied_at") or ""))
+    
+    return {
+        "job": {
+            "id": job.get("id"),
+            "title": job.get("title"),
+            "location": job.get("location"),
+            "job_type": job.get("job_type"),
+            "salary_min": job.get("salary_min"),
+            "salary_max": job.get("salary_max"),
+            "requirements": job.get("requirements"),
+            "applicant_count": len(applications)
+        },
+        "applicants": enriched_applicants,
+        "stage_counts": {
+            "applied": sum(1 for a in applications if a.get("stage") == "applied"),
+            "shortlisted": sum(1 for a in applications if a.get("stage") == "shortlisted"),
+            "interview": sum(1 for a in applications if a.get("stage") == "interview"),
+            "offered": sum(1 for a in applications if a.get("stage") == "offered"),
+            "hired": sum(1 for a in applications if a.get("stage") == "hired"),
+            "rejected": sum(1 for a in applications if a.get("stage") == "rejected"),
+            "on_hold": sum(1 for a in applications if a.get("stage") == "on_hold"),
+            "over_budget": sum(1 for a in applications if a.get("stage") == "over_budget"),
+            "not_qualified": sum(1 for a in applications if a.get("stage") == "not_qualified")
+        }
+    }
+
+
 # ============== CANDIDATE MANAGEMENT (Admin/Recruiter) ==============
 
 @api_router.get("/candidates", response_model=List[CandidateProfile])
