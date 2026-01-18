@@ -7,7 +7,7 @@ import json
 import hashlib
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import Chat, Message
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
 def get_chat_client():
     """Get Emergent Chat client for GPT-5.2"""
-    return Chat(
+    return LlmChat(
         api_key=EMERGENT_KEY,
         model="gpt-5.2"
     )
@@ -61,8 +61,8 @@ async def parse_resume_with_ai(resume_text: str) -> Dict:
 Resume text:
 {resume_text[:8000]}"""  # Limit to 8000 chars
         
-        response = await chat.send_async(
-            messages=[Message(role="user", content=prompt)]
+        response = await chat.send_message_async(
+            message=UserMessage(content=prompt)
         )
         
         # Extract JSON from response
@@ -114,8 +114,8 @@ async def parse_job_description_with_ai(jd_text: str) -> Dict:
 Job Description:
 {jd_text[:8000]}"""
         
-        response = await chat.send_async(
-            messages=[Message(role="user", content=prompt)]
+        response = await chat.send_message_async(
+            message=UserMessage(content=prompt)
         )
         
         response_text = response.content.strip()
@@ -188,8 +188,8 @@ Return JSON:
     "explanation": "2-3 sentence explanation of the match"
 }}"""
         
-        response = await chat.send_async(
-            messages=[Message(role="user", content=prompt)]
+        response = await chat.send_message_async(
+            message=UserMessage(content=prompt)
         )
         
         response_text = response.content.strip()
