@@ -2218,6 +2218,8 @@ def calculate_career_stability(experience: List[Dict]) -> Dict:
     - Yellow: 2-3 quick changes
     - Red: More than 3 quick changes
     """
+    import re
+    
     if not experience:
         return {"score": "green", "quick_changes": 0, "tooltip": "No work history available"}
     
@@ -2230,7 +2232,6 @@ def calculate_career_stability(experience: List[Dict]) -> Dict:
         is_quick = False
         if "month" in duration:
             # Extract months
-            import re
             months_match = re.search(r'(\d+)\s*month', duration)
             if months_match:
                 months = int(months_match.group(1))
