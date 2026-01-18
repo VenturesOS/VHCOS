@@ -171,12 +171,16 @@ class ApplicationResponse(BaseModel):
     notice_period: Optional[str] = None
     skills: Optional[List[str]] = None
     experience_years: Optional[int] = None
+    experience_summary: Optional[str] = None  # Brief summary text
     location: Optional[str] = None
     headline: Optional[str] = None
     resume_url: Optional[str] = None
     status: str = "applied"
     stage: str = "applied"
     notes: List[dict] = []
+    edit_history: List[dict] = []  # Audit trail
+    last_edited_by: Optional[dict] = None  # {name, role, timestamp}
+    manually_edited: bool = False  # Flag to prevent parsing overwrites
     applied_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: str
