@@ -112,6 +112,15 @@ export default function EmployerJobsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-[#7CB342] hover:bg-[#689F38]"
+                    onClick={() => navigate(`/employer/jobs/${job.id}/applicants`)}
+                    data-testid={`view-applicants-${job.id}`}
+                  >
+                    <Eye className="w-4 h-4 mr-1" /> View Applicants
+                  </Button>
+                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleToggleStatus(job)}
