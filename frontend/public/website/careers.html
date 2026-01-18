@@ -332,8 +332,8 @@
   </footer>
 
   <script>
-    // API Base URL - points to the backend
-    const API_BASE = window.location.origin;
+    // API Base URL - use relative path since frontend proxies /api to backend
+    const API_BASE = '';
     
     // Format salary in INR/LPA
     function formatSalary(min, max) {
