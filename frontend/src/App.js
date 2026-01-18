@@ -18,6 +18,7 @@ import AdminJobsPage from "./pages/admin/JobsPage";
 import AdminCandidatesPage from "./pages/admin/CandidatesPage";
 import CompaniesPage from "./pages/admin/CompaniesPage";
 import SettingsPage from "./pages/admin/SettingsPage";
+import CandidateDataBankPage from "./pages/admin/CandidateDataBankPage";
 
 // Recruiter Pages
 import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
@@ -31,6 +32,7 @@ import EmployerJobsPage from "./pages/employer/EmployerJobsPage";
 import CreateJobPage from "./pages/employer/CreateJobPage";
 import ApplicantsPage from "./pages/employer/ApplicantsPage";
 import AnalyticsPage from "./pages/employer/AnalyticsPage";
+import FindCandidatesPage from "./pages/employer/FindCandidatesPage";
 
 // Candidate Pages
 import CandidateDashboard from "./pages/candidate/CandidateDashboard";
@@ -38,6 +40,7 @@ import ProfilePage from "./pages/candidate/ProfilePage";
 import BrowseJobsPage from "./pages/candidate/BrowseJobsPage";
 import ApplicationsPage from "./pages/candidate/ApplicationsPage";
 import MessagesPage from "./pages/candidate/MessagesPage";
+import MatchingJobsPage from "./pages/candidate/MatchingJobsPage";
 
 function App() {
   return (
