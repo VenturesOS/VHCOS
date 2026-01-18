@@ -58,6 +58,7 @@ function App() {
             <Route path="users" element={<UsersPage />} />
             <Route path="jobs" element={<AdminJobsPage />} />
             <Route path="candidates" element={<AdminCandidatesPage />} />
+            <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="companies" element={<CompaniesPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
@@ -68,6 +69,8 @@ function App() {
             <Route path="jobs" element={<RecruiterJobsPage />} />
             <Route path="pipeline" element={<PipelinePage />} />
             <Route path="candidates" element={<RecruiterCandidatesPage />} />
+            <Route path="find-candidates" element={<FindCandidatesPage />} />
+            <Route path="candidate-bank" element={<CandidateDataBankPage />} />
           </Route>
 
           {/* Employer Routes */}
@@ -76,6 +79,8 @@ function App() {
             <Route path="jobs" element={<EmployerJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="applicants" element={<ApplicantsPage />} />
+            <Route path="find-candidates" element={<FindCandidatesPage />} />
+            <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
           </Route>
 
@@ -84,6 +89,7 @@ function App() {
             <Route index element={<CandidateDashboard />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="jobs" element={<BrowseJobsPage />} />
+            <Route path="matching-jobs" element={<MatchingJobsPage />} />
             <Route path="applications" element={<ApplicationsPage />} />
             <Route path="messages" element={<MessagesPage />} />
           </Route>
