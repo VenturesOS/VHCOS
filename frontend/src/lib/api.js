@@ -66,6 +66,8 @@ export const applicationAPI = {
   getAll: (params) => api.get('/applications', { params }),
   getById: (id) => api.get(`/applications/${id}`),
   update: (id, data) => api.put(`/applications/${id}`, data),
+  updateDetails: (id, data) => api.put(`/applications/${id}/details`, data),
+  getEditHistory: (id) => api.get(`/applications/${id}/edit-history`),
   addNote: (id, content) => api.post(`/applications/${id}/notes`, { content }),
 };
 
