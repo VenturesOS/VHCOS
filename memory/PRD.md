@@ -10,12 +10,13 @@ Build a production-ready recruitment portal called VHC Talent OS with:
 - Basic Messaging
 - Settings Panel
 - AI-powered resume/JD parsing and candidate-job matching
+- Email/WhatsApp notifications for job matches
 
 ## User Personas
 1. **Admin**: Full system control - manages users, jobs, candidates, companies, candidate data bank, settings
 2. **Recruiter**: Manages candidate pipeline, moves candidates through stages, uses AI matching
 3. **Employer**: Posts jobs, views applicants, finds matching candidates using AI
-4. **Candidate**: Creates profile, uploads resume, applies to jobs, views AI-matched jobs
+4. **Candidate**: Creates profile, uploads resume, applies to jobs, views AI-matched jobs, manages job alerts
 
 ## Core Requirements (Static)
 - Secure JWT authentication with bcrypt password hashing
@@ -25,6 +26,8 @@ Build a production-ready recruitment portal called VHC Talent OS with:
 - Responsive UI with VHC lime green branding (#7CB342)
 - Kanban board for candidate pipeline stages
 - AI Matching Engine using GPT-5.2
+- Email notifications using Resend API
+- WhatsApp notifications using Twilio (opt-in only)
 
 ## What's Been Implemented
 
@@ -52,6 +55,20 @@ Build a production-ready recruitment portal called VHC Talent OS with:
 - ✅ **Audit Trail**: Track all candidate data changes
 - ✅ **Frontend Pages**: Admin Candidate Data Bank, Employer Find Candidates, Candidate Matching Jobs
 
+### Phase 2.5 / P1 - Email Notifications & Job Alerts (Complete - January 18, 2026)
+- ✅ **Email Notification Service** (`/app/backend/services/email_service.py`): Resend API integration
+- ✅ **WhatsApp Notification Service** (`/app/backend/services/whatsapp_service.py`): Twilio integration (opt-in only)
+- ✅ **Notification Templates** (`/app/backend/services/notification_templates.py`): Centralized email/WhatsApp templates
+- ✅ **Job Alert Preferences**: Candidates can set skills, location, experience range, job types
+- ✅ **Notification Channels**: Email always enabled, WhatsApp optional with explicit consent
+- ✅ **Alert Frequency**: Instant, Daily, Weekly options
+- ✅ **Pause/Resume Alerts**: Candidates can temporarily pause notifications
+- ✅ **Notification Deduplication**: Max 1 notification per job per candidate per channel
+- ✅ **Notification History/Audit Log**: Track all sent/skipped/failed notifications
+- ✅ **Admin Notification Stats**: Dashboard with subscriber counts and delivery stats
+- ✅ **Background Job Triggers**: Async notifications when jobs created/updated
+- ✅ **Frontend Notification Settings**: `/candidate/notifications` page with full CRUD
+
 ## API Endpoints Summary
 
 ### Authentication
@@ -73,6 +90,21 @@ Build a production-ready recruitment portal called VHC Talent OS with:
 - `PUT /api/candidate-bank/{id}` - Update candidate
 - `GET /api/candidate-bank/{id}/audit-log` - View audit trail
 - `GET /api/candidate-bank/{id}/resume-history` - View resume versions
+
+### Job Alerts & Notifications (P1 - NEW)
+- `GET /api/alerts/preferences` - Get candidate's alert preferences
+- `POST /api/alerts/preferences` - Create/enable job alerts
+- `PUT /api/alerts/preferences` - Update alert preferences
+- `DELETE /api/alerts/preferences` - Unsubscribe from alerts
+- `POST /api/alerts/pause` - Temporarily pause alerts
+- `POST /api/alerts/resume` - Resume paused alerts
+- `POST /api/alerts/whatsapp/opt-in` - Enable WhatsApp notifications (requires valid phone)
+- `POST /api/alerts/whatsapp/opt-out` - Disable WhatsApp notifications
+- `PUT /api/alerts/whatsapp/number` - Update WhatsApp number
+- `GET /api/notifications/history` - Get candidate's notification history
+- `GET /api/admin/notifications/stats` - Admin notification statistics
+- `POST /api/jobs/with-notifications` - Create job and trigger notifications
+- `POST /api/jobs/{job_id}/notify-candidates` - Manually trigger notifications
 
 ### Core APIs
 - `/api/users/*` - User CRUD (Admin)
@@ -96,24 +128,26 @@ Build a production-ready recruitment portal called VHC Talent OS with:
 - [x] AI Matching Engine (GPT-5.2)
 - [x] Candidate Data Bank
 
-### P1 (High Priority) - Next
-- [ ] Email notifications for candidates on new matching jobs
-- [ ] Template-based async email delivery
+### P1 (High Priority) - COMPLETE ✅
+- [x] Email notifications for candidates on new matching jobs
+- [x] Job Alert subscriptions with preferences
+- [x] WhatsApp notifications (opt-in, consent-based)
+- [x] Notification history and audit log
+- [x] Admin notification statistics
+
+### P2 (Medium Priority) - Next
+- [ ] Email campaign automation for recruiters
+- [ ] Interview scheduling with calendar integration
+- [ ] Bulk candidate import (CSV/Excel)
 - [ ] Advanced search and filtering
 - [ ] Job application cover letter preview
-
-### P2 (Medium Priority) - Future
-- [ ] WhatsApp automation (opt-in, compliance-ready)
-- [ ] Email campaign automation
-- [ ] CRM sync integration
-- [ ] Interview scheduling calendar
-- [ ] Bulk candidate import
 
 ### P3 (Nice to Have) - Future
 - [ ] Advanced analytics dashboards with charts
 - [ ] Custom workflow automation (n8n hooks)
 - [ ] Payment & billing integration
 - [ ] White-label client dashboards
+- [ ] CRM sync integration
 
 ## Technical Stack
 - Frontend: React 19, Tailwind CSS, Shadcn UI, @hello-pangea/dnd, Recharts
@@ -121,48 +155,80 @@ Build a production-ready recruitment portal called VHC Talent OS with:
 - Database: MongoDB
 - Authentication: JWT with 24-hour expiry
 - AI Integration: GPT-5.2 via emergentintegrations library (Emergent LLM Key)
+- Email: Resend API
+- WhatsApp: Twilio Business API
+
+## Environment Variables
+```
+# Backend (.env)
+MONGO_URL="mongodb://localhost:27017"
+DB_NAME="vhc_talent_os"
+JWT_SECRET=<auto-generated>
+ADMIN_EMAIL="admin@vhc.in"
+ADMIN_PASSWORD="VhcAdmin@2024"
+EMERGENT_LLM_KEY=<provided>
+RESEND_API_KEY=<user-provided>
+SENDER_EMAIL=notifications@vhctalent.com
+TWILIO_ACCOUNT_SID=<optional>
+TWILIO_AUTH_TOKEN=<optional>
+TWILIO_WHATSAPP_NUMBER=<optional>
+JOB_MATCH_THRESHOLD=60
+NOTIFICATION_ENABLED=true
+```
 
 ## Admin Credentials
 - Email: admin@vhc.in
 - Password: VhcAdmin@2024
 
-## Test Credentials (Require Password Reset)
-- Recruiter: recruiter@vhctalent.com / oBANv_5MOGyjWQqX
-- Employer: employer@vhctalent.com / No9UaBkni5LXbrAS
-- Candidate: candidate@vhctalent.com / n7t2qnzZQuaNyjMM
+## Test Credentials
+- Test Candidate: testcandidate@vhc.in / Test@123
+- Recruiter: recruiter@vhctalent.com (requires password reset)
+- Employer: employer@vhctalent.com (requires password reset)
+- Candidate: candidate@vhctalent.com (requires password reset)
 
 ## Code Architecture
 ```
 /app/
 ├── backend/
-│   ├── .env                    # Environment variables
+│   ├── .env
 │   ├── requirements.txt
-│   ├── server.py              # Main FastAPI app (~1200 lines)
-│   └── services/
-│       └── matching_engine.py # AI parsing and matching logic
+│   ├── server.py              # Main FastAPI app (~1900 lines)
+│   ├── services/
+│   │   ├── matching_engine.py # AI parsing and matching logic
+│   │   ├── email_service.py   # Resend email delivery
+│   │   ├── whatsapp_service.py # Twilio WhatsApp delivery
+│   │   ├── notification_service.py # Notification orchestration
+│   │   └── notification_templates.py # Centralized templates
+│   └── tests/
+│       ├── test_ai_matching_engine.py
+│       └── test_notifications_alerts.py
 └── frontend/
     ├── .env
     ├── package.json
     └── src/
-        ├── App.js             # Main router
+        ├── App.js
         ├── components/
-        │   ├── layout/        # Sidebar, DashboardLayout
-        │   └── ui/            # Shadcn UI components
+        │   ├── layout/
+        │   └── ui/
         ├── lib/
-        │   ├── api.js         # API utility functions
-        │   └── auth.js        # Auth context and hooks
+        │   ├── api.js
+        │   └── auth.js
         └── pages/
-            ├── admin/         # Admin dashboard pages
-            ├── auth/          # Login, Register, PasswordReset
-            ├── candidate/     # Candidate dashboard pages
-            ├── employer/      # Employer dashboard pages
-            └── recruiter/     # Recruiter dashboard pages
+            ├── admin/
+            ├── auth/
+            ├── candidate/
+            │   ├── NotificationSettingsPage.jsx  # NEW
+            │   └── ...
+            ├── employer/
+            └── recruiter/
 ```
 
-## Refactoring Notes (Low Priority)
-- `server.py` is ~1200 lines - consider splitting into modules using FastAPI APIRouter
-- Should be done only after Phase 2b is stable and before Phase 3
-
 ## Test Reports
-- `/app/test_reports/iteration_4.json` - Latest comprehensive test (100% pass)
+- `/app/test_reports/iteration_5.json` - Latest comprehensive test (100% pass - P1 Notifications)
+- `/app/test_reports/iteration_4.json` - Phase-2b AI Matching (100% pass)
+- `/app/tests/test_notifications_alerts.py` - 20 pytest tests for notification system
 - `/app/tests/test_ai_matching_engine.py` - 18 pytest tests for AI features
+
+## Refactoring Notes (Low Priority)
+- `server.py` is ~1900 lines - consider splitting into modules using FastAPI APIRouter
+- Should be done only after P2 features are stable
