@@ -1,18 +1,20 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import hashlib
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 import aiofiles
+import fitz  # PyMuPDF for PDF text extraction
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
