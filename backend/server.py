@@ -2047,6 +2047,154 @@ async def get_public_job_detail(job_id: str):
 
 from fastapi import Request
 
+def calculate_career_stability(experience: List[Dict]) -> Dict:
+    """
+    Calculate career stability based on job tenure.
+    Returns: {score: 'green'|'yellow'|'red', quick_changes: int, tooltip: str}
+    
+    Rules:
+    - Green: 0-1 quick changes (≤1 year tenure)
+    - Yellow: 2-3 quick changes
+    - Red: More than 3 quick changes
+    """
+    if not experience:
+        return {"score": "green", "quick_changes": 0, "tooltip": "No work history available"}
+    
+    quick_changes = 0
+    
+    for job in experience:
+        duration = job.get("duration", "").lower()
+        
+        # Parse duration to check if ≤1 year
+        is_quick = False
+        if "month" in duration:
+            # Extract months
+            import re
+            months_match = re.search(r'(\d+)\s*month', duration)
+            if months_match:
+                months = int(months_match.group(1))
+                if months <= 12:
+                    is_quick = True
+        elif "year" in duration:
+            years_match = re.search(r'(\d+)\s*year', duration)
+            if years_match:
+                years = int(years_match.group(1))
+                if years < 1:
+                    is_quick = True
+        elif any(term in duration for term in ["present", "current", "ongoing"]):
+            # Current job, don't count
+            pass
+        else:
+            # Unknown format, assume not quick
+            pass
+        
+        if is_quick:
+            quick_changes += 1
+    
+    if quick_changes <= 1:
+        return {
+            "score": "green",
+            "quick_changes": quick_changes,
+            "tooltip": f"Stable career history ({quick_changes} short tenure)"
+        }
+    elif quick_changes <= 3:
+        return {
+            "score": "yellow",
+            "quick_changes": quick_changes,
+            "tooltip": f"Moderate job changes ({quick_changes} short tenures)"
+        }
+    else:
+        return {
+            "score": "red",
+            "quick_changes": quick_changes,
+            "tooltip": f"Frequent job changes ({quick_changes} short tenures)"
+        }
+
+
+@api_router.post("/public/parse-resume")
+async def public_parse_resume(
+    request: Request,
+    resume: UploadFile = File(...),
+    website: Optional[str] = Form(None),  # Honeypot
+):
+    """
+    Parse resume and return extracted data for review (NO LOGIN REQUIRED).
+    Step 1 of two-step apply flow.
+    """
+    # Get client IP for rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    
+    # Rate limit: 10 parses per minute per IP
+    if not check_rate_limit(f"parse:{client_ip}", limit=10, window=60):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    
+    # Honeypot check
+    if website:
+        logger.warning(f"[BOT] Honeypot triggered from {client_ip}")
+        return {"success": True, "parsed_data": {}}
+    
+    # Save resume file temporarily
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    filename = f"temp_{timestamp}_{resume.filename}"
+    upload_dir = Path("/app/uploads")
+    upload_dir.mkdir(exist_ok=True)
+    
+    file_path = upload_dir / filename
+    async with aiofiles.open(file_path, 'wb') as f:
+        content = await resume.read()
+        await f.write(content)
+    
+    # Extract resume text
+    resume_text = ""
+    try:
+        if filename.lower().endswith('.pdf'):
+            doc = fitz.open(str(file_path))
+            for page in doc:
+                resume_text += page.get_text()
+            doc.close()
+        elif filename.lower().endswith('.txt'):
+            async with aiofiles.open(file_path, 'r', errors='ignore') as f:
+                resume_text = await f.read()
+    except Exception as e:
+        logger.error(f"[PARSE] Resume text extraction failed: {e}")
+    
+    # Parse resume with AI
+    parsed_data = {}
+    try:
+        from services.matching_engine import parse_resume_with_ai
+        result = await parse_resume_with_ai(resume_text[:8000])
+        if result.get("success"):
+            parsed_data = result.get("data", {})
+    except Exception as e:
+        logger.error(f"[PARSE] AI parsing failed: {e}")
+    
+    # Calculate career stability
+    career_stability = calculate_career_stability(parsed_data.get("experience", []))
+    
+    return {
+        "success": True,
+        "parsed_data": {
+            "name": parsed_data.get("name"),
+            "email": parsed_data.get("email"),
+            "phone": parsed_data.get("phone"),
+            "headline": parsed_data.get("headline"),
+            "summary": parsed_data.get("summary"),
+            "skills": parsed_data.get("skills", []),
+            "experience_years": parsed_data.get("experience_years", 0),
+            "experience": parsed_data.get("experience", []),
+            "education": parsed_data.get("education", []),
+            "location": parsed_data.get("location"),
+            "certifications": parsed_data.get("certifications", [])
+        },
+        "career_stability": career_stability,
+        "resume_filename": filename,
+        "resume_url": f"/api/uploads/{filename}"
+    }
+
+
 @api_router.post("/public/apply")
 async def public_apply(
     request: Request,
@@ -2055,7 +2203,13 @@ async def public_apply(
     name: str = Form(...),
     phone: Optional[str] = Form(None),
     cover_letter: Optional[str] = Form(None),
-    resume: UploadFile = File(...),
+    current_salary: Optional[int] = Form(None),  # INR
+    notice_period: Optional[str] = Form(None),  # e.g., "30 days", "2 weeks", "immediate"
+    skills: Optional[str] = Form(None),  # Comma-separated, edited by candidate
+    experience_years: Optional[int] = Form(None),
+    location: Optional[str] = Form(None),
+    resume: UploadFile = File(None),  # Optional if resume_filename provided
+    resume_filename: Optional[str] = Form(None),  # From parse step
     website: Optional[str] = Form(None),  # Honeypot
     turnstile_token: Optional[str] = Form(None)
 ):
