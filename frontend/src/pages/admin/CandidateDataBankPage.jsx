@@ -166,21 +166,37 @@ export default function CandidateDataBankPage() {
                           <span className="text-xs text-slate-400">+{candidate.skills.length - 4}</span>
                         )}
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        candidate.source === 'self' ? 'bg-blue-50 text-blue-600' :
-                        candidate.source === 'employer' ? 'bg-purple-50 text-purple-600' :
-                        'bg-amber-50 text-amber-600'
+                      {/* Source Badge */}
+                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                        candidate.source === 'job_application' ? 'bg-blue-50 text-blue-600' :
+                        candidate.source === 'recruiter_upload' ? 'bg-purple-50 text-purple-600' :
+                        candidate.source === 'candidate_registration' ? 'bg-green-50 text-green-600' :
+                        'bg-slate-100 text-slate-600'
                       }`}>
-                        {candidate.source}
+                        {candidate.source === 'job_application' ? 'Applied' :
+                         candidate.source === 'recruiter_upload' ? 'Recruiter Upload' :
+                         candidate.source === 'candidate_registration' ? 'Registered' :
+                         'Direct Upload'}
                       </span>
+                      {/* Status */}
+                      {candidate.is_active !== false && (
+                        <span className="w-2 h-2 bg-green-500 rounded-full" title="Active"></span>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
               {candidates.length === 0 && (
-                <div className="p-8 text-center">
-                  <Database className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-                  <p className="text-slate-500">No candidates found</p>
+                <div className="text-center py-12">
+                  <Database className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 mb-2">No candidates in data bank</p>
+                  <p className="text-sm text-slate-400 mb-4">Add candidates by uploading resumes or wait for job applications</p>
+                  <Button 
+                    onClick={() => setShowUpload(true)}
+                    className="bg-[#7CB342] hover:bg-[#689F38]"
+                  >
+                    <Upload className="w-4 h-4 mr-2" /> Upload First Resume
+                  </Button>
                 </div>
               )}
             </div>
