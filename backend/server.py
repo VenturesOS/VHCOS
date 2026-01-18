@@ -163,18 +163,28 @@ class ApplicationResponse(BaseModel):
     candidate_id: str
     candidate_name: Optional[str] = None
     candidate_email: Optional[str] = None
+    candidate_phone: Optional[str] = None
     job_title: Optional[str] = None
     company_name: Optional[str] = None
     cover_letter: Optional[str] = None
+    current_salary: Optional[int] = None  # INR
+    notice_period: Optional[str] = None
+    skills: Optional[List[str]] = None
+    experience_years: Optional[int] = None
+    location: Optional[str] = None
+    headline: Optional[str] = None
+    resume_url: Optional[str] = None
     status: str = "applied"
     stage: str = "applied"
     notes: List[dict] = []
-    created_at: str
+    applied_at: Optional[str] = None
+    created_at: Optional[str] = None
     updated_at: str
 
 class ApplicationUpdate(BaseModel):
     status: Optional[str] = None
     stage: Optional[str] = None
+    rejection_reason: Optional[str] = None  # For tracking why rejected/not qualified
 
 class NoteCreate(BaseModel):
     content: str
