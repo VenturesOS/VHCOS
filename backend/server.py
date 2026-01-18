@@ -98,7 +98,7 @@ class JobResponse(BaseModel):
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
     department: Optional[str] = None
-    company_id: str
+    company_id: Optional[str] = None
     company_name: Optional[str] = None
     posted_by: str
     status: str = "active"
