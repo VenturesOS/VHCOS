@@ -151,10 +151,8 @@ export default function BrowseJobsPage() {
                         </span>
                         {(job.salary_min || job.salary_max) && (
                           <span className="flex items-center gap-1">
-                            <DollarSign className="w-4 h-4" />
-                            {job.salary_min && `$${job.salary_min.toLocaleString()}`}
-                            {job.salary_min && job.salary_max && ' - '}
-                            {job.salary_max && `$${job.salary_max.toLocaleString()}`}
+                            <IndianRupee className="w-4 h-4" />
+                            {formatSalaryDisplay(job.salary_min, job.salary_max)}
                           </span>
                         )}
                       </div>
