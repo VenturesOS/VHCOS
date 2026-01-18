@@ -298,8 +298,70 @@ function ApplicantCard({ applicant, jobData, onClick }) {
   );
 }
 
-// Applicant Detail Dialog Component
-function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
+// Applicant Detail Dialog Component with Edit Mode
+function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage, onRefresh }) {
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    current_salary: '',
+    notice_period: '',
+    skills: [],
+    experience_summary: ''
+  });
+  const [newSkill, setNewSkill] = useState('');
+
+  // Initialize form when applicant changes
+  useEffect(() => {
+    if (applicant) {
+      setEditForm({
+        current_salary: applicant.current_salary || '',
+        notice_period: applicant.notice_period || '',
+        skills: applicant.skills || [],
+        experience_summary: applicant.experience_summary || applicant.summary || ''
+      });
+      setIsEditMode(false);
+    }
+  }, [applicant]);
+
+  const handleSaveDetails = async () => {
+    setSaving(true);
+    try {
+      const updateData = {
+        current_salary: editForm.current_salary ? parseInt(editForm.current_salary) : null,
+        notice_period: editForm.notice_period || null,
+        skills: editForm.skills.length > 0 ? editForm.skills : null,
+        experience_summary: editForm.experience_summary || null
+      };
+      
+      await applicationAPI.updateDetails(applicant.id, updateData);
+      toast.success('Details updated successfully');
+      setIsEditMode(false);
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      toast.error('Failed to update details');
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddSkill = () => {
+    if (newSkill.trim() && !editForm.skills.includes(newSkill.trim())) {
+      setEditForm(prev => ({
+        ...prev,
+        skills: [...prev.skills, newSkill.trim()]
+      }));
+      setNewSkill('');
+    }
+  };
+
+  const handleRemoveSkill = (skillToRemove) => {
+    setEditForm(prev => ({
+      ...prev,
+      skills: prev.skills.filter(s => s !== skillToRemove)
+    }));
+  };
+
   if (!applicant) return null;
 
   const StageIcon = STAGES[applicant.stage]?.icon || Users;
@@ -308,13 +370,59 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
     <Dialog open={!!applicant} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-heading text-xl">Applicant Review</DialogTitle>
-          <DialogDescription>
-            Review candidate details and take action
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="font-heading text-xl">Applicant Review</DialogTitle>
+              <DialogDescription>
+                Review candidate details and take action
+              </DialogDescription>
+            </div>
+            {!isEditMode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditMode(true)}
+                data-testid="edit-details-btn"
+              >
+                <Edit2 className="h-4 w-4 mr-1" /> Edit Details
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditMode(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-[#7CB342] hover:bg-[#689F38]"
+                  onClick={handleSaveDetails}
+                  disabled={saving}
+                  data-testid="save-details-btn"
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogHeader>
         
         <div className="space-y-6">
+          {/* Last Edited By Info */}
+          {applicant.last_edited_by && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
+              <span className="text-amber-700">
+                Last updated by <strong>{applicant.last_edited_by.name}</strong> ({applicant.last_edited_by.role})
+                {applicant.last_edited_by.timestamp && (
+                  <> on {new Date(applicant.last_edited_by.timestamp).toLocaleDateString()}</>
+                )}
+              </span>
+            </div>
+          )}
+
           {/* Header with avatar and basic info */}
           <div className="flex items-start gap-4">
             <div className="relative">
@@ -351,10 +459,13 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
                     {applicant.match_score}% Match
                   </Badge>
                 )}
+                {applicant.manually_edited && (
+                  <Badge variant="secondary" className="text-xs">Manually Edited</Badge>
+                )}
               </div>
               <p className="text-slate-600 mt-1">{applicant.headline}</p>
               
-              {/* Contact Info */}
+              {/* Contact Info (read-only) */}
               <div className="flex flex-wrap gap-4 mt-3 text-sm">
                 <a href={`mailto:${applicant.candidate_email}`} className="flex items-center gap-1 text-slate-600 hover:text-[#7CB342]">
                   <Mail className="h-4 w-4" /> {applicant.candidate_email}
@@ -373,22 +484,56 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
             </div>
           </div>
 
-          {/* Key Details Grid */}
+          {/* Key Details Grid - Editable in Edit Mode */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-slate-50 rounded-lg p-3">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Experience</p>
               <p className="font-semibold text-lg">{applicant.experience_years || 0} years</p>
             </div>
+            
+            {/* Current Salary - Editable */}
             <div className="bg-slate-50 rounded-lg p-3">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Current Salary (INR)</p>
-              <p className="font-semibold text-lg">
-                {applicant.current_salary ? formatSalaryINR(applicant.current_salary) : 'Not provided'}
-              </p>
+              {isEditMode ? (
+                <input
+                  type="number"
+                  className="w-full p-1 border rounded text-lg font-semibold"
+                  value={editForm.current_salary}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, current_salary: e.target.value }))}
+                  placeholder="e.g., 1500000"
+                  data-testid="edit-salary-input"
+                />
+              ) : (
+                <p className="font-semibold text-lg">
+                  {applicant.current_salary ? formatSalaryINR(applicant.current_salary) : 'Not provided'}
+                </p>
+              )}
             </div>
+            
+            {/* Notice Period - Editable */}
             <div className="bg-slate-50 rounded-lg p-3">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Notice Period</p>
-              <p className="font-semibold text-lg">{applicant.notice_period || 'Not provided'}</p>
+              {isEditMode ? (
+                <select
+                  className="w-full p-1 border rounded text-lg font-semibold"
+                  value={editForm.notice_period}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, notice_period: e.target.value }))}
+                  data-testid="edit-notice-select"
+                >
+                  <option value="">Select...</option>
+                  <option value="Immediate">Immediate</option>
+                  <option value="15 days">15 days</option>
+                  <option value="30 days">30 days</option>
+                  <option value="45 days">45 days</option>
+                  <option value="60 days">60 days</option>
+                  <option value="90 days">90 days</option>
+                  <option value="More than 90 days">More than 90 days</option>
+                </select>
+              ) : (
+                <p className="font-semibold text-lg">{applicant.notice_period || 'Not provided'}</p>
+              )}
             </div>
+            
             <div className="bg-slate-50 rounded-lg p-3">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Career Stability</p>
               <TooltipProvider>
@@ -432,25 +577,68 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
             </div>
           )}
 
-          {/* Skills */}
-          {applicant.skills && applicant.skills.length > 0 && (
-            <div>
-              <h4 className="font-semibold mb-2">Skills</h4>
+          {/* Skills - Editable */}
+          <div>
+            <h4 className="font-semibold mb-2">Skills {isEditMode && <span className="text-xs font-normal text-slate-500">(Click × to remove, type to add)</span>}</h4>
+            {isEditMode ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2 p-2 border rounded-lg bg-white min-h-[48px]">
+                  {editForm.skills.map((skill, idx) => (
+                    <span key={idx} className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-sm flex items-center gap-1">
+                      {skill}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkill(skill)}
+                        className="text-green-700 hover:text-red-600 ml-1"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1 p-2 border rounded"
+                    placeholder="Add a skill..."
+                    value={newSkill}
+                    onChange={(e) => setNewSkill(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSkill())}
+                    data-testid="add-skill-input"
+                  />
+                  <Button type="button" variant="outline" onClick={handleAddSkill}>Add</Button>
+                </div>
+              </div>
+            ) : (
               <div className="flex flex-wrap gap-2">
-                {applicant.skills.map((skill, idx) => (
+                {(applicant.skills || []).map((skill, idx) => (
                   <Badge key={idx} variant="secondary">{skill}</Badge>
                 ))}
+                {(!applicant.skills || applicant.skills.length === 0) && (
+                  <span className="text-slate-400 text-sm">No skills listed</span>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Summary */}
-          {applicant.summary && (
-            <div>
-              <h4 className="font-semibold mb-2">Summary</h4>
-              <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">{applicant.summary}</p>
-            </div>
-          )}
+          {/* Experience Summary - Editable */}
+          <div>
+            <h4 className="font-semibold mb-2">Experience Summary</h4>
+            {isEditMode ? (
+              <textarea
+                className="w-full p-3 border rounded-lg bg-white"
+                rows={4}
+                value={editForm.experience_summary}
+                onChange={(e) => setEditForm(prev => ({ ...prev, experience_summary: e.target.value }))}
+                placeholder="Brief summary of candidate's experience..."
+                data-testid="edit-summary-textarea"
+              />
+            ) : (
+              <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
+                {applicant.experience_summary || applicant.summary || 'No summary available'}
+              </p>
+            )}
+          </div>
 
           {/* Cover Letter */}
           {applicant.cover_letter && (
@@ -476,50 +664,52 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage }) {
           )}
 
           {/* Action Buttons */}
-          <div className="border-t pt-4">
-            <h4 className="font-semibold mb-3">Take Action</h4>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              <Button
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => onUpdateStage(applicant.id, 'shortlisted')}
-                data-testid="action-shortlist"
-              >
-                <CheckCircle className="h-4 w-4 mr-1" /> Shortlist
-              </Button>
-              <Button
-                variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50"
-                onClick={() => onUpdateStage(applicant.id, 'rejected')}
-                data-testid="action-reject"
-              >
-                <XCircle className="h-4 w-4 mr-1" /> Reject
-              </Button>
-              <Button
-                variant="outline"
-                className="text-gray-600 hover:bg-gray-50"
-                onClick={() => onUpdateStage(applicant.id, 'on_hold')}
-                data-testid="action-hold"
-              >
-                <Pause className="h-4 w-4 mr-1" /> Hold
-              </Button>
-              <Button
-                variant="outline"
-                className="text-orange-600 border-orange-200 hover:bg-orange-50"
-                onClick={() => onUpdateStage(applicant.id, 'over_budget')}
-                data-testid="action-over-budget"
-              >
-                <TrendingDown className="h-4 w-4 mr-1" /> Over Budget
-              </Button>
-              <Button
-                variant="outline"
-                className="text-rose-600 border-rose-200 hover:bg-rose-50"
-                onClick={() => onUpdateStage(applicant.id, 'not_qualified')}
-                data-testid="action-not-qualified"
-              >
-                <UserX className="h-4 w-4 mr-1" /> Not Qualified
-              </Button>
+          {!isEditMode && (
+            <div className="border-t pt-4">
+              <h4 className="font-semibold mb-3">Take Action</h4>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => onUpdateStage(applicant.id, 'shortlisted')}
+                  data-testid="action-shortlist"
+                >
+                  <CheckCircle className="h-4 w-4 mr-1" /> Shortlist
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={() => onUpdateStage(applicant.id, 'rejected')}
+                  data-testid="action-reject"
+                >
+                  <XCircle className="h-4 w-4 mr-1" /> Reject
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-gray-600 hover:bg-gray-50"
+                  onClick={() => onUpdateStage(applicant.id, 'on_hold')}
+                  data-testid="action-hold"
+                >
+                  <Pause className="h-4 w-4 mr-1" /> Hold
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                  onClick={() => onUpdateStage(applicant.id, 'over_budget')}
+                  data-testid="action-over-budget"
+                >
+                  <TrendingDown className="h-4 w-4 mr-1" /> Over Budget
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-rose-600 border-rose-200 hover:bg-rose-50"
+                  onClick={() => onUpdateStage(applicant.id, 'not_qualified')}
+                  data-testid="action-not-qualified"
+                >
+                  <UserX className="h-4 w-4 mr-1" /> Not Qualified
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
