@@ -1,0 +1,29 @@
+Looking in indexes: https://pypi.org/simple, https://d33sy5i8bnduwe.cloudfront.net/simple/
+Collecting resend
+  Downloading resend-2.19.0-py2.py3-none-any.whl.metadata (2.5 kB)
+Collecting twilio
+  Downloading twilio-9.9.1-py2.py3-none-any.whl.metadata (13 kB)
+Requirement already satisfied: requests>=2.31.0 in /root/.venv/lib/python3.11/site-packages (from resend) (2.32.5)
+Requirement already satisfied: typing-extensions>=4.4.0 in /root/.venv/lib/python3.11/site-packages (from resend) (4.15.0)
+Requirement already satisfied: PyJWT<3.0.0,>=2.0.0 in /root/.venv/lib/python3.11/site-packages (from twilio) (2.10.1)
+Requirement already satisfied: aiohttp>=3.8.4 in /root/.venv/lib/python3.11/site-packages (from twilio) (3.13.3)
+Collecting aiohttp-retry>=2.8.3 (from twilio)
+  Downloading aiohttp_retry-2.9.1-py3-none-any.whl.metadata (8.8 kB)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in /root/.venv/lib/python3.11/site-packages (from aiohttp>=3.8.4->twilio) (2.6.1)
+Requirement already satisfied: aiosignal>=1.4.0 in /root/.venv/lib/python3.11/site-packages (from aiohttp>=3.8.4->twilio) (1.4.0)
+Requirement already satisfied: attrs>=17.3.0 in /root/.venv/lib/python3.11/site-packages (from aiohttp>=3.8.4->twilio) (25.4.0)
+Requirement already satisfied: frozenlist>=1.1.1 in /root/.venv/lib/python3.11/site-packages (from aiohttp>=3.8.4->twilio) (1.8.0)
+Requirement already satisfied: multidict<7.0,>=4.5 in /root/.venv/lib/python3.11/site-packages (from aiohttp>=3.8.4->twilio) (6.7.0)
+Requirement already satisfied: propcache>=0.2.0 in /root/.venv/lib/python3.11/site-packages (from aiohttp>=3.8.4->twilio) (0.4.1)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in /root/.venv/lib/python3.11/site-packages (from aiohttp>=3.8.4->twilio) (1.22.0)
+Requirement already satisfied: idna>=2.0 in /root/.venv/lib/python3.11/site-packages (from yarl<2.0,>=1.17.0->aiohttp>=3.8.4->twilio) (3.11)
+Requirement already satisfied: charset_normalizer<4,>=2 in /root/.venv/lib/python3.11/site-packages (from requests>=2.31.0->resend) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /root/.venv/lib/python3.11/site-packages (from requests>=2.31.0->resend) (2.6.2)
+Requirement already satisfied: certifi>=2017.4.17 in /root/.venv/lib/python3.11/site-packages (from requests>=2.31.0->resend) (2026.1.4)
+Downloading resend-2.19.0-py2.py3-none-any.whl (50 kB)
+Downloading twilio-9.9.1-py2.py3-none-any.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 46.5 MB/s  0:00:00
+Downloading aiohttp_retry-2.9.1-py3-none-any.whl (10.0 kB)
+Installing collected packages: resend, aiohttp-retry, twilio
+
+Successfully installed aiohttp-retry-2.9.1 resend-2.19.0 twilio-9.9.1
