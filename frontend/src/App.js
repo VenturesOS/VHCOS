@@ -31,6 +31,7 @@ import EmployerDashboard from "./pages/employer/EmployerDashboard";
 import EmployerJobsPage from "./pages/employer/EmployerJobsPage";
 import CreateJobPage from "./pages/employer/CreateJobPage";
 import ApplicantsPage from "./pages/employer/ApplicantsPage";
+import JobApplicantsPage from "./pages/employer/JobApplicantsPage";
 import AnalyticsPage from "./pages/employer/AnalyticsPage";
 import FindCandidatesPage from "./pages/employer/FindCandidatesPage";
 
