@@ -2320,8 +2320,6 @@ async def public_apply(
             logger.error(f"[PUBLIC APPLY] AI parsing failed: {e}")
     else:
         raise HTTPException(status_code=400, detail="Resume is required. Please upload a resume file.")
-    except Exception as e:
-        logger.error(f"[PUBLIC APPLY] AI parsing failed: {e}")
     
     # Check if candidate already exists in data bank
     existing_candidate = await db.candidate_bank.find_one({
@@ -2333,18 +2331,32 @@ async def public_apply(
     
     now = datetime.now(timezone.utc).isoformat()
     
+    # Prepare skills list (from candidate-edited or parsed data)
+    final_skills = parsed_data.get("skills", [])
+    if skills and isinstance(skills, str):
+        final_skills = [s.strip() for s in skills.split(",") if s.strip()]
+    
     if existing_candidate:
         candidate_id = existing_candidate["id"]
-        # Update with new resume if parsed
-        if parsed_data:
-            await db.candidate_bank.update_one(
-                {"id": candidate_id},
-                {"$set": {
-                    "skills": parsed_data.get("skills", existing_candidate.get("skills", [])),
-                    "experience_years": parsed_data.get("experience_years", existing_candidate.get("experience_years", 0)),
-                    "updated_at": now
-                }}
-            )
+        # Update with new data
+        update_data = {
+            "skills": final_skills or existing_candidate.get("skills", []),
+            "experience_years": experience_years if experience_years is not None else existing_candidate.get("experience_years", 0),
+            "current_salary": current_salary,
+            "notice_period": notice_period,
+            "updated_at": now
+        }
+        if location:
+            update_data["location"] = location
+        if headline:
+            update_data["headline"] = headline
+        if filename:
+            update_data["resume_url"] = f"/api/uploads/{filename}"
+        
+        await db.candidate_bank.update_one(
+            {"id": candidate_id},
+            {"$set": update_data}
+        )
     else:
         # Create new candidate in data bank
         candidate_id = str(uuid.uuid4())
@@ -2353,16 +2365,18 @@ async def public_apply(
             "name": parsed_data.get("name") or name,
             "email": email,
             "phone": parsed_data.get("phone") or phone,
-            "headline": parsed_data.get("headline"),
+            "headline": headline or parsed_data.get("headline"),
             "summary": parsed_data.get("summary"),
-            "skills": parsed_data.get("skills", []),
-            "experience_years": parsed_data.get("experience_years", 0),
+            "skills": final_skills,
+            "experience_years": experience_years if experience_years is not None else parsed_data.get("experience_years", 0),
             "experience": parsed_data.get("experience", []),
             "education": parsed_data.get("education", []),
-            "location": parsed_data.get("location"),
+            "location": location or parsed_data.get("location"),
+            "current_salary": current_salary,  # INR
+            "notice_period": notice_period,
             "source": "public_application",
             "source_job_id": job_id,
-            "resume_url": f"/api/uploads/{filename}",
+            "resume_url": f"/api/uploads/{filename}" if filename else None,
             "resume_text": resume_text[:5000],
             "is_active": True,
             "linked_user_id": None,  # Not linked to any user account
@@ -2371,7 +2385,7 @@ async def public_apply(
         }
         await db.candidate_bank.insert_one(candidate_doc)
     
-    # Create application
+    # Create application with salary and notice period
     application_id = str(uuid.uuid4())
     application_doc = {
         "id": application_id,
@@ -2379,8 +2393,15 @@ async def public_apply(
         "candidate_id": candidate_id,
         "candidate_name": parsed_data.get("name") or name,
         "candidate_email": email,
-        "resume_url": f"/api/uploads/{filename}",
+        "candidate_phone": phone,
+        "resume_url": f"/api/uploads/{filename}" if filename else None,
         "cover_letter": cover_letter,
+        "current_salary": current_salary,  # INR
+        "notice_period": notice_period,
+        "skills": final_skills,
+        "experience_years": experience_years if experience_years is not None else parsed_data.get("experience_years", 0),
+        "location": location or parsed_data.get("location"),
+        "headline": headline or parsed_data.get("headline"),
         "stage": "applied",
         "source": "public_website",
         "notes": [],
