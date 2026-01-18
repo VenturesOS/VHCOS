@@ -22,7 +22,7 @@ export default function NotificationSettingsPage() {
 
   const fetchPreferences = useCallback(async () => {
     try {
-      const response = await api.get('/api/alerts/preferences');
+      const response = await api.get('/alerts/preferences');
       setPreferences(response.data);
       setWhatsappNumber(response.data.whatsapp_number || '');
     } catch (err) {
@@ -34,7 +34,7 @@ export default function NotificationSettingsPage() {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const response = await api.get('/api/notifications/history?limit=10');
+      const response = await api.get('/notifications/history?limit=10');
       setNotificationHistory(response.data);
     } catch (err) {
       console.error('Failed to fetch history:', err);
