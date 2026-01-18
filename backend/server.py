@@ -260,6 +260,10 @@ async def register(user_data: UserCreate):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Validate password strength
+    if len(user_data.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     
@@ -272,6 +276,7 @@ async def register(user_data: UserCreate):
         "phone": None,
         "company_id": None,
         "is_active": True,
+        "requires_password_reset": False,
         "created_at": now
     }
     
@@ -303,10 +308,11 @@ async def register(user_data: UserCreate):
         email=user_data.email,
         name=user_data.name,
         role=user_data.role,
-        created_at=now
+        created_at=now,
+        requires_password_reset=False
     )
     
-    return TokenResponse(access_token=access_token, user=user_response)
+    return TokenResponse(access_token=access_token, user=user_response, requires_password_reset=False)
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
@@ -317,6 +323,8 @@ async def login(credentials: UserLogin):
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="Account is disabled")
     
+    requires_reset = user.get("requires_password_reset", False)
+    
     access_token = create_access_token({"sub": user["id"], "role": user["role"]})
     
     user_response = UserResponse(
@@ -326,7 +334,8 @@ async def login(credentials: UserLogin):
         role=user["role"],
         company_id=user.get("company_id"),
         phone=user.get("phone"),
-        created_at=user["created_at"]
+        created_at=user["created_at"],
+        requires_password_reset=requires_reset
     )
     
     return TokenResponse(access_token=access_token, user=user_response)
