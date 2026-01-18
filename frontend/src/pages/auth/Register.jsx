@@ -22,8 +22,10 @@ export default function Register() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [justRegistered, setJustRegistered] = useState(false);
 
-  if (isAuthenticated && user) {
+  // Only redirect if already authenticated AND not in the process of registering
+  if (isAuthenticated && user && !justRegistered) {
     return <Navigate to={`/${user.role}`} replace />;
   }
 
@@ -40,11 +42,13 @@ export default function Register() {
     }
 
     setLoading(true);
+    setJustRegistered(true);
 
     try {
       const userData = await register(formData);
       toast.success(`Welcome to VHC Talent OS, ${userData.name}!`);
-      navigate(`/${userData.role}`);
+      // Use window.location for a clean navigation to avoid React Router race conditions
+      window.location.href = `/${userData.role}`;
     } catch (error) {
       const message = error.response?.data?.detail || 'Registration failed. Please try again.';
       toast.error(message);
