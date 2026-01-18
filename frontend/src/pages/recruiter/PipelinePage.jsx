@@ -130,9 +130,12 @@ export default function PipelinePage() {
         <div className="flex gap-4 overflow-x-auto pb-4">
           {STAGES.map((stage) => (
             <div key={stage.id} className="flex-shrink-0 w-72">
-              <div className={`rounded-t-lg px-4 py-2 ${stage.color} border-t-4`}>
+              <div className={`rounded-t-lg px-4 py-3 ${stage.color} border-t-4`}>
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-700">{stage.label}</h3>
+                  <div>
+                    <h3 className="font-semibold text-slate-700">{stage.label}</h3>
+                    <p className="text-xs text-slate-500">{stage.desc}</p>
+                  </div>
                   <span className="text-sm text-slate-500 bg-white px-2 py-0.5 rounded-full">
                     {getApplicationsByStage(stage.id).length}
                   </span>
