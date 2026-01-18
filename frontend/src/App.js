@@ -1,53 +1,95 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./lib/auth";
+import { Toaster } from "./components/ui/sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+// Auth Pages
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+// Layout
+import DashboardLayout from "./components/layout/DashboardLayout";
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+// Admin Pages
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import UsersPage from "./pages/admin/UsersPage";
+import AdminJobsPage from "./pages/admin/JobsPage";
+import AdminCandidatesPage from "./pages/admin/CandidatesPage";
+import CompaniesPage from "./pages/admin/CompaniesPage";
+import SettingsPage from "./pages/admin/SettingsPage";
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+// Recruiter Pages
+import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
+import RecruiterJobsPage from "./pages/recruiter/RecruiterJobsPage";
+import PipelinePage from "./pages/recruiter/PipelinePage";
+import RecruiterCandidatesPage from "./pages/recruiter/RecruiterCandidatesPage";
+
+// Employer Pages
+import EmployerDashboard from "./pages/employer/EmployerDashboard";
+import EmployerJobsPage from "./pages/employer/EmployerJobsPage";
+import CreateJobPage from "./pages/employer/CreateJobPage";
+import ApplicantsPage from "./pages/employer/ApplicantsPage";
+import AnalyticsPage from "./pages/employer/AnalyticsPage";
+
+// Candidate Pages
+import CandidateDashboard from "./pages/candidate/CandidateDashboard";
+import ProfilePage from "./pages/candidate/ProfilePage";
+import BrowseJobsPage from "./pages/candidate/BrowseJobsPage";
+import ApplicationsPage from "./pages/candidate/ApplicationsPage";
+import MessagesPage from "./pages/candidate/MessagesPage";
 
 function App() {
   return (
-    <div className="App">
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
+          {/* Public Routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={<DashboardLayout allowedRoles={["admin"]} />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="jobs" element={<AdminJobsPage />} />
+            <Route path="candidates" element={<AdminCandidatesPage />} />
+            <Route path="companies" element={<CompaniesPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
+
+          {/* Recruiter Routes */}
+          <Route path="/recruiter" element={<DashboardLayout allowedRoles={["recruiter"]} />}>
+            <Route index element={<RecruiterDashboard />} />
+            <Route path="jobs" element={<RecruiterJobsPage />} />
+            <Route path="pipeline" element={<PipelinePage />} />
+            <Route path="candidates" element={<RecruiterCandidatesPage />} />
+          </Route>
+
+          {/* Employer Routes */}
+          <Route path="/employer" element={<DashboardLayout allowedRoles={["employer"]} />}>
+            <Route index element={<EmployerDashboard />} />
+            <Route path="jobs" element={<EmployerJobsPage />} />
+            <Route path="jobs/new" element={<CreateJobPage />} />
+            <Route path="applicants" element={<ApplicantsPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+          </Route>
+
+          {/* Candidate Routes */}
+          <Route path="/candidate" element={<DashboardLayout allowedRoles={["candidate"]} />}>
+            <Route index element={<CandidateDashboard />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="jobs" element={<BrowseJobsPage />} />
+            <Route path="applications" element={<ApplicationsPage />} />
+            <Route path="messages" element={<MessagesPage />} />
+          </Route>
+
+          {/* Default Redirect */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
-    </div>
+      <Toaster position="top-right" richColors />
+    </AuthProvider>
   );
 }
 
