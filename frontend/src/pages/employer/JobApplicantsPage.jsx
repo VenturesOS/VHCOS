@@ -345,7 +345,7 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage, onR
       await applicationAPI.updateDetails(applicant.id, updateData);
       toast.success('Details updated successfully');
       setIsEditMode(false);
-      if (onRefresh) onRefresh();
+      if (onRefresh) onRefresh(applicant.id);
     } catch (error) {
       toast.error('Failed to update details');
       console.error(error);
