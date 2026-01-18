@@ -93,3 +93,6 @@ export function formatSalaryDisplay(min, max) {
 // Default currency code for Phase-1
 export const DEFAULT_CURRENCY = 'INR';
 export const CURRENCY_SYMBOL = '₹';
+
+// Alias for convenience
+export const formatINR = formatSalaryINR;
