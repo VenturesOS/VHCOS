@@ -93,6 +93,8 @@ function App() {
             <Route path="matching-jobs" element={<MatchingJobsPage />} />
             <Route path="applications" element={<ApplicationsPage />} />
             <Route path="messages" element={<MessagesPage />} />
+            <Route path="notifications" element={<NotificationSettingsPage />} />
+            <Route path="settings/notifications" element={<NotificationSettingsPage />} />
           </Route>
 
           {/* Default Redirect */}
