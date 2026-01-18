@@ -112,4 +112,43 @@ export const settingsAPI = {
   update: (data) => api.put('/settings', data),
 };
 
+// AI Matching APIs
+export const matchingAPI = {
+  parseResume: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/ai/parse-resume', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  parseJD: (text, file) => {
+    const formData = new FormData();
+    if (text) formData.append('jd_text', text);
+    if (file) formData.append('file', file);
+    return api.post('/ai/parse-jd', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  findCandidates: (params) => api.post('/matching/find-candidates', params),
+  getJobsForCandidate: () => api.get('/matching/jobs-for-candidate'),
+};
+
+// Candidate Data Bank APIs
+export const candidateBankAPI = {
+  add: (file, email, name) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (email) formData.append('email', email);
+    if (name) formData.append('name', name);
+    return api.post('/candidate-bank/add', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getAll: (params) => api.get('/candidate-bank', { params }),
+  getById: (id) => api.get(`/candidate-bank/${id}`),
+  update: (id, data) => api.put(`/candidate-bank/${id}`, data),
+  getAuditLog: (id) => api.get(`/candidate-bank/${id}/audit-log`),
+  getResumeHistory: (id) => api.get(`/candidate-bank/${id}/resume-history`),
+};
+
 export default api;
