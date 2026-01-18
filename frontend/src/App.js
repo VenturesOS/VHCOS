@@ -6,6 +6,7 @@ import { Toaster } from "./components/ui/sonner";
 // Auth Pages
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import PasswordReset from "./pages/auth/PasswordReset";
 
 // Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
