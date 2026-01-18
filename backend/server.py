@@ -2203,21 +2203,24 @@ async def public_apply(
     name: str = Form(...),
     phone: Optional[str] = Form(None),
     cover_letter: Optional[str] = Form(None),
-    current_salary: Optional[int] = Form(None),  # INR
+    current_salary: Optional[int] = Form(None),  # INR - from review step
     notice_period: Optional[str] = Form(None),  # e.g., "30 days", "2 weeks", "immediate"
     skills: Optional[str] = Form(None),  # Comma-separated, edited by candidate
-    experience_years: Optional[int] = Form(None),
-    location: Optional[str] = Form(None),
-    resume: UploadFile = File(None),  # Optional if resume_filename provided
-    resume_filename: Optional[str] = Form(None),  # From parse step
+    experience_years: Optional[int] = Form(None),  # Candidate-corrected value
+    location: Optional[str] = Form(None),  # Candidate-corrected value
+    headline: Optional[str] = Form(None),  # Candidate-corrected value
+    resume: UploadFile = File(None),  # Optional if resume_filename provided from parse step
+    resume_filename: Optional[str] = Form(None),  # From /public/parse-resume step
     website: Optional[str] = Form(None),  # Honeypot
     turnstile_token: Optional[str] = Form(None)
 ):
     """
     Public job application (NO LOGIN REQUIRED).
-    - Resume is parsed immediately
-    - Candidate account creation is OPTIONAL
-    - Application linked to Candidate Data Bank
+    Supports two-step apply flow:
+    - Step 1: Candidate uploads resume via /public/parse-resume, gets parsed data
+    - Step 2: Candidate reviews/edits data, adds salary & notice period, then submits here
+    
+    Can also accept direct resume upload for single-step apply.
     """
     # Get client IP for rate limiting
     client_ip = request.client.host if request.client else "unknown"
@@ -2246,39 +2249,77 @@ async def public_apply(
     if not re.match(email_pattern, email):
         raise HTTPException(status_code=400, detail="Invalid email address")
     
-    # Save resume file
-    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    safe_email = email.replace('@', '_at_').replace('.', '_')
-    filename = f"public_{safe_email}_{timestamp}_{resume.filename}"
+    # Handle resume - either from parse step or new upload
     upload_dir = Path("/app/uploads")
     upload_dir.mkdir(exist_ok=True)
-    
-    file_path = upload_dir / filename
-    async with aiofiles.open(file_path, 'wb') as f:
-        content = await resume.read()
-        await f.write(content)
-    
-    # Extract resume text
+    filename = None
     resume_text = ""
-    try:
-        if filename.lower().endswith('.pdf'):
-            doc = fitz.open(str(file_path))
-            for page in doc:
-                resume_text += page.get_text()
-            doc.close()
-        elif filename.lower().endswith('.txt'):
-            async with aiofiles.open(file_path, 'r', errors='ignore') as f:
-                resume_text = await f.read()
-    except Exception as e:
-        logger.error(f"[PUBLIC APPLY] Resume text extraction failed: {e}")
-    
-    # Parse resume with AI
     parsed_data = {}
-    try:
-        from services.matching_engine import parse_resume_with_ai
-        result = await parse_resume_with_ai(resume_text[:8000])
-        if result.get("success"):
-            parsed_data = result.get("data", {})
+    
+    if resume_filename:
+        # Two-step flow: resume was already parsed, use the existing file
+        file_path = upload_dir / resume_filename
+        if not file_path.exists():
+            raise HTTPException(status_code=400, detail="Resume file not found. Please re-upload your resume.")
+        filename = resume_filename
+        
+        # Use candidate-provided data from review step (already corrected by candidate)
+        parsed_data = {
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "headline": headline,
+            "skills": [s.strip() for s in skills.split(",")] if skills else [],
+            "experience_years": experience_years or 0,
+            "location": location
+        }
+        
+        # Extract resume text for storage
+        try:
+            if filename.lower().endswith('.pdf'):
+                doc = fitz.open(str(file_path))
+                for page in doc:
+                    resume_text += page.get_text()
+                doc.close()
+            elif filename.lower().endswith('.txt'):
+                async with aiofiles.open(file_path, 'r', errors='ignore') as f:
+                    resume_text = await f.read()
+        except Exception as e:
+            logger.error(f"[PUBLIC APPLY] Resume text extraction failed: {e}")
+    elif resume:
+        # Single-step flow: new resume upload, parse it now
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        safe_email = email.replace('@', '_at_').replace('.', '_')
+        filename = f"public_{safe_email}_{timestamp}_{resume.filename}"
+        
+        file_path = upload_dir / filename
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await resume.read()
+            await f.write(content)
+        
+        # Extract resume text
+        try:
+            if filename.lower().endswith('.pdf'):
+                doc = fitz.open(str(file_path))
+                for page in doc:
+                    resume_text += page.get_text()
+                doc.close()
+            elif filename.lower().endswith('.txt'):
+                async with aiofiles.open(file_path, 'r', errors='ignore') as f:
+                    resume_text = await f.read()
+        except Exception as e:
+            logger.error(f"[PUBLIC APPLY] Resume text extraction failed: {e}")
+        
+        # Parse resume with AI
+        try:
+            from services.matching_engine import parse_resume_with_ai
+            result = await parse_resume_with_ai(resume_text[:8000])
+            if result.get("success"):
+                parsed_data = result.get("data", {})
+        except Exception as e:
+            logger.error(f"[PUBLIC APPLY] AI parsing failed: {e}")
+    else:
+        raise HTTPException(status_code=400, detail="Resume is required. Please upload a resume file.")
     except Exception as e:
         logger.error(f"[PUBLIC APPLY] AI parsing failed: {e}")
     
