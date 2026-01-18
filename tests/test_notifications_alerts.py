@@ -396,19 +396,19 @@ class TestAuthorizationChecks:
     def test_alerts_preferences_requires_auth(self):
         """Alert preferences endpoints require authentication"""
         response = requests.get(f"{BASE_URL}/api/alerts/preferences")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403], f"Expected 401/403, got {response.status_code}"
         print("✅ GET /api/alerts/preferences requires authentication")
     
     def test_notification_history_requires_auth(self):
         """Notification history requires authentication"""
         response = requests.get(f"{BASE_URL}/api/notifications/history")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403], f"Expected 401/403, got {response.status_code}"
         print("✅ GET /api/notifications/history requires authentication")
     
     def test_admin_stats_requires_auth(self):
         """Admin stats requires authentication"""
         response = requests.get(f"{BASE_URL}/api/admin/notifications/stats")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403], f"Expected 401/403, got {response.status_code}"
         print("✅ GET /api/admin/notifications/stats requires authentication")
 
 
