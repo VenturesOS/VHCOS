@@ -204,12 +204,22 @@ function ApplicantCard({ applicant, jobData, onClick }) {
                 {applicant.candidate_name?.charAt(0).toUpperCase()}
               </span>
             </div>
-            {/* Career Stability Indicator */}
+            {/* Career Stability Indicator with Tooltip */}
             {applicant.career_stability && (
-              <div 
-                className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${STABILITY_COLORS[applicant.career_stability.score]}`}
-                title={applicant.career_stability.tooltip}
-              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div 
+                      className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white cursor-help ${STABILITY_COLORS[applicant.career_stability.score]}`}
+                      data-testid={`stability-indicator-${applicant.id}`}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs">
+                    <p className="font-semibold">Career Stability: {applicant.career_stability.score.charAt(0).toUpperCase() + applicant.career_stability.score.slice(1)}</p>
+                    <p className="text-xs text-muted-foreground">{applicant.career_stability.tooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           <div>
