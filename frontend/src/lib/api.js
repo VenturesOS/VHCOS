@@ -80,6 +80,7 @@ export const applicationAPI = {
   updateDetails: (id, data) => api.put(`/applications/${id}/details`, data),
   getEditHistory: (id) => api.get(`/applications/${id}/edit-history`),
   addNote: (id, content) => api.post(`/applications/${id}/notes`, { content }),
+  downloadResume: (id) => `${API_BASE}/applications/${id}/resume`,
 };
 
 // Candidate APIs
