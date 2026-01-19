@@ -657,20 +657,77 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage, onR
             </div>
           )}
 
-          {/* Resume Link */}
-          {applicant.resume_url && (
-            <div>
-              <a 
-                href={applicant.resume_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-[#7CB342] hover:underline"
-              >
-                <FileText className="h-4 w-4" />
-                View Resume
-              </a>
-            </div>
-          )}
+          {/* Resume Preview & Download */}
+          <div>
+            <h4 className="font-semibold mb-2">Resume / CV</h4>
+            {applicant.resume_url ? (
+              <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                <FileText className="h-6 w-6 text-[#7CB342]" />
+                <span className="text-sm text-slate-600 flex-1">
+                  {applicant.candidate_name?.replace(/\s+/g, '_')}_VHC
+                  {applicant.resume_url.split('.').pop() ? `.${applicant.resume_url.split('.').pop()}` : '.pdf'}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Open resume in new tab for preview
+                      const previewUrl = `${process.env.REACT_APP_BACKEND_URL}${applicant.resume_url}`;
+                      window.open(previewUrl, '_blank');
+                    }}
+                    data-testid="preview-resume-btn"
+                  >
+                    <Eye className="h-4 w-4 mr-1" /> Preview
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
+                    onClick={() => {
+                      // Download with proper naming
+                      const token = localStorage.getItem('vhc_token');
+                      const downloadUrl = `${process.env.REACT_APP_BACKEND_URL}/api/applications/${applicant.id}/resume`;
+                      
+                      // Create a temporary link to trigger download with auth
+                      fetch(downloadUrl, {
+                        headers: { Authorization: `Bearer ${token}` }
+                      })
+                      .then(response => {
+                        if (!response.ok) throw new Error('Download failed');
+                        const disposition = response.headers.get('content-disposition');
+                        let filename = 'resume.pdf';
+                        if (disposition) {
+                          const match = disposition.match(/filename="?([^";\n]+)"?/);
+                          if (match) filename = match[1];
+                        }
+                        return response.blob().then(blob => ({ blob, filename }));
+                      })
+                      .then(({ blob, filename }) => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        a.remove();
+                        toast.success('Resume downloaded');
+                      })
+                      .catch(() => toast.error('Failed to download resume'));
+                    }}
+                    data-testid="download-resume-btn"
+                  >
+                    <Download className="h-4 w-4 mr-1" /> Download
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 italic p-3 bg-slate-50 rounded-lg">
+                No resume uploaded for this application
+              </p>
+            )}
+          </div>
 
           {/* Action Buttons */}
           {!isEditMode && (
