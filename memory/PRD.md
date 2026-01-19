@@ -106,12 +106,21 @@ Applications collection now includes:
 
 ---
 
-## Test Credentials
+## Demo Login Credentials
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@vhc.in | VhcAdmin@2024 |
-| Employer | employer@vhctalent.com | Demo@2024 |
+**Login URL:** `https://[preview-url]/login`
+
+| Role | Email | Password | Notes |
+|------|-------|----------|-------|
+| Admin | admin@vhc.in | VhcAdmin@2024 | INTERNAL USE ONLY - Do not display on public website |
+| Employer | employer@vhctalent.com | Demo@2024 | Demo employer account |
+| Recruiter | recruiter@vhctalent.com | Demo@2024 | Demo recruiter account |
+| Candidate | candidate@vhctalent.com | Demo@2024 | Demo candidate account |
+
+**Notes:**
+- No first-login password reset required
+- Accounts are stable and will not auto-expire
+- Admin credentials must NOT be shown on public website
 
 ---
 
