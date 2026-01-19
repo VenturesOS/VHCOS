@@ -83,13 +83,22 @@ export default function CandidateDataBankPage() {
           <h1 className="font-heading text-3xl font-bold text-slate-900">Candidate Data Bank</h1>
           <p className="text-slate-500 mt-1">Centralized candidate database with deduplication</p>
         </div>
-        <Button
-          onClick={() => setShowUpload(true)}
-          className="bg-[#7CB342] hover:bg-[#689F38]"
-          data-testid="add-candidate-btn"
-        >
-          <Plus className="w-4 h-4 mr-2" /> Add Candidate
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate('batch-upload')}
+            data-testid="batch-upload-btn"
+          >
+            <Files className="w-4 h-4 mr-2" /> Batch Upload
+          </Button>
+          <Button
+            onClick={() => setShowUpload(true)}
+            className="bg-[#7CB342] hover:bg-[#689F38]"
+            data-testid="add-candidate-btn"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Add Candidate
+          </Button>
+        </div>
       </div>
 
       {/* Search & Filters */}
