@@ -67,6 +67,7 @@ function App() {
             <Route path="candidates" element={<AdminCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="companies" element={<CompaniesPage />} />
+            <Route path="pipeline" element={<AdminPipelinePage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 
