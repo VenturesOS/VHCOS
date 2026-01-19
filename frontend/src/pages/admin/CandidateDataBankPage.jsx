@@ -1,13 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { candidateBankAPI } from '../../lib/api';
+import { candidateBankAPI, jobAPI } from '../../lib/api';
+import { formatSalaryINR } from '../../lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { Label } from '../../components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files } from 'lucide-react';
+import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files, Briefcase, DollarSign, AlertCircle } from 'lucide-react';
+
+// Notice period options
+const NOTICE_PERIODS = [
+  "Immediate",
+  "15 days",
+  "30 days",
+  "45 days",
+  "60 days",
+  "90 days",
+  "90+ days"
+];
 
 export default function CandidateDataBankPage() {
   const navigate = useNavigate();
@@ -22,10 +36,82 @@ export default function CandidateDataBankPage() {
   const [resumeHistory, setResumeHistory] = useState([]);
   const fileInputRef = useRef(null);
   const [uploadForm, setUploadForm] = useState({ email: '', name: '' });
+  
+  // Task 2: Add as Applicant state
+  const [showAddApplicant, setShowAddApplicant] = useState(false);
+  const [applicantCandidate, setApplicantCandidate] = useState(null);
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState('');
+  const [editSalary, setEditSalary] = useState('');
+  const [editNotice, setEditNotice] = useState('');
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     loadCandidates();
   }, []);
+
+  // Load jobs for the Add as Applicant dialog
+  const loadJobs = async () => {
+    try {
+      const res = await jobAPI.getAll();
+      setJobs(res.data.filter(j => j.status === 'active'));
+    } catch (error) {
+      console.error('Failed to load jobs', error);
+    }
+  };
+
+  // Open Add as Applicant dialog
+  const openAddApplicantDialog = (candidate) => {
+    setApplicantCandidate(candidate);
+    setEditSalary(candidate.current_salary?.toString() || '');
+    setEditNotice(candidate.notice_period || '');
+    setSelectedJobId('');
+    loadJobs();
+    setShowAddApplicant(true);
+  };
+
+  // Handle Add as Applicant
+  const handleAddAsApplicant = async () => {
+    // Validate mandatory fields
+    if (!editSalary || parseInt(editSalary) <= 0) {
+      toast.error('Current salary (INR) is mandatory');
+      return;
+    }
+    if (!editNotice) {
+      toast.error('Notice period is mandatory');
+      return;
+    }
+    if (!selectedJobId) {
+      toast.error('Please select a job');
+      return;
+    }
+
+    setLinking(true);
+    try {
+      // First update salary/notice if changed
+      const salaryNum = parseInt(editSalary);
+      if (salaryNum !== applicantCandidate.current_salary || editNotice !== applicantCandidate.notice_period) {
+        await candidateBankAPI.updateSalaryNotice(applicantCandidate.id, salaryNum, editNotice);
+      }
+
+      // Then link to job
+      const res = await candidateBankAPI.linkToJob(applicantCandidate.id, selectedJobId);
+      toast.success(res.data.message);
+      setShowAddApplicant(false);
+      loadCandidates(); // Refresh to show updated data
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'object' && detail.message) {
+        toast.error(detail.message);
+      } else if (typeof detail === 'string') {
+        toast.error(detail);
+      } else {
+        toast.error('Failed to add as applicant');
+      }
+    } finally {
+      setLinking(false);
+    }
+  };
 
   const loadCandidates = async () => {
     setLoading(true);
