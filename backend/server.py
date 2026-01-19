@@ -835,9 +835,11 @@ async def download_application_resume(
     # Get resume URL
     resume_url = application.get("resume_url")
     if not resume_url:
-        # Try to get from candidate profile
+        # Try to get from candidate profile (check both candidates and candidate_bank)
         if application.get("candidate_id"):
             candidate = await db.candidates.find_one({"id": application["candidate_id"]}, {"_id": 0})
+            if not candidate:
+                candidate = await db.candidate_bank.find_one({"id": application["candidate_id"]}, {"_id": 0})
             if candidate:
                 resume_url = candidate.get("resume_url")
     
