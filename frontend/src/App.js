@@ -1,5 +1,5 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./lib/auth";
 import { Toaster } from "./components/ui/sonner";
 
@@ -7,6 +7,9 @@ import { Toaster } from "./components/ui/sonner";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import PasswordReset from "./pages/auth/PasswordReset";
+
+// Public Website Redirect
+import PublicWebsiteRedirect from "./pages/PublicWebsite";
 
 // Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
