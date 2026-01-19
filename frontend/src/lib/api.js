@@ -96,6 +96,7 @@ export const candidateAPI = {
   },
   getAll: () => api.get('/candidates'),
   getById: (id) => api.get(`/candidates/${id}`),
+  downloadResume: (id) => `${API_BASE}/candidates/${id}/resume`,
 };
 
 // Company APIs
