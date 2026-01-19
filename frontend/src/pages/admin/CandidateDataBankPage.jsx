@@ -547,13 +547,12 @@ export default function CandidateDataBankPage() {
                     <SelectValue placeholder="Choose a job..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {jobs.map(job => (
+                    {jobs.length > 0 ? jobs.map(job => (
                       <SelectItem key={job.id} value={job.id}>
                         {job.title} {job.company_name ? `- ${job.company_name}` : ''}
                       </SelectItem>
-                    ))}
-                    {jobs.length === 0 && (
-                      <SelectItem value="" disabled>No active jobs available</SelectItem>
+                    )) : (
+                      <div className="px-2 py-1.5 text-sm text-slate-500">No active jobs available</div>
                     )}
                   </SelectContent>
                 </Select>
