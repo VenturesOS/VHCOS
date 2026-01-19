@@ -23,6 +23,7 @@ import CompaniesPage from "./pages/admin/CompaniesPage";
 import SettingsPage from "./pages/admin/SettingsPage";
 import CandidateDataBankPage from "./pages/admin/CandidateDataBankPage";
 import AdminPipelinePage from "./pages/admin/AdminPipelinePage";
+import BatchUploadPage from "./pages/admin/BatchUploadPage";
 
 // Recruiter Pages
 import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
