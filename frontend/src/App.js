@@ -84,6 +84,7 @@ function App() {
             <Route path="candidates" element={<RecruiterCandidatesPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
+            <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
           </Route>
 
           {/* Employer Routes */}
@@ -95,6 +96,7 @@ function App() {
             <Route path="applicants" element={<ApplicantsPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
+            <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
           </Route>
 
