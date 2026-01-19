@@ -25,9 +25,10 @@ VHC Talent OS is a production-ready, role-based recruitment portal built for VHC
 
 ---
 
-## Phase-1.5 Status: ✅ COMPLETE (January 18, 2026)
+## Phase-1.5 Status: ✅ COMPLETE & TESTED (January 18, 2026)
 
 ### Controlled Salary, Notice Period & Candidate Detail Preview/Edit
+**Testing:** 19 pytest tests passed - all backend and frontend functionality verified
 
 **Visibility (Admin, Employer, Recruiter can VIEW):**
 - Current salary (INR)
