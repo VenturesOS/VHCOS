@@ -284,6 +284,9 @@ class CandidateBankRecord(BaseModel):
     active_resume_id: Optional[str] = None
     resume_versions: List[dict] = []
     resume_fingerprints: List[str] = []
+    resume_url: Optional[str] = None
+    current_salary: Optional[int] = None  # INR - mandatory for job linking
+    notice_period: Optional[str] = None  # mandatory for job linking
     source: str = "self"  # self, employer, recruiter, parsing
     linked_user_id: Optional[str] = None
     visibility: dict = {}  # employer_ids, recruiter_ids with access
