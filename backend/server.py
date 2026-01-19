@@ -584,10 +584,360 @@ async def update_user(user_id: str, update_data: UserUpdate, current_user: dict 
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(require_role(["admin"]))):
-    result = await db.users.delete_one({"id": user_id})
-    if result.deleted_count == 0:
+    # Soft delete - set is_active to False instead of hard delete
+    result = await db.users.update_one(
+        {"id": user_id}, 
+        {"$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "User deleted successfully"}
+    return {"message": "User deactivated successfully"}
+
+@api_router.post("/admin/users", response_model=UserResponse)
+async def admin_create_user(user_data: AdminUserCreate, current_user: dict = Depends(require_role(["admin"]))):
+    """Admin-only endpoint to create users with any role"""
+    # Validate role
+    allowed_roles = ["employer", "recruiter", "candidate"]
+    if user_data.role not in allowed_roles:
+        raise HTTPException(status_code=400, detail=f"Role must be one of: {', '.join(allowed_roles)}")
+    
+    # Check if email already exists
+    existing = await db.users.find_one({"email": user_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    user_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    user_doc = {
+        "id": user_id,
+        "email": user_data.email,
+        "name": user_data.name,
+        "role": user_data.role,
+        "password": hash_password(user_data.password),
+        "phone": user_data.phone,
+        "company_id": user_data.company_id,
+        "is_active": True,
+        "requires_password_reset": False,
+        "created_at": now,
+        "created_by": current_user["id"]
+    }
+    
+    await db.users.insert_one(user_doc)
+    
+    # Create candidate profile if role is candidate
+    if user_data.role == "candidate":
+        profile_doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "name": user_data.name,
+            "email": user_data.email,
+            "phone": user_data.phone,
+            "headline": None,
+            "summary": None,
+            "skills": [],
+            "experience": [],
+            "education": [],
+            "resume_url": None,
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.candidates.insert_one(profile_doc)
+    
+    return UserResponse(**{k: v for k, v in user_doc.items() if k != "password" and k != "_id"})
+
+@api_router.post("/admin/users/{user_id}/reset-password")
+async def admin_reset_user_password(user_id: str, reset_data: AdminPasswordReset, current_user: dict = Depends(require_role(["admin"]))):
+    """Admin-only endpoint to reset any user's password"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot reset admin passwords through this endpoint for security
+    if user.get("role") == "admin" and user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Cannot reset another admin's password")
+    
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "password": hash_password(reset_data.new_password),
+            "requires_password_reset": False,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Password reset successfully", "user_id": user_id}
+
+@api_router.post("/admin/users/{user_id}/toggle-status")
+async def admin_toggle_user_status(user_id: str, current_user: dict = Depends(require_role(["admin"]))):
+    """Admin-only endpoint to activate/deactivate a user"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot deactivate own account
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+    
+    new_status = not user.get("is_active", True)
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": f"User {'activated' if new_status else 'deactivated'} successfully", "is_active": new_status}
+
+@api_router.get("/admin/employers")
+async def get_employers_list(current_user: dict = Depends(require_role(["admin"]))):
+    """Get list of all employers for recruiter assignment"""
+    employers = await db.users.find({"role": "employer"}, {"_id": 0, "password": 0}).to_list(1000)
+    return employers
+
+@api_router.post("/admin/assign-recruiter")
+async def assign_recruiter_to_employer(
+    recruiter_id: str,
+    employer_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Assign a recruiter to an employer"""
+    recruiter = await db.users.find_one({"id": recruiter_id, "role": "recruiter"})
+    if not recruiter:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+    
+    employer = await db.users.find_one({"id": employer_id, "role": "employer"})
+    if not employer:
+        raise HTTPException(status_code=404, detail="Employer not found")
+    
+    # Update recruiter with employer assignment
+    await db.users.update_one(
+        {"id": recruiter_id},
+        {"$set": {"assigned_employer_id": employer_id, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Recruiter assigned to employer successfully"}
+
+# ============== ADMIN PIPELINE VIEW ==============
+
+@api_router.get("/admin/pipeline")
+async def get_admin_pipeline(
+    employer_id: Optional[str] = None,
+    recruiter_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Admin collective pipeline view across all employers and recruiters.
+    Read-only aggregated view for management oversight.
+    """
+    # Build filter
+    match_filter = {}
+    
+    if job_id:
+        match_filter["job_id"] = job_id
+    
+    # Get all applications
+    applications = await db.applications.find(match_filter, {"_id": 0}).to_list(10000)
+    
+    # Get job details for filtering and display
+    job_ids = list(set(app["job_id"] for app in applications))
+    jobs = await db.jobs.find({"id": {"$in": job_ids}}, {"_id": 0}).to_list(1000)
+    jobs_map = {j["id"]: j for j in jobs}
+    
+    # Apply employer filter if specified
+    if employer_id:
+        employer_job_ids = [j["id"] for j in jobs if j.get("company_id") == employer_id or j.get("created_by") == employer_id]
+        applications = [app for app in applications if app["job_id"] in employer_job_ids]
+    
+    # Apply recruiter filter if specified
+    if recruiter_id:
+        recruiter_job_ids = [j["id"] for j in jobs if j.get("created_by") == recruiter_id or j.get("assigned_recruiter") == recruiter_id]
+        applications = [app for app in applications if app["job_id"] in recruiter_job_ids]
+    
+    # Define all pipeline stages
+    all_stages = ["applied", "shortlisted", "interview", "offered", "hired", "rejected", "on_hold", "over_budget", "not_qualified"]
+    
+    # Group applications by stage
+    pipeline_data = {stage: [] for stage in all_stages}
+    
+    for app in applications:
+        stage = app.get("stage", "applied")
+        if stage not in pipeline_data:
+            stage = "applied"
+        
+        job = jobs_map.get(app["job_id"], {})
+        
+        pipeline_data[stage].append({
+            "id": app["id"],
+            "candidate_name": app.get("candidate_name", "Unknown"),
+            "candidate_email": app.get("candidate_email"),
+            "job_title": app.get("job_title") or job.get("title", "Unknown"),
+            "job_id": app["job_id"],
+            "company_name": job.get("company_name", ""),
+            "match_score": app.get("match_score", 0),
+            "applied_at": app.get("created_at"),
+            "current_salary": app.get("current_salary"),
+            "notice_period": app.get("notice_period"),
+            "resume_url": app.get("resume_url")
+        })
+    
+    # Calculate stage counts
+    stage_counts = {stage: len(apps) for stage, apps in pipeline_data.items()}
+    
+    # Get filter options
+    employers = await db.users.find({"role": "employer"}, {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(1000)
+    recruiters = await db.users.find({"role": "recruiter"}, {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(1000)
+    
+    return {
+        "pipeline": pipeline_data,
+        "stage_counts": stage_counts,
+        "total_applications": len(applications),
+        "filters": {
+            "employers": employers,
+            "recruiters": recruiters,
+            "jobs": [{"id": j["id"], "title": j.get("title", "Untitled")} for j in jobs]
+        }
+    }
+
+# ============== CV DOWNLOAD ENDPOINT ==============
+
+@api_router.get("/applications/{app_id}/resume")
+async def download_application_resume(
+    app_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Download candidate resume with proper naming: Firstname_Lastname_VHC.ext
+    
+    Permission checks:
+    - Admin: Can access any resume
+    - Employer/Recruiter: Only resumes for candidates who applied to their jobs
+    """
+    # Get application
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Permission check for non-admin
+    if current_user["role"] != "admin":
+        job = await db.jobs.find_one({"id": application["job_id"]}, {"_id": 0})
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Check if user has access to this job
+        has_access = (
+            job.get("created_by") == current_user["id"] or
+            job.get("company_id") == current_user.get("company_id") or
+            job.get("assigned_recruiter") == current_user["id"]
+        )
+        if not has_access:
+            raise HTTPException(status_code=403, detail="Access denied to this resume")
+    
+    # Get resume URL
+    resume_url = application.get("resume_url")
+    if not resume_url:
+        # Try to get from candidate profile
+        if application.get("candidate_id"):
+            candidate = await db.candidates.find_one({"id": application["candidate_id"]}, {"_id": 0})
+            if candidate:
+                resume_url = candidate.get("resume_url")
+    
+    if not resume_url:
+        raise HTTPException(status_code=404, detail="Resume not found for this application")
+    
+    # Extract filename from URL
+    original_filename = resume_url.split("/")[-1]
+    file_path = UPLOAD_DIR / original_filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Resume file not found")
+    
+    # Generate proper download filename: Firstname_Lastname_VHC.ext
+    candidate_name = application.get("candidate_name", "Unknown_Candidate")
+    name_parts = candidate_name.strip().split()
+    
+    if len(name_parts) >= 2:
+        first_name = name_parts[0]
+        last_name = name_parts[-1]
+    elif len(name_parts) == 1:
+        first_name = name_parts[0]
+        last_name = "Unknown"
+    else:
+        first_name = "Unknown"
+        last_name = "Candidate"
+    
+    # Clean names (remove special characters, replace spaces with underscore)
+    import re
+    first_name = re.sub(r'[^a-zA-Z0-9]', '', first_name)
+    last_name = re.sub(r'[^a-zA-Z0-9]', '', last_name)
+    
+    # Get file extension
+    file_ext = file_path.suffix
+    
+    # Create download filename
+    download_filename = f"{first_name}_{last_name}_VHC{file_ext}"
+    
+    return FileResponse(
+        file_path,
+        filename=download_filename,
+        media_type="application/octet-stream"
+    )
+
+@api_router.get("/candidates/{candidate_id}/resume")
+async def download_candidate_resume(
+    candidate_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Download resume directly from candidate bank.
+    Same naming convention: Firstname_Lastname_VHC.ext
+    """
+    # Get candidate from candidate bank
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        # Try candidates collection
+        candidate = await db.candidates.find_one({"id": candidate_id}, {"_id": 0})
+    
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    # Get resume URL
+    resume_url = candidate.get("resume_url")
+    if not resume_url:
+        raise HTTPException(status_code=404, detail="Resume not found for this candidate")
+    
+    # Extract filename from URL
+    original_filename = resume_url.split("/")[-1]
+    file_path = UPLOAD_DIR / original_filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Resume file not found")
+    
+    # Generate download filename
+    candidate_name = candidate.get("name", "Unknown_Candidate")
+    name_parts = candidate_name.strip().split()
+    
+    if len(name_parts) >= 2:
+        first_name = name_parts[0]
+        last_name = name_parts[-1]
+    elif len(name_parts) == 1:
+        first_name = name_parts[0]
+        last_name = "Unknown"
+    else:
+        first_name = "Unknown"
+        last_name = "Candidate"
+    
+    import re
+    first_name = re.sub(r'[^a-zA-Z0-9]', '', first_name)
+    last_name = re.sub(r'[^a-zA-Z0-9]', '', last_name)
+    
+    file_ext = file_path.suffix
+    download_filename = f"{first_name}_{last_name}_VHC{file_ext}"
+    
+    return FileResponse(
+        file_path,
+        filename=download_filename,
+        media_type="application/octet-stream"
+    )
 
 # ============== COMPANY ROUTES ==============
 
