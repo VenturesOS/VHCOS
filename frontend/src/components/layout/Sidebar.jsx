@@ -30,6 +30,7 @@ const navItems = {
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
     { icon: Users, label: 'Users', path: '/admin/users' },
     { icon: Briefcase, label: 'Jobs', path: '/admin/jobs' },
+    { icon: ClipboardList, label: 'Pipeline', path: '/admin/pipeline' },
     { icon: UserCircle, label: 'Candidates', path: '/admin/candidates' },
     { icon: Database, label: 'Candidate Bank', path: '/admin/candidate-bank' },
     { icon: Building2, label: 'Companies', path: '/admin/companies' },
