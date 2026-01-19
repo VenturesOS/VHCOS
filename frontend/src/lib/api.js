@@ -165,6 +165,21 @@ export const candidateBankAPI = {
   update: (id, data) => api.put(`/candidate-bank/${id}`, data),
   getAuditLog: (id) => api.get(`/candidate-bank/${id}/audit-log`),
   getResumeHistory: (id) => api.get(`/candidate-bank/${id}/resume-history`),
+  // Phase-2: Batch upload
+  batchParse: (files) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    return api.post('/candidate-bank/batch-parse', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  batchSave: (candidates) => api.post('/candidate-bank/batch-save', { candidates }),
+  updateSalaryNotice: (id, currentSalary, noticePeriod) => 
+    api.put(`/candidate-bank/${id}/salary-notice`, null, { 
+      params: { current_salary: currentSalary, notice_period: noticePeriod } 
+    }),
+  // Phase-2: Link candidate to job
+  linkToJob: (candidateId, jobId) => api.post('/applications/link-candidate', { candidate_id: candidateId, job_id: jobId }),
 };
 
 export default api;
