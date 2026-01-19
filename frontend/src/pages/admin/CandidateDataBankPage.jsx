@@ -279,6 +279,19 @@ export default function CandidateDataBankPage() {
                       {candidate.is_active !== false && (
                         <span className="w-2 h-2 bg-green-500 rounded-full" title="Active"></span>
                       )}
+                      {/* Add as Applicant Button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAddApplicantDialog(candidate);
+                        }}
+                        className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
+                        data-testid={`add-applicant-btn-${candidate.id}`}
+                      >
+                        <Briefcase className="w-4 h-4 mr-1" /> Add as Applicant
+                      </Button>
                     </div>
                   </div>
                 </div>
