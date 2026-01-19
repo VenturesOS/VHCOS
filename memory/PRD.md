@@ -25,9 +25,9 @@ VHC Talent OS is a production-ready, role-based recruitment portal built for VHC
 
 ---
 
-## Phase-1.5 Status: ✅ COMPLETE & TESTED (January 18, 2026)
+## Phase-1.5 Status: ✅ COMPLETE & TESTED (January 19, 2026)
 
-### Controlled Salary, Notice Period & Candidate Detail Preview/Edit
+### Task 1: Controlled Salary, Notice Period & Candidate Detail Preview/Edit ✅
 **Testing:** 19 pytest tests passed - all backend and frontend functionality verified
 
 **Visibility (Admin, Employer, Recruiter can VIEW):**
@@ -48,6 +48,26 @@ Candidate self-edit > Employer edit > Recruiter edit > Resume parsing
 ```
 - `manually_edited` flag prevents parsing overwrites
 - Manual edits always take precedence
+
+### Task 2: CV Preview & Download (Reviewer Side) ✅
+- Admin, Employer, Recruiter can preview/download candidate CVs
+- Download filename format: `Firstname_Lastname_VHC.ext`
+- Permission-based access (Admin: all, Employer/Recruiter: their jobs only)
+- Graceful fallback if CV is missing
+
+### Task 3: Admin User Management ✅
+- View ALL users across the system
+- Create users (Employer, Recruiter, Candidate)
+- Delete users (soft delete)
+- Reset user passwords
+- Assign recruiters to employers
+- Deactivate/reactivate users
+
+### Task 4: Admin Collective Pipeline View ✅
+- Global read-only pipeline overview
+- Stages: Applied, Shortlisted, Interview, Offered, Hired, Rejected, On Hold, Over Budget, Not Qualified
+- Filters: By Employer, By Recruiter, By Job
+- View-only (Admin cannot move candidates from this view)
 
 **Audit Trail:**
 - Every edit logged with:
