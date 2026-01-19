@@ -505,6 +505,127 @@ export default function CandidateDataBankPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Add as Applicant Dialog */}
+      <Dialog open={showAddApplicant} onOpenChange={setShowAddApplicant}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-[#7CB342]" />
+              Add as Applicant
+            </DialogTitle>
+            <DialogDescription>
+              Add this candidate to a job as an applicant. Salary and notice period are required.
+            </DialogDescription>
+          </DialogHeader>
+
+          {applicantCandidate && (
+            <div className="space-y-4 py-4">
+              {/* Candidate Info */}
+              <div className="bg-slate-50 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#DCFCE7] flex items-center justify-center">
+                    <span className="text-[#7CB342] font-semibold">
+                      {applicantCandidate.name?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900">{applicantCandidate.name}</p>
+                    <p className="text-sm text-slate-500">{applicantCandidate.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Job Selection */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Briefcase className="w-4 h-4" />
+                  Select Job / Mandate *
+                </Label>
+                <Select value={selectedJobId} onValueChange={setSelectedJobId}>
+                  <SelectTrigger data-testid="job-select-dropdown">
+                    <SelectValue placeholder="Choose a job..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobs.map(job => (
+                      <SelectItem key={job.id} value={job.id}>
+                        {job.title} {job.company_name ? `- ${job.company_name}` : ''}
+                      </SelectItem>
+                    ))}
+                    {jobs.length === 0 && (
+                      <SelectItem value="" disabled>No active jobs available</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Salary - Editable */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <DollarSign className="w-4 h-4" />
+                  Current Salary (INR) *
+                </Label>
+                <Input
+                  type="number"
+                  value={editSalary}
+                  onChange={(e) => setEditSalary(e.target.value)}
+                  placeholder="e.g., 1500000"
+                  className={!editSalary ? 'border-amber-400' : ''}
+                  data-testid="salary-input"
+                />
+                {editSalary && parseInt(editSalary) > 0 && (
+                  <p className="text-xs text-slate-500">{formatSalaryINR(parseInt(editSalary))}</p>
+                )}
+              </div>
+
+              {/* Notice Period - Editable */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  Notice Period *
+                </Label>
+                <Select value={editNotice} onValueChange={setEditNotice}>
+                  <SelectTrigger 
+                    className={!editNotice ? 'border-amber-400' : ''}
+                    data-testid="notice-select"
+                  >
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {NOTICE_PERIODS.map(np => (
+                      <SelectItem key={np} value={np}>{np}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Warning if fields missing */}
+              {(!editSalary || !editNotice) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                  <p className="text-sm text-amber-700">
+                    Salary and notice period are mandatory before adding as applicant.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddApplicant(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddAsApplicant}
+              disabled={linking || !editSalary || !editNotice || !selectedJobId}
+              className="bg-[#7CB342] hover:bg-[#689F38]"
+              data-testid="confirm-add-applicant-btn"
+            >
+              {linking ? 'Adding...' : 'Add as Applicant'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
