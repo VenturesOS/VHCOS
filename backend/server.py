@@ -307,6 +307,8 @@ class CandidateBankUpdate(BaseModel):
     education: Optional[List[dict]] = None
     location: Optional[str] = None
     certifications: Optional[List[str]] = None
+    current_salary: Optional[int] = None  # INR
+    notice_period: Optional[str] = None
 
 class AuditLogEntry(BaseModel):
     id: str
