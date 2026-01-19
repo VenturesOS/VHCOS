@@ -1,5 +1,11 @@
 # VHC Talent OS - Product Requirements Document
 
+## 🔒 BUILD STATUS: PILOT-READY STABLE (January 19, 2026)
+
+**Phase-1 + Phase-1.5: LOCKED & APPROVED**
+
+---
+
 ## Overview
 VHC Talent OS is a production-ready, role-based recruitment portal built for VHC Talent Advisory. The system supports Executive Search, Specialist Hiring, and People Advisory services across India and the United States.
 
