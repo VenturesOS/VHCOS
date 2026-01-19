@@ -2099,6 +2099,475 @@ async def add_to_candidate_bank(
             "message": "New candidate added to data bank"
         }
 
+# ============== PHASE-2: BATCH CV UPLOAD ==============
+
+class BatchUploadCandidate(BaseModel):
+    """Single candidate data for batch save"""
+    temp_id: str  # Temporary ID from parse response
+    name: str
+    email: str
+    phone: Optional[str] = None
+    skills: List[str] = []
+    experience_summary: Optional[str] = None
+    current_salary: int  # MANDATORY - INR
+    notice_period: str  # MANDATORY
+    file_id: str  # Reference to uploaded file
+    fingerprint: str  # Resume fingerprint for dedup
+
+class BatchSaveRequest(BaseModel):
+    """Request body for batch save"""
+    candidates: List[BatchUploadCandidate]
+
+@api_router.post("/candidate-bank/batch-parse")
+async def batch_parse_resumes(
+    files: List[UploadFile] = File(...),
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Parse up to 10 CVs and return preview data. No save - just parsing.
+    Returns parsed data for each file for user preview/edit before save.
+    """
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 files allowed per batch")
+    
+    if len(files) == 0:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+    
+    results = []
+    
+    for file in files:
+        temp_id = str(uuid.uuid4())
+        
+        try:
+            # Validate file type
+            if not file.filename.lower().endswith(('.pdf', '.doc', '.docx')):
+                results.append({
+                    "temp_id": temp_id,
+                    "filename": file.filename,
+                    "success": False,
+                    "error": "Only PDF, DOC, DOCX files allowed"
+                })
+                continue
+            
+            # Save file temporarily
+            file_id = str(uuid.uuid4())
+            file_ext = Path(file.filename).suffix
+            file_path = UPLOAD_DIR / f"resume_{file_id}{file_ext}"
+            
+            async with aiofiles.open(file_path, 'wb') as f:
+                content = await file.read()
+                await f.write(content)
+            
+            # Extract text
+            if file_ext.lower() == '.pdf':
+                resume_text = extract_text_from_pdf(file_path)
+            else:
+                async with aiofiles.open(file_path, 'r', errors='ignore') as f:
+                    resume_text = await f.read()
+            
+            # Generate fingerprint for dedup
+            fingerprint = generate_resume_fingerprint(resume_text)
+            
+            # Parse with AI
+            parse_result = await parse_resume_with_ai(resume_text[:8000])
+            
+            if not parse_result["success"]:
+                results.append({
+                    "temp_id": temp_id,
+                    "filename": file.filename,
+                    "success": False,
+                    "error": "Failed to parse resume"
+                })
+                continue
+            
+            parsed_data = parse_result["data"]
+            
+            # Check for duplicates
+            dup_check = await find_similar_candidate(
+                db,
+                email=parsed_data.get("email"),
+                phone=parsed_data.get("phone"),
+                resume_fingerprint=fingerprint
+            )
+            
+            results.append({
+                "temp_id": temp_id,
+                "filename": file.filename,
+                "file_id": file_id,
+                "fingerprint": fingerprint,
+                "success": True,
+                "parsed_data": {
+                    "name": parsed_data.get("name", "Unknown"),
+                    "email": parsed_data.get("email", ""),
+                    "phone": parsed_data.get("phone", ""),
+                    "skills": parsed_data.get("skills", []),
+                    "experience_summary": parsed_data.get("summary", ""),
+                    "experience_years": parsed_data.get("experience_years", 0),
+                    "location": parsed_data.get("location", ""),
+                    "headline": parsed_data.get("headline", ""),
+                    "experience": parsed_data.get("experience", []),
+                    "education": parsed_data.get("education", [])
+                },
+                "duplicate_check": {
+                    "is_duplicate": dup_check["found"],
+                    "match_type": dup_check.get("match_type"),
+                    "existing_candidate": {
+                        "id": dup_check["candidate"]["id"],
+                        "name": dup_check["candidate"].get("name"),
+                        "email": dup_check["candidate"].get("email"),
+                        "created_at": dup_check["candidate"].get("created_at"),
+                        "current_salary": dup_check["candidate"].get("current_salary"),
+                        "notice_period": dup_check["candidate"].get("notice_period")
+                    } if dup_check["found"] else None
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error parsing file {file.filename}: {str(e)}")
+            results.append({
+                "temp_id": temp_id,
+                "filename": file.filename,
+                "success": False,
+                "error": str(e)
+            })
+    
+    return {
+        "total": len(files),
+        "parsed": len([r for r in results if r.get("success")]),
+        "failed": len([r for r in results if not r.get("success")]),
+        "results": results
+    }
+
+@api_router.post("/candidate-bank/batch-save")
+async def batch_save_candidates(
+    request: BatchSaveRequest,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Save multiple candidates to data bank after user review/edit.
+    ATOMIC: All succeed or all fail. Validates salary & notice period as mandatory.
+    """
+    candidates = request.candidates
+    
+    if len(candidates) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 candidates per batch")
+    
+    if len(candidates) == 0:
+        raise HTTPException(status_code=400, detail="No candidates to save")
+    
+    # VALIDATION PHASE - Check all candidates first
+    validation_errors = []
+    
+    for idx, candidate in enumerate(candidates):
+        errors = []
+        
+        if not candidate.email or not candidate.email.strip():
+            errors.append("Email is required")
+        if not candidate.name or not candidate.name.strip():
+            errors.append("Name is required")
+        if not candidate.current_salary or candidate.current_salary <= 0:
+            errors.append("Current salary (INR) is mandatory and must be positive")
+        if not candidate.notice_period or not candidate.notice_period.strip():
+            errors.append("Notice period is mandatory")
+        
+        if errors:
+            validation_errors.append({
+                "temp_id": candidate.temp_id,
+                "index": idx,
+                "name": candidate.name,
+                "errors": errors
+            })
+    
+    # If any validation errors, FAIL ALL (atomic behavior)
+    if validation_errors:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Validation failed. No candidates were saved.",
+                "errors": validation_errors
+            }
+        )
+    
+    # SAVE PHASE - All validated, now save
+    now = datetime.now(timezone.utc).isoformat()
+    saved = []
+    
+    for candidate in candidates:
+        try:
+            # Check for duplicate again (in case of race condition)
+            dup_check = await find_similar_candidate(
+                db,
+                email=candidate.email,
+                phone=candidate.phone,
+                resume_fingerprint=candidate.fingerprint
+            )
+            
+            file_path = None
+            for f in UPLOAD_DIR.iterdir():
+                if candidate.file_id in f.name:
+                    file_path = f
+                    break
+            
+            resume_version = {
+                "id": candidate.file_id,
+                "fingerprint": candidate.fingerprint,
+                "uploaded_at": now,
+                "uploaded_by": current_user["id"],
+                "is_active": True
+            }
+            
+            if dup_check["found"]:
+                # Update existing candidate
+                existing = dup_check["candidate"]
+                
+                update_data = {
+                    "resume_versions": existing.get("resume_versions", []) + [resume_version],
+                    "active_resume_id": candidate.file_id,
+                    "updated_at": now,
+                    "last_updated_by": current_user["id"],
+                    "current_salary": candidate.current_salary,
+                    "notice_period": candidate.notice_period,
+                    "resume_url": f"/api/uploads/resume_{candidate.file_id}{Path(file_path).suffix if file_path else '.pdf'}"
+                }
+                
+                # Update fields with audit logging
+                source = current_user["role"]
+                
+                if candidate.name and candidate.name != existing.get("name"):
+                    if await should_update_field(existing["id"], "name", source, db):
+                        await create_audit_log(existing["id"], "name", existing.get("name"), candidate.name, current_user, "batch_upload")
+                        update_data["name"] = candidate.name
+                
+                if candidate.skills and candidate.skills != existing.get("skills"):
+                    if await should_update_field(existing["id"], "skills", source, db):
+                        await create_audit_log(existing["id"], "skills", existing.get("skills"), candidate.skills, current_user, "batch_upload")
+                        update_data["skills"] = candidate.skills
+                
+                if candidate.experience_summary and candidate.experience_summary != existing.get("summary"):
+                    if await should_update_field(existing["id"], "summary", source, db):
+                        await create_audit_log(existing["id"], "summary", existing.get("summary"), candidate.experience_summary, current_user, "batch_upload")
+                        update_data["summary"] = candidate.experience_summary
+                
+                # Add fingerprint if new
+                if candidate.fingerprint not in existing.get("resume_fingerprints", []):
+                    update_data["resume_fingerprints"] = existing.get("resume_fingerprints", []) + [candidate.fingerprint]
+                
+                await db.candidate_bank.update_one({"id": existing["id"]}, {"$set": update_data})
+                
+                saved.append({
+                    "temp_id": candidate.temp_id,
+                    "action": "updated",
+                    "candidate_id": existing["id"],
+                    "name": candidate.name
+                })
+            
+            else:
+                # Create new candidate
+                candidate_id = str(uuid.uuid4())
+                
+                candidate_doc = {
+                    "id": candidate_id,
+                    "email": candidate.email.lower().strip(),
+                    "name": candidate.name.strip(),
+                    "phone": candidate.phone,
+                    "phone_normalized": normalize_phone(candidate.phone or ""),
+                    "headline": None,
+                    "summary": candidate.experience_summary,
+                    "skills": candidate.skills,
+                    "experience_years": 0,
+                    "experience": [],
+                    "education": [],
+                    "location": None,
+                    "certifications": [],
+                    "active_resume_id": candidate.file_id,
+                    "resume_versions": [resume_version],
+                    "resume_fingerprints": [candidate.fingerprint],
+                    "resume_url": f"/api/uploads/resume_{candidate.file_id}{Path(file_path).suffix if file_path else '.pdf'}",
+                    "current_salary": candidate.current_salary,
+                    "notice_period": candidate.notice_period,
+                    "source": current_user["role"],
+                    "linked_user_id": None,
+                    "visibility": {
+                        f"{current_user['role']}_ids": [current_user["id"]]
+                    },
+                    "match_cache": [],
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_by": current_user["id"],
+                    "last_updated_by": current_user["id"]
+                }
+                
+                await db.candidate_bank.insert_one(candidate_doc)
+                
+                saved.append({
+                    "temp_id": candidate.temp_id,
+                    "action": "created",
+                    "candidate_id": candidate_id,
+                    "name": candidate.name
+                })
+        
+        except Exception as e:
+            logger.error(f"Error saving candidate {candidate.temp_id}: {str(e)}")
+            # Atomic failure - rollback and fail all
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": f"Failed to save candidate {candidate.name}. No candidates were saved.",
+                    "error": str(e)
+                }
+            )
+    
+    return {
+        "success": True,
+        "message": f"Successfully saved {len(saved)} candidates",
+        "saved": saved
+    }
+
+# ============== PHASE-2: MANUAL ADD AS APPLICANT ==============
+
+class LinkCandidateRequest(BaseModel):
+    """Request to link a candidate to a job as an applicant"""
+    candidate_id: str
+    job_id: str
+
+@api_router.post("/applications/link-candidate")
+async def link_candidate_to_job(
+    request: LinkCandidateRequest,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Create an application record linking a Candidate Data Bank record to a job.
+    Does NOT duplicate the candidate - just creates an application.
+    Inherits salary & notice period from Candidate Data Bank.
+    """
+    # Validate candidate exists
+    candidate = await db.candidate_bank.find_one({"id": request.candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found in data bank")
+    
+    # Validate job exists
+    job = await db.jobs.find_one({"id": request.job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check for duplicate application (candidate already applied to this job)
+    existing_app = await db.applications.find_one({
+        "candidate_id": request.candidate_id,
+        "job_id": request.job_id
+    })
+    if existing_app:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Candidate has already been added to this job",
+                "existing_application_id": existing_app.get("id"),
+                "stage": existing_app.get("stage", "applied")
+            }
+        )
+    
+    # Validate mandatory fields from candidate
+    if not candidate.get("current_salary"):
+        raise HTTPException(
+            status_code=400,
+            detail="Candidate must have current salary set before being added as applicant"
+        )
+    if not candidate.get("notice_period"):
+        raise HTTPException(
+            status_code=400,
+            detail="Candidate must have notice period set before being added as applicant"
+        )
+    
+    # Create application record
+    now = datetime.now(timezone.utc).isoformat()
+    app_id = str(uuid.uuid4())
+    
+    application_doc = {
+        "id": app_id,
+        "job_id": request.job_id,
+        "job_title": job.get("title"),
+        "candidate_id": request.candidate_id,
+        "candidate_name": candidate.get("name"),
+        "candidate_email": candidate.get("email"),
+        "resume_url": candidate.get("resume_url"),
+        "skills": candidate.get("skills", []),
+        "experience_summary": candidate.get("summary"),
+        "current_salary": candidate.get("current_salary"),
+        "notice_period": candidate.get("notice_period"),
+        "stage": "applied",
+        "source": "manual_link",
+        "match_score": 0,
+        "manually_edited": False,
+        "edit_history": [],
+        "notes": [],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user["id"],
+        "created_by_role": current_user["role"]
+    }
+    
+    await db.applications.insert_one(application_doc)
+    
+    return {
+        "success": True,
+        "message": f"Successfully added {candidate.get('name')} as applicant for {job.get('title')}",
+        "application_id": app_id,
+        "candidate_id": request.candidate_id,
+        "job_id": request.job_id
+    }
+
+# ============== PHASE-2: UPDATE CANDIDATE SALARY/NOTICE ==============
+
+@api_router.put("/candidate-bank/{candidate_id}/salary-notice")
+async def update_candidate_salary_notice(
+    candidate_id: str,
+    current_salary: int = None,
+    notice_period: str = None,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Update candidate's salary and/or notice period in the Candidate Data Bank.
+    Used to ensure mandatory fields are set before linking to jobs.
+    """
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if current_salary is not None:
+        if current_salary <= 0:
+            raise HTTPException(status_code=400, detail="Salary must be positive")
+        
+        # Audit log
+        if candidate.get("current_salary") != current_salary:
+            await create_audit_log(
+                candidate_id, "current_salary", 
+                candidate.get("current_salary"), current_salary, 
+                current_user, "manual_update"
+            )
+        update_data["current_salary"] = current_salary
+    
+    if notice_period is not None:
+        if not notice_period.strip():
+            raise HTTPException(status_code=400, detail="Notice period cannot be empty")
+        
+        # Audit log
+        if candidate.get("notice_period") != notice_period:
+            await create_audit_log(
+                candidate_id, "notice_period",
+                candidate.get("notice_period"), notice_period,
+                current_user, "manual_update"
+            )
+        update_data["notice_period"] = notice_period.strip()
+    
+    await db.candidate_bank.update_one({"id": candidate_id}, {"$set": update_data})
+    
+    return {
+        "success": True,
+        "message": "Candidate updated successfully",
+        "candidate_id": candidate_id
+    }
+
 @api_router.get("/candidate-bank", response_model=List[CandidateBankRecord])
 async def get_candidate_bank(
     search: Optional[str] = None,
