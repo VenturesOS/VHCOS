@@ -72,6 +72,20 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     is_active: Optional[bool] = None
+    company_id: Optional[str] = None  # For assigning employer to recruiter
+
+class AdminUserCreate(BaseModel):
+    """Admin-only user creation with role specification"""
+    email: EmailStr
+    password: str
+    name: str
+    role: str  # employer, recruiter, candidate
+    phone: Optional[str] = None
+    company_id: Optional[str] = None
+
+class AdminPasswordReset(BaseModel):
+    """Admin-initiated password reset for any user"""
+    new_password: str
 
 class PasswordReset(BaseModel):
     current_password: str
