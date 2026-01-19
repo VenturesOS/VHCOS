@@ -142,6 +142,19 @@ Applications collection now includes:
 
 ---
 
+## Bug Fixes (Phase-1 Hardening)
+
+### ✅ Blank White Screen on First Load (Fixed: January 19, 2026)
+**Root Cause:** React Router's `<Navigate>` component was redirecting to `/website/Index.html`, but React was intercepting this route and rendering an empty React component instead of serving the static HTML file.
+
+**Solution:** Replaced `<Navigate>` with a custom `PublicWebsiteRedirect` component that uses `window.location.replace()` to perform a hard redirect, bypassing React Router and allowing the static HTML to be served directly.
+
+**Files Changed:**
+- `/app/frontend/src/pages/PublicWebsite.jsx` (new)
+- `/app/frontend/src/App.js` (updated imports and routes)
+
+---
+
 *Last Updated: January 18, 2026*
 *Phase-1: Signed Off*
 *Phase-1.5: Complete*
