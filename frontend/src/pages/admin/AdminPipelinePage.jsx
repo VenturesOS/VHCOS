@@ -1,0 +1,303 @@
+import { useState, useEffect } from 'react';
+import { adminAPI } from '../../lib/api';
+import { formatSalaryINR } from '../../lib/currency';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Badge } from '../../components/ui/badge';
+import { toast } from 'sonner';
+import { 
+  LayoutGrid, Users, CheckCircle, Clock, Award, UserCheck, 
+  XCircle, Pause, TrendingDown, UserX, Filter, Building2,
+  Briefcase, FileText
+} from 'lucide-react';
+
+// Stage configuration
+const STAGES = [
+  { id: 'applied', label: 'Applied', color: 'bg-blue-500', icon: Users, bgLight: 'bg-blue-50' },
+  { id: 'shortlisted', label: 'Shortlisted', color: 'bg-amber-500', icon: CheckCircle, bgLight: 'bg-amber-50' },
+  { id: 'interview', label: 'Interview', color: 'bg-purple-500', icon: Clock, bgLight: 'bg-purple-50' },
+  { id: 'offered', label: 'Offered', color: 'bg-green-500', icon: Award, bgLight: 'bg-green-50' },
+  { id: 'hired', label: 'Hired', color: 'bg-emerald-500', icon: UserCheck, bgLight: 'bg-emerald-50' },
+  { id: 'rejected', label: 'Rejected', color: 'bg-red-500', icon: XCircle, bgLight: 'bg-red-50' },
+  { id: 'on_hold', label: 'On Hold', color: 'bg-gray-500', icon: Pause, bgLight: 'bg-gray-50' },
+  { id: 'over_budget', label: 'Over Budget', color: 'bg-orange-500', icon: TrendingDown, bgLight: 'bg-orange-50' },
+  { id: 'not_qualified', label: 'Not Qualified', color: 'bg-rose-500', icon: UserX, bgLight: 'bg-rose-50' },
+];
+
+export default function AdminPipelinePage() {
+  const [loading, setLoading] = useState(true);
+  const [pipelineData, setPipelineData] = useState({});
+  const [stageCounts, setStageCounts] = useState({});
+  const [totalApplications, setTotalApplications] = useState(0);
+  const [filters, setFilters] = useState({ employers: [], recruiters: [], jobs: [] });
+  
+  // Filter state
+  const [selectedEmployer, setSelectedEmployer] = useState('all');
+  const [selectedRecruiter, setSelectedRecruiter] = useState('all');
+  const [selectedJob, setSelectedJob] = useState('all');
+
+  useEffect(() => {
+    loadPipeline();
+  }, [selectedEmployer, selectedRecruiter, selectedJob]);
+
+  const loadPipeline = async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (selectedEmployer !== 'all') params.employer_id = selectedEmployer;
+      if (selectedRecruiter !== 'all') params.recruiter_id = selectedRecruiter;
+      if (selectedJob !== 'all') params.job_id = selectedJob;
+      
+      const res = await adminAPI.getPipeline(params);
+      setPipelineData(res.data.pipeline);
+      setStageCounts(res.data.stage_counts);
+      setTotalApplications(res.data.total_applications);
+      setFilters(res.data.filters);
+    } catch (error) {
+      toast.error('Failed to load pipeline data');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearFilters = () => {
+    setSelectedEmployer('all');
+    setSelectedRecruiter('all');
+    setSelectedJob('all');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7CB342]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-testid="admin-pipeline-page">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-3xl font-bold text-slate-900">Collective Pipeline</h1>
+          <p className="text-slate-500 mt-1">Global view across all employers and recruiters</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-lg px-4 py-2">
+            {totalApplications} Total Applications
+          </Badge>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <Card className="border-slate-200">
+        <CardHeader className="py-3 px-4 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="font-medium text-slate-700">Filters</span>
+            {(selectedEmployer !== 'all' || selectedRecruiter !== 'all' || selectedJob !== 'all') && (
+              <button 
+                onClick={clearFilters}
+                className="ml-auto text-sm text-[#7CB342] hover:underline"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500 flex items-center gap-1">
+                <Building2 className="w-3 h-3" /> Employer
+              </label>
+              <Select value={selectedEmployer} onValueChange={setSelectedEmployer}>
+                <SelectTrigger data-testid="filter-employer">
+                  <SelectValue placeholder="All Employers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Employers</SelectItem>
+                  {filters.employers.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500 flex items-center gap-1">
+                <Users className="w-3 h-3" /> Recruiter
+              </label>
+              <Select value={selectedRecruiter} onValueChange={setSelectedRecruiter}>
+                <SelectTrigger data-testid="filter-recruiter">
+                  <SelectValue placeholder="All Recruiters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Recruiters</SelectItem>
+                  {filters.recruiters.map((rec) => (
+                    <SelectItem key={rec.id} value={rec.id}>
+                      {rec.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500 flex items-center gap-1">
+                <Briefcase className="w-3 h-3" /> Job
+              </label>
+              <Select value={selectedJob} onValueChange={setSelectedJob}>
+                <SelectTrigger data-testid="filter-job">
+                  <SelectValue placeholder="All Jobs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Jobs</SelectItem>
+                  {filters.jobs.map((job) => (
+                    <SelectItem key={job.id} value={job.id}>
+                      {job.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Stage Summary Cards */}
+      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
+        {STAGES.map((stage) => {
+          const Icon = stage.icon;
+          const count = stageCounts[stage.id] || 0;
+          return (
+            <Card key={stage.id} className={`border-l-4 ${stage.color.replace('bg-', 'border-')}`}>
+              <CardContent className="p-3 text-center">
+                <div className={`w-8 h-8 mx-auto rounded-full ${stage.bgLight} flex items-center justify-center mb-1`}>
+                  <Icon className={`w-4 h-4 ${stage.color.replace('bg-', 'text-')}`} />
+                </div>
+                <div className="text-2xl font-bold text-slate-900">{count}</div>
+                <div className="text-xs text-slate-500 truncate">{stage.label}</div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Pipeline Columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {STAGES.slice(0, 5).map((stage) => {
+          const Icon = stage.icon;
+          const applications = pipelineData[stage.id] || [];
+          
+          return (
+            <Card key={stage.id} className="border-slate-200">
+              <CardHeader className={`py-3 px-4 border-b ${stage.bgLight}`}>
+                <CardTitle className="font-heading text-sm flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Icon className={`w-4 h-4 ${stage.color.replace('bg-', 'text-')}`} />
+                    {stage.label}
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {applications.length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-2 max-h-[500px] overflow-y-auto">
+                {applications.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-sm">
+                    No candidates
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {applications.map((app) => (
+                      <div 
+                        key={app.id}
+                        className="p-3 bg-white rounded-lg border border-slate-100 hover:shadow-sm transition-shadow"
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="w-8 h-8 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
+                            <span className="text-[#7CB342] font-semibold text-xs">
+                              {app.candidate_name?.charAt(0).toUpperCase() || '?'}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-slate-900 truncate">
+                              {app.candidate_name}
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {app.job_title}
+                            </div>
+                            {app.match_score > 0 && (
+                              <Badge variant="outline" className="text-xs mt-1">
+                                {app.match_score}% match
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between text-xs text-slate-500">
+                          {app.current_salary && (
+                            <span>{formatSalaryINR(app.current_salary)}</span>
+                          )}
+                          {app.notice_period && (
+                            <span>{app.notice_period}</span>
+                          )}
+                          {app.resume_url && (
+                            <FileText className="w-3 h-3 text-green-500" title="Has Resume" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Secondary Stages (Rejected, On Hold, etc.) */}
+      <Card className="border-slate-200">
+        <CardHeader className="py-3 px-4 border-b border-slate-100 bg-slate-50/50">
+          <CardTitle className="font-heading text-sm">Other Stages</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {STAGES.slice(5).map((stage) => {
+              const Icon = stage.icon;
+              const applications = pipelineData[stage.id] || [];
+              
+              return (
+                <div key={stage.id} className={`p-4 rounded-lg ${stage.bgLight}`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon className={`w-4 h-4 ${stage.color.replace('bg-', 'text-')}`} />
+                    <span className="font-medium text-sm text-slate-700">{stage.label}</span>
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                      {applications.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {applications.slice(0, 5).map((app) => (
+                      <div key={app.id} className="text-xs text-slate-600 truncate">
+                        • {app.candidate_name} - {app.job_title}
+                      </div>
+                    ))}
+                    {applications.length > 5 && (
+                      <div className="text-xs text-slate-400">
+                        +{applications.length - 5} more
+                      </div>
+                    )}
+                    {applications.length === 0 && (
+                      <div className="text-xs text-slate-400">No candidates</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
