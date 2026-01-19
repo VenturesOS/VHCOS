@@ -105,8 +105,8 @@ function App() {
           </Route>
 
           {/* Default Redirect - Public Website is the landing page */}
-          <Route path="/" element={<Navigate to="/website/Index.html" replace />} />
-          <Route path="*" element={<Navigate to="/website/Index.html" replace />} />
+          <Route path="/" element={<PublicWebsiteRedirect />} />
+          <Route path="*" element={<PublicWebsiteRedirect />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />
