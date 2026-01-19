@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { candidateBankAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -6,9 +7,10 @@ import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
-import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus } from 'lucide-react';
+import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files } from 'lucide-react';
 
 export default function CandidateDataBankPage() {
+  const navigate = useNavigate();
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
