@@ -23,7 +23,7 @@ import {
 import { useState } from 'react';
 import { Button } from '../ui/button';
 
-const LOGO_URL = 'https://customer-assets.emergentagent.com/job_hire-hub-33/artifacts/umsjvfj8_VHC_logo-removebg_edited_edited.png';
+const LOGO_URL = 'https://customer-assets.emergentagent.com/job_vhc-edit/artifacts/46yye45w_logo.svg';
 
 const navItems = {
   admin: [
