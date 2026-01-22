@@ -1,5 +1,10 @@
-# VHC Talent Advisory - Development Site
+# Ventures HRD Centre Pvt Ltd - Development Site
 # Block all search engines from indexing
 
 User-agent: *
 Disallow: /
+
+# Production robots.txt should be:
+# User-agent: *
+# Allow: /
+# Sitemap: https://vhc.in/sitemap.xml
