@@ -609,6 +609,20 @@
     setInterval(() => {
       slideTeam(1);
     }, 5000);
+    
+    // Login Dropdown Logic
+    function toggleLoginDropdown() {
+      const dropdown = document.getElementById('loginDropdown');
+      dropdown.classList.toggle('show');
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.login-dropdown')) {
+        const dropdown = document.getElementById('loginDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      }
+    });
   </script>
 
 </body>
