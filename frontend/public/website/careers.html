@@ -43,6 +43,43 @@
     .dropdown-menu a:hover { background: #f0fdf4; color: #9acd32; }
     .dropdown-menu .role-icon { margin-right: 10px; }
     
+    /* Global Switch Styles */
+    .view-switch-container {
+      background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+    .view-switch {
+      display: flex;
+      background: rgba(255,255,255,0.1);
+      border-radius: 30px;
+      padding: 4px;
+    }
+    .view-switch button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 26px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+    .view-switch button.active {
+      background: #9acd32;
+      color: #111827;
+    }
+    .view-switch button:not(.active) {
+      background: transparent;
+      color: white;
+    }
+    .view-switch button:not(.active):hover {
+      background: rgba(255,255,255,0.15);
+    }
+    
     /* Hero */
     .hero { background: linear-gradient(rgba(17,24,39,0.85), rgba(17,24,39,0.85)), url('https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1600&q=80'); background-size: cover; background-position: center; padding: 100px 24px; text-align: center; color: white; }
     .hero h1 { font-size: 48px; font-weight: 800; margin-bottom: 16px; }
