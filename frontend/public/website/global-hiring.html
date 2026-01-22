@@ -16,6 +16,51 @@
   <meta name="description" content="Ventures HRD Centre Pvt Ltd offers seamless global hiring solutions across India and USA. Cross-border recruitment, visa support, and bi-continental talent acquisition.">
   <meta name="keywords" content="global hiring, international recruitment, India USA hiring, cross-border talent, H1B visa support, expat recruitment, global talent acquisition">
   <meta name="author" content="Ventures HRD Centre Pvt Ltd">
+  
+  <style>
+    /* Login Dropdown Styles */
+    .login-dropdown { position: relative; }
+    .login-btn { 
+      background: #111827; 
+      color: white; 
+      padding: 10px 20px; 
+      border-radius: 6px; 
+      font-weight: 600; 
+      cursor: pointer; 
+      border: none; 
+      display: flex; 
+      align-items: center; 
+      gap: 8px;
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .login-btn:hover { background: #1f2937; }
+    .dropdown-menu { 
+      display: none; 
+      position: absolute; 
+      top: 100%; 
+      right: 0; 
+      background: white; 
+      border-radius: 8px; 
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+      min-width: 200px; 
+      margin-top: 8px; 
+      overflow: hidden;
+      z-index: 200;
+    }
+    .dropdown-menu.show { display: block; }
+    .dropdown-menu a { 
+      display: block; 
+      padding: 14px 20px; 
+      color: #111827; 
+      text-decoration: none; 
+      font-weight: 500; 
+      border-bottom: 1px solid #f0f0f0; 
+    }
+    .dropdown-menu a:last-child { border-bottom: none; }
+    .dropdown-menu a:hover { background: #f0fdf4; color: #9acd32; }
+    .dropdown-menu .role-icon { margin-right: 10px; }
+  </style>
 </head>
 <body style="margin:0; font-family:system-ui,-apple-system,sans-serif;">
 
@@ -29,7 +74,31 @@
       <a href="careers.html" style="color:#111827; text-decoration:none;">Career</a>
       <a href="contact.html" style="color:#111827; text-decoration:none;">Contact</a>
       <a href="global-hiring.html" style="color:#9acd32; text-decoration:none;">Global Hiring</a>
-      <a href="/login" style="background:#111827; color:white; padding:10px 20px; border-radius:6px; text-decoration:none; font-weight:600;">Login</a>
+      
+      <!-- Unified Login Dropdown -->
+      <div class="login-dropdown">
+        <button class="login-btn" onclick="toggleLoginDropdown()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          Login
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+        <div class="dropdown-menu" id="loginDropdown">
+          <a href="/login?role=employer">
+            <span class="role-icon">🏢</span> Employer Login
+          </a>
+          <a href="/login?role=recruiter">
+            <span class="role-icon">👔</span> Recruiter Login
+          </a>
+          <a href="/login?role=candidate">
+            <span class="role-icon">👤</span> Candidate Login
+          </a>
+        </div>
+      </div>
     </nav>
   </header>
 
