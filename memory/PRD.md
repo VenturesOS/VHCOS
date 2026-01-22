@@ -203,7 +203,7 @@ Applications collection now includes:
 - ✅ NO firm history, years of experience, philosophy, values, leadership bios (moved to About)
 - ✅ Uses "Global Hiring" terminology (no US hiring mentions)
 - ✅ Expertise-led, capability-focused content
-- ✅ Professional business/strategy images (no team/culture photos)
+- ✅ Professional business images (no team/culture photos)
 
 **What was preserved:**
 - ✅ Header logo (SVG, 56px height) - UNTOUCHED
@@ -219,6 +219,61 @@ Applications collection now includes:
 - ✅ Careers page still loads live jobs
 - ✅ Login button routes correctly to /login
 - ✅ No layout or routing regressions
+
+---
+
+## Dual Front-End Experience: ✅ COMPLETE (January 22, 2026)
+
+### Task: Create Employer/Candidate View Switch (inspired by Michael Page)
+**Scope:** Add a visible toggle at the top of the public website to switch between Employer and Candidate experiences
+
+**Implementation:**
+1. **Global View Switch**
+   - Dark header bar with toggle: "For Employers" | "For Candidates"
+   - Default state: "For Employers" (green active indicator)
+   - Instant switching via JavaScript (no page reload)
+   - State persisted in localStorage
+
+2. **Employer View** (existing experience)
+   - Hero: "Recruitment Expertise That Delivers Results"
+   - Sections: Our Recruitment Expertise, How We Work, Global Hiring Support, Who We Work With
+   - Unchanged from previous restructure
+
+3. **Candidate View** (NEW - Michael Page inspired structure)
+   - **Hero Carousel**: 4 rotating slides (Career Insights, Salary Benchmarks, Job Market Trends, Global Opportunities)
+   - **Job Search Widget**: Keywords, Location, Salary Range fields with "Search Jobs" CTA
+   - **Browse Opportunities**: Tabs for Industry, Function, Location, Popular Roles with category cards
+   - **Job Match Tool**: CV upload CTA with green gradient background
+   - **User Intent Selector**: "Find a Job" vs "Find Talent" cards (Find Talent routes back to Employer view)
+   - **CTA Cards**: Register Profile, Looking for a Job, Job Alerts
+   - **Career Insights**: 4 article preview cards
+   - **Final CTA**: "Ready for Your Next Career Move?"
+
+**Technical Details:**
+- Pure HTML/CSS/JS implementation (no React changes)
+- localStorage persistence for view preference
+- Auto-rotating carousel (5-second interval)
+- Tab-based browse navigation
+- All CTAs link to existing careers.html
+- Shared footer across both views
+
+**Constraints Applied:**
+- ✅ Header logo UNTOUCHED
+- ✅ Navigation structure UNTOUCHED
+- ✅ Login button routes to /login
+- ✅ Careers page job listing UNTOUCHED (live jobs still load)
+- ✅ Apply flow UNTOUCHED
+- ✅ No "US hiring" mentions (uses "Global Hiring" terminology)
+- ✅ No backend/API changes
+- ✅ No React portal changes
+
+**Verification completed:**
+- ✅ Homepage loads correctly on first render
+- ✅ Switch toggles instantly between views
+- ✅ Careers page still shows live jobs
+- ✅ Login button routes correctly to /login
+- ✅ No console errors
+- ✅ Mobile responsive intact
 
 ---
 
