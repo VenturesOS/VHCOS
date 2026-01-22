@@ -30,6 +30,49 @@
   </script>
 
   <style>
+    /* Login Dropdown Styles */
+    .login-dropdown { position: relative; }
+    .login-btn { 
+      background: #111827; 
+      color: white; 
+      padding: 10px 20px; 
+      border-radius: 6px; 
+      font-weight: 600; 
+      cursor: pointer; 
+      border: none; 
+      display: flex; 
+      align-items: center; 
+      gap: 8px;
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .login-btn:hover { background: #1f2937; }
+    .dropdown-menu { 
+      display: none; 
+      position: absolute; 
+      top: 100%; 
+      right: 0; 
+      background: white; 
+      border-radius: 8px; 
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+      min-width: 200px; 
+      margin-top: 8px; 
+      overflow: hidden;
+      z-index: 200;
+    }
+    .dropdown-menu.show { display: block; }
+    .dropdown-menu a { 
+      display: block; 
+      padding: 14px 20px; 
+      color: #111827; 
+      text-decoration: none; 
+      font-weight: 500; 
+      border-bottom: 1px solid #f0f0f0; 
+    }
+    .dropdown-menu a:last-child { border-bottom: none; }
+    .dropdown-menu a:hover { background: #f0fdf4; color: #9acd32; }
+    .dropdown-menu .role-icon { margin-right: 10px; }
+    
     /* Global Switch Styles */
     .view-switch-container {
       background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
