@@ -798,6 +798,20 @@
   </footer>
 
   <script>
+    // Login Dropdown Logic
+    function toggleLoginDropdown() {
+      const dropdown = document.getElementById('loginDropdown');
+      dropdown.classList.toggle('show');
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.login-dropdown')) {
+        const dropdown = document.getElementById('loginDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      }
+    });
+    
     // View Switch Logic
     function switchView(view) {
       const employerView = document.getElementById('employer-view');
