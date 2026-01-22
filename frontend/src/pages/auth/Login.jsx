@@ -46,6 +46,16 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] p-4">
       <div className="w-full max-w-md animate-fade-in">
+        {/* Back to Website Button */}
+        <a 
+          href="/website/Index.html" 
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-[#7CB342] mb-6 text-sm font-medium transition-colors"
+          data-testid="back-to-website-btn"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Website
+        </a>
+        
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <img src={LOGO_URL} alt="VHC Talent OS" className="h-16 w-auto mb-4" />
