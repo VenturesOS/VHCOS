@@ -627,6 +627,26 @@
       }
     });
     
+    // View Switch Logic
+    function switchToEmployers() {
+      localStorage.setItem('vhc-view', 'employers');
+      window.location.href = 'Index.html';
+    }
+    
+    function switchToCandidates() {
+      localStorage.setItem('vhc-view', 'candidates');
+      window.location.href = 'Index.html';
+    }
+    
+    // Check and highlight current view on load
+    (function() {
+      const savedView = localStorage.getItem('vhc-view');
+      if (savedView === 'candidates') {
+        document.getElementById('btn-employers').classList.remove('active');
+        document.getElementById('btn-candidates').classList.add('active');
+      }
+    })();
+    
     // Apply modal - Open and initialize
     function openApplyModal(jobId, jobTitle) {
       currentJobId = jobId;
