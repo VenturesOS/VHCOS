@@ -179,55 +179,5 @@
     </div>
   </footer>
 
-  <script>
-    const slider = document.getElementById('teamSlider');
-    const dotsContainer = document.getElementById('sliderDots');
-    const totalCards = 7;
-    const cardsPerView = 3;
-    let currentSlide = 0;
-    
-    function getMaxSlide() {
-      return totalCards - cardsPerView;
-    }
-    
-    // Create dots
-    function createDots() {
-      const numDots = getMaxSlide() + 1;
-      for (let i = 0; i < numDots; i++) {
-        const dot = document.createElement('div');
-        dot.className = 'slider-dot' + (i === 0 ? ' active' : '');
-        dot.onclick = () => goToSlide(i);
-        dotsContainer.appendChild(dot);
-      }
-    }
-    
-    function goToSlide(index) {
-      currentSlide = Math.max(0, Math.min(index, getMaxSlide()));
-      const percentage = (currentSlide / totalCards) * 100;
-      slider.style.transform = 'translateX(-' + percentage + '%)';
-      
-      // Update dots
-      document.querySelectorAll('.slider-dot').forEach((dot, i) => {
-        dot.className = 'slider-dot' + (i === currentSlide ? ' active' : '');
-      });
-    }
-    
-    function slideTeam(direction) {
-      goToSlide(currentSlide + direction);
-    }
-    
-    // Initialize
-    createDots();
-    
-    // Auto-slide every 5 seconds
-    setInterval(() => {
-      if (currentSlide >= getMaxSlide()) {
-        goToSlide(0);
-      } else {
-        slideTeam(1);
-      }
-    }, 5000);
-  </script>
-
 </body>
 </html>
