@@ -185,6 +185,42 @@ Applications collection now includes:
 
 ---
 
+## Home Page Restructure: ✅ COMPLETE (January 22, 2026)
+
+### Task: Restructure Home Page as "Recruitment Expertise" Gateway
+**Scope:** Transform Home page from "About/Story" style to expertise-focused gateway (Michael Page style)
+
+**New Home Page Sections:**
+1. **Hero**: "Recruitment Expertise That Delivers Results" - expertise-focused headline with CTAs
+2. **Our Recruitment Expertise**: 3 cards (Executive Search, Specialist Hiring, Talent Advisory) with professional business images
+3. **How We Work**: 4-step engagement model (Discovery → Research & Sourcing → Assessment → Placement & Support)
+4. **Global Hiring Support**: International reach section with region bullets (India & APAC, Middle East, Europe, Americas) - NO US-specific mentions
+5. **Who We Work With**: 4 client type cards (Enterprise, Growth-Stage, Industrial, Professional Services)
+6. **Final CTA**: "Ready to Find Exceptional Talent?"
+
+**Content Rules Applied:**
+- ✅ NO firm history, years of experience, philosophy, values, leadership bios (moved to About)
+- ✅ Uses "Global Hiring" terminology (no US hiring mentions)
+- ✅ Expertise-led, capability-focused content
+- ✅ Professional business/strategy images (no team/culture photos)
+
+**What was preserved:**
+- ✅ Header logo (SVG, 56px height) - UNTOUCHED
+- ✅ Navigation structure and URLs - UNTOUCHED
+- ✅ Login button routing to /login - UNTOUCHED
+- ✅ Footer structure with updated copy
+- ✅ VHC brand colors (#9acd32 green, #111827 dark)
+
+**Verification completed:**
+- ✅ Home page loads correctly on first render
+- ✅ Home content is clearly distinct from About page
+- ✅ All images load correctly
+- ✅ Careers page still loads live jobs
+- ✅ Login button routes correctly to /login
+- ✅ No layout or routing regressions
+
+---
+
 ## Phase-2 Backlog (NOT STARTED)
 
 - WhatsApp Automation
