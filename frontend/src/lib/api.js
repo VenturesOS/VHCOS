@@ -133,6 +133,47 @@ export const governanceAPI = {
   transitionJob: (jobId, newStatus, reason) => api.post(`/jobs/${jobId}/transition`, { new_status: newStatus, reason }),
 };
 
+// Commercial Intelligence APIs
+export const commercialAPI = {
+  create: (data) => api.post('/commercials', data),
+  getAll: (params) => api.get('/commercials', { params }),
+  getById: (id) => api.get(`/commercials/${id}`),
+  update: (id, data) => api.put(`/commercials/${id}`, data),
+  delete: (id) => api.delete(`/commercials/${id}`),
+};
+
+// Revenue APIs
+export const revenueAPI = {
+  calculate: (applicationId, offeredSalary) => api.post('/revenue/calculate', null, { params: { application_id: applicationId, offered_salary: offeredSalary } }),
+  override: (revenueId, manualOverride, reason) => api.put(`/revenue/${revenueId}/override`, null, { params: { manual_override: manualOverride, reason } }),
+  getPipeline: (params) => api.get('/revenue/pipeline', { params }),
+};
+
+// Analytics APIs
+export const analyticsAPI = {
+  getAdmin: (params) => api.get('/analytics/admin', { params }),
+  getEmployer: (params) => api.get('/analytics/employer', { params }),
+  getCompanyPipeline: (companyId) => api.get(`/companies/${companyId}/pipeline`),
+};
+
+// JD Parsing API
+export const jdAPI = {
+  parse: (data) => {
+    const formData = new FormData();
+    if (data.jd_text) formData.append('jd_text', data.jd_text);
+    if (data.jd_file) formData.append('jd_file', data.jd_file);
+    return api.post('/jobs/parse-jd', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+};
+
+// Mandate Assignment API
+export const mandateAPI = {
+  assignRecruiters: (jobId, recruiterIds) => api.post(`/jobs/${jobId}/assign-recruiters`, recruiterIds),
+  getAssignments: (jobId) => api.get(`/jobs/${jobId}/assignments`),
+};
+
 // Message APIs
 export const messageAPI = {
   send: (data) => api.post('/messages', data),
