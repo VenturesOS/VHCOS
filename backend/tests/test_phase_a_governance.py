@@ -138,23 +138,28 @@ class TestJobApprovalWorkflow(TestAuthentication):
         assert job["status"] == "active"
         assert len(job["approval_history"]) > 1  # Should have initial + approval entry
     
-    def test_invalid_transition_rejected(self, admin_token):
-        """Test that invalid state transitions are rejected"""
-        # Get an active job
-        headers = {"Authorization": f"Bearer {admin_token}"}
-        response = httpx.get(f"{API_URL}/api/jobs?status=active", headers=headers)
-        jobs = response.json()
-        if not jobs:
-            pytest.skip("No active jobs to test transition")
+    def test_invalid_transition_rejected(self, employer_token, recruiter_token):
+        """Test that invalid state transitions are rejected for non-admin users"""
+        # Create a job as recruiter (starts as pending_approval)
+        rec_headers = {"Authorization": f"Bearer {recruiter_token}"}
+        job_data = {
+            "title": "Invalid Transition Test Job",
+            "description": "Testing invalid transition",
+            "location": "Mumbai",
+            "job_type": "full-time"
+        }
+        create_response = httpx.post(f"{API_URL}/api/jobs", json=job_data, headers=rec_headers)
+        if create_response.status_code != 200:
+            pytest.skip("Could not create test job")
+        job_id = create_response.json()["id"]
         
-        job_id = jobs[0]["id"]
-        
-        # Try invalid transition: active -> draft (not allowed)
-        transition_data = {"new_status": "draft"}
+        # Employer tries an invalid transition: pending_approval -> archived (not allowed)
+        emp_headers = {"Authorization": f"Bearer {employer_token}"}
+        transition_data = {"new_status": "archived"}  # archived is only valid from closed
         response = httpx.post(
             f"{API_URL}/api/jobs/{job_id}/transition",
             json=transition_data,
-            headers=headers
+            headers=emp_headers
         )
         assert response.status_code == 400
 
