@@ -46,6 +46,8 @@ import AnalyticsPage from "./pages/employer/AnalyticsPage";
 import FindCandidatesPage from "./pages/employer/FindCandidatesPage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
 
+import EmployerAnalyticsPage from "./pages/employer/EmployerAnalyticsPage";
+
 // Candidate Pages
 import CandidateDashboard from "./pages/candidate/CandidateDashboard";
 import ProfilePage from "./pages/candidate/ProfilePage";
