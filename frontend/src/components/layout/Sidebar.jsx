@@ -18,7 +18,9 @@ import {
   X,
   Sparkles,
   Database,
-  Bell
+  Bell,
+  Network,
+  UsersRound
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -34,6 +36,8 @@ const navItems = {
     { icon: UserCircle, label: 'Candidates', path: '/admin/candidates' },
     { icon: Database, label: 'Candidate Bank', path: '/admin/candidate-bank' },
     { icon: Building2, label: 'Companies', path: '/admin/companies' },
+    { icon: UsersRound, label: 'Teams', path: '/admin/teams' },
+    { icon: Network, label: 'Hierarchy', path: '/admin/hierarchy' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
   recruiter: [
