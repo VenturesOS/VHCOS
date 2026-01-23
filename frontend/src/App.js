@@ -68,6 +68,7 @@ function App() {
           {/* Admin Routes */}
           <Route path="/admin" element={<DashboardLayout allowedRoles={["admin"]} />}>
             <Route index element={<AdminDashboard />} />
+            <Route path="analytics" element={<AdminAnalyticsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="jobs" element={<AdminJobsPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
@@ -75,6 +76,7 @@ function App() {
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="companies" element={<CompaniesPage />} />
+            <Route path="commercials" element={<CommercialsPage />} />
             <Route path="teams" element={<TeamsPage />} />
             <Route path="hierarchy" element={<HierarchyPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
