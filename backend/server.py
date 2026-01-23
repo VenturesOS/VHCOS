@@ -254,7 +254,81 @@ class CompanyResponse(BaseModel):
     industry: Optional[str] = None
     website: Optional[str] = None
     location: Optional[str] = None
+    assigned_employer_id: Optional[str] = None  # Employer assigned to this company
+    assigned_employer_name: Optional[str] = None
+    status: str = "active"  # active, disabled
     created_at: str
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    industry: Optional[str] = None
+    website: Optional[str] = None
+    location: Optional[str] = None
+    assigned_employer_id: Optional[str] = None
+    status: Optional[str] = None
+
+# ============== TEAM & HIERARCHY MODELS ==============
+
+class TeamCreate(BaseModel):
+    name: str
+    employer_id: str
+    recruiter_ids: List[str] = []
+    company_ids: List[str] = []
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    recruiter_ids: Optional[List[str]] = None
+    company_ids: Optional[List[str]] = None
+    status: Optional[str] = None
+
+class TeamResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    employer_id: str
+    employer_name: Optional[str] = None
+    recruiter_ids: List[str] = []
+    recruiter_names: List[str] = []
+    company_ids: List[str] = []
+    company_names: List[str] = []
+    active_jobs_count: int = 0
+    status: str = "active"  # active, disabled
+    created_at: str
+    updated_at: Optional[str] = None
+
+# ============== REFERRAL MODELS ==============
+
+class ReferralCreate(BaseModel):
+    job_id: str
+    candidate_name: str
+    candidate_email: EmailStr
+    candidate_phone: str
+    resume_url: Optional[str] = None
+    note: Optional[str] = None  # "Why this candidate?"
+
+class ReferralResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    job_id: str
+    job_title: Optional[str] = None
+    referrer_id: str
+    referrer_name: Optional[str] = None
+    candidate_name: str
+    candidate_email: str
+    candidate_phone: str
+    resume_url: Optional[str] = None
+    note: Optional[str] = None
+    status: str = "submitted"  # submitted, validated, linked, in_process, outcome_reached, closed
+    linked_candidate_id: Optional[str] = None  # Links to candidate_bank if validated
+    linked_application_id: Optional[str] = None  # Links to application if applied
+    status_history: List[dict] = []  # Audit trail
+    created_at: str
+    updated_at: Optional[str] = None
+
+class ReferralStatusUpdate(BaseModel):
+    new_status: str = Field(..., pattern="^(submitted|validated|linked|in_process|outcome_reached|closed)$")
+    reason: Optional[str] = None
 
 class MessageBase(BaseModel):
     recipient_id: str
