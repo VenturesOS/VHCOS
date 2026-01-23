@@ -1070,38 +1070,208 @@ async def get_company(company_id: str, current_user: dict = Depends(get_current_
 
 @api_router.post("/jobs", response_model=JobResponse)
 async def create_job(job_data: JobCreate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
+    """
+    Create a new job with approval workflow:
+    - Admin/Employer: Job goes directly to 'active' status
+    - Recruiter: Job goes to 'pending_approval' status, needs Employer/Admin approval
+    """
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     
-    company_id = current_user.get("company_id", "default")
+    # Determine company_id
+    company_id = job_data.company_id or current_user.get("company_id", "default")
     company_name = None
+    
     if company_id and company_id != "default":
         company = await db.companies.find_one({"id": company_id}, {"_id": 0})
         if company:
             company_name = company.get("name")
+            # Verify employer is assigned to this company if not admin
+            if current_user["role"] == "employer":
+                if company.get("assigned_employer_id") and company.get("assigned_employer_id") != current_user["id"]:
+                    raise HTTPException(status_code=403, detail="You are not assigned to this company")
+    
+    # Determine initial status based on role
+    if current_user["role"] == "recruiter":
+        initial_status = "pending_approval"
+    else:
+        initial_status = "active"
+    
+    # Validate public_company_alias for active jobs (mandatory for public visibility)
+    if initial_status == "active" and not job_data.public_company_alias:
+        # Default alias if not provided
+        job_data_dict = job_data.model_dump()
+        job_data_dict["public_company_alias"] = "Confidential Client"
+    else:
+        job_data_dict = job_data.model_dump()
+    
+    # Find team for this employer/recruiter
+    team_id = None
+    if current_user["role"] == "recruiter":
+        # Find team where this recruiter is assigned
+        team = await db.teams.find_one({"recruiter_ids": current_user["id"], "status": "active"}, {"_id": 0})
+        if team:
+            team_id = team["id"]
+    elif current_user["role"] == "employer":
+        # Find team for this employer
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        if team:
+            team_id = team["id"]
     
     job_doc = {
         "id": job_id,
-        **job_data.model_dump(),
+        **job_data_dict,
         "company_id": company_id,
         "company_name": company_name,
         "posted_by": current_user["id"],
-        "status": "active",
+        "posted_by_role": current_user["role"],
+        "status": initial_status,
+        "team_id": team_id,
         "applicant_count": 0,
-        "created_at": now
+        "approval_history": [{
+            "status": initial_status,
+            "changed_by": current_user["id"],
+            "changed_by_name": current_user["name"],
+            "changed_by_role": current_user["role"],
+            "timestamp": now,
+            "reason": "Job created"
+        }],
+        "created_at": now,
+        "updated_at": now
     }
     
     await db.jobs.insert_one(job_doc)
+    
+    logging.info(f"Job {job_id} created by {current_user['name']} ({current_user['role']}) with status {initial_status}")
+    
     return JobResponse(**job_doc)
+
+@api_router.post("/jobs/{job_id}/transition", response_model=JobResponse)
+async def transition_job_status(
+    job_id: str, 
+    transition: JobStateTransition, 
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Transition job status with audit logging.
+    Valid transitions:
+    - draft -> pending_approval, active (admin only)
+    - pending_approval -> active, draft (rejected back to draft)
+    - active -> on_hold, closed
+    - on_hold -> active, closed
+    - closed -> archived (admin only)
+    - archived -> (no transitions, final state)
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    current_status = job.get("status", "active")
+    new_status = transition.new_status
+    
+    # Define valid transitions
+    valid_transitions = {
+        "draft": ["pending_approval", "active"],
+        "pending_approval": ["active", "draft", "on_hold"],
+        "active": ["on_hold", "closed"],
+        "on_hold": ["active", "closed"],
+        "closed": ["archived"],
+        "archived": []  # No transitions from archived
+    }
+    
+    # Admin can do any transition except from archived
+    if current_user["role"] != "admin":
+        if new_status not in valid_transitions.get(current_status, []):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid transition from {current_status} to {new_status}"
+            )
+        # Employer can only approve their team's jobs
+        if current_user["role"] == "employer":
+            team = await db.teams.find_one({"employer_id": current_user["id"]}, {"_id": 0})
+            if team and job.get("team_id") != team["id"]:
+                # Check if job was posted by a recruiter in their team
+                if job.get("posted_by") not in team.get("recruiter_ids", []):
+                    raise HTTPException(status_code=403, detail="You can only approve jobs from your team")
+    else:
+        # Admin can't transition from archived
+        if current_status == "archived":
+            raise HTTPException(status_code=400, detail="Cannot transition from archived state")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Create audit entry
+    audit_entry = {
+        "from_status": current_status,
+        "to_status": new_status,
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user["name"],
+        "changed_by_role": current_user["role"],
+        "timestamp": now,
+        "reason": transition.reason or f"Status changed from {current_status} to {new_status}"
+    }
+    
+    # Update job
+    await db.jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {"status": new_status, "updated_at": now},
+            "$push": {"approval_history": audit_entry}
+        }
+    )
+    
+    logging.info(f"Job {job_id} transitioned from {current_status} to {new_status} by {current_user['name']}")
+    
+    updated_job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    return JobResponse(**updated_job)
+
+@api_router.get("/jobs/pending-approval", response_model=List[JobResponse])
+async def get_pending_approval_jobs(current_user: dict = Depends(require_role(["admin", "employer"]))):
+    """Get jobs pending approval (for Admin and Employers)"""
+    query = {"status": "pending_approval"}
+    
+    if current_user["role"] == "employer":
+        # Get jobs from recruiters in this employer's team
+        team = await db.teams.find_one({"employer_id": current_user["id"]}, {"_id": 0})
+        if team:
+            query["$or"] = [
+                {"team_id": team["id"]},
+                {"posted_by": {"$in": team.get("recruiter_ids", [])}}
+            ]
+        else:
+            # No team, return empty
+            return []
+    
+    jobs = await db.jobs.find(query, {"_id": 0}).to_list(1000)
+    return [JobResponse(**j) for j in jobs]
 
 @api_router.get("/jobs", response_model=List[JobResponse])
 async def get_jobs(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     query = {}
     
     if current_user["role"] == "employer":
-        query["posted_by"] = current_user["id"]
+        # Employer sees jobs from their team
+        team = await db.teams.find_one({"employer_id": current_user["id"]}, {"_id": 0})
+        if team:
+            query["$or"] = [
+                {"posted_by": current_user["id"]},
+                {"team_id": team["id"]}
+            ]
+        else:
+            query["posted_by"] = current_user["id"]
+    elif current_user["role"] == "recruiter":
+        # Recruiter sees their assigned jobs and jobs they posted
+        team = await db.teams.find_one({"recruiter_ids": current_user["id"]}, {"_id": 0})
+        if team:
+            query["$or"] = [
+                {"posted_by": current_user["id"]},
+                {"team_id": team["id"]}
+            ]
+        else:
+            query["posted_by"] = current_user["id"]
     elif current_user["role"] == "candidate":
         query["status"] = "active"
+    # Admin sees all jobs
     
     if status:
         query["status"] = status
@@ -1111,6 +1281,7 @@ async def get_jobs(status: Optional[str] = None, current_user: dict = Depends(ge
 
 @api_router.get("/jobs/browse", response_model=List[JobResponse])
 async def browse_jobs(search: Optional[str] = None, location: Optional[str] = None, job_type: Optional[str] = None):
+    """Public job browsing - only shows ACTIVE jobs with masked company names"""
     query = {"status": "active"}
     
     if search:
