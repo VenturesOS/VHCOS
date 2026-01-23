@@ -4798,6 +4798,1086 @@ async def get_admin_hierarchy(current_user: dict = Depends(require_role(["admin"
     }
 
 
+# ============== COMMERCIAL INTELLIGENCE ENGINE ==============
+
+@api_router.post("/commercials", response_model=CommercialResponse)
+async def create_commercial(
+    commercial_data: CommercialCreate,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Create a commercial configuration for a company.
+    - Admin: can create for any company
+    - Employer: can only create for assigned companies
+    """
+    # Validate company exists
+    company = await db.companies.find_one({"id": commercial_data.company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Employer can only manage assigned companies
+    if current_user["role"] == "employer":
+        if company.get("assigned_employer_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You are not assigned to this company")
+    
+    # Validate commercial type fields
+    if commercial_data.type == "percentage" and commercial_data.fee_percentage is None:
+        raise HTTPException(status_code=400, detail="fee_percentage required for percentage type")
+    if commercial_data.type == "fixed" and commercial_data.fixed_amount is None:
+        raise HTTPException(status_code=400, detail="fixed_amount required for fixed type")
+    if commercial_data.type == "level_based" and commercial_data.level_config is None:
+        raise HTTPException(status_code=400, detail="level_config required for level_based type")
+    
+    commercial_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    commercial_doc = {
+        "id": commercial_id,
+        "company_id": commercial_data.company_id,
+        "company_name": company.get("name"),
+        "commercial_name": commercial_data.commercial_name,
+        "type": commercial_data.type,
+        "fee_percentage": commercial_data.fee_percentage,
+        "fixed_amount": commercial_data.fixed_amount,
+        "level_config": commercial_data.level_config,
+        "salary_min": commercial_data.salary_min,
+        "salary_max": commercial_data.salary_max,
+        "job_level": commercial_data.job_level,
+        "effective_from": commercial_data.effective_from,
+        "effective_to": commercial_data.effective_to,
+        "is_active": commercial_data.is_active,
+        "created_at": now,
+        "created_by": current_user["id"],
+        "created_by_name": current_user["name"],
+        "updated_at": now,
+        "audit_log": [{
+            "action": "created",
+            "by_id": current_user["id"],
+            "by_name": current_user["name"],
+            "by_role": current_user["role"],
+            "timestamp": now
+        }]
+    }
+    
+    await db.commercials.insert_one(commercial_doc)
+    logging.info(f"Commercial '{commercial_data.commercial_name}' created for company {company.get('name')} by {current_user['name']}")
+    
+    return CommercialResponse(**commercial_doc)
+
+
+@api_router.get("/commercials", response_model=List[CommercialResponse])
+async def get_commercials(
+    company_id: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Get commercials.
+    - Admin: sees all commercials
+    - Employer: sees only commercials for assigned companies
+    """
+    query = {}
+    
+    if current_user["role"] == "employer":
+        # Get companies assigned to this employer
+        assigned_companies = await db.companies.find(
+            {"assigned_employer_id": current_user["id"]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        company_ids = [c["id"] for c in assigned_companies]
+        query["company_id"] = {"$in": company_ids}
+    
+    if company_id:
+        query["company_id"] = company_id
+    if is_active is not None:
+        query["is_active"] = is_active
+    
+    commercials = await db.commercials.find(query, {"_id": 0}).to_list(1000)
+    return [CommercialResponse(**c) for c in commercials]
+
+
+@api_router.get("/commercials/{commercial_id}", response_model=CommercialResponse)
+async def get_commercial(
+    commercial_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """Get a specific commercial by ID."""
+    commercial = await db.commercials.find_one({"id": commercial_id}, {"_id": 0})
+    if not commercial:
+        raise HTTPException(status_code=404, detail="Commercial not found")
+    
+    # Employer access control
+    if current_user["role"] == "employer":
+        company = await db.companies.find_one({"id": commercial["company_id"]}, {"_id": 0})
+        if not company or company.get("assigned_employer_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    return CommercialResponse(**commercial)
+
+
+@api_router.put("/commercials/{commercial_id}", response_model=CommercialResponse)
+async def update_commercial(
+    commercial_id: str,
+    update_data: CommercialUpdate,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """Update a commercial configuration."""
+    commercial = await db.commercials.find_one({"id": commercial_id}, {"_id": 0})
+    if not commercial:
+        raise HTTPException(status_code=404, detail="Commercial not found")
+    
+    # Employer access control
+    if current_user["role"] == "employer":
+        company = await db.companies.find_one({"id": commercial["company_id"]}, {"_id": 0})
+        if not company or company.get("assigned_employer_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+    
+    if not update_dict:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    update_dict["updated_at"] = now
+    
+    # Create audit entry
+    audit_entry = {
+        "action": "updated",
+        "changes": list(update_dict.keys()),
+        "by_id": current_user["id"],
+        "by_name": current_user["name"],
+        "by_role": current_user["role"],
+        "timestamp": now
+    }
+    
+    await db.commercials.update_one(
+        {"id": commercial_id},
+        {
+            "$set": update_dict,
+            "$push": {"audit_log": audit_entry}
+        }
+    )
+    
+    updated = await db.commercials.find_one({"id": commercial_id}, {"_id": 0})
+    return CommercialResponse(**updated)
+
+
+@api_router.delete("/commercials/{commercial_id}")
+async def delete_commercial(
+    commercial_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Soft delete (deactivate) a commercial. Admin only."""
+    commercial = await db.commercials.find_one({"id": commercial_id}, {"_id": 0})
+    if not commercial:
+        raise HTTPException(status_code=404, detail="Commercial not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.commercials.update_one(
+        {"id": commercial_id},
+        {
+            "$set": {"is_active": False, "updated_at": now},
+            "$push": {"audit_log": {
+                "action": "deactivated",
+                "by_id": current_user["id"],
+                "by_name": current_user["name"],
+                "by_role": current_user["role"],
+                "timestamp": now
+            }}
+        }
+    )
+    
+    return {"message": "Commercial deactivated successfully"}
+
+
+# ============== REVENUE CALCULATION ENGINE ==============
+
+def calculate_revenue(offered_salary: float, commercial: dict, job_level: Optional[str] = None) -> float:
+    """Calculate revenue based on commercial type."""
+    if commercial["type"] == "percentage":
+        return offered_salary * (commercial["fee_percentage"] / 100)
+    elif commercial["type"] == "fixed":
+        return commercial["fixed_amount"]
+    elif commercial["type"] == "level_based":
+        level_config = commercial.get("level_config", {})
+        level = job_level or "mid"  # Default to mid if not specified
+        fee_pct = level_config.get(level, level_config.get("mid", 10.0))
+        return offered_salary * (fee_pct / 100)
+    return 0.0
+
+
+async def get_applicable_commercial(company_id: str, salary: Optional[float] = None, job_level: Optional[str] = None) -> Optional[dict]:
+    """Get the applicable commercial for a job/offer."""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    query = {
+        "company_id": company_id,
+        "is_active": True,
+        "effective_from": {"$lte": now},
+        "$or": [
+            {"effective_to": None},
+            {"effective_to": {"$gte": now}}
+        ]
+    }
+    
+    commercials = await db.commercials.find(query, {"_id": 0}).to_list(100)
+    
+    if not commercials:
+        return None
+    
+    # If salary provided, try to find salary-range specific commercial
+    if salary:
+        for comm in commercials:
+            if comm.get("salary_min") and comm.get("salary_max"):
+                if comm["salary_min"] <= salary <= comm["salary_max"]:
+                    return comm
+    
+    # If job level provided, try to find level-specific commercial
+    if job_level:
+        for comm in commercials:
+            if comm.get("job_level") == job_level:
+                return comm
+            if comm["type"] == "level_based":
+                return comm
+    
+    # Return first active commercial as default
+    return commercials[0]
+
+
+@api_router.post("/revenue/calculate")
+async def calculate_application_revenue(
+    application_id: str,
+    offered_salary: float,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Calculate revenue for an application when offer is made.
+    Creates/updates revenue entry in database.
+    """
+    application = await db.applications.find_one({"id": application_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Get job to find company
+    job = await db.jobs.find_one({"id": application["job_id"]}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    company_id = job.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Job has no company assigned")
+    
+    # Employer access control
+    if current_user["role"] == "employer":
+        company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+        if not company or company.get("assigned_employer_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get applicable commercial
+    commercial = await get_applicable_commercial(
+        company_id,
+        salary=offered_salary,
+        job_level=job.get("job_level")
+    )
+    
+    if not commercial:
+        raise HTTPException(status_code=400, detail="No active commercial found for this company")
+    
+    # Calculate revenue
+    calculated_revenue = calculate_revenue(
+        offered_salary,
+        commercial,
+        job.get("job_level")
+    )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check if revenue entry exists
+    existing = await db.revenue.find_one({"application_id": application_id}, {"_id": 0})
+    
+    if existing:
+        # Update existing
+        await db.revenue.update_one(
+            {"application_id": application_id},
+            {
+                "$set": {
+                    "offered_salary": offered_salary,
+                    "commercial_id": commercial["id"],
+                    "commercial_type": commercial["type"],
+                    "fee_percentage": commercial.get("fee_percentage"),
+                    "fixed_amount": commercial.get("fixed_amount"),
+                    "calculated_revenue": calculated_revenue,
+                    "final_revenue": existing.get("manual_override") or calculated_revenue,
+                    "stage": application.get("stage", "offered"),
+                    "updated_at": now
+                },
+                "$push": {"audit_log": {
+                    "action": "recalculated",
+                    "offered_salary": offered_salary,
+                    "calculated_revenue": calculated_revenue,
+                    "by_id": current_user["id"],
+                    "by_name": current_user["name"],
+                    "timestamp": now
+                }}
+            }
+        )
+        revenue_id = existing["id"]
+    else:
+        # Create new
+        revenue_id = str(uuid.uuid4())
+        revenue_doc = {
+            "id": revenue_id,
+            "application_id": application_id,
+            "job_id": application["job_id"],
+            "job_title": job.get("title"),
+            "candidate_id": application.get("candidate_id"),
+            "candidate_name": application.get("candidate_name"),
+            "company_id": company_id,
+            "offered_salary": offered_salary,
+            "commercial_id": commercial["id"],
+            "commercial_name": commercial.get("commercial_name"),
+            "commercial_type": commercial["type"],
+            "fee_percentage": commercial.get("fee_percentage"),
+            "fixed_amount": commercial.get("fixed_amount"),
+            "calculated_revenue": calculated_revenue,
+            "manual_override": None,
+            "final_revenue": calculated_revenue,
+            "stage": application.get("stage", "offered"),
+            "is_closed": application.get("stage") == "hired",
+            "created_at": now,
+            "created_by": current_user["id"],
+            "audit_log": [{
+                "action": "created",
+                "offered_salary": offered_salary,
+                "calculated_revenue": calculated_revenue,
+                "by_id": current_user["id"],
+                "by_name": current_user["name"],
+                "timestamp": now
+            }]
+        }
+        await db.revenue.insert_one(revenue_doc)
+    
+    # Update application with offered salary
+    await db.applications.update_one(
+        {"id": application_id},
+        {"$set": {"offered_salary": offered_salary, "updated_at": now}}
+    )
+    
+    return {
+        "revenue_id": revenue_id,
+        "application_id": application_id,
+        "offered_salary": offered_salary,
+        "commercial_name": commercial.get("commercial_name"),
+        "commercial_type": commercial["type"],
+        "fee_percentage": commercial.get("fee_percentage"),
+        "calculated_revenue": calculated_revenue,
+        "final_revenue": calculated_revenue
+    }
+
+
+@api_router.put("/revenue/{revenue_id}/override")
+async def override_revenue(
+    revenue_id: str,
+    manual_override: float,
+    reason: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Admin-only: Manually override calculated revenue.
+    """
+    revenue = await db.revenue.find_one({"id": revenue_id}, {"_id": 0})
+    if not revenue:
+        raise HTTPException(status_code=404, detail="Revenue entry not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.revenue.update_one(
+        {"id": revenue_id},
+        {
+            "$set": {
+                "manual_override": manual_override,
+                "final_revenue": manual_override,
+                "updated_at": now
+            },
+            "$push": {"audit_log": {
+                "action": "manual_override",
+                "previous_revenue": revenue.get("final_revenue"),
+                "new_revenue": manual_override,
+                "reason": reason,
+                "by_id": current_user["id"],
+                "by_name": current_user["name"],
+                "timestamp": now
+            }}
+        }
+    )
+    
+    logging.info(f"Revenue {revenue_id} manually overridden to {manual_override} by {current_user['name']}: {reason}")
+    
+    return {"message": "Revenue overridden successfully", "final_revenue": manual_override}
+
+
+@api_router.get("/revenue/pipeline")
+async def get_revenue_pipeline(
+    company_id: Optional[str] = None,
+    employer_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Get revenue pipeline data.
+    - Admin: sees all
+    - Employer: sees only assigned companies
+    """
+    query = {}
+    
+    if current_user["role"] == "employer":
+        # Get companies assigned to this employer
+        assigned_companies = await db.companies.find(
+            {"assigned_employer_id": current_user["id"]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        company_ids = [c["id"] for c in assigned_companies]
+        query["company_id"] = {"$in": company_ids}
+    elif company_id:
+        query["company_id"] = company_id
+    
+    if date_from:
+        query["created_at"] = {"$gte": date_from}
+    if date_to:
+        if "created_at" in query:
+            query["created_at"]["$lte"] = date_to
+        else:
+            query["created_at"] = {"$lte": date_to}
+    
+    revenues = await db.revenue.find(query, {"_id": 0}).to_list(10000)
+    
+    # Calculate pipeline stats
+    pipeline_by_stage = {}
+    closed_revenue = 0
+    total_pipeline = 0
+    
+    for rev in revenues:
+        stage = rev.get("stage", "offered")
+        amount = rev.get("final_revenue", 0)
+        
+        if stage not in pipeline_by_stage:
+            pipeline_by_stage[stage] = {"count": 0, "revenue": 0}
+        
+        pipeline_by_stage[stage]["count"] += 1
+        pipeline_by_stage[stage]["revenue"] += amount
+        
+        if rev.get("is_closed"):
+            closed_revenue += amount
+        else:
+            total_pipeline += amount
+    
+    return {
+        "pipeline_by_stage": pipeline_by_stage,
+        "total_pipeline_revenue": total_pipeline,
+        "closed_revenue": closed_revenue,
+        "total_entries": len(revenues),
+        "entries": revenues[:100]  # Limit detail response
+    }
+
+
+# ============== ADMIN ANALYTICS DASHBOARD ==============
+
+@api_router.get("/analytics/admin")
+async def get_admin_analytics(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    employer_id: Optional[str] = None,
+    recruiter_id: Optional[str] = None,
+    company_id: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Admin analytics dashboard - Power BI style.
+    Full visibility into all business metrics.
+    """
+    # Build date query
+    date_query = {}
+    if date_from:
+        date_query["$gte"] = date_from
+    if date_to:
+        date_query["$lte"] = date_to
+    
+    # Get all jobs with filters
+    jobs_query = {"status": {"$in": ["active", "on_hold", "closed"]}}
+    if company_id:
+        jobs_query["company_id"] = company_id
+    
+    jobs = await db.jobs.find(jobs_query, {"_id": 0}).to_list(10000)
+    active_jobs = [j for j in jobs if j.get("status") == "active"]
+    
+    # Get all applications
+    apps_query = {}
+    if date_query:
+        apps_query["created_at"] = date_query
+    
+    applications = await db.applications.find(apps_query, {"_id": 0}).to_list(100000)
+    
+    # Get revenue data
+    revenue_query = {}
+    if date_query:
+        revenue_query["created_at"] = date_query
+    if company_id:
+        revenue_query["company_id"] = company_id
+    
+    revenues = await db.revenue.find(revenue_query, {"_id": 0}).to_list(10000)
+    
+    # Calculate KPIs
+    total_pipeline_revenue = sum(r.get("final_revenue", 0) for r in revenues if not r.get("is_closed"))
+    closed_revenue = sum(r.get("final_revenue", 0) for r in revenues if r.get("is_closed"))
+    
+    # Stage distribution
+    stage_counts = {}
+    for app in applications:
+        stage = app.get("stage", "applied")
+        stage_counts[stage] = stage_counts.get(stage, 0) + 1
+    
+    offered_count = stage_counts.get("offered", 0)
+    hired_count = stage_counts.get("hired", 0)
+    offer_to_join_ratio = (hired_count / offered_count * 100) if offered_count > 0 else 0
+    
+    # Calculate avg time to close
+    hired_apps = [a for a in applications if a.get("stage") == "hired"]
+    if hired_apps:
+        total_days = 0
+        for app in hired_apps:
+            created = datetime.fromisoformat(app["created_at"].replace("Z", "+00:00"))
+            updated = datetime.fromisoformat(app.get("updated_at", app["created_at"]).replace("Z", "+00:00"))
+            total_days += (updated - created).days
+        avg_time_to_close = total_days / len(hired_apps)
+    else:
+        avg_time_to_close = 0
+    
+    # Get counts
+    active_employers = await db.users.count_documents({"role": "employer", "is_active": True})
+    active_recruiters = await db.users.count_documents({"role": "recruiter", "is_active": True})
+    
+    # Revenue by company
+    company_revenue = {}
+    for rev in revenues:
+        cid = rev.get("company_id")
+        if cid:
+            if cid not in company_revenue:
+                company_revenue[cid] = {"name": "", "pipeline": 0, "closed": 0}
+            company_revenue[cid]["pipeline"] += rev.get("final_revenue", 0) if not rev.get("is_closed") else 0
+            company_revenue[cid]["closed"] += rev.get("final_revenue", 0) if rev.get("is_closed") else 0
+    
+    # Get company names
+    for cid in company_revenue:
+        company = await db.companies.find_one({"id": cid}, {"name": 1, "_id": 0})
+        if company:
+            company_revenue[cid]["name"] = company.get("name", "Unknown")
+    
+    # Recruiter performance
+    recruiter_stats = {}
+    for app in applications:
+        # Get the recruiter who processed this application
+        job = next((j for j in jobs if j["id"] == app.get("job_id")), None)
+        if job:
+            for rec_id in job.get("assigned_recruiter_ids", []):
+                if rec_id not in recruiter_stats:
+                    recruiter_stats[rec_id] = {"name": "", "applications": 0, "shortlisted": 0, "hired": 0, "revenue": 0}
+                recruiter_stats[rec_id]["applications"] += 1
+                if app.get("stage") in ["shortlisted", "interview", "offered", "hired"]:
+                    recruiter_stats[rec_id]["shortlisted"] += 1
+                if app.get("stage") == "hired":
+                    recruiter_stats[rec_id]["hired"] += 1
+    
+    # Get recruiter names and add revenue
+    for rec_id in recruiter_stats:
+        user = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
+        if user:
+            recruiter_stats[rec_id]["name"] = user.get("name", "Unknown")
+        # Sum revenue for this recruiter's applications
+        for rev in revenues:
+            app = next((a for a in applications if a["id"] == rev.get("application_id")), None)
+            if app:
+                job = next((j for j in jobs if j["id"] == app.get("job_id")), None)
+                if job and rec_id in job.get("assigned_recruiter_ids", []):
+                    recruiter_stats[rec_id]["revenue"] += rev.get("final_revenue", 0)
+    
+    # Revenue funnel by stage
+    revenue_funnel = {
+        "offered": sum(r.get("final_revenue", 0) for r in revenues if r.get("stage") == "offered"),
+        "hired": sum(r.get("final_revenue", 0) for r in revenues if r.get("stage") == "hired"),
+    }
+    
+    return {
+        "kpis": {
+            "total_active_mandates": len(active_jobs),
+            "total_pipeline_revenue": round(total_pipeline_revenue, 2),
+            "closed_revenue": round(closed_revenue, 2),
+            "avg_time_to_close_days": round(avg_time_to_close, 1),
+            "offer_to_join_ratio": round(offer_to_join_ratio, 1),
+            "active_employers": active_employers,
+            "active_recruiters": active_recruiters,
+        },
+        "stage_distribution": stage_counts,
+        "revenue_funnel": revenue_funnel,
+        "company_revenue": list(company_revenue.values()),
+        "recruiter_performance": list(recruiter_stats.values()),
+    }
+
+
+# ============== EMPLOYER ANALYTICS DASHBOARD ==============
+
+@api_router.get("/analytics/employer")
+async def get_employer_analytics(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Employer analytics dashboard.
+    Scoped to assigned companies and teams only.
+    """
+    # Get companies assigned to this employer (or all for admin)
+    if current_user["role"] == "employer":
+        assigned_companies = await db.companies.find(
+            {"assigned_employer_id": current_user["id"]},
+            {"_id": 0}
+        ).to_list(1000)
+        company_ids = [c["id"] for c in assigned_companies]
+    else:
+        assigned_companies = await db.companies.find({}, {"_id": 0}).to_list(1000)
+        company_ids = [c["id"] for c in assigned_companies]
+    
+    if not company_ids:
+        return {
+            "kpis": {
+                "active_mandates": 0,
+                "pipeline_revenue": 0,
+                "closed_revenue": 0,
+                "offers_pending": 0,
+                "avg_fee_percentage": 0,
+            },
+            "team_performance": [],
+            "company_revenue": [],
+            "recruiter_contribution": [],
+        }
+    
+    # Get jobs for these companies
+    jobs = await db.jobs.find(
+        {"company_id": {"$in": company_ids}},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    active_jobs = [j for j in jobs if j.get("status") == "active"]
+    job_ids = [j["id"] for j in jobs]
+    
+    # Get applications for these jobs
+    applications = await db.applications.find(
+        {"job_id": {"$in": job_ids}},
+        {"_id": 0}
+    ).to_list(100000)
+    
+    # Get revenue
+    revenues = await db.revenue.find(
+        {"company_id": {"$in": company_ids}},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    pipeline_revenue = sum(r.get("final_revenue", 0) for r in revenues if not r.get("is_closed"))
+    closed_revenue = sum(r.get("final_revenue", 0) for r in revenues if r.get("is_closed"))
+    
+    # Offers pending
+    offers_pending = len([a for a in applications if a.get("stage") == "offered"])
+    
+    # Average fee percentage
+    commercials = await db.commercials.find(
+        {"company_id": {"$in": company_ids}, "is_active": True},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    pct_fees = [c.get("fee_percentage", 0) for c in commercials if c.get("fee_percentage")]
+    avg_fee = sum(pct_fees) / len(pct_fees) if pct_fees else 0
+    
+    # Company-wise revenue
+    company_revenue = []
+    for company in assigned_companies:
+        comp_revs = [r for r in revenues if r.get("company_id") == company["id"]]
+        company_revenue.append({
+            "company_id": company["id"],
+            "company_name": company.get("name"),
+            "pipeline": sum(r.get("final_revenue", 0) for r in comp_revs if not r.get("is_closed")),
+            "closed": sum(r.get("final_revenue", 0) for r in comp_revs if r.get("is_closed")),
+            "mandates": len([j for j in jobs if j.get("company_id") == company["id"]]),
+        })
+    
+    # Get teams for this employer
+    teams = await db.teams.find(
+        {"employer_id": current_user["id"]} if current_user["role"] == "employer" else {},
+        {"_id": 0}
+    ).to_list(100)
+    
+    team_performance = []
+    for team in teams:
+        team_jobs = [j for j in jobs if j.get("team_id") == team["id"]]
+        team_job_ids = [j["id"] for j in team_jobs]
+        team_apps = [a for a in applications if a.get("job_id") in team_job_ids]
+        team_revs = [r for r in revenues if r.get("job_id") in team_job_ids]
+        
+        team_performance.append({
+            "team_id": team["id"],
+            "team_name": team.get("name"),
+            "mandates": len(team_jobs),
+            "applications": len(team_apps),
+            "hired": len([a for a in team_apps if a.get("stage") == "hired"]),
+            "pipeline_revenue": sum(r.get("final_revenue", 0) for r in team_revs if not r.get("is_closed")),
+            "closed_revenue": sum(r.get("final_revenue", 0) for r in team_revs if r.get("is_closed")),
+        })
+    
+    # Recruiter contribution
+    recruiter_contribution = []
+    recruiter_ids = set()
+    for job in jobs:
+        for rec_id in job.get("assigned_recruiter_ids", []):
+            recruiter_ids.add(rec_id)
+    
+    for rec_id in recruiter_ids:
+        rec_jobs = [j for j in jobs if rec_id in j.get("assigned_recruiter_ids", [])]
+        rec_job_ids = [j["id"] for j in rec_jobs]
+        rec_apps = [a for a in applications if a.get("job_id") in rec_job_ids]
+        rec_revs = [r for r in revenues if r.get("job_id") in rec_job_ids]
+        
+        recruiter = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
+        
+        recruiter_contribution.append({
+            "recruiter_id": rec_id,
+            "recruiter_name": recruiter.get("name", "Unknown") if recruiter else "Unknown",
+            "mandates": len(rec_jobs),
+            "applications": len(rec_apps),
+            "hired": len([a for a in rec_apps if a.get("stage") == "hired"]),
+            "revenue": sum(r.get("final_revenue", 0) for r in rec_revs),
+        })
+    
+    return {
+        "kpis": {
+            "active_mandates": len(active_jobs),
+            "pipeline_revenue": round(pipeline_revenue, 2),
+            "closed_revenue": round(closed_revenue, 2),
+            "offers_pending": offers_pending,
+            "avg_fee_percentage": round(avg_fee, 2),
+        },
+        "team_performance": team_performance,
+        "company_revenue": company_revenue,
+        "recruiter_contribution": recruiter_contribution,
+    }
+
+
+# ============== COMPANY PIPELINE VIEW ==============
+
+@api_router.get("/companies/{company_id}/pipeline")
+async def get_company_pipeline(
+    company_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Get company profile with pipeline view.
+    Shows mandates, revenue breakdown, and detailed pipeline.
+    """
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Employer access control
+    if current_user["role"] == "employer":
+        if company.get("assigned_employer_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get all jobs for this company
+    jobs = await db.jobs.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
+    
+    total_mandates = len(jobs)
+    active_mandates = len([j for j in jobs if j.get("status") == "active"])
+    closed_mandates = len([j for j in jobs if j.get("status") == "closed"])
+    
+    # Get revenue
+    revenues = await db.revenue.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
+    total_revenue = sum(r.get("final_revenue", 0) for r in revenues)
+    
+    # Get commercials
+    commercials = await db.commercials.find(
+        {"company_id": company_id, "is_active": True},
+        {"_id": 0}
+    ).to_list(100)
+    
+    pct_fees = [c.get("fee_percentage", 0) for c in commercials if c.get("fee_percentage")]
+    avg_commercial_pct = sum(pct_fees) / len(pct_fees) if pct_fees else 0
+    
+    # Build pipeline table
+    pipeline = []
+    for job in jobs:
+        job_revenues = [r for r in revenues if r.get("job_id") == job["id"]]
+        expected_revenue = sum(r.get("final_revenue", 0) for r in job_revenues if not r.get("is_closed"))
+        closed_revenue = sum(r.get("final_revenue", 0) for r in job_revenues if r.get("is_closed"))
+        
+        # Get recruiters for this job
+        recruiters = []
+        for rec_id in job.get("assigned_recruiter_ids", []):
+            rec = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
+            if rec:
+                recruiters.append(rec.get("name", "Unknown"))
+        
+        # Get application count by stage
+        apps = await db.applications.find({"job_id": job["id"]}, {"stage": 1, "_id": 0}).to_list(10000)
+        stage_counts = {}
+        for app in apps:
+            stage = app.get("stage", "applied")
+            stage_counts[stage] = stage_counts.get(stage, 0) + 1
+        
+        pipeline.append({
+            "job_id": job["id"],
+            "job_title": job.get("title"),
+            "job_level": job.get("job_level"),
+            "status": job.get("status"),
+            "recruiters": recruiters,
+            "stage_counts": stage_counts,
+            "expected_revenue": round(expected_revenue, 2),
+            "closed_revenue": round(closed_revenue, 2),
+        })
+    
+    return {
+        "company": {
+            "id": company["id"],
+            "name": company.get("name"),
+            "industry": company.get("industry"),
+        },
+        "summary": {
+            "total_mandates": total_mandates,
+            "active_mandates": active_mandates,
+            "closed_mandates": closed_mandates,
+            "total_revenue": round(total_revenue, 2),
+            "avg_commercial_percentage": round(avg_commercial_pct, 2),
+        },
+        "commercials": [CommercialResponse(**c).model_dump() for c in commercials],
+        "pipeline": pipeline,
+    }
+
+
+# ============== JD PARSING ==============
+
+@api_router.post("/jobs/parse-jd")
+async def parse_job_description(
+    jd_text: Optional[str] = Form(None),
+    jd_file: Optional[UploadFile] = File(None),
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Parse a job description (text or file) using AI.
+    Returns structured job fields for form pre-fill.
+    """
+    raw_text = ""
+    
+    if jd_file:
+        # Save and extract text from file
+        file_ext = jd_file.filename.split(".")[-1].lower()
+        if file_ext not in ["pdf", "doc", "docx", "txt"]:
+            raise HTTPException(status_code=400, detail="Unsupported file format. Use PDF, DOC, DOCX, or TXT")
+        
+        # Save file temporarily
+        file_path = UPLOAD_DIR / f"jd_{uuid.uuid4()}.{file_ext}"
+        async with aiofiles.open(file_path, "wb") as f:
+            content = await jd_file.read()
+            await f.write(content)
+        
+        # Extract text
+        if file_ext == "pdf":
+            doc = fitz.open(str(file_path))
+            for page in doc:
+                raw_text += page.get_text()
+            doc.close()
+        elif file_ext == "txt":
+            async with aiofiles.open(file_path, "r") as f:
+                raw_text = await f.read()
+        else:
+            # For DOC/DOCX, try to extract using python-docx
+            try:
+                from docx import Document
+                doc = Document(str(file_path))
+                raw_text = "\n".join([para.text for para in doc.paragraphs])
+            except:
+                raw_text = "Unable to parse DOC/DOCX file"
+        
+        # Clean up temp file
+        file_path.unlink(missing_ok=True)
+    
+    elif jd_text:
+        raw_text = jd_text
+    else:
+        raise HTTPException(status_code=400, detail="Provide either jd_text or jd_file")
+    
+    # Parse using AI (using GPT-5.2 via Emergent)
+    try:
+        from emergentintegrations.llm.chat import chat, UserMessage
+        
+        parse_prompt = f"""Parse the following job description and extract structured information.
+Return a JSON object with these fields:
+- title: Job title
+- skills: Array of required skills
+- experience_years: Estimated years of experience required (number)
+- location: Job location
+- job_level: One of "junior", "mid", "senior", "leadership" based on requirements
+- salary_min: Minimum salary if mentioned (number, in INR)
+- salary_max: Maximum salary if mentioned (number, in INR)
+- summary: 2-3 sentence summary of the role
+- responsibilities: Array of key responsibilities
+- requirements: Array of key requirements
+
+Job Description:
+{raw_text[:4000]}
+
+Return ONLY valid JSON, no markdown or explanation."""
+
+        response = await chat(
+            api_key=os.environ.get("EMERGENT_API_KEY"),
+            model="gpt-5.2",
+            messages=[UserMessage(content=parse_prompt)]
+        )
+        
+        # Parse JSON response
+        import json
+        try:
+            # Clean response (remove markdown if present)
+            response_text = response.content.strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            
+            parsed = json.loads(response_text)
+        except json.JSONDecodeError:
+            parsed = {}
+        
+        return {
+            "title": parsed.get("title"),
+            "skills": parsed.get("skills", []),
+            "experience_years": parsed.get("experience_years"),
+            "location": parsed.get("location"),
+            "job_level": parsed.get("job_level"),
+            "salary_min": parsed.get("salary_min"),
+            "salary_max": parsed.get("salary_max"),
+            "summary": parsed.get("summary"),
+            "responsibilities": parsed.get("responsibilities", []),
+            "requirements": parsed.get("requirements", []),
+            "raw_text": raw_text[:2000],
+        }
+        
+    except Exception as e:
+        logging.error(f"JD parsing error: {e}")
+        # Return basic extraction if AI fails
+        return {
+            "title": None,
+            "skills": [],
+            "experience_years": None,
+            "location": None,
+            "job_level": None,
+            "salary_min": None,
+            "salary_max": None,
+            "summary": None,
+            "responsibilities": [],
+            "requirements": [],
+            "raw_text": raw_text[:2000],
+            "parse_error": str(e)
+        }
+
+
+# ============== MANDATE ASSIGNMENT ==============
+
+@api_router.post("/jobs/{job_id}/assign-recruiters")
+async def assign_recruiters_to_mandate(
+    job_id: str,
+    recruiter_ids: List[str],
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Assign recruiters to a job mandate.
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Employer access control
+    if current_user["role"] == "employer":
+        if job.get("company_id"):
+            company = await db.companies.find_one({"id": job["company_id"]}, {"_id": 0})
+            if not company or company.get("assigned_employer_id") != current_user["id"]:
+                raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Validate all recruiter IDs
+    for rec_id in recruiter_ids:
+        recruiter = await db.users.find_one({"id": rec_id, "role": "recruiter"}, {"_id": 0})
+        if not recruiter:
+            raise HTTPException(status_code=400, detail=f"Recruiter {rec_id} not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get recruiter names
+    recruiter_names = []
+    for rec_id in recruiter_ids:
+        rec = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
+        if rec:
+            recruiter_names.append(rec.get("name", "Unknown"))
+    
+    await db.jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "assigned_recruiter_ids": recruiter_ids,
+                "assigned_recruiter_names": recruiter_names,
+                "updated_at": now
+            },
+            "$push": {"approval_history": {
+                "action": "recruiters_assigned",
+                "recruiter_ids": recruiter_ids,
+                "recruiter_names": recruiter_names,
+                "by_id": current_user["id"],
+                "by_name": current_user["name"],
+                "timestamp": now
+            }}
+        }
+    )
+    
+    logging.info(f"Recruiters {recruiter_names} assigned to job {job_id} by {current_user['name']}")
+    
+    return {
+        "message": "Recruiters assigned successfully",
+        "job_id": job_id,
+        "assigned_recruiter_ids": recruiter_ids,
+        "assigned_recruiter_names": recruiter_names
+    }
+
+
+@api_router.get("/jobs/{job_id}/assignments")
+async def get_job_assignments(
+    job_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Get recruiter assignments for a job."""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # For recruiter, check if they are assigned
+    if current_user["role"] == "recruiter":
+        if current_user["id"] not in job.get("assigned_recruiter_ids", []):
+            raise HTTPException(status_code=403, detail="Not assigned to this job")
+    
+    return {
+        "job_id": job_id,
+        "job_title": job.get("title"),
+        "team_id": job.get("team_id"),
+        "assigned_recruiter_ids": job.get("assigned_recruiter_ids", []),
+        "assigned_recruiter_names": job.get("assigned_recruiter_names", []),
+    }
+
+
 # ============== FILE SERVING ==============
 
 from fastapi.responses import FileResponse
