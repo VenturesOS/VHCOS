@@ -10,6 +10,7 @@
 **Header & Login UX Unification: COMPLETE (January 22, 2026)**
 **Phase-A Internal Governance Backend: COMPLETE & TESTED (January 23, 2026)**
 **Phase-B Admin UI for Hierarchy & Governance: COMPLETE & TESTED (January 23, 2026)**
+**Phase-C Job & Referral Lifecycle UI: COMPLETE & TESTED (January 23, 2026)**
 
 ---
 
@@ -495,7 +496,70 @@ Admin-only UI screens for managing the internal governance system, including Tea
 
 ---
 
-## Phase-C Backlog: Job & Referral Lifecycle UI
+## Phase-C: Job & Referral Lifecycle UI ✅ COMPLETE & TESTED (January 23, 2026)
+
+### Overview
+User-facing UI components for job approval workflows, referral submission, and status tracking across Employer and Recruiter roles.
+
+### 1. Employer Job Approval Page ✅
+**Route:** `/employer/approvals`
+
+**Features:**
+- Status overview cards (Pending Approval, Active, On Hold, Closed)
+- Pending Approval Queue with Approve/Hold/Reject action buttons
+- All Jobs Status table with status badges and quick actions
+- Approval dialogs with reason input and confirmation
+- Audit visibility with expandable approval history
+
+**Actions Available:**
+- Approve: pending_approval → active
+- Hold: active → on_hold
+- Reject: pending_approval → closed
+- Reactivate: on_hold → active
+
+### 2. Recruiter Referrals Page ✅
+**Route:** `/recruiter/referrals`
+
+**Features:**
+- Stats cards (Total Referrals, Pending Review, In Process, Outcomes)
+- Search by candidate name, email, or job title
+- Status filter dropdown (All, Submitted, Validated, Linked, In Process, Outcome Reached, Closed)
+- Referral cards with candidate info and status badges
+- Expandable status history timeline
+- Create Referral dialog (only for ACTIVE jobs)
+
+**Create Referral Form Fields:**
+- Job selection (active jobs only) *
+- Candidate name *
+- Candidate email *
+- Candidate phone
+- Note
+
+### 3. Sidebar Navigation Updates ✅
+**Employer:**
+- Added "Approvals" link with CheckCircle icon
+
+**Recruiter:**
+- Added "Referrals" link with UserPlus icon
+
+**Access Control:**
+- Approvals visible only to Employer
+- Referrals visible only to Recruiter
+
+### Testing Status ✅
+- **12 frontend features tested and working (100%)**
+- Test file: `/app/test_reports/iteration_12.json`
+
+### Files Created/Modified
+- `/app/frontend/src/pages/employer/JobApprovalPage.jsx` (new)
+- `/app/frontend/src/pages/recruiter/RecruiterReferralsPage.jsx` (new)
+- `/app/frontend/src/components/layout/Sidebar.jsx` (updated)
+- `/app/frontend/src/App.js` (routes added)
+- `/app/frontend/src/lib/api.js` (API methods already added in Phase B)
+
+---
+
+## Phase-C Backlog: Job & Referral Lifecycle UI (NEXT)
 
 - Job approval queue for Employers
 - Referral submission form for Recruiters
@@ -541,3 +605,4 @@ Admin-only UI screens for managing the internal governance system, including Tea
 *Website Content Sync: Complete*
 *Phase-A Internal Governance Backend: Complete (43 tests passed)*
 *Phase-B Admin UI for Hierarchy & Governance: Complete (11 features tested)*
+*Phase-C Job & Referral Lifecycle UI: Complete (12 features tested)*
