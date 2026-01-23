@@ -31,12 +31,14 @@ const LOGO_URL = 'https://customer-assets.emergentagent.com/job_vhc-edit/artifac
 const navItems = {
   admin: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
+    { icon: BarChart3, label: 'Analytics', path: '/admin/analytics' },
     { icon: Users, label: 'Users', path: '/admin/users' },
     { icon: Briefcase, label: 'Jobs', path: '/admin/jobs' },
     { icon: ClipboardList, label: 'Pipeline', path: '/admin/pipeline' },
     { icon: UserCircle, label: 'Candidates', path: '/admin/candidates' },
     { icon: Database, label: 'Candidate Bank', path: '/admin/candidate-bank' },
     { icon: Building2, label: 'Companies', path: '/admin/companies' },
+    { icon: DollarSign, label: 'Commercials', path: '/admin/commercials' },
     { icon: UsersRound, label: 'Teams', path: '/admin/teams' },
     { icon: Network, label: 'Hierarchy', path: '/admin/hierarchy' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
