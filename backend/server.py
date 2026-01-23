@@ -3416,6 +3416,9 @@ async def get_public_jobs(
     """
     Get active job listings (PUBLIC - NO AUTH REQUIRED).
     For careers page on public website.
+    
+    CLIENT PRIVACY: Returns public_company_alias instead of real company name.
+    Only ACTIVE jobs are visible to the public.
     """
     query = {"status": "active"}
     
@@ -3434,13 +3437,15 @@ async def get_public_jobs(
     
     jobs = await db.jobs.find(query, {"_id": 0}).limit(limit).to_list(limit)
     
-    # Enrich with company names
+    # CLIENT PRIVACY: Use public_company_alias for public listings
     for job in jobs:
-        if job.get("company_id"):
-            company = await db.companies.find_one({"id": job["company_id"]}, {"_id": 0, "name": 1})
-            job["company_name"] = company.get("name", "VHC Client") if company else "VHC Client"
+        # Mask company name with public_company_alias (privacy protection)
+        if job.get("public_company_alias"):
+            job["company_name"] = job["public_company_alias"]
         else:
-            job["company_name"] = "VHC Client"
+            job["company_name"] = "Confidential Client"
+        # Remove internal company_id from public response
+        job.pop("company_id", None)
     
     return jobs
 
@@ -3449,17 +3454,20 @@ async def get_public_jobs(
 async def get_public_job_detail(job_id: str):
     """
     Get single job detail (PUBLIC - NO AUTH REQUIRED).
+    
+    CLIENT PRIVACY: Returns public_company_alias instead of real company name.
     """
     job = await db.jobs.find_one({"id": job_id, "status": "active"}, {"_id": 0})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    # Add company name
-    if job.get("company_id"):
-        company = await db.companies.find_one({"id": job["company_id"]}, {"_id": 0, "name": 1})
-        job["company_name"] = company.get("name", "VHC Client") if company else "VHC Client"
+    # CLIENT PRIVACY: Use public_company_alias for public view
+    if job.get("public_company_alias"):
+        job["company_name"] = job["public_company_alias"]
     else:
-        job["company_name"] = "VHC Client"
+        job["company_name"] = "Confidential Client"
+    # Remove internal company_id from public response
+    job.pop("company_id", None)
     
     return job
 
