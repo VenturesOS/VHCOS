@@ -20,7 +20,8 @@ import {
   Database,
   Bell,
   Network,
-  UsersRound
+  UsersRound,
+  CheckCircle
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
