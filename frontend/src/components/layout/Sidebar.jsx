@@ -21,7 +21,8 @@ import {
   Bell,
   Network,
   UsersRound,
-  CheckCircle
+  CheckCircle,
+  DollarSign
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
