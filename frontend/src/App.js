@@ -101,6 +101,7 @@ function App() {
           {/* Employer Routes */}
           <Route path="/employer" element={<DashboardLayout allowedRoles={["employer"]} />}>
             <Route index element={<EmployerDashboard />} />
+            <Route path="analytics" element={<EmployerAnalyticsPage />} />
             <Route path="jobs" element={<EmployerJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
@@ -109,7 +110,6 @@ function App() {
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
           </Route>
 
           {/* Candidate Routes */}
