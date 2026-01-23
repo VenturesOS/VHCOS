@@ -85,12 +85,11 @@ function App() {
             <Route path="jobs" element={<RecruiterJobsPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="pipeline" element={<PipelinePage />} />
+            <Route path="referrals" element={<RecruiterReferralsPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="candidates" element={<RecruiterCandidatesPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
-            <Route path="candidate-bank" element={<CandidateDataBankPage />} />
-            <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
           </Route>
 
           {/* Employer Routes */}
@@ -100,6 +99,7 @@ function App() {
             <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="applicants" element={<ApplicantsPage />} />
+            <Route path="approvals" element={<JobApprovalPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
