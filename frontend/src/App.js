@@ -26,6 +26,8 @@ import AdminPipelinePage from "./pages/admin/AdminPipelinePage";
 import BatchUploadPage from "./pages/admin/BatchUploadPage";
 import TeamsPage from "./pages/admin/TeamsPage";
 import HierarchyPage from "./pages/admin/HierarchyPage";
+import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
+import CommercialsPage from "./pages/admin/CommercialsPage";
 
 // Recruiter Pages
 import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
