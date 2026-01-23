@@ -492,7 +492,7 @@ export default function TeamsPage() {
             </DialogTitle>
             <DialogDescription>
               Are you sure you want to disable <strong>{selectedTeam?.name}</strong>? 
-              This will remove the team from active listings but won't delete any data.
+              This will remove the team from active listings but will not delete any data.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
