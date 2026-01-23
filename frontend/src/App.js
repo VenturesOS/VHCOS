@@ -32,6 +32,7 @@ import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
 import RecruiterJobsPage from "./pages/recruiter/RecruiterJobsPage";
 import PipelinePage from "./pages/recruiter/PipelinePage";
 import RecruiterCandidatesPage from "./pages/recruiter/RecruiterCandidatesPage";
+import RecruiterReferralsPage from "./pages/recruiter/RecruiterReferralsPage";
 
 // Employer Pages
 import EmployerDashboard from "./pages/employer/EmployerDashboard";
@@ -41,6 +42,7 @@ import ApplicantsPage from "./pages/employer/ApplicantsPage";
 import JobApplicantsPage from "./pages/employer/JobApplicantsPage";
 import AnalyticsPage from "./pages/employer/AnalyticsPage";
 import FindCandidatesPage from "./pages/employer/FindCandidatesPage";
+import JobApprovalPage from "./pages/employer/JobApprovalPage";
 
 // Candidate Pages
 import CandidateDashboard from "./pages/candidate/CandidateDashboard";
