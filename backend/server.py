@@ -106,9 +106,10 @@ class JobBase(BaseModel):
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
     department: Optional[str] = None
+    public_company_alias: Optional[str] = None  # Masked company name for candidates
 
 class JobCreate(JobBase):
-    pass
+    company_id: Optional[str] = None  # Admin/Employer can specify company
 
 class JobResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -123,9 +124,14 @@ class JobResponse(BaseModel):
     department: Optional[str] = None
     company_id: Optional[str] = None
     company_name: Optional[str] = None
+    public_company_alias: Optional[str] = None  # Masked name for candidates
     posted_by: str
-    status: str = "active"
+    posted_by_role: Optional[str] = None
+    status: str = "active"  # draft, pending_approval, active, on_hold, closed, archived
+    team_id: Optional[str] = None
+    approval_history: List[dict] = []  # Audit trail for state transitions
     created_at: str
+    updated_at: Optional[str] = None
     applicant_count: int = 0
 
 class JobUpdate(BaseModel):
@@ -137,7 +143,13 @@ class JobUpdate(BaseModel):
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
     department: Optional[str] = None
+    public_company_alias: Optional[str] = None
     status: Optional[str] = None
+
+# Job State Transition Model
+class JobStateTransition(BaseModel):
+    new_status: str = Field(..., pattern="^(draft|pending_approval|active|on_hold|closed|archived)$")
+    reason: Optional[str] = None
 
 class CandidateProfile(BaseModel):
     model_config = ConfigDict(extra="ignore")
