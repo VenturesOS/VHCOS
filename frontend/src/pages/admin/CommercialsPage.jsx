@@ -18,7 +18,7 @@ export default function CommercialsPage() {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [companyFilter, setCompanyFilter] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -46,7 +46,7 @@ export default function CommercialsPage() {
   const loadData = async () => {
     try {
       const [commercialsRes, companiesRes] = await Promise.all([
-        commercialAPI.getAll({ company_id: companyFilter || undefined }),
+        commercialAPI.getAll({ company_id: companyFilter !== 'all' ? companyFilter : undefined }),
         companyAPI.getAll(),
       ]);
       setCommercials(commercialsRes.data);
@@ -250,7 +250,7 @@ export default function CommercialsPage() {
               <SelectValue placeholder="All Companies" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Companies</SelectItem>
+              <SelectItem value="all">All Companies</SelectItem>
               {companies.map((c) => (
                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
               ))}
