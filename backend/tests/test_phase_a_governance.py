@@ -272,11 +272,13 @@ class TestReferralLifecycle(TestAuthentication):
     
     def test_create_referral(self, recruiter_token, active_job_id):
         """Recruiter can create referrals"""
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
         headers = {"Authorization": f"Bearer {recruiter_token}"}
         referral_data = {
             "job_id": active_job_id,
-            "candidate_name": "Jane Referral Test",
-            "candidate_email": f"jane.referral.{active_job_id[:8]}@test.com",
+            "candidate_name": f"Jane Referral {unique_id}",
+            "candidate_email": f"jane.{unique_id}@test.com",
             "candidate_phone": "+91-9876543211",
             "note": "Excellent candidate"
         }
@@ -284,8 +286,7 @@ class TestReferralLifecycle(TestAuthentication):
         assert response.status_code == 200
         referral = response.json()
         assert referral["status"] == "submitted"
-        assert referral["candidate_name"] == "Jane Referral Test"
-        return referral["id"]
+        assert "Jane Referral" in referral["candidate_name"]
     
     def test_referral_duplicate_prevented(self, recruiter_token, active_job_id):
         """Duplicate referrals should be prevented"""
@@ -304,15 +305,19 @@ class TestReferralLifecycle(TestAuthentication):
     
     def test_referral_status_transition(self, admin_token, recruiter_token, active_job_id):
         """Test referral status transitions"""
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
+        
         # Create referral
         rec_headers = {"Authorization": f"Bearer {recruiter_token}"}
         referral_data = {
             "job_id": active_job_id,
-            "candidate_name": "Transition Test",
-            "candidate_email": f"transition.{active_job_id[:6]}@test.com",
+            "candidate_name": f"Transition {unique_id}",
+            "candidate_email": f"transition.{unique_id}@test.com",
             "candidate_phone": "+91-5555555555"
         }
         create_response = httpx.post(f"{API_URL}/api/referrals", json=referral_data, headers=rec_headers)
+        assert create_response.status_code == 200, f"Failed to create referral: {create_response.text}"
         referral_id = create_response.json()["id"]
         
         # Transition to validated as admin
