@@ -9,6 +9,7 @@
 **Dual Front-End Experience: COMPLETE (January 22, 2026)**
 **Header & Login UX Unification: COMPLETE (January 22, 2026)**
 **Phase-A Internal Governance Backend: COMPLETE & TESTED (January 23, 2026)**
+**Phase-B Admin UI for Hierarchy & Governance: COMPLETE & TESTED (January 23, 2026)**
 
 ---
 
@@ -405,6 +406,85 @@ Enterprise-grade internal governance system for VHC Talent OS with job approval 
 
 ---
 
+## Phase-B: Admin UI for Hierarchy & Governance ✅ COMPLETE & TESTED (January 23, 2026)
+
+### Overview
+Admin-only UI screens for managing the internal governance system, including Teams, Hierarchy visualization, and Company-Employer assignments.
+
+### 1. Teams Management Page ✅
+**Route:** `/admin/teams`
+
+**Features:**
+- Summary stats (Active Teams, Employers, Recruiters, Companies)
+- Search teams functionality
+- Create Team dialog with:
+  - Team Name (required)
+  - Employer selection (required)
+  - Recruiters multi-select (checkboxes)
+  - Companies multi-select (checkboxes)
+- Edit Team dialog (employer read-only after creation)
+- Disable Team (soft delete with confirmation)
+- Team cards showing recruiters, companies, and active jobs counts
+- Active/Disabled sections
+
+### 2. Organization Hierarchy Page ✅
+**Route:** `/admin/hierarchy`
+
+**Features:**
+- Summary stats (Employers, Teams, Unassigned Recruiters, Unassigned Companies)
+- Organization Structure tree view:
+  - Expandable Employer nodes
+  - Expandable Team nodes showing Recruiters and Companies
+- Unassigned Recruiters section with warning styling
+- Unassigned Companies section with warning styling
+
+### 3. Read-Only Permissions Matrix ✅
+**Location:** Bottom of Hierarchy Page
+
+**Permissions Displayed:**
+| Action | Admin | Employer | Recruiter |
+|--------|-------|----------|-----------|
+| Create Jobs | ✓ | ✓ | ✓ (Pending Approval) |
+| Approve Jobs | ✓ | ✓ (Own Team) | – |
+| Create Teams | ✓ | – | – |
+| Manage Team Members | ✓ | – | – |
+| Create Referrals | ✓ | ✓ | ✓ |
+| Approve Referrals | ✓ | ✓ | – |
+| View Hierarchy | ✓ | ✓ (Own Teams) | – |
+
+### 4. Companies Page Enhancement ✅
+**Route:** `/admin/companies`
+
+**New Features:**
+- Employer assignment section on each company card
+- "Assign" button for unassigned companies
+- "Change" button for assigned companies
+- Assign Employer dialog with employer dropdown
+
+### 5. Sidebar Navigation ✅
+**New Links Added:**
+- Teams (`/admin/teams`)
+- Hierarchy (`/admin/hierarchy`)
+
+### 6. Access Control ✅
+- All new pages restricted to Admin role only
+- Non-admin users (Employer, Recruiter) cannot see these links in sidebar
+- Direct navigation attempts redirect to role-specific dashboard
+
+### Testing Status ✅
+- **11 frontend features tested and working (100%)**
+- Test file: `/app/test_reports/iteration_11.json`
+
+### Files Created/Modified
+- `/app/frontend/src/pages/admin/TeamsPage.jsx` (new)
+- `/app/frontend/src/pages/admin/HierarchyPage.jsx` (new)
+- `/app/frontend/src/pages/admin/CompaniesPage.jsx` (enhanced)
+- `/app/frontend/src/components/layout/Sidebar.jsx` (updated)
+- `/app/frontend/src/App.js` (routes added)
+- `/app/frontend/src/lib/api.js` (API methods added)
+
+---
+
 ## Phase-B Backlog: Admin UI for Hierarchy & Teams (NEXT)
 
 - Admin dashboard for team management
@@ -460,3 +540,4 @@ Enterprise-grade internal governance system for VHC Talent OS with job approval 
 *Phase-1.5: Complete*
 *Website Content Sync: Complete*
 *Phase-A Internal Governance Backend: Complete (43 tests passed)*
+*Phase-B Admin UI for Hierarchy & Governance: Complete (11 features tested)*
