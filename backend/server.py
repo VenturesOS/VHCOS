@@ -5343,14 +5343,17 @@ async def get_admin_analytics(
     offer_to_join_ratio = (hired_count / offered_count * 100) if offered_count > 0 else 0
     
     # Calculate avg time to close
-    hired_apps = [a for a in applications if a.get("stage") == "hired"]
+    hired_apps = [a for a in applications if a.get("stage") == "hired" and a.get("created_at")]
     if hired_apps:
         total_days = 0
         for app in hired_apps:
-            created = datetime.fromisoformat(app["created_at"].replace("Z", "+00:00"))
-            updated = datetime.fromisoformat(app.get("updated_at", app["created_at"]).replace("Z", "+00:00"))
-            total_days += (updated - created).days
-        avg_time_to_close = total_days / len(hired_apps)
+            try:
+                created = datetime.fromisoformat(app["created_at"].replace("Z", "+00:00"))
+                updated = datetime.fromisoformat(app.get("updated_at", app["created_at"]).replace("Z", "+00:00"))
+                total_days += (updated - created).days
+            except:
+                pass
+        avg_time_to_close = total_days / len(hired_apps) if hired_apps else 0
     else:
         avg_time_to_close = 0
     
