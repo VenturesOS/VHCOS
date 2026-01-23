@@ -24,6 +24,8 @@ import SettingsPage from "./pages/admin/SettingsPage";
 import CandidateDataBankPage from "./pages/admin/CandidateDataBankPage";
 import AdminPipelinePage from "./pages/admin/AdminPipelinePage";
 import BatchUploadPage from "./pages/admin/BatchUploadPage";
+import TeamsPage from "./pages/admin/TeamsPage";
+import HierarchyPage from "./pages/admin/HierarchyPage";
 
 // Recruiter Pages
 import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
@@ -69,6 +71,8 @@ function App() {
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="companies" element={<CompaniesPage />} />
+            <Route path="teams" element={<TeamsPage />} />
+            <Route path="hierarchy" element={<HierarchyPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
