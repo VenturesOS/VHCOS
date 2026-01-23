@@ -1,6 +1,6 @@
 # VHC Talent OS - Product Requirements Document
 
-## 🔒 BUILD STATUS: PILOT-READY STABLE (January 22, 2026)
+## 🔒 BUILD STATUS: PILOT-READY STABLE (January 23, 2026)
 
 **Phase-1 + Phase-1.5: LOCKED & APPROVED**
 **Phase-2 Part A: COMPLETE & TESTED (January 19, 2026)**
@@ -8,6 +8,7 @@
 **Home Page Restructure: COMPLETE (January 22, 2026)**
 **Dual Front-End Experience: COMPLETE (January 22, 2026)**
 **Header & Login UX Unification: COMPLETE (January 22, 2026)**
+**Phase-A Internal Governance Backend: COMPLETE & TESTED (January 23, 2026)**
 
 ---
 
@@ -278,6 +279,151 @@ Applications collection now includes:
 
 ---
 
+## Phase-A: Internal Governance Backend ✅ COMPLETE & TESTED (January 23, 2026)
+
+### Overview
+Enterprise-grade internal governance system for VHC Talent OS with job approval workflows, referral lifecycle management, team hierarchies, and client privacy controls.
+
+### 1. Job Approval Workflow ✅
+**States:** `draft` → `pending_approval` → `active` → `on_hold` → `closed` → `archived`
+
+| Role | Creates Job As | Can Transition To |
+|------|----------------|-------------------|
+| Admin | active | All states (except from archived) |
+| Employer | active | active, on_hold, closed |
+| Recruiter | pending_approval | None (needs approval) |
+
+**Key Endpoints:**
+- `POST /api/jobs` - Create job (status based on role)
+- `POST /api/jobs/{id}/transition` - Change job status
+- `GET /api/jobs/pending-approval` - View jobs awaiting approval (Admin/Employer)
+
+**Audit:** `approval_history` array tracks all state changes with timestamps and reasons
+
+### 2. Referral Lifecycle ✅
+**States:** `submitted` → `validated` → `linked` → `in_process` → `outcome_reached` → `closed`
+
+**Key Endpoints:**
+- `POST /api/referrals` - Create referral
+- `GET /api/referrals` - List referrals (role-based access)
+- `POST /api/referrals/{id}/transition` - Change referral status
+- `POST /api/referrals/{id}/link-candidate` - Link to candidate bank
+
+**Features:**
+- Duplicate prevention (same email + job_id rejected)
+- Audit trail via `status_history` array
+- Auto-create candidate bank record on link
+
+### 3. Team & Hierarchy Management ✅
+**Structure:** Admin → Employers → Teams → (Recruiters + Companies)
+
+**Key Endpoints:**
+- `POST /api/teams` - Create team (Admin only)
+- `GET /api/teams` - List teams (Admin: all, Employer: own)
+- `PUT /api/teams/{id}` - Update team (Admin only)
+- `DELETE /api/teams/{id}` - Soft delete team (Admin only)
+- `GET /api/admin/hierarchy` - Full hierarchy view (Admin only)
+
+**Features:**
+- Teams link Employers, Recruiters, and Companies
+- Recruiters auto-assigned to team via `team_id` field
+- Full audit log on team changes
+
+### 4. Client Privacy (Company Name Masking) ✅
+**Implementation:**
+- `public_company_alias` field on Jobs model
+- Public endpoints (`/api/public/jobs`, `/api/public/jobs/{id}`) show alias instead of real company
+- Default: "Confidential Client" if alias not set
+- `company_id` removed from public responses
+
+### 5. Company-Employer Assignment ✅
+**Key Endpoint:**
+- `PUT /api/companies/{id}/assign-employer` - Assign employer to company (Admin only)
+
+### Testing Status ✅
+- **43 pytest tests passed** (17 core + 26 edge cases)
+- Test files:
+  - `/app/backend/tests/test_phase_a_governance.py`
+  - `/app/backend/tests/test_phase_a_edge_cases.py`
+
+### New Database Collections/Fields
+
+**Jobs Collection (updated):**
+```javascript
+{
+  "status": "draft|pending_approval|active|on_hold|closed|archived",
+  "public_company_alias": "string",  // For client privacy
+  "team_id": "string",               // Links to teams collection
+  "approval_history": [              // Audit trail
+    {
+      "status": "active",
+      "changed_by": "user-id",
+      "changed_by_name": "Admin",
+      "changed_by_role": "admin",
+      "timestamp": "ISO-8601",
+      "reason": "Approved by admin"
+    }
+  ]
+}
+```
+
+**Teams Collection (new):**
+```javascript
+{
+  "id": "uuid",
+  "name": "Team Name",
+  "employer_id": "user-id",
+  "employer_name": "string",
+  "recruiter_ids": ["user-id", ...],
+  "recruiter_names": ["string", ...],
+  "company_ids": ["company-id", ...],
+  "company_names": ["string", ...],
+  "status": "active|disabled",
+  "audit_log": [...]
+}
+```
+
+**Referrals Collection (new):**
+```javascript
+{
+  "id": "uuid",
+  "job_id": "string",
+  "job_title": "string",
+  "referrer_id": "user-id",
+  "referrer_name": "string",
+  "candidate_name": "string",
+  "candidate_email": "string",
+  "candidate_phone": "string",
+  "resume_url": "string|null",
+  "note": "string",
+  "status": "submitted|validated|linked|in_process|outcome_reached|closed",
+  "linked_candidate_id": "string|null",
+  "linked_application_id": "string|null",
+  "status_history": [...]  // Audit trail
+}
+```
+
+---
+
+## Phase-B Backlog: Admin UI for Hierarchy & Teams (NEXT)
+
+- Admin dashboard for team management
+- Create/Edit/Disable teams UI
+- View employer->team->recruiter->company hierarchy
+- Assign recruiters to teams
+- Permissions matrix view
+
+---
+
+## Phase-C Backlog: Job & Referral Lifecycle UI
+
+- Job approval queue for Employers
+- Referral submission form for Recruiters
+- Referral tracking dashboard
+- Status transition buttons with confirmation
+
+---
+
 ## Phase-2 Backlog (NOT STARTED)
 
 - WhatsApp Automation
@@ -309,7 +455,8 @@ Applications collection now includes:
 
 ---
 
-*Last Updated: January 22, 2026*
+*Last Updated: January 23, 2026*
 *Phase-1: Signed Off*
 *Phase-1.5: Complete*
 *Website Content Sync: Complete*
+*Phase-A Internal Governance Backend: Complete (43 tests passed)*
