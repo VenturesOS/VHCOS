@@ -3988,6 +3988,715 @@ async def update_settings(settings_data: dict, current_user: dict = Depends(requ
     )
     return {"message": "Settings updated successfully"}
 
+# ============== PHASE-A: TEAM MANAGEMENT ==============
+
+@api_router.post("/teams", response_model=TeamResponse)
+async def create_team(team_data: TeamCreate, current_user: dict = Depends(require_role(["admin"]))):
+    """
+    Create a new Team (Admin only).
+    
+    A Team links:
+    - One Employer (team owner/manager)
+    - Multiple Recruiters (team members)
+    - Multiple Companies (client companies the team manages)
+    """
+    # Validate employer exists and has correct role
+    employer = await db.users.find_one({"id": team_data.employer_id, "role": "employer"}, {"_id": 0})
+    if not employer:
+        raise HTTPException(status_code=404, detail="Employer not found")
+    
+    # Validate all recruiters exist and have correct role
+    recruiter_names = []
+    for recruiter_id in team_data.recruiter_ids:
+        recruiter = await db.users.find_one({"id": recruiter_id, "role": "recruiter"}, {"_id": 0})
+        if not recruiter:
+            raise HTTPException(status_code=400, detail=f"Recruiter {recruiter_id} not found")
+        recruiter_names.append(recruiter.get("name", "Unknown"))
+    
+    # Validate all companies exist
+    company_names = []
+    for company_id in team_data.company_ids:
+        company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+        if not company:
+            raise HTTPException(status_code=400, detail=f"Company {company_id} not found")
+        company_names.append(company.get("name", "Unknown"))
+    
+    team_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    team_doc = {
+        "id": team_id,
+        "name": team_data.name,
+        "employer_id": team_data.employer_id,
+        "employer_name": employer.get("name"),
+        "recruiter_ids": team_data.recruiter_ids,
+        "recruiter_names": recruiter_names,
+        "company_ids": team_data.company_ids,
+        "company_names": company_names,
+        "status": "active",
+        "active_jobs_count": 0,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user["id"],
+        "audit_log": [{
+            "action": "created",
+            "by_id": current_user["id"],
+            "by_name": current_user["name"],
+            "by_role": current_user["role"],
+            "timestamp": now
+        }]
+    }
+    
+    await db.teams.insert_one(team_doc)
+    
+    # Update recruiters with team assignment
+    for recruiter_id in team_data.recruiter_ids:
+        await db.users.update_one(
+            {"id": recruiter_id},
+            {"$set": {"team_id": team_id, "updated_at": now}}
+        )
+    
+    # Update companies with employer assignment
+    for company_id in team_data.company_ids:
+        await db.companies.update_one(
+            {"id": company_id},
+            {"$set": {"assigned_employer_id": team_data.employer_id, "team_id": team_id, "updated_at": now}}
+        )
+    
+    logging.info(f"Team '{team_data.name}' created by {current_user['name']}")
+    
+    return TeamResponse(**team_doc)
+
+
+@api_router.get("/teams", response_model=List[TeamResponse])
+async def get_teams(current_user: dict = Depends(require_role(["admin", "employer"]))):
+    """
+    Get all teams.
+    - Admin: sees all teams
+    - Employer: sees only their teams
+    """
+    query = {}
+    if current_user["role"] == "employer":
+        query["employer_id"] = current_user["id"]
+    
+    teams = await db.teams.find(query, {"_id": 0}).to_list(1000)
+    
+    # Enrich with active jobs count
+    for team in teams:
+        jobs_count = await db.jobs.count_documents({
+            "team_id": team["id"],
+            "status": {"$in": ["active", "pending_approval"]}
+        })
+        team["active_jobs_count"] = jobs_count
+    
+    return [TeamResponse(**t) for t in teams]
+
+
+@api_router.get("/teams/{team_id}", response_model=TeamResponse)
+async def get_team(team_id: str, current_user: dict = Depends(require_role(["admin", "employer"]))):
+    """Get a specific team by ID."""
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Employer can only view their own teams
+    if current_user["role"] == "employer" and team["employer_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get active jobs count
+    jobs_count = await db.jobs.count_documents({
+        "team_id": team_id,
+        "status": {"$in": ["active", "pending_approval"]}
+    })
+    team["active_jobs_count"] = jobs_count
+    
+    return TeamResponse(**team)
+
+
+@api_router.put("/teams/{team_id}", response_model=TeamResponse)
+async def update_team(team_id: str, update_data: TeamUpdate, current_user: dict = Depends(require_role(["admin"]))):
+    """
+    Update a team (Admin only).
+    Can update name, recruiters, companies, and status.
+    """
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update_dict = {"updated_at": now}
+    audit_entries = []
+    
+    if update_data.name is not None:
+        audit_entries.append({
+            "action": "name_changed",
+            "old_value": team.get("name"),
+            "new_value": update_data.name,
+            "by_id": current_user["id"],
+            "by_name": current_user["name"],
+            "by_role": current_user["role"],
+            "timestamp": now
+        })
+        update_dict["name"] = update_data.name
+    
+    if update_data.status is not None:
+        audit_entries.append({
+            "action": "status_changed",
+            "old_value": team.get("status"),
+            "new_value": update_data.status,
+            "by_id": current_user["id"],
+            "by_name": current_user["name"],
+            "by_role": current_user["role"],
+            "timestamp": now
+        })
+        update_dict["status"] = update_data.status
+    
+    if update_data.recruiter_ids is not None:
+        # Validate new recruiters
+        recruiter_names = []
+        for recruiter_id in update_data.recruiter_ids:
+            recruiter = await db.users.find_one({"id": recruiter_id, "role": "recruiter"}, {"_id": 0})
+            if not recruiter:
+                raise HTTPException(status_code=400, detail=f"Recruiter {recruiter_id} not found")
+            recruiter_names.append(recruiter.get("name", "Unknown"))
+        
+        # Remove old recruiters from team
+        old_recruiter_ids = team.get("recruiter_ids", [])
+        for old_id in old_recruiter_ids:
+            if old_id not in update_data.recruiter_ids:
+                await db.users.update_one(
+                    {"id": old_id},
+                    {"$unset": {"team_id": ""}}
+                )
+        
+        # Add new recruiters to team
+        for new_id in update_data.recruiter_ids:
+            await db.users.update_one(
+                {"id": new_id},
+                {"$set": {"team_id": team_id, "updated_at": now}}
+            )
+        
+        audit_entries.append({
+            "action": "recruiters_changed",
+            "old_value": old_recruiter_ids,
+            "new_value": update_data.recruiter_ids,
+            "by_id": current_user["id"],
+            "by_name": current_user["name"],
+            "by_role": current_user["role"],
+            "timestamp": now
+        })
+        update_dict["recruiter_ids"] = update_data.recruiter_ids
+        update_dict["recruiter_names"] = recruiter_names
+    
+    if update_data.company_ids is not None:
+        # Validate new companies
+        company_names = []
+        for company_id in update_data.company_ids:
+            company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+            if not company:
+                raise HTTPException(status_code=400, detail=f"Company {company_id} not found")
+            company_names.append(company.get("name", "Unknown"))
+        
+        # Update company assignments
+        old_company_ids = team.get("company_ids", [])
+        for old_id in old_company_ids:
+            if old_id not in update_data.company_ids:
+                await db.companies.update_one(
+                    {"id": old_id},
+                    {"$unset": {"assigned_employer_id": "", "team_id": ""}}
+                )
+        
+        for new_id in update_data.company_ids:
+            await db.companies.update_one(
+                {"id": new_id},
+                {"$set": {"assigned_employer_id": team["employer_id"], "team_id": team_id, "updated_at": now}}
+            )
+        
+        audit_entries.append({
+            "action": "companies_changed",
+            "old_value": old_company_ids,
+            "new_value": update_data.company_ids,
+            "by_id": current_user["id"],
+            "by_name": current_user["name"],
+            "by_role": current_user["role"],
+            "timestamp": now
+        })
+        update_dict["company_ids"] = update_data.company_ids
+        update_dict["company_names"] = company_names
+    
+    await db.teams.update_one(
+        {"id": team_id},
+        {
+            "$set": update_dict,
+            "$push": {"audit_log": {"$each": audit_entries}}
+        }
+    )
+    
+    updated_team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    return TeamResponse(**updated_team)
+
+
+@api_router.delete("/teams/{team_id}")
+async def delete_team(team_id: str, current_user: dict = Depends(require_role(["admin"]))):
+    """
+    Soft delete a team (Admin only).
+    Sets status to 'disabled' instead of actual deletion.
+    """
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.teams.update_one(
+        {"id": team_id},
+        {
+            "$set": {"status": "disabled", "updated_at": now},
+            "$push": {"audit_log": {
+                "action": "disabled",
+                "by_id": current_user["id"],
+                "by_name": current_user["name"],
+                "by_role": current_user["role"],
+                "timestamp": now
+            }}
+        }
+    )
+    
+    logging.info(f"Team {team_id} disabled by {current_user['name']}")
+    
+    return {"message": "Team disabled successfully"}
+
+
+# ============== PHASE-A: REFERRAL MANAGEMENT ==============
+
+@api_router.post("/referrals", response_model=ReferralResponse)
+async def create_referral(referral_data: ReferralCreate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
+    """
+    Create a new candidate referral.
+    
+    Referral Lifecycle:
+    1. submitted - Initial submission
+    2. validated - Referral details verified
+    3. linked - Linked to candidate bank record
+    4. in_process - Candidate is being processed for the job
+    5. outcome_reached - Hiring decision made
+    6. closed - Referral process complete
+    """
+    # Validate job exists and is active
+    job = await db.jobs.find_one({"id": referral_data.job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Can only refer candidates to active jobs")
+    
+    # Check for duplicate referral (same email + job)
+    existing = await db.referrals.find_one({
+        "job_id": referral_data.job_id,
+        "candidate_email": referral_data.candidate_email.lower()
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="This candidate has already been referred for this job")
+    
+    referral_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    referral_doc = {
+        "id": referral_id,
+        "job_id": referral_data.job_id,
+        "job_title": job.get("title"),
+        "referrer_id": current_user["id"],
+        "referrer_name": current_user["name"],
+        "candidate_name": referral_data.candidate_name,
+        "candidate_email": referral_data.candidate_email.lower(),
+        "candidate_phone": referral_data.candidate_phone,
+        "resume_url": referral_data.resume_url,
+        "note": referral_data.note,
+        "status": "submitted",
+        "linked_candidate_id": None,
+        "linked_application_id": None,
+        "status_history": [{
+            "status": "submitted",
+            "changed_by": current_user["id"],
+            "changed_by_name": current_user["name"],
+            "changed_by_role": current_user["role"],
+            "timestamp": now,
+            "reason": "Referral submitted"
+        }],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.referrals.insert_one(referral_doc)
+    
+    logging.info(f"Referral {referral_id} created by {current_user['name']} for job {referral_data.job_id}")
+    
+    return ReferralResponse(**referral_doc)
+
+
+@api_router.get("/referrals", response_model=List[ReferralResponse])
+async def get_referrals(
+    job_id: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Get referrals based on user role.
+    - Admin: sees all referrals
+    - Employer: sees referrals for their team's jobs
+    - Recruiter: sees their own referrals
+    """
+    query = {}
+    
+    if current_user["role"] == "recruiter":
+        query["referrer_id"] = current_user["id"]
+    elif current_user["role"] == "employer":
+        # Get jobs from employer's team
+        team = await db.teams.find_one({"employer_id": current_user["id"]}, {"_id": 0})
+        if team:
+            team_jobs = await db.jobs.find({"team_id": team["id"]}, {"id": 1, "_id": 0}).to_list(1000)
+            job_ids = [j["id"] for j in team_jobs]
+            query["job_id"] = {"$in": job_ids}
+        else:
+            # No team, return empty
+            return []
+    
+    if job_id:
+        query["job_id"] = job_id
+    if status:
+        query["status"] = status
+    
+    referrals = await db.referrals.find(query, {"_id": 0}).to_list(1000)
+    return [ReferralResponse(**r) for r in referrals]
+
+
+@api_router.get("/referrals/{referral_id}", response_model=ReferralResponse)
+async def get_referral(referral_id: str, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
+    """Get a specific referral by ID."""
+    referral = await db.referrals.find_one({"id": referral_id}, {"_id": 0})
+    if not referral:
+        raise HTTPException(status_code=404, detail="Referral not found")
+    
+    # Access control for non-admin users
+    if current_user["role"] == "recruiter":
+        if referral["referrer_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user["role"] == "employer":
+        # Check if job belongs to employer's team
+        job = await db.jobs.find_one({"id": referral["job_id"]}, {"_id": 0})
+        if job:
+            team = await db.teams.find_one({"employer_id": current_user["id"]}, {"_id": 0})
+            if not team or job.get("team_id") != team["id"]:
+                raise HTTPException(status_code=403, detail="Access denied")
+        else:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    return ReferralResponse(**referral)
+
+
+@api_router.post("/referrals/{referral_id}/transition", response_model=ReferralResponse)
+async def transition_referral_status(
+    referral_id: str,
+    transition: ReferralStatusUpdate,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Transition referral status with audit logging.
+    
+    Valid transitions:
+    - submitted -> validated, closed
+    - validated -> linked, closed
+    - linked -> in_process, closed
+    - in_process -> outcome_reached, closed
+    - outcome_reached -> closed
+    - closed -> (no transitions, final state)
+    """
+    referral = await db.referrals.find_one({"id": referral_id}, {"_id": 0})
+    if not referral:
+        raise HTTPException(status_code=404, detail="Referral not found")
+    
+    current_status = referral.get("status", "submitted")
+    new_status = transition.new_status
+    
+    # Define valid transitions
+    valid_transitions = {
+        "submitted": ["validated", "closed"],
+        "validated": ["linked", "closed"],
+        "linked": ["in_process", "closed"],
+        "in_process": ["outcome_reached", "closed"],
+        "outcome_reached": ["closed"],
+        "closed": []  # Final state
+    }
+    
+    if new_status not in valid_transitions.get(current_status, []):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid transition from {current_status} to {new_status}"
+        )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Create audit entry
+    audit_entry = {
+        "from_status": current_status,
+        "to_status": new_status,
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user["name"],
+        "changed_by_role": current_user["role"],
+        "timestamp": now,
+        "reason": transition.reason or f"Status changed from {current_status} to {new_status}"
+    }
+    
+    await db.referrals.update_one(
+        {"id": referral_id},
+        {
+            "$set": {"status": new_status, "updated_at": now},
+            "$push": {"status_history": audit_entry}
+        }
+    )
+    
+    logging.info(f"Referral {referral_id} transitioned from {current_status} to {new_status} by {current_user['name']}")
+    
+    updated_referral = await db.referrals.find_one({"id": referral_id}, {"_id": 0})
+    return ReferralResponse(**updated_referral)
+
+
+@api_router.post("/referrals/{referral_id}/link-candidate")
+async def link_referral_to_candidate(
+    referral_id: str,
+    candidate_id: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Link a referral to an existing candidate bank record, or create a new candidate.
+    
+    If candidate_id is provided: links to existing candidate
+    If not provided: creates new candidate from referral data
+    """
+    referral = await db.referrals.find_one({"id": referral_id}, {"_id": 0})
+    if not referral:
+        raise HTTPException(status_code=404, detail="Referral not found")
+    
+    if referral.get("status") not in ["submitted", "validated"]:
+        raise HTTPException(status_code=400, detail="Can only link referrals in submitted or validated status")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if candidate_id:
+        # Link to existing candidate
+        candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+    else:
+        # Create new candidate from referral data
+        candidate_id = str(uuid.uuid4())
+        candidate_doc = {
+            "id": candidate_id,
+            "email": referral["candidate_email"],
+            "name": referral["candidate_name"],
+            "phone": referral.get("candidate_phone"),
+            "phone_normalized": referral.get("candidate_phone"),
+            "skills": [],
+            "experience_years": 0,
+            "experience": [],
+            "education": [],
+            "resume_url": referral.get("resume_url"),
+            "source": "referral",
+            "source_referral_id": referral_id,
+            "visibility": {
+                f"{current_user['role']}_ids": [current_user["id"]]
+            },
+            "created_at": now,
+            "updated_at": now,
+            "created_by": current_user["id"]
+        }
+        await db.candidate_bank.insert_one(candidate_doc)
+    
+    # Update referral with link
+    await db.referrals.update_one(
+        {"id": referral_id},
+        {
+            "$set": {
+                "status": "linked",
+                "linked_candidate_id": candidate_id,
+                "updated_at": now
+            },
+            "$push": {"status_history": {
+                "from_status": referral["status"],
+                "to_status": "linked",
+                "changed_by": current_user["id"],
+                "changed_by_name": current_user["name"],
+                "changed_by_role": current_user["role"],
+                "timestamp": now,
+                "reason": f"Linked to candidate {candidate_id}"
+            }}
+        }
+    )
+    
+    return {
+        "message": "Referral linked to candidate successfully",
+        "referral_id": referral_id,
+        "candidate_id": candidate_id
+    }
+
+
+# ============== PHASE-A: COMPANY-EMPLOYER ASSIGNMENT ==============
+
+@api_router.put("/companies/{company_id}/assign-employer")
+async def assign_employer_to_company(
+    company_id: str,
+    employer_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Assign an employer to manage a company (Admin only).
+    """
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    employer = await db.users.find_one({"id": employer_id, "role": "employer"}, {"_id": 0})
+    if not employer:
+        raise HTTPException(status_code=404, detail="Employer not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.companies.update_one(
+        {"id": company_id},
+        {"$set": {
+            "assigned_employer_id": employer_id,
+            "assigned_employer_name": employer.get("name"),
+            "updated_at": now
+        }}
+    )
+    
+    return {
+        "message": "Employer assigned to company successfully",
+        "company_id": company_id,
+        "employer_id": employer_id,
+        "employer_name": employer.get("name")
+    }
+
+
+@api_router.put("/companies/{company_id}", response_model=CompanyResponse)
+async def update_company(
+    company_id: str,
+    update_data: CompanyUpdate,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Update company details.
+    - Admin: can update any company
+    - Employer: can only update companies assigned to them
+    """
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Access control for employers
+    if current_user["role"] == "employer":
+        if company.get("assigned_employer_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You are not assigned to this company")
+    
+    update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+    if not update_dict:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.companies.update_one({"id": company_id}, {"$set": update_dict})
+    
+    updated_company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    return CompanyResponse(**updated_company)
+
+
+# ============== PHASE-A: ADMIN HIERARCHY OVERVIEW ==============
+
+@api_router.get("/admin/hierarchy")
+async def get_admin_hierarchy(current_user: dict = Depends(require_role(["admin"]))):
+    """
+    Get complete hierarchy overview for Admin.
+    Shows: Employers -> Teams -> Recruiters -> Companies
+    """
+    # Get all employers
+    employers = await db.users.find({"role": "employer", "is_active": True}, {"_id": 0, "password": 0}).to_list(1000)
+    
+    hierarchy = []
+    
+    for employer in employers:
+        employer_data = {
+            "employer_id": employer["id"],
+            "employer_name": employer["name"],
+            "employer_email": employer["email"],
+            "teams": []
+        }
+        
+        # Get teams for this employer
+        teams = await db.teams.find({"employer_id": employer["id"], "status": "active"}, {"_id": 0}).to_list(100)
+        
+        for team in teams:
+            # Get active jobs count
+            jobs_count = await db.jobs.count_documents({
+                "team_id": team["id"],
+                "status": {"$in": ["active", "pending_approval"]}
+            })
+            
+            team_data = {
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "active_jobs_count": jobs_count,
+                "recruiters": [],
+                "companies": []
+            }
+            
+            # Get recruiters in this team
+            for recruiter_id in team.get("recruiter_ids", []):
+                recruiter = await db.users.find_one({"id": recruiter_id}, {"_id": 0, "password": 0})
+                if recruiter:
+                    team_data["recruiters"].append({
+                        "id": recruiter["id"],
+                        "name": recruiter["name"],
+                        "email": recruiter["email"]
+                    })
+            
+            # Get companies in this team
+            for company_id in team.get("company_ids", []):
+                company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+                if company:
+                    team_data["companies"].append({
+                        "id": company["id"],
+                        "name": company["name"],
+                        "industry": company.get("industry")
+                    })
+            
+            employer_data["teams"].append(team_data)
+        
+        hierarchy.append(employer_data)
+    
+    # Get unassigned recruiters
+    unassigned_recruiters = await db.users.find(
+        {"role": "recruiter", "is_active": True, "team_id": {"$exists": False}},
+        {"_id": 0, "password": 0}
+    ).to_list(1000)
+    
+    # Get unassigned companies
+    unassigned_companies = await db.companies.find(
+        {"assigned_employer_id": {"$exists": False}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    return {
+        "hierarchy": hierarchy,
+        "unassigned_recruiters": [{"id": r["id"], "name": r["name"], "email": r["email"]} for r in unassigned_recruiters],
+        "unassigned_companies": [{"id": c["id"], "name": c["name"]} for c in unassigned_companies],
+        "summary": {
+            "total_employers": len(employers),
+            "total_teams": sum(len(e["teams"]) for e in hierarchy),
+            "total_unassigned_recruiters": len(unassigned_recruiters),
+            "total_unassigned_companies": len(unassigned_companies)
+        }
+    }
+
+
 # ============== FILE SERVING ==============
 
 from fastapi.responses import FileResponse
