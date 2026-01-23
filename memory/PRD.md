@@ -560,6 +560,107 @@ User-facing UI components for job approval workflows, referral submission, and s
 
 ---
 
+## Commercial Intelligence Phase ✅ IMPLEMENTED (January 23, 2026)
+
+### Overview
+Enterprise-grade commercial rate management, revenue tracking, and business analytics for VHC Talent OS.
+
+### 1. Commercials Engine (Company Level) ✅
+**Backend Endpoints:**
+- `POST /api/commercials` - Create commercial config
+- `GET /api/commercials` - List commercials (with company filter)
+- `PUT /api/commercials/{id}` - Update commercial
+- `DELETE /api/commercials/{id}` - Deactivate commercial (Admin only)
+
+**Commercial Types:**
+- Percentage of Salary (e.g., 8.33%)
+- Fixed Fee (e.g., ₹1,00,000)
+- Level-Based (Junior: 8%, Mid: 10%, Senior: 12%, Leadership: 15%)
+
+**Access Control:**
+- Admin: Full control
+- Employer: Manage assigned companies only
+- Recruiters/Candidates: NO visibility
+
+### 2. Revenue Calculation Engine ✅
+**Backend Endpoints:**
+- `POST /api/revenue/calculate` - Calculate revenue for application
+- `PUT /api/revenue/{id}/override` - Admin-only manual override
+- `GET /api/revenue/pipeline` - Pipeline revenue data
+
+**Formula:** Revenue = Offered Salary × Applicable Commercial %
+
+### 3. Admin Analytics Dashboard ✅
+**Route:** `/admin/analytics`
+
+**KPIs:**
+- Total Active Mandates
+- Total Pipeline Revenue
+- Closed Revenue
+- Avg Time to Close
+- Offer-to-Join Ratio
+- Active Employers
+- Active Recruiters
+
+**Visuals:**
+- Revenue Funnel by Stage
+- Stage Distribution
+- Company-wise Revenue Table
+- Recruiter Performance Table
+
+### 4. Employer Analytics Dashboard ✅
+**Route:** `/employer/analytics`
+
+**KPIs:**
+- Active Mandates
+- Pipeline Revenue
+- Closed Revenue
+- Offers Pending
+- Avg Fee %
+
+**Tables:**
+- Team Performance
+- Company Revenue
+- Recruiter Contribution
+
+### 5. Company Pipeline View ✅
+**Endpoint:** `GET /api/companies/{id}/pipeline`
+
+**Data:**
+- Total/Active/Closed Mandates
+- Total Revenue
+- Avg Commercial %
+- Pipeline Table (Job, Level, Recruiters, Stage, Revenue)
+
+### 6. JD Parsing ✅
+**Endpoint:** `POST /api/jobs/parse-jd`
+
+**Capabilities:**
+- Text input or file upload (PDF/DOC/DOCX/TXT)
+- AI parsing using GPT-5.2 via Emergent
+- Extracts: Title, Skills, Experience, Location, Level, Salary, Summary
+
+### 7. Mandate Assignment ✅
+**Endpoints:**
+- `POST /api/jobs/{id}/assign-recruiters` - Assign recruiters to job
+- `GET /api/jobs/{id}/assignments` - Get job assignments
+
+### 8. Security & Governance ✅
+**Visibility Rules:**
+- Revenue & Commercials: Admin + Assigned Employer ONLY
+- Recruiters: Execution only (no financial data)
+- Candidates: Zero financial visibility
+
+**Verified:** Recruiter access to `/api/commercials` returns "Insufficient permissions"
+
+### Files Created
+- `/app/frontend/src/pages/admin/AdminAnalyticsPage.jsx`
+- `/app/frontend/src/pages/admin/CommercialsPage.jsx`
+- `/app/frontend/src/pages/employer/EmployerAnalyticsPage.jsx`
+- Backend: Commercial Intelligence endpoints in `server.py`
+
+---
+
 ## Phase-C Backlog: Job & Referral Lifecycle UI (NEXT)
 
 - Job approval queue for Employers
