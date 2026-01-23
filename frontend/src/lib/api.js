@@ -104,6 +104,33 @@ export const companyAPI = {
   create: (data) => api.post('/companies', data),
   getAll: () => api.get('/companies'),
   getById: (id) => api.get(`/companies/${id}`),
+  update: (id, data) => api.put(`/companies/${id}`, data),
+  assignEmployer: (companyId, employerId) => api.put(`/companies/${companyId}/assign-employer`, null, { params: { employer_id: employerId } }),
+};
+
+// Team APIs (Admin only - Phase A Governance)
+export const teamAPI = {
+  create: (data) => api.post('/teams', data),
+  getAll: () => api.get('/teams'),
+  getById: (id) => api.get(`/teams/${id}`),
+  update: (id, data) => api.put(`/teams/${id}`, data),
+  delete: (id) => api.delete(`/teams/${id}`),
+};
+
+// Referral APIs (Phase A Governance)
+export const referralAPI = {
+  create: (data) => api.post('/referrals', data),
+  getAll: (params) => api.get('/referrals', { params }),
+  getById: (id) => api.get(`/referrals/${id}`),
+  transition: (id, newStatus, reason) => api.post(`/referrals/${id}/transition`, { new_status: newStatus, reason }),
+  linkCandidate: (id, candidateId) => api.post(`/referrals/${id}/link-candidate`, null, { params: { candidate_id: candidateId } }),
+};
+
+// Admin Governance APIs (Phase A)
+export const governanceAPI = {
+  getHierarchy: () => api.get('/admin/hierarchy'),
+  getPendingJobs: () => api.get('/jobs/pending-approval'),
+  transitionJob: (jobId, newStatus, reason) => api.post(`/jobs/${jobId}/transition`, { new_status: newStatus, reason }),
 };
 
 // Message APIs
