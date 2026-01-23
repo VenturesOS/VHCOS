@@ -19,8 +19,8 @@ export default function AdminAnalyticsPage() {
   
   // Filters
   const [filters, setFilters] = useState({
-    employer_id: '',
-    company_id: '',
+    employer_id: 'all',
+    company_id: 'all',
     date_from: '',
     date_to: '',
   });
@@ -49,8 +49,8 @@ export default function AdminAnalyticsPage() {
   const loadAnalytics = async () => {
     try {
       const params = {};
-      if (filters.employer_id) params.employer_id = filters.employer_id;
-      if (filters.company_id) params.company_id = filters.company_id;
+      if (filters.employer_id && filters.employer_id !== 'all') params.employer_id = filters.employer_id;
+      if (filters.company_id && filters.company_id !== 'all') params.company_id = filters.company_id;
       if (filters.date_from) params.date_from = filters.date_from;
       if (filters.date_to) params.date_to = filters.date_to;
       
@@ -103,7 +103,7 @@ export default function AdminAnalyticsPage() {
                 <SelectValue placeholder="All Companies" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Companies</SelectItem>
+                <SelectItem value="all">All Companies</SelectItem>
                 {companies.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
