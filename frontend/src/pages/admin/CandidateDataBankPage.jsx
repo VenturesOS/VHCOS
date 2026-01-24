@@ -394,7 +394,7 @@ export default function CandidateDataBankPage() {
 
       {/* Candidate Detail Dialog */}
       <Dialog open={!!selectedCandidate} onOpenChange={() => setSelectedCandidate(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading">Candidate Profile</DialogTitle>
           </DialogHeader>
@@ -402,6 +402,9 @@ export default function CandidateDataBankPage() {
             <Tabs defaultValue="profile" className="w-full">
               <TabsList className="mb-4">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
+                <TabsTrigger value="activity" data-testid="activity-history-tab">
+                  <Activity className="w-4 h-4 mr-1" /> Activity History
+                </TabsTrigger>
                 <TabsTrigger value="resumes">Resume History</TabsTrigger>
                 <TabsTrigger value="audit">Audit Log</TabsTrigger>
               </TabsList>
@@ -420,6 +423,24 @@ export default function CandidateDataBankPage() {
                     </div>
                   </div>
 
+                  {/* Data Governance: Profile Freshness Metadata */}
+                  {(selectedCandidate.last_profile_updated_at || selectedCandidate.last_application_date) && (
+                    <div className="bg-slate-50 rounded-lg p-3 flex flex-wrap gap-4 text-sm">
+                      {selectedCandidate.last_profile_updated_at && (
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <CalendarDays className="w-4 h-4 text-blue-500" />
+                          <span>Profile Updated: {new Date(selectedCandidate.last_profile_updated_at).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      {selectedCandidate.last_application_date && (
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <Briefcase className="w-4 h-4 text-green-500" />
+                          <span>Last Applied: {new Date(selectedCandidate.last_application_date).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2 text-slate-600">
                       <Mail className="w-4 h-4" /> {selectedCandidate.email}
@@ -437,6 +458,16 @@ export default function CandidateDataBankPage() {
                     <div className="flex items-center gap-2 text-slate-600">
                       <Clock className="w-4 h-4" /> {selectedCandidate.experience_years || 0} years exp
                     </div>
+                    {selectedCandidate.current_salary && (
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <DollarSign className="w-4 h-4" /> {formatSalaryINR(selectedCandidate.current_salary)}
+                      </div>
+                    )}
+                    {selectedCandidate.notice_period && (
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Clock className="w-4 h-4" /> Notice: {selectedCandidate.notice_period}
+                      </div>
+                    )}
                   </div>
 
                   {selectedCandidate.summary && (
@@ -468,6 +499,97 @@ export default function CandidateDataBankPage() {
                           <div key={i} className="p-3 bg-slate-50 rounded-lg">
                             <p className="font-medium">{exp.title}</p>
                             <p className="text-sm text-slate-500">{exp.company} • {exp.duration}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Data Governance: Activity History Tab */}
+              <TabsContent value="activity" data-testid="activity-history-content">
+                <div className="space-y-4">
+                  {/* Summary Stats */}
+                  {activityHistory?.summary && (
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                      <div className="bg-blue-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-blue-600">{activityHistory.summary.total_applications}</p>
+                        <p className="text-xs text-blue-600">Total Applications</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-green-600">{activityHistory.summary.stages?.hired || 0}</p>
+                        <p className="text-xs text-green-600">Hired</p>
+                      </div>
+                      <div className="bg-amber-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-amber-600">{activityHistory.summary.stages?.interview || 0}</p>
+                        <p className="text-xs text-amber-600">Interviews</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Freshness Info */}
+                  {activityHistory?.freshness && (
+                    <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1">
+                      <p className="font-medium text-slate-700 mb-2">Profile Freshness</p>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <CalendarDays className="w-4 h-4" />
+                        Created: {activityHistory.freshness.profile_created_at ? new Date(activityHistory.freshness.profile_created_at).toLocaleDateString() : 'N/A'}
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <TrendingUp className="w-4 h-4" />
+                        Last Profile Update: {activityHistory.freshness.last_profile_updated_at ? new Date(activityHistory.freshness.last_profile_updated_at).toLocaleDateString() : 'Never'}
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Briefcase className="w-4 h-4" />
+                        Last Application: {activityHistory.freshness.last_application_date ? new Date(activityHistory.freshness.last_application_date).toLocaleDateString() : 'Never'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Application History */}
+                  <div>
+                    <h4 className="font-medium mb-2">Application History</h4>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {activityHistory?.applications?.map((app) => (
+                        <div key={app.application_id} className="p-3 bg-slate-50 rounded-lg text-sm border-l-4 border-[#7CB342]">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-slate-800">{app.job_title}</span>
+                            <span className={`px-2 py-0.5 text-xs rounded-full ${
+                              app.stage === 'hired' ? 'bg-green-100 text-green-700' :
+                              app.stage === 'rejected' ? 'bg-red-100 text-red-700' :
+                              app.stage === 'interview' ? 'bg-blue-100 text-blue-700' :
+                              app.stage === 'offered' ? 'bg-purple-100 text-purple-700' :
+                              'bg-slate-100 text-slate-600'
+                            }`}>
+                              {app.stage}
+                            </span>
+                          </div>
+                          <p className="text-slate-500">{app.company_name}</p>
+                          <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
+                            <span>Applied: {new Date(app.applied_at).toLocaleDateString()}</span>
+                            <span>Source: {app.source}</span>
+                            {app.current_salary_at_application && (
+                              <span>Salary: {formatSalaryINR(app.current_salary_at_application)}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {(!activityHistory?.applications || activityHistory.applications.length === 0) && (
+                        <p className="text-slate-400 text-sm">No application history</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Profile Audit Trail */}
+                  {activityHistory?.profile_audit?.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">Recent Profile Changes</h4>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {activityHistory.profile_audit.map((entry, idx) => (
+                          <div key={idx} className="p-2 bg-amber-50 rounded text-xs">
+                            <span className="font-medium">{entry.field}</span>: {String(entry.old_value) || 'null'} → {String(entry.new_value)}
+                            <span className="text-slate-400 ml-2">by {entry.changed_by_name} ({entry.changed_by_role})</span>
                           </div>
                         ))}
                       </div>
