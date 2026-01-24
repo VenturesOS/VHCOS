@@ -117,6 +117,14 @@ export const teamAPI = {
   delete: (id) => api.delete(`/teams/${id}`),
 };
 
+// Employer Portal APIs (Internal OS Enhancement)
+export const employerPortalAPI = {
+  // My Team panel - team members, mandates, pipelines, revenue
+  getMyTeam: () => api.get('/employer/my-team'),
+  // Companies panel - assigned companies with commercials, mandates, pipelines
+  getMyCompanies: () => api.get('/employer/companies'),
+};
+
 // Referral APIs (Phase A Governance)
 export const referralAPI = {
   create: (data) => api.post('/referrals', data),
