@@ -671,7 +671,7 @@ export default function CandidateDataBankPage() {
               Add as Applicant
             </DialogTitle>
             <DialogDescription>
-              Add this candidate to a job as an applicant. Salary and notice period are required.
+              Add this candidate to a job as an applicant. All fields (salary, notice period, location, experience) are required.
             </DialogDescription>
           </DialogHeader>
 
