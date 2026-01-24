@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files, Briefcase, DollarSign, AlertCircle } from 'lucide-react';
+import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp } from 'lucide-react';
 
 // Notice period options
 const NOTICE_PERIODS = [
@@ -34,6 +34,7 @@ export default function CandidateDataBankPage() {
   const [uploading, setUploading] = useState(false);
   const [auditLog, setAuditLog] = useState([]);
   const [resumeHistory, setResumeHistory] = useState([]);
+  const [activityHistory, setActivityHistory] = useState(null);  // Data Governance: Activity history
   const fileInputRef = useRef(null);
   const [uploadForm, setUploadForm] = useState({ email: '', name: '' });
   
@@ -44,6 +45,8 @@ export default function CandidateDataBankPage() {
   const [selectedJobId, setSelectedJobId] = useState('');
   const [editSalary, setEditSalary] = useState('');
   const [editNotice, setEditNotice] = useState('');
+  const [editLocation, setEditLocation] = useState('');  // Data Governance: mandatory field
+  const [editExperience, setEditExperience] = useState('');  // Data Governance: mandatory field
   const [linking, setLinking] = useState(false);
 
   useEffect(() => {
