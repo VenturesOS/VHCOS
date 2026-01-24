@@ -365,15 +365,15 @@ class CandidateBankRecord(BaseModel):
     experience_years: int = 0
     experience: List[dict] = []
     education: List[dict] = []
-    location: Optional[str] = None
+    location: Optional[str] = None  # MANDATORY for data completeness
     certifications: List[str] = []
     active_resume_id: Optional[str] = None
     resume_versions: List[dict] = []
     resume_fingerprints: List[str] = []
     resume_url: Optional[str] = None
-    current_salary: Optional[int] = None  # INR - mandatory for job linking
-    notice_period: Optional[str] = None  # mandatory for job linking
-    source: str = "self"  # self, employer, recruiter, parsing
+    current_salary: Optional[int] = None  # MANDATORY - INR
+    notice_period: Optional[str] = None  # MANDATORY
+    source: str = "self"  # self, employer, recruiter, parsing, admin, referral
     linked_user_id: Optional[str] = None
     visibility: dict = {}  # employer_ids, recruiter_ids with access
     match_cache: List[dict] = []  # cached match results
@@ -381,6 +381,12 @@ class CandidateBankRecord(BaseModel):
     updated_at: str
     created_by: Optional[str] = None
     last_updated_by: Optional[str] = None
+    # Profile freshness metadata (system-managed)
+    last_profile_updated_at: Optional[str] = None
+    last_application_date: Optional[str] = None
+    # Activity history for internal tracking
+    application_history: List[dict] = []  # Internal only - not exposed to candidates
+    profile_update_audit: List[dict] = []  # Audit log for salary, notice, location, experience changes
 
 class CandidateBankUpdate(BaseModel):
     name: Optional[str] = None
