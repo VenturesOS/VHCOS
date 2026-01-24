@@ -2871,10 +2871,10 @@ async def batch_save_candidates(
                     "headline": None,
                     "summary": candidate.experience_summary,
                     "skills": candidate.skills,
-                    "experience_years": 0,
+                    "experience_years": candidate.experience_years,  # Data Governance: mandatory
                     "experience": [],
                     "education": [],
-                    "location": None,
+                    "location": candidate.location,  # Data Governance: mandatory
                     "certifications": [],
                     "active_resume_id": candidate.file_id,
                     "resume_versions": [resume_version],
@@ -2891,7 +2891,12 @@ async def batch_save_candidates(
                     "created_at": now,
                     "updated_at": now,
                     "created_by": current_user["id"],
-                    "last_updated_by": current_user["id"]
+                    "last_updated_by": current_user["id"],
+                    # Data Governance: Profile Freshness metadata
+                    "last_profile_updated_at": now,
+                    "last_application_date": None,
+                    "application_history": [],
+                    "profile_update_audit": []
                 }
                 
                 await db.candidate_bank.insert_one(candidate_doc)
