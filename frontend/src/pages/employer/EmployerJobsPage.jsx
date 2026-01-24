@@ -4,14 +4,26 @@ import { jobAPI } from '../../lib/api';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
+import { Textarea } from '../../components/ui/textarea';
+import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeOff, AlertTriangle, History } from 'lucide-react';
 
 export default function EmployerJobsPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
+  
+  // Career Page Status Control
+  const [showCareerPageDialog, setShowCareerPageDialog] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [careerPageAction, setCareerPageAction] = useState(''); // 'live' or 'removed'
+  const [careerPageReason, setCareerPageReason] = useState('');
+  const [updatingCareerPage, setUpdatingCareerPage] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [careerPageHistory, setCareerPageHistory] = useState([]);
 
   useEffect(() => {
     loadJobs();
@@ -46,6 +58,46 @@ export default function EmployerJobsPage() {
       loadJobs();
     } catch (error) {
       toast.error('Failed to update status');
+    }
+  };
+
+  // Career Page Control
+  const openCareerPageDialog = (job, action) => {
+    setSelectedJob(job);
+    setCareerPageAction(action);
+    setCareerPageReason('');
+    setShowCareerPageDialog(true);
+  };
+
+  const handleCareerPageUpdate = async () => {
+    if (!selectedJob) return;
+    
+    setUpdatingCareerPage(true);
+    try {
+      await jobAPI.updateCareerPageStatus(selectedJob.id, careerPageAction, careerPageReason || undefined);
+      toast.success(
+        careerPageAction === 'live' 
+          ? 'Job posted to career page' 
+          : 'Job removed from career page'
+      );
+      setShowCareerPageDialog(false);
+      loadJobs();
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      toast.error(detail || 'Failed to update career page status');
+    } finally {
+      setUpdatingCareerPage(false);
+    }
+  };
+
+  const openHistoryDialog = async (job) => {
+    try {
+      const res = await jobAPI.getCareerPageHistory(job.id);
+      setCareerPageHistory(res.data.history || []);
+      setSelectedJob(job);
+      setShowHistoryDialog(true);
+    } catch (error) {
+      toast.error('Failed to load history');
     }
   };
 
