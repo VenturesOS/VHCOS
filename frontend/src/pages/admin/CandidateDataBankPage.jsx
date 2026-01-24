@@ -755,11 +755,11 @@ export default function CandidateDataBankPage() {
               </div>
 
               {/* Warning if fields missing */}
-              {(!editSalary || !editNotice) && (
+              {(!editSalary || !editNotice || !editLocation || editExperience === '') && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
                   <p className="text-sm text-amber-700">
-                    Salary and notice period are mandatory before adding as applicant.
+                    All fields (salary, notice period, location, experience) are mandatory before adding as applicant.
                   </p>
                 </div>
               )}
@@ -772,7 +772,7 @@ export default function CandidateDataBankPage() {
             </Button>
             <Button
               onClick={handleAddAsApplicant}
-              disabled={linking || !editSalary || !editNotice || !selectedJobId}
+              disabled={linking || !editSalary || !editNotice || !editLocation || editExperience === '' || !selectedJobId}
               className="bg-[#7CB342] hover:bg-[#689F38]"
               data-testid="confirm-add-applicant-btn"
             >
