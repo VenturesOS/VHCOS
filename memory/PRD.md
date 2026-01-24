@@ -662,12 +662,151 @@ Enterprise-grade commercial rate management, revenue tracking, and business anal
 
 ---
 
-## Phase-C Backlog: Job & Referral Lifecycle UI (NEXT)
+## Data Governance & Candidate Intelligence ✅ COMPLETE & TESTED (January 24, 2026)
 
-- Job approval queue for Employers
-- Referral submission form for Recruiters
-- Referral tracking dashboard
-- Status transition buttons with confirmation
+### Overview
+Enterprise-grade data governance layer enforcing mandatory candidate fields, providing complete activity history visibility, and ensuring audit compliance across all candidate operations.
+
+### 1. Mandatory Field Enforcement ✅
+
+**Mandatory Fields (All candidate creation/update points):**
+- `current_salary` (INR) - Required, must be positive
+- `notice_period` - Required (Immediate, 15/30/45/60/90/90+ days)
+- `location` - Required (city/region)
+- `experience_years` - Required (0 for freshers)
+
+**Enforcement Points:**
+- `POST /api/candidate-bank/batch-save` - Rejects candidates missing any mandatory field (422)
+- `POST /api/applications/link-candidate` - Validates candidate has all mandatory fields
+- `PUT /api/candidate-bank/{id}/salary-notice` - Updates all 4 mandatory fields with audit
+
+**Pydantic Model Validation:**
+- `BatchUploadCandidate` model now requires location and experience_years
+- Validation helper: `validate_mandatory_candidate_fields()` centralized validation
+
+### 2. Candidate Activity History ✅
+
+**Endpoint:** `GET /api/candidate-bank/{id}/history`
+
+**Response Structure:**
+```json
+{
+  "candidate_id": "uuid",
+  "candidate_name": "string",
+  "applications": [
+    {
+      "application_id": "uuid",
+      "job_id": "uuid",
+      "job_title": "string",
+      "company_name": "string",
+      "stage": "applied|shortlisted|interview|offered|hired|rejected",
+      "source": "manual_link|self|referral",
+      "applied_at": "ISO-8601",
+      "current_salary_at_application": 1200000
+    }
+  ],
+  "freshness": {
+    "last_profile_updated_at": "ISO-8601",
+    "last_application_date": "ISO-8601",
+    "profile_created_at": "ISO-8601"
+  },
+  "summary": {
+    "total_applications": 5,
+    "stages": {
+      "applied": 2,
+      "hired": 1,
+      "rejected": 1,
+      "interview": 1
+    }
+  },
+  "profile_audit": [...]
+}
+```
+
+**Access Control:** Admin, Employer, Recruiter only
+
+### 3. Profile Freshness Metadata ✅
+
+**New Fields on Candidate Records:**
+- `last_profile_updated_at` - Updated on any profile edit
+- `last_application_date` - Updated when candidate applies to any job
+- `profile_created_at` - Set on creation (immutable)
+
+**Automatic Updates:**
+- Profile changes trigger freshness update
+- Applications automatically update last_application_date
+- Stage changes logged in application history
+
+### 4. Audit Logging ✅
+
+**Tracked Fields:** current_salary, notice_period, location, experience_years
+
+**Audit Entry Structure:**
+```json
+{
+  "field": "current_salary",
+  "old_value": 1600000,
+  "new_value": 1200000,
+  "changed_by": "user-id",
+  "changed_by_name": "Admin Name",
+  "changed_by_role": "admin",
+  "timestamp": "ISO-8601",
+  "source": "manual_update|application_edit"
+}
+```
+
+**Storage:**
+- `audit_logs` collection (global)
+- `profile_update_audit` array on each candidate record
+
+### 5. SEO Verification ✅
+
+**Action Taken:** Removed `noindex, nofollow` meta tags from all public HTML files
+
+**Files Updated (8 total):**
+- Index.html
+- about.html
+- services.html
+- industries.html
+- contact.html
+- careers.html
+- global-hiring.html
+- sitemap.html
+
+**Preserved:** All other meta tags (description, keywords, author, Open Graph)
+
+### Frontend Updates ✅
+
+**Candidate Data Bank Page (`/admin/candidate-bank`):**
+- Profile dialog shows freshness metadata (Profile Updated, Last Applied dates)
+- New "Activity History" tab showing:
+  - Summary stats (Total Applications, Hired, Interviews)
+  - Profile Freshness section
+  - Application History with stages, dates, sources
+  - Recent Profile Changes audit log
+
+**Add as Applicant Dialog:**
+- 4 mandatory fields: Salary, Notice Period, Location, Experience
+- Validation warning when fields missing
+- Button disabled until all fields filled
+
+**Batch Upload Page (`/admin/batch-upload`):**
+- Location and Experience years inputs added
+- Updated mandatory fields notice
+- Validation for all 4 fields
+
+### Testing Status ✅
+- **Backend:** 14/14 tests passed (100%)
+- **Frontend:** All features working
+- Test files: `/app/backend/tests/test_data_governance.py`, `/app/backend/tests/test_data_governance_comprehensive.py`
+- Test report: `/app/test_reports/iteration_13.json`
+
+### Files Modified
+- `/app/backend/server.py` - Validation, history endpoint, audit logging
+- `/app/frontend/src/pages/admin/CandidateDataBankPage.jsx` - Activity History tab, freshness display
+- `/app/frontend/src/pages/admin/BatchUploadPage.jsx` - Location, experience fields
+- `/app/frontend/src/lib/api.js` - getHistory(), updateMandatoryFields() methods
+- `/app/frontend/public/website/*.html` - SEO tags removed
 
 ---
 
