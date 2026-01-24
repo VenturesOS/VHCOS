@@ -4801,6 +4801,263 @@ async def get_teams(current_user: dict = Depends(require_role(["admin", "employe
     return [TeamResponse(**t) for t in teams]
 
 
+@api_router.get("/employer/my-team")
+async def get_employer_team_with_metrics(current_user: dict = Depends(require_role(["employer"]))):
+    """
+    Get employer's team with detailed performance metrics.
+    Shows: team members, mandates assigned, pipelines, revenue per stage, closed revenue.
+    
+    Internal endpoint for Employer portal "My Team" panel.
+    """
+    # Get employer's team
+    team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+    
+    if not team:
+        return {
+            "team": None,
+            "members": [],
+            "summary": {
+                "total_members": 0,
+                "total_mandates": 0,
+                "total_pipeline": 0,
+                "total_revenue_pipeline": 0,
+                "total_revenue_closed": 0
+            }
+        }
+    
+    # Get team member details
+    recruiter_ids = team.get("recruiter_ids", [])
+    recruiters = await db.users.find(
+        {"id": {"$in": recruiter_ids}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "is_active": 1, "created_at": 1}
+    ).to_list(100)
+    
+    # Get jobs/mandates under employer's companies
+    company_ids = team.get("company_ids", [])
+    employer_jobs = await db.jobs.find(
+        {"$or": [
+            {"team_id": team["id"]},
+            {"company_id": {"$in": company_ids}},
+            {"posted_by": {"$in": recruiter_ids + [current_user["id"]]}}
+        ]},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    job_ids = [j["id"] for j in employer_jobs]
+    
+    # Get all applications for these jobs
+    applications = await db.applications.find(
+        {"job_id": {"$in": job_ids}},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    # Get commercials for revenue calculation
+    commercials = await db.commercials.find(
+        {"company_id": {"$in": company_ids}},
+        {"_id": 0}
+    ).to_list(100)
+    commercial_by_company = {c["company_id"]: c for c in commercials}
+    
+    # Calculate per-member metrics
+    members_with_metrics = []
+    
+    for recruiter in recruiters:
+        # Jobs assigned to this recruiter
+        recruiter_jobs = [j for j in employer_jobs if 
+                         j.get("posted_by") == recruiter["id"] or 
+                         recruiter["id"] in j.get("assigned_recruiters", [])]
+        recruiter_job_ids = [j["id"] for j in recruiter_jobs]
+        
+        # Applications for recruiter's jobs
+        recruiter_apps = [a for a in applications if a["job_id"] in recruiter_job_ids]
+        
+        # Pipeline stages count
+        stages = {
+            "applied": 0, "shortlisted": 0, "interview": 0,
+            "offered": 0, "hired": 0, "rejected": 0
+        }
+        for app in recruiter_apps:
+            stage = app.get("stage", "applied")
+            if stage in stages:
+                stages[stage] += 1
+        
+        # Revenue calculation
+        revenue_pipeline = 0
+        revenue_closed = 0
+        
+        for app in recruiter_apps:
+            job = next((j for j in recruiter_jobs if j["id"] == app["job_id"]), None)
+            if job:
+                company_id = job.get("company_id")
+                commercial = commercial_by_company.get(company_id)
+                offered_salary = app.get("offered_salary", 0) or app.get("current_salary", 0) or 0
+                
+                if commercial and offered_salary > 0:
+                    fee_percent = commercial.get("fee_percentage", 0) or 8.33
+                    revenue = (offered_salary * fee_percent) / 100
+                    
+                    if app.get("stage") == "hired":
+                        revenue_closed += revenue
+                    elif app.get("stage") in ["offered", "interview", "shortlisted"]:
+                        revenue_pipeline += revenue
+        
+        members_with_metrics.append({
+            "id": recruiter["id"],
+            "name": recruiter["name"],
+            "email": recruiter["email"],
+            "is_active": recruiter.get("is_active", True),
+            "joined_at": recruiter.get("created_at"),
+            "mandates_assigned": len(recruiter_jobs),
+            "mandates": [{"id": j["id"], "title": j["title"], "company_name": j.get("company_name")} for j in recruiter_jobs[:5]],
+            "pipeline": stages,
+            "total_pipeline_count": sum(stages.values()),
+            "revenue_pipeline": round(revenue_pipeline, 2),
+            "revenue_closed": round(revenue_closed, 2)
+        })
+    
+    # Calculate team totals
+    total_pipeline = sum(m["total_pipeline_count"] for m in members_with_metrics)
+    total_revenue_pipeline = sum(m["revenue_pipeline"] for m in members_with_metrics)
+    total_revenue_closed = sum(m["revenue_closed"] for m in members_with_metrics)
+    
+    return {
+        "team": {
+            "id": team["id"],
+            "name": team["name"],
+            "company_ids": company_ids,
+            "company_names": team.get("company_names", [])
+        },
+        "members": members_with_metrics,
+        "summary": {
+            "total_members": len(members_with_metrics),
+            "total_mandates": len(employer_jobs),
+            "total_pipeline": total_pipeline,
+            "total_revenue_pipeline": round(total_revenue_pipeline, 2),
+            "total_revenue_closed": round(total_revenue_closed, 2)
+        }
+    }
+
+
+@api_router.get("/employer/companies")
+async def get_employer_companies_with_details(current_user: dict = Depends(require_role(["employer"]))):
+    """
+    Get employer's assigned companies with commercial details, mandates, and pipelines.
+    
+    Internal endpoint for Employer portal "Companies" panel.
+    Returns companies assigned by Admin with:
+    - Commercial details (read-only)
+    - Active mandates
+    - Pipeline data grouped by mandate
+    """
+    # Get employer's team to find assigned companies
+    team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+    
+    if not team:
+        return {"companies": []}
+    
+    company_ids = team.get("company_ids", [])
+    
+    if not company_ids:
+        return {"companies": []}
+    
+    # Get companies
+    companies = await db.companies.find(
+        {"id": {"$in": company_ids}},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get commercials for each company
+    commercials = await db.commercials.find(
+        {"company_id": {"$in": company_ids}},
+        {"_id": 0}
+    ).to_list(100)
+    commercial_by_company = {c["company_id"]: c for c in commercials}
+    
+    # Get jobs for each company
+    all_jobs = await db.jobs.find(
+        {"company_id": {"$in": company_ids}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get applications for pipeline data
+    job_ids = [j["id"] for j in all_jobs]
+    applications = await db.applications.find(
+        {"job_id": {"$in": job_ids}},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    enriched_companies = []
+    
+    for company in companies:
+        company_id = company["id"]
+        commercial = commercial_by_company.get(company_id, {})
+        company_jobs = [j for j in all_jobs if j.get("company_id") == company_id]
+        company_job_ids = [j["id"] for j in company_jobs]
+        company_apps = [a for a in applications if a["job_id"] in company_job_ids]
+        
+        # Group pipeline by mandate
+        mandates_with_pipeline = []
+        for job in company_jobs:
+            job_apps = [a for a in company_apps if a["job_id"] == job["id"]]
+            
+            stages = {"applied": 0, "shortlisted": 0, "interview": 0, "offered": 0, "hired": 0, "rejected": 0}
+            revenue_by_stage = {"applied": 0, "shortlisted": 0, "interview": 0, "offered": 0, "hired": 0}
+            
+            fee_percent = commercial.get("fee_percentage", 0) or 8.33
+            
+            for app in job_apps:
+                stage = app.get("stage", "applied")
+                if stage in stages:
+                    stages[stage] += 1
+                
+                offered_salary = app.get("offered_salary", 0) or app.get("current_salary", 0) or 0
+                if offered_salary > 0 and stage in revenue_by_stage:
+                    revenue_by_stage[stage] += (offered_salary * fee_percent) / 100
+            
+            mandates_with_pipeline.append({
+                "id": job["id"],
+                "title": job["title"],
+                "status": job.get("status", "active"),
+                "location": job.get("location"),
+                "posted_by": job.get("posted_by"),
+                "created_at": job.get("created_at"),
+                "pipeline_count": sum(stages.values()),
+                "stages": stages,
+                "revenue_by_stage": {k: round(v, 2) for k, v in revenue_by_stage.items()},
+                "total_revenue_pipeline": round(sum(v for k, v in revenue_by_stage.items() if k != "hired"), 2),
+                "total_revenue_closed": round(revenue_by_stage.get("hired", 0), 2)
+            })
+        
+        # Calculate company totals
+        total_pipeline = sum(m["pipeline_count"] for m in mandates_with_pipeline)
+        total_revenue_closed = sum(m["total_revenue_closed"] for m in mandates_with_pipeline)
+        
+        enriched_companies.append({
+            "id": company_id,
+            "name": company["name"],
+            "industry": company.get("industry"),
+            "location": company.get("location"),
+            "logo_url": company.get("logo_url"),
+            # Commercial details (read-only for employer)
+            "commercial": {
+                "fee_percentage": commercial.get("fee_percentage"),
+                "fee_structure": commercial.get("fee_structure"),
+                "payment_terms": commercial.get("payment_terms"),
+                "currency": commercial.get("currency", "INR"),
+                "commercial_slabs": commercial.get("commercial_slabs", []),
+                "is_active": commercial.get("is_active", True)
+            },
+            # Mandates
+            "mandates": mandates_with_pipeline,
+            "active_mandates_count": len([m for m in mandates_with_pipeline if m["status"] == "active"]),
+            # Summary
+            "total_pipeline": total_pipeline,
+            "total_revenue_closed": round(total_revenue_closed, 2)
+        })
+    
+    return {"companies": enriched_companies}
+
+
 @api_router.get("/teams/{team_id}", response_model=TeamResponse)
 async def get_team(team_id: str, current_user: dict = Depends(require_role(["admin", "employer"]))):
     """Get a specific team by ID."""
