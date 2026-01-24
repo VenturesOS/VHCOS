@@ -16,7 +16,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 EMPLOYER_EMAIL = "employer@vhctalent.com"
 EMPLOYER_PASSWORD = "VhcTalent@2024"
 RECRUITER_EMAIL = "recruiter@vhctalent.com"
-RECRUITER_PASSWORD = "VhcTalent@2024"
+RECRUITER_PASSWORD = "TestPass@123"
 ADMIN_EMAIL = "admin@vhc.in"
 ADMIN_PASSWORD = "VhcAdmin@2024"
 
