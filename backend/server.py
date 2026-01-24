@@ -3355,27 +3355,105 @@ async def get_candidate_bank_record(
     candidate_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get single candidate from data bank with visibility check"""
+    """
+    Get single candidate from data bank with STRICT visibility check.
+    
+    Access Control (Data Governance):
+    - Admin: Full access
+    - Employer: Only if candidate was parsed by self, team member, or applied to employer's jobs
+    - Recruiter: Only if candidate was parsed by self or applied to recruiter's assigned jobs
+    - Candidate: NO access
+    """
+    
+    # Candidate has ZERO access to internal data bank
+    if current_user["role"] == "candidate":
+        raise HTTPException(status_code=403, detail="Candidates cannot access the internal data bank")
     
     candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
     
-    # Check visibility
+    # Check visibility based on role
     if current_user["role"] == "admin":
-        pass
+        pass  # Full access
+        
     elif current_user["role"] == "employer":
-        if current_user["id"] not in candidate.get("visibility", {}).get("employer_ids", []) and candidate.get("source") != "self":
-            raise HTTPException(status_code=403, detail="Access denied")
+        has_access = False
+        
+        # Check if employer created this candidate
+        if candidate.get("created_by") == current_user["id"]:
+            has_access = True
+        
+        # Check if a team member created this candidate
+        if not has_access:
+            team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+            if team and candidate.get("created_by") in team.get("recruiter_ids", []):
+                has_access = True
+        
+        # Check if candidate applied to employer's jobs
+        if not has_access:
+            team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+            team_recruiter_ids = team.get("recruiter_ids", []) if team else []
+            
+            employer_jobs = await db.jobs.find(
+                {"$or": [
+                    {"posted_by": current_user["id"]},
+                    {"posted_by": {"$in": team_recruiter_ids}},
+                    {"company_id": {"$in": team.get("company_ids", []) if team else []}}
+                ]},
+                {"id": 1, "_id": 0}
+            ).to_list(1000)
+            employer_job_ids = [j["id"] for j in employer_jobs]
+            
+            application = await db.applications.find_one({
+                "candidate_id": candidate_id,
+                "job_id": {"$in": employer_job_ids}
+            })
+            if application:
+                has_access = True
+        
+        # Check legacy visibility field
+        if not has_access and current_user["id"] in candidate.get("visibility", {}).get("employer_ids", []):
+            has_access = True
+        
+        if not has_access:
+            raise HTTPException(status_code=403, detail="Access denied to this candidate")
+            
     elif current_user["role"] == "recruiter":
-        vis = candidate.get("visibility", {})
-        if (current_user["id"] not in vis.get("recruiter_ids", []) and 
-            candidate.get("created_by") != current_user["id"] and
-            candidate.get("source") != "self"):
-            raise HTTPException(status_code=403, detail="Access denied")
-    elif current_user["role"] == "candidate":
-        if candidate.get("linked_user_id") != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
+        has_access = False
+        
+        # Check if recruiter created this candidate
+        if candidate.get("created_by") == current_user["id"]:
+            has_access = True
+        
+        # Check if candidate applied to recruiter's assigned jobs
+        if not has_access:
+            team = await db.teams.find_one({"recruiter_ids": current_user["id"], "status": "active"}, {"_id": 0})
+            
+            recruiter_jobs = await db.jobs.find(
+                {"$or": [
+                    {"posted_by": current_user["id"]},
+                    {"team_id": team["id"]} if team else {"team_id": "__never_match__"}
+                ]},
+                {"id": 1, "_id": 0}
+            ).to_list(1000)
+            recruiter_job_ids = [j["id"] for j in recruiter_jobs]
+            
+            application = await db.applications.find_one({
+                "candidate_id": candidate_id,
+                "job_id": {"$in": recruiter_job_ids}
+            })
+            if application:
+                has_access = True
+        
+        # Check legacy visibility field
+        if not has_access and current_user["id"] in candidate.get("visibility", {}).get("recruiter_ids", []):
+            has_access = True
+        
+        if not has_access:
+            raise HTTPException(status_code=403, detail="Access denied to this candidate")
+    else:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     return candidate
 
