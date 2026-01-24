@@ -12,8 +12,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://data-governance-5.pr
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
-EMPLOYER_CREDS = {"email": "employer@vhctalent.com", "password": "Demo@2024"}
-RECRUITER_CREDS = {"email": "recruiter@vhctalent.com", "password": "VhcRecruiter@2024"}
+RECRUITER_CREDS = {"email": "recruiter@vhctalent.com", "password": "Demo@2024"}
 
 
 @pytest.fixture(scope="module")
@@ -21,14 +20,6 @@ def admin_token():
     """Get admin auth token"""
     response = requests.post(f"{BASE_URL}/api/auth/login", json=ADMIN_CREDS)
     assert response.status_code == 200, f"Admin login failed: {response.text}"
-    return response.json()["access_token"]
-
-
-@pytest.fixture(scope="module")
-def employer_token():
-    """Get employer auth token"""
-    response = requests.post(f"{BASE_URL}/api/auth/login", json=EMPLOYER_CREDS)
-    assert response.status_code == 200, f"Employer login failed: {response.text}"
     return response.json()["access_token"]
 
 
