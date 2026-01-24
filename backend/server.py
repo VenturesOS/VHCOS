@@ -2967,16 +2967,21 @@ async def link_candidate_to_job(
             }
         )
     
-    # Validate mandatory fields from candidate
-    if not candidate.get("current_salary"):
+    # Validate mandatory fields from candidate (Data Governance)
+    validation_errors = validate_mandatory_candidate_fields({
+        "current_salary": candidate.get("current_salary"),
+        "notice_period": candidate.get("notice_period"),
+        "location": candidate.get("location"),
+        "experience_years": candidate.get("experience_years")
+    })
+    if validation_errors:
         raise HTTPException(
             status_code=400,
-            detail="Candidate must have current salary set before being added as applicant"
-        )
-    if not candidate.get("notice_period"):
-        raise HTTPException(
-            status_code=400,
-            detail="Candidate must have notice period set before being added as applicant"
+            detail={
+                "message": "Candidate is missing mandatory fields required for application",
+                "errors": validation_errors,
+                "candidate_id": request.candidate_id
+            }
         )
     
     # Create application record
