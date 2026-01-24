@@ -2601,6 +2601,8 @@ class BatchUploadCandidate(BaseModel):
     experience_summary: Optional[str] = None
     current_salary: int  # MANDATORY - INR
     notice_period: str  # MANDATORY
+    location: str  # MANDATORY - Data Governance
+    experience_years: int  # MANDATORY - Data Governance (can be 0 for freshers)
     file_id: str  # Reference to uploaded file
     fingerprint: str  # Resume fingerprint for dedup
 
@@ -2745,7 +2747,7 @@ async def batch_save_candidates(
     if len(candidates) == 0:
         raise HTTPException(status_code=400, detail="No candidates to save")
     
-    # VALIDATION PHASE - Check all candidates first
+    # VALIDATION PHASE - Check all candidates first (Data Governance enforcement)
     validation_errors = []
     
     for idx, candidate in enumerate(candidates):
@@ -2755,10 +2757,15 @@ async def batch_save_candidates(
             errors.append("Email is required")
         if not candidate.name or not candidate.name.strip():
             errors.append("Name is required")
+        # Data Governance: Mandatory fields enforcement
         if not candidate.current_salary or candidate.current_salary <= 0:
             errors.append("Current salary (INR) is mandatory and must be positive")
         if not candidate.notice_period or not candidate.notice_period.strip():
             errors.append("Notice period is mandatory")
+        if not candidate.location or not candidate.location.strip():
+            errors.append("Location is mandatory")
+        if candidate.experience_years is None:
+            errors.append("Experience (years) is mandatory")
         
         if errors:
             validation_errors.append({
