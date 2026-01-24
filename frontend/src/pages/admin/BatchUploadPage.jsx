@@ -278,6 +278,8 @@ export default function BatchUploadPage() {
         experience_summary: c.editing.experience_summary,
         current_salary: parseInt(c.editing.current_salary),
         notice_period: c.editing.notice_period,
+        location: c.editing.location,  // Data Governance: mandatory
+        experience_years: parseInt(c.editing.experience_years),  // Data Governance: mandatory
         file_id: c.file_id,
         fingerprint: c.fingerprint
       }));
