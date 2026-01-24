@@ -102,8 +102,10 @@ export default function BatchUploadPage() {
           experience_summary: r.parsed_data?.experience_summary || '',
           current_salary: '',  // MANDATORY - user must fill
           notice_period: '',   // MANDATORY - user must fill
+          location: r.parsed_data?.location || '',  // MANDATORY - Data Governance
+          experience_years: r.parsed_data?.experience_years?.toString() || '0',  // MANDATORY - Data Governance
         },
-        isValid: false,  // Not valid until salary/notice filled
+        isValid: false,  // Not valid until all mandatory fields filled
         errors: []
       }));
       
