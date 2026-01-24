@@ -3237,43 +3237,115 @@ async def get_candidate_bank(
     skills: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get candidates from data bank based on role visibility"""
+    """
+    Get candidates from data bank based on STRICT role visibility.
+    
+    Access Control (Data Governance):
+    - Admin: Full access to all candidates from all sources
+    - Employer: Only candidates parsed by self, parsed by assigned team members, 
+                or applied via job postings under employer's mandates
+    - Recruiter: Only candidates parsed by self, or applied via jobs of their assigned mandates
+    - Candidate: NO access (returns empty list)
+    """
+    
+    # Candidate has ZERO access to internal Candidate Data Bank
+    if current_user["role"] == "candidate":
+        return []
     
     query = {}
     
-    # Role-based visibility
+    # Role-based visibility with STRICT enforcement
     if current_user["role"] == "admin":
-        pass  # Full access
+        pass  # Full access to all candidates
+        
     elif current_user["role"] == "employer":
+        # Get employer's team to find assigned recruiters
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        team_recruiter_ids = team.get("recruiter_ids", []) if team else []
+        
+        # Get jobs under employer's mandates (for candidates who applied)
+        employer_jobs = await db.jobs.find(
+            {"$or": [
+                {"posted_by": current_user["id"]},
+                {"posted_by": {"$in": team_recruiter_ids}},
+                {"company_id": {"$in": team.get("company_ids", []) if team else []}}
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        employer_job_ids = [j["id"] for j in employer_jobs]
+        
+        # Get candidate IDs who applied to employer's jobs
+        applications = await db.applications.find(
+            {"job_id": {"$in": employer_job_ids}},
+            {"candidate_id": 1, "_id": 0}
+        ).to_list(10000)
+        applied_candidate_ids = list(set([a.get("candidate_id") for a in applications if a.get("candidate_id")]))
+        
+        # Employer can see:
+        # 1. Candidates they parsed themselves
+        # 2. Candidates parsed by their team recruiters
+        # 3. Candidates who applied to their job postings
         query["$or"] = [
-            {"visibility.employer_ids": current_user["id"]},
-            {"source": "self"}
-        ]
-    elif current_user["role"] == "recruiter":
-        query["$or"] = [
-            {"visibility.recruiter_ids": current_user["id"]},
             {"created_by": current_user["id"]},
-            {"source": "self"}
+            {"created_by": {"$in": team_recruiter_ids}},
+            {"id": {"$in": applied_candidate_ids}} if applied_candidate_ids else {"id": "__never_match__"},
+            {"visibility.employer_ids": current_user["id"]}
         ]
-    elif current_user["role"] == "candidate":
-        query["linked_user_id"] = current_user["id"]
+        
+    elif current_user["role"] == "recruiter":
+        # Get recruiter's assigned mandates
+        team = await db.teams.find_one({"recruiter_ids": current_user["id"], "status": "active"}, {"_id": 0})
+        
+        # Get jobs under recruiter's assigned mandates
+        recruiter_jobs = await db.jobs.find(
+            {"$or": [
+                {"posted_by": current_user["id"]},
+                {"team_id": team["id"]} if team else {"team_id": "__never_match__"}
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        recruiter_job_ids = [j["id"] for j in recruiter_jobs]
+        
+        # Get candidate IDs who applied to recruiter's jobs
+        applications = await db.applications.find(
+            {"job_id": {"$in": recruiter_job_ids}},
+            {"candidate_id": 1, "_id": 0}
+        ).to_list(10000)
+        applied_candidate_ids = list(set([a.get("candidate_id") for a in applications if a.get("candidate_id")]))
+        
+        # Recruiter can see:
+        # 1. Candidates they parsed themselves
+        # 2. Candidates who applied to their assigned mandates' job postings
+        query["$or"] = [
+            {"created_by": current_user["id"]},
+            {"id": {"$in": applied_candidate_ids}} if applied_candidate_ids else {"id": "__never_match__"},
+            {"visibility.recruiter_ids": current_user["id"]}
+        ]
     else:
         return []
     
     # Search filter
     if search:
-        query["$and"] = query.get("$and", []) + [{
+        search_condition = {
             "$or": [
                 {"name": {"$regex": search, "$options": "i"}},
                 {"email": {"$regex": search, "$options": "i"}},
                 {"skills": {"$regex": search, "$options": "i"}}
             ]
-        }]
+        }
+        if "$or" in query:
+            query = {"$and": [{"$or": query["$or"]}, search_condition]}
+        else:
+            query["$and"] = [search_condition]
     
     # Skills filter
     if skills:
         skill_list = [s.strip() for s in skills.split(",")]
-        query["skills"] = {"$in": skill_list}
+        skill_condition = {"skills": {"$in": skill_list}}
+        if "$and" in query:
+            query["$and"].append(skill_condition)
+        else:
+            query["skills"] = {"$in": skill_list}
     
     candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(500)
     return [CandidateBankRecord(**c) for c in candidates]
