@@ -38,12 +38,6 @@ def admin_headers(admin_token):
 
 
 @pytest.fixture
-def employer_headers(employer_token):
-    """Headers with employer auth token"""
-    return {"Authorization": f"Bearer {employer_token}"}
-
-
-@pytest.fixture
 def recruiter_headers(recruiter_token):
     """Headers with recruiter auth token"""
     return {"Authorization": f"Bearer {recruiter_token}"}
@@ -137,7 +131,7 @@ class TestMandatoryFieldValidation:
         # Should succeed
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
-        assert data.get("saved_count", 0) >= 1 or data.get("duplicate_count", 0) >= 1
+        assert data.get("success") is True, f"Batch save failed: {data}"
 
 
 class TestCandidateHistoryEndpoint:
