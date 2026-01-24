@@ -183,12 +183,14 @@ export default function CandidateDataBankPage() {
   const loadCandidateDetails = async (candidate) => {
     setSelectedCandidate(candidate);
     try {
-      const [auditRes, historyRes] = await Promise.all([
+      const [auditRes, historyRes, activityRes] = await Promise.all([
         candidateBankAPI.getAuditLog(candidate.id),
         candidateBankAPI.getResumeHistory(candidate.id),
+        candidateBankAPI.getHistory(candidate.id),  // Data Governance: Activity history
       ]);
       setAuditLog(auditRes.data);
       setResumeHistory(historyRes.data);
+      setActivityHistory(activityRes.data);
     } catch (error) {
       console.error('Failed to load details');
     }
