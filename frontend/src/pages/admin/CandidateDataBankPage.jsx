@@ -68,6 +68,8 @@ export default function CandidateDataBankPage() {
     setApplicantCandidate(candidate);
     setEditSalary(candidate.current_salary?.toString() || '');
     setEditNotice(candidate.notice_period || '');
+    setEditLocation(candidate.location || '');  // Data Governance
+    setEditExperience(candidate.experience_years?.toString() || '0');  // Data Governance
     setSelectedJobId('');
     loadJobs();
     setShowAddApplicant(true);
@@ -75,13 +77,24 @@ export default function CandidateDataBankPage() {
 
   // Handle Add as Applicant
   const handleAddAsApplicant = async () => {
-    // Validate mandatory fields
-    if (!editSalary || parseInt(editSalary) <= 0) {
+    // Validate mandatory fields (Data Governance)
+    const salaryNum = parseInt(editSalary);
+    const expNum = parseInt(editExperience);
+    
+    if (!editSalary || salaryNum <= 0) {
       toast.error('Current salary (INR) is mandatory');
       return;
     }
     if (!editNotice) {
       toast.error('Notice period is mandatory');
+      return;
+    }
+    if (!editLocation || !editLocation.trim()) {
+      toast.error('Location is mandatory');
+      return;
+    }
+    if (editExperience === '' || isNaN(expNum) || expNum < 0) {
+      toast.error('Experience (years) is mandatory');
       return;
     }
     if (!selectedJobId) {
@@ -91,10 +104,22 @@ export default function CandidateDataBankPage() {
 
     setLinking(true);
     try {
-      // First update salary/notice if changed
-      const salaryNum = parseInt(editSalary);
-      if (salaryNum !== applicantCandidate.current_salary || editNotice !== applicantCandidate.notice_period) {
-        await candidateBankAPI.updateSalaryNotice(applicantCandidate.id, salaryNum, editNotice);
+      // First update mandatory fields if changed
+      const needsUpdate = (
+        salaryNum !== applicantCandidate.current_salary || 
+        editNotice !== applicantCandidate.notice_period ||
+        editLocation !== applicantCandidate.location ||
+        expNum !== applicantCandidate.experience_years
+      );
+      
+      if (needsUpdate) {
+        await candidateBankAPI.updateSalaryNotice(
+          applicantCandidate.id, 
+          salaryNum, 
+          editNotice,
+          editLocation.trim(),
+          expNum
+        );
       }
 
       // Then link to job
@@ -106,6 +131,10 @@ export default function CandidateDataBankPage() {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'object' && detail.message) {
         toast.error(detail.message);
+        // Show specific field errors if present
+        if (detail.errors) {
+          detail.errors.forEach(err => toast.error(err));
+        }
       } else if (typeof detail === 'string') {
         toast.error(detail);
       } else {
