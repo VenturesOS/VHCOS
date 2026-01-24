@@ -611,22 +611,22 @@ def validate_mandatory_candidate_fields(data: dict, context: str = "candidate") 
     # Current Salary - MANDATORY
     current_salary = data.get("current_salary")
     if current_salary is None or (isinstance(current_salary, (int, float)) and current_salary <= 0):
-        errors.append(f"Current salary is mandatory and must be greater than 0")
+        errors.append("Current salary is mandatory and must be greater than 0")
     
     # Notice Period - MANDATORY
     notice_period = data.get("notice_period")
     if not notice_period or (isinstance(notice_period, str) and not notice_period.strip()):
-        errors.append(f"Notice period is mandatory")
+        errors.append("Notice period is mandatory")
     
     # Location - MANDATORY
     location = data.get("location")
     if not location or (isinstance(location, str) and not location.strip()):
-        errors.append(f"Location is mandatory")
+        errors.append("Location is mandatory")
     
     # Experience Years - MANDATORY (can be 0 for freshers)
     experience_years = data.get("experience_years")
     if experience_years is None:
-        errors.append(f"Experience (years) is mandatory")
+        errors.append("Experience (years) is mandatory")
     
     return errors
 
