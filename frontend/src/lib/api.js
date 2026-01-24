@@ -233,6 +233,8 @@ export const candidateBankAPI = {
   update: (id, data) => api.put(`/candidate-bank/${id}`, data),
   getAuditLog: (id) => api.get(`/candidate-bank/${id}/audit-log`),
   getResumeHistory: (id) => api.get(`/candidate-bank/${id}/resume-history`),
+  // Data Governance: Get candidate activity history (internal only)
+  getHistory: (id) => api.get(`/candidate-bank/${id}/history`),
   // Phase-2: Batch upload
   batchParse: (files) => {
     const formData = new FormData();
@@ -242,9 +244,25 @@ export const candidateBankAPI = {
     });
   },
   batchSave: (candidates) => api.post('/candidate-bank/batch-save', { candidates }),
-  updateSalaryNotice: (id, currentSalary, noticePeriod) => 
+  // Data Governance: Update mandatory fields (salary, notice, location, experience)
+  updateMandatoryFields: (id, data) => 
     api.put(`/candidate-bank/${id}/salary-notice`, null, { 
-      params: { current_salary: currentSalary, notice_period: noticePeriod } 
+      params: { 
+        current_salary: data.currentSalary, 
+        notice_period: data.noticePeriod,
+        location: data.location,
+        experience_years: data.experienceYears
+      } 
+    }),
+  // Backward compatible alias
+  updateSalaryNotice: (id, currentSalary, noticePeriod, location, experienceYears) => 
+    api.put(`/candidate-bank/${id}/salary-notice`, null, { 
+      params: { 
+        current_salary: currentSalary, 
+        notice_period: noticePeriod,
+        location,
+        experience_years: experienceYears
+      } 
     }),
   // Phase-2: Link candidate to job
   linkToJob: (candidateId, jobId) => api.post('/applications/link-candidate', { candidate_id: candidateId, job_id: jobId }),
