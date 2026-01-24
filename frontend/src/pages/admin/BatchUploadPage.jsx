@@ -704,6 +704,36 @@ function CandidateCard({ candidate, onUpdate, onAddSkill, onRemoveSkill, onRemov
           </Select>
         </div>
         
+        {/* Location - MANDATORY (Data Governance) */}
+        <div className="space-y-1">
+          <Label className="text-xs text-slate-500 flex items-center gap-1">
+            Location *
+          </Label>
+          <Input
+            value={candidate.editing.location}
+            onChange={(e) => onUpdate('location', e.target.value)}
+            placeholder="e.g., Mumbai, Delhi"
+            className={!candidate.editing.location ? 'border-amber-400' : ''}
+            data-testid={`location-input-${candidate.temp_id}`}
+          />
+        </div>
+        
+        {/* Experience Years - MANDATORY (Data Governance) */}
+        <div className="space-y-1">
+          <Label className="text-xs text-slate-500 flex items-center gap-1">
+            Experience (years) *
+          </Label>
+          <Input
+            value={candidate.editing.experience_years}
+            onChange={(e) => onUpdate('experience_years', e.target.value)}
+            placeholder="e.g., 5"
+            type="number"
+            min="0"
+            className={candidate.editing.experience_years === '' ? 'border-amber-400' : ''}
+            data-testid={`exp-input-${candidate.temp_id}`}
+          />
+        </div>
+        
         {/* Skills */}
         <div className="space-y-1 md:col-span-2">
           <Label className="text-xs text-slate-500">Skills</Label>
