@@ -128,6 +128,9 @@ class JobResponse(BaseModel):
     posted_by: str
     posted_by_role: Optional[str] = None
     status: str = "active"  # draft, pending_approval, active, on_hold, closed, archived
+    # Career Page Publishing Control (Internal OS Enhancement)
+    career_page_status: str = "not_posted"  # not_posted, live, removed
+    career_page_history: List[dict] = []  # Audit trail for career page status changes
     team_id: Optional[str] = None
     approval_history: List[dict] = []  # Audit trail for state transitions
     created_at: str
