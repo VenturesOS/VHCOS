@@ -148,7 +148,15 @@ export default function EmployerJobsPage() {
                     <Briefcase className="w-6 h-6 text-[#7CB342]" />
                   </div>
                   <div>
-                    <h3 className="font-heading font-semibold text-lg text-slate-900">{job.title}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-heading font-semibold text-lg text-slate-900">{job.title}</h3>
+                      {/* Career Page Status Badge */}
+                      {job.career_page_status === 'live' && (
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1">
+                          <Globe className="w-3 h-3" /> Live on Career Page
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-slate-500">
                       <span className="flex items-center gap-1">
                         <MapPin className="w-4 h-4" /> {job.location}
@@ -162,7 +170,7 @@ export default function EmployerJobsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     variant="default"
                     size="sm"
@@ -172,6 +180,42 @@ export default function EmployerJobsPage() {
                   >
                     <Eye className="w-4 h-4 mr-1" /> View Applicants
                   </Button>
+                  
+                  {/* Career Page Controls */}
+                  {job.status === 'active' && (
+                    job.career_page_status === 'live' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                        onClick={() => openCareerPageDialog(job, 'removed')}
+                        data-testid={`remove-career-page-${job.id}`}
+                      >
+                        <GlobeOff className="w-4 h-4 mr-1" /> Remove from Career Page
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-green-600 border-green-300 hover:bg-green-50"
+                        onClick={() => openCareerPageDialog(job, 'live')}
+                        data-testid={`post-career-page-${job.id}`}
+                      >
+                        <Globe className="w-4 h-4 mr-1" /> Post to Career Page
+                      </Button>
+                    )
+                  )}
+                  
+                  {/* Career Page History */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openHistoryDialog(job)}
+                    title="Career Page History"
+                  >
+                    <History className="w-4 h-4" />
+                  </Button>
+                  
                   <Button
                     variant="outline"
                     size="sm"
@@ -179,7 +223,7 @@ export default function EmployerJobsPage() {
                   >
                     {job.status === 'active' ? 'Close' : 'Reopen'}
                   </Button>
-                  <span className={`badge ${job.status === 'active' ? 'badge-active' : 'badge-inactive'}`}>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${job.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
                     {job.status}
                   </span>
                   <Button
