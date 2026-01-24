@@ -145,6 +145,25 @@ export default function CandidateDataBankPage() {
     }
   };
 
+  // Download candidate resume
+  const downloadResume = (candidate) => {
+    if (!candidate.resume_url) {
+      toast.error('No resume available for this candidate');
+      return;
+    }
+    // Use the API URL for download with auth token
+    const token = localStorage.getItem('token');
+    const downloadUrl = candidateBankAPI.getResumeDownloadUrl(candidate.id);
+    
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement('a');
+    link.href = `${downloadUrl}?token=${token}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const loadCandidates = async () => {
     setLoading(true);
     try {
