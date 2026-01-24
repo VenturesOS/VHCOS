@@ -3043,54 +3043,119 @@ async def link_candidate_to_job(
 # ============== PHASE-2: UPDATE CANDIDATE SALARY/NOTICE ==============
 
 @api_router.put("/candidate-bank/{candidate_id}/salary-notice")
-async def update_candidate_salary_notice(
+async def update_candidate_mandatory_fields(
     candidate_id: str,
     current_salary: int = None,
     notice_period: str = None,
+    location: str = None,
+    experience_years: int = None,
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
     """
-    Update candidate's salary and/or notice period in the Candidate Data Bank.
+    Update candidate's mandatory fields in the Candidate Data Bank.
+    Data Governance: salary, notice_period, location, experience_years
     Used to ensure mandatory fields are set before linking to jobs.
+    All changes are audit-logged.
     """
     candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
     
-    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {"updated_at": now}
+    audit_entries = []
+    
+    # Track which fields are being updated
+    fields_updated = []
     
     if current_salary is not None:
         if current_salary <= 0:
             raise HTTPException(status_code=400, detail="Salary must be positive")
         
-        # Audit log
-        if candidate.get("current_salary") != current_salary:
+        old_val = candidate.get("current_salary")
+        if old_val != current_salary:
+            audit_entries.append(create_profile_audit_entry(
+                "current_salary", old_val, current_salary,
+                current_user["id"], current_user["name"], current_user["role"],
+                "manual_update"
+            ))
             await create_audit_log(
-                candidate_id, "current_salary", 
-                candidate.get("current_salary"), current_salary, 
+                candidate_id, "current_salary", old_val, current_salary, 
                 current_user, "manual_update"
             )
         update_data["current_salary"] = current_salary
+        fields_updated.append("current_salary")
     
     if notice_period is not None:
         if not notice_period.strip():
             raise HTTPException(status_code=400, detail="Notice period cannot be empty")
         
-        # Audit log
-        if candidate.get("notice_period") != notice_period:
+        old_val = candidate.get("notice_period")
+        if old_val != notice_period.strip():
+            audit_entries.append(create_profile_audit_entry(
+                "notice_period", old_val, notice_period.strip(),
+                current_user["id"], current_user["name"], current_user["role"],
+                "manual_update"
+            ))
             await create_audit_log(
-                candidate_id, "notice_period",
-                candidate.get("notice_period"), notice_period,
+                candidate_id, "notice_period", old_val, notice_period.strip(),
                 current_user, "manual_update"
             )
         update_data["notice_period"] = notice_period.strip()
+        fields_updated.append("notice_period")
     
-    await db.candidate_bank.update_one({"id": candidate_id}, {"$set": update_data})
+    if location is not None:
+        if not location.strip():
+            raise HTTPException(status_code=400, detail="Location cannot be empty")
+        
+        old_val = candidate.get("location")
+        if old_val != location.strip():
+            audit_entries.append(create_profile_audit_entry(
+                "location", old_val, location.strip(),
+                current_user["id"], current_user["name"], current_user["role"],
+                "manual_update"
+            ))
+            await create_audit_log(
+                candidate_id, "location", old_val, location.strip(),
+                current_user, "manual_update"
+            )
+        update_data["location"] = location.strip()
+        fields_updated.append("location")
+    
+    if experience_years is not None:
+        if experience_years < 0:
+            raise HTTPException(status_code=400, detail="Experience years cannot be negative")
+        
+        old_val = candidate.get("experience_years")
+        if old_val != experience_years:
+            audit_entries.append(create_profile_audit_entry(
+                "experience_years", old_val, experience_years,
+                current_user["id"], current_user["name"], current_user["role"],
+                "manual_update"
+            ))
+            await create_audit_log(
+                candidate_id, "experience_years", old_val, experience_years,
+                current_user, "manual_update"
+            )
+        update_data["experience_years"] = experience_years
+        fields_updated.append("experience_years")
+    
+    # Update freshness metadata
+    update_data["last_profile_updated_at"] = now
+    update_data["last_updated_by"] = current_user["id"]
+    
+    # Perform update with audit log appended
+    update_ops = {"$set": update_data}
+    if audit_entries:
+        update_ops["$push"] = {"profile_update_audit": {"$each": audit_entries}}
+    
+    await db.candidate_bank.update_one({"id": candidate_id}, update_ops)
     
     return {
         "success": True,
         "message": "Candidate updated successfully",
-        "candidate_id": candidate_id
+        "candidate_id": candidate_id,
+        "fields_updated": fields_updated
     }
 
 @api_router.get("/candidate-bank", response_model=List[CandidateBankRecord])
