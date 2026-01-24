@@ -1616,8 +1616,18 @@ async def create_application(app_data: ApplicationCreate, current_user: dict = D
     if existing:
         raise HTTPException(status_code=400, detail="Already applied to this job")
     
+    # Get candidate's data from candidate_bank if exists
+    candidate_bank = await db.candidate_bank.find_one(
+        {"$or": [{"linked_user_id": current_user["id"]}, {"email": current_user["email"]}]},
+        {"_id": 0}
+    )
+    
     app_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    
+    # Get company name
+    company = await db.companies.find_one({"id": job.get("company_id")}, {"name": 1, "_id": 0})
+    company_name = company.get("name") if company else job.get("company_name", "Unknown")
     
     app_doc = {
         "id": app_id,
@@ -1626,19 +1636,42 @@ async def create_application(app_data: ApplicationCreate, current_user: dict = D
         "candidate_name": current_user["name"],
         "candidate_email": current_user["email"],
         "job_title": job.get("title"),
-        "company_name": job.get("company_name"),
+        "company_name": company_name,
         "cover_letter": app_data.cover_letter,
         "status": "active",
         "stage": "applied",
+        "source": "self",
         "notes": [],
+        "edit_history": [],
         "created_at": now,
         "updated_at": now
     }
+    
+    # Include candidate bank data if available
+    if candidate_bank:
+        app_doc["current_salary"] = candidate_bank.get("current_salary")
+        app_doc["notice_period"] = candidate_bank.get("notice_period")
+        app_doc["location"] = candidate_bank.get("location")
+        app_doc["experience_years"] = candidate_bank.get("experience_years")
+        app_doc["skills"] = candidate_bank.get("skills", [])
+        app_doc["resume_url"] = candidate_bank.get("resume_url")
     
     await db.applications.insert_one(app_doc)
     
     # Increment applicant count
     await db.jobs.update_one({"id": app_data.job_id}, {"$inc": {"applicant_count": 1}})
+    
+    # Data Governance: Add to candidate's application history if they exist in candidate_bank
+    if candidate_bank:
+        await add_application_to_history(candidate_bank["id"], {
+            "id": app_id,
+            "job_id": app_data.job_id,
+            "job_title": job.get("title"),
+            "company_name": company_name,
+            "source": "self",
+            "created_at": now,
+            "stage": "applied"
+        })
     
     return ApplicationResponse(**app_doc)
 
