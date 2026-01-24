@@ -436,8 +436,9 @@ class TestMandatoryFieldsValidation:
         print("✅ Batch save rejects candidates without experience_years")
     
     def test_batch_save_succeeds_with_all_fields(self, admin_headers):
-        """Batch save should succeed with all mandatory fields"""
+        """Batch save should succeed with all mandatory fields (including batch flow fields)"""
         unique_email = f"test_complete_{uuid.uuid4().hex[:8]}@test.com"
+        temp_id = str(uuid.uuid4())
         response = requests.post(
             f"{BASE_URL}/api/candidate-bank/batch-save",
             headers=admin_headers,
@@ -449,7 +450,10 @@ class TestMandatoryFieldsValidation:
                     "notice_period": "30 days",
                     "location": "Bangalore",
                     "experience_years": 5,
-                    "skills": ["Python", "FastAPI"]
+                    "skills": ["Python", "FastAPI"],
+                    "temp_id": temp_id,
+                    "file_id": temp_id,
+                    "fingerprint": f"test_fingerprint_{temp_id}"
                 }]
             }
         )
