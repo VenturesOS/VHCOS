@@ -252,6 +252,132 @@ export default function EmployerJobsPage() {
           </div>
         )}
       </div>
+
+      {/* Career Page Status Dialog */}
+      <Dialog open={showCareerPageDialog} onOpenChange={setShowCareerPageDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              {careerPageAction === 'live' ? (
+                <>
+                  <Globe className="w-5 h-5 text-green-600" />
+                  Post to Career Page
+                </>
+              ) : (
+                <>
+                  <GlobeOff className="w-5 h-5 text-amber-600" />
+                  Remove from Career Page
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {careerPageAction === 'live' 
+                ? "This job will be visible on the public career page. Are you sure?"
+                : "This job will be removed from the public career page but will remain active internally."
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedJob && (
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-lg">
+                <p className="font-medium">{selectedJob.title}</p>
+                <p className="text-sm text-slate-500">{selectedJob.company_name} • {selectedJob.location}</p>
+              </div>
+
+              {careerPageAction === 'live' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                  <p className="text-sm text-amber-700">
+                    Posting to career page will make this job publicly visible. Not all jobs need to be on the career page.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>Reason (optional)</Label>
+                <Textarea
+                  value={careerPageReason}
+                  onChange={(e) => setCareerPageReason(e.target.value)}
+                  placeholder={careerPageAction === 'live' 
+                    ? "e.g., Approved for public posting..."
+                    : "e.g., Position filled internally..."
+                  }
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCareerPageDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCareerPageUpdate}
+              disabled={updatingCareerPage}
+              className={careerPageAction === 'live' 
+                ? "bg-green-600 hover:bg-green-700"
+                : "bg-amber-600 hover:bg-amber-700"
+              }
+              data-testid="confirm-career-page-btn"
+            >
+              {updatingCareerPage 
+                ? 'Processing...' 
+                : careerPageAction === 'live' ? 'Post to Career Page' : 'Remove from Career Page'
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Career Page History Dialog */}
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <History className="w-5 h-5 text-slate-600" />
+              Career Page History
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedJob && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="font-medium text-sm">{selectedJob.title}</p>
+                <p className="text-xs text-slate-500">
+                  Current Status: {selectedJob.career_page_status === 'live' ? 'Live on Career Page' : 'Not Posted'}
+                </p>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {careerPageHistory.length > 0 ? (
+                  careerPageHistory.map((entry, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-lg text-sm border-l-4 border-slate-300">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium">
+                          {entry.from_status || 'not_posted'} → {entry.to_status}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(entry.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-slate-600">
+                        By: {entry.changed_by_name} ({entry.changed_by_role})
+                      </p>
+                      {entry.reason && (
+                        <p className="text-slate-500 mt-1 italic">"{entry.reason}"</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-slate-400 text-sm text-center py-4">No status changes recorded</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
