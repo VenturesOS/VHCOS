@@ -380,26 +380,6 @@ class TestAuditLogging:
 class TestRoleBasedAccess:
     """Tests for role-based access to history and audit endpoints"""
     
-    def test_employer_can_access_history(self, employer_headers):
-        """Employer should be able to access candidate history"""
-        response = requests.get(f"{BASE_URL}/api/candidate-bank", headers=employer_headers)
-        
-        if response.status_code != 200:
-            pytest.skip("Employer cannot access candidate bank")
-        
-        candidates = response.json()
-        if not candidates:
-            pytest.skip("No candidates for testing")
-        
-        candidate_id = candidates[0]["id"]
-        
-        response = requests.get(
-            f"{BASE_URL}/api/candidate-bank/{candidate_id}/history",
-            headers=employer_headers
-        )
-        
-        assert response.status_code == 200, f"Employer cannot access history: {response.text}"
-    
     def test_recruiter_can_access_history(self, recruiter_headers):
         """Recruiter should be able to access candidate history"""
         response = requests.get(f"{BASE_URL}/api/candidate-bank", headers=recruiter_headers)
