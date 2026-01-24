@@ -1782,10 +1782,13 @@ async def update_application_details(
     # Also update candidate_bank if the candidate exists there
     if application.get("candidate_id"):
         candidate_update = {}
+        audit_fields = []
         if "current_salary" in update_dict:
             candidate_update["current_salary"] = update_dict["current_salary"]
+            audit_fields.append("current_salary")
         if "notice_period" in update_dict:
             candidate_update["notice_period"] = update_dict["notice_period"]
+            audit_fields.append("notice_period")
         if "skills" in update_dict:
             candidate_update["skills"] = update_dict["skills"]
         if "experience_summary" in update_dict:
@@ -1794,10 +1797,29 @@ async def update_application_details(
         if candidate_update:
             candidate_update["updated_at"] = now
             candidate_update["manually_edited"] = True
+            candidate_update["last_profile_updated_at"] = now  # Data Governance: freshness update
+            candidate_update["last_updated_by"] = current_user["id"]
             await db.candidate_bank.update_one(
                 {"id": application["candidate_id"]},
                 {"$set": candidate_update}
             )
+            
+            # Data Governance: Add audit entries for mandatory field changes
+            if audit_fields:
+                candidate = await db.candidate_bank.find_one({"id": application["candidate_id"]}, {"_id": 0})
+                if candidate:
+                    for field in audit_fields:
+                        old_entry = next((e for e in audit_entries if e["field"] == field), None)
+                        if old_entry:
+                            profile_audit = create_profile_audit_entry(
+                                field, old_entry["old_value"], old_entry["new_value"],
+                                current_user["id"], current_user["name"], current_user["role"],
+                                "application_edit"
+                            )
+                            await db.candidate_bank.update_one(
+                                {"id": application["candidate_id"]},
+                                {"$push": {"profile_update_audit": profile_audit}}
+                            )
     
     # Fetch updated application
     updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
