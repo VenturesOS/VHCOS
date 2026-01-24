@@ -1671,6 +1671,11 @@ async def get_application(app_id: str, current_user: dict = Depends(get_current_
 
 @api_router.put("/applications/{app_id}", response_model=ApplicationResponse)
 async def update_application(app_id: str, update_data: ApplicationUpdate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
+    # Get current application for history tracking
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
     update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
     update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
     
@@ -1678,8 +1683,21 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Application not found")
     
-    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
-    return ApplicationResponse(**application)
+    # Data Governance: Update candidate history if stage changed
+    if "stage" in update_dict and application.get("candidate_id"):
+        new_stage = update_dict["stage"]
+        outcome = None
+        if new_stage in ["hired", "rejected", "dropped"]:
+            outcome = new_stage
+        await update_application_in_history(
+            application["candidate_id"],
+            app_id,
+            new_stage,
+            outcome
+        )
+    
+    updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    return ApplicationResponse(**updated_application)
 
 @api_router.post("/applications/{app_id}/notes")
 async def add_note(app_id: str, note_data: NoteCreate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
