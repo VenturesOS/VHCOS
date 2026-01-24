@@ -132,7 +132,7 @@ export default function BatchUploadPage() {
       
       const newEditing = { ...c.editing, [field]: value };
       
-      // Validate
+      // Validate (Data Governance: all mandatory fields)
       const errors = [];
       if (!newEditing.name?.trim()) errors.push('Name is required');
       if (!newEditing.email?.trim()) errors.push('Email is required');
@@ -140,6 +140,10 @@ export default function BatchUploadPage() {
         errors.push('Current salary is required');
       }
       if (!newEditing.notice_period) errors.push('Notice period is required');
+      if (!newEditing.location?.trim()) errors.push('Location is required');
+      if (newEditing.experience_years === '' || parseInt(newEditing.experience_years) < 0) {
+        errors.push('Experience (years) is required');
+      }
       
       return {
         ...c,
