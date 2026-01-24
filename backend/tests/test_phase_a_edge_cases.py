@@ -16,7 +16,7 @@ import os
 import uuid
 
 # API Configuration
-API_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://workflowos-4.preview.emergentagent.com")
+API_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://data-governance-5.preview.emergentagent.com")
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
