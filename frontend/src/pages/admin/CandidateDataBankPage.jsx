@@ -332,6 +332,22 @@ export default function CandidateDataBankPage() {
                       {candidate.is_active !== false && (
                         <span className="w-2 h-2 bg-green-500 rounded-full" title="Active"></span>
                       )}
+                      {/* Download Resume Button */}
+                      {candidate.resume_url && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadResume(candidate);
+                          }}
+                          className="text-slate-600 hover:text-[#7CB342]"
+                          data-testid={`download-resume-btn-${candidate.id}`}
+                          title="Download Resume"
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      )}
                       {/* Add as Applicant Button */}
                       <Button
                         variant="outline"
