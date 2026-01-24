@@ -1631,6 +1631,197 @@ async def delete_job(job_id: str, current_user: dict = Depends(require_role(["ad
         raise HTTPException(status_code=404, detail="Job not found")
     return {"message": "Job deleted successfully"}
 
+
+# ============== CAREER PAGE PUBLISHING CONTROL ==============
+# Internal OS Enhancement: Career Page Status Control with full audit logging
+# Status options: not_posted, live, removed
+# Publishing is NEVER automatic - always requires explicit action
+
+class CareerPageStatusUpdate(BaseModel):
+    """Model for updating career page status"""
+    new_status: str = Field(..., pattern="^(live|removed)$")
+    reason: Optional[str] = None
+
+
+@api_router.post("/jobs/{job_id}/career-page-status")
+async def update_career_page_status(
+    job_id: str,
+    update: CareerPageStatusUpdate,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Update job's career page status with full audit logging.
+    
+    IMPORTANT: Career page publishing is NEVER automatic.
+    System must ALWAYS ask: "Do you want to post this job on the career page?"
+    Default option = NO
+    
+    Access Control:
+    - Admin: Can turn ON/OFF career page status for any job
+    - Employer: Can turn ON/OFF for jobs under their companies
+    - Recruiter: Can turn ON/OFF ONLY for jobs they personally created AND only after employer approval
+    - Candidate: NO control
+    
+    Rules:
+    - Job must be in 'active' status to be posted on career page
+    - Removing from career page does NOT delete the job internally
+    - Full audit log maintained for all status changes
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Access control checks
+    if current_user["role"] == "recruiter":
+        # Recruiter can only control jobs they personally created
+        if job.get("posted_by") != current_user["id"]:
+            raise HTTPException(
+                status_code=403, 
+                detail="Recruiters can only control career page status for jobs they personally created"
+            )
+        # Recruiter can only post after employer approval (status must be 'active')
+        if job.get("status") != "active":
+            raise HTTPException(
+                status_code=400,
+                detail="Job must be approved (active status) before posting to career page"
+            )
+    
+    elif current_user["role"] == "employer":
+        # Employer can control jobs under their companies
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        if team:
+            company_ids = team.get("company_ids", [])
+            recruiter_ids = team.get("recruiter_ids", [])
+            
+            can_control = (
+                job.get("posted_by") == current_user["id"] or
+                job.get("company_id") in company_ids or
+                job.get("posted_by") in recruiter_ids
+            )
+            
+            if not can_control:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Employers can only control career page status for jobs under their companies"
+                )
+        else:
+            # No team assigned, only own jobs
+            if job.get("posted_by") != current_user["id"]:
+                raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Admin has full access - no additional checks needed
+    
+    # Validation: Can only post active jobs to career page
+    if update.new_status == "live" and job.get("status") != "active":
+        raise HTTPException(
+            status_code=400,
+            detail="Only active/approved jobs can be posted on the career page"
+        )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    current_status = job.get("career_page_status", "not_posted")
+    
+    # Create audit log entry
+    audit_entry = {
+        "from_status": current_status,
+        "to_status": update.new_status,
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user.get("name", "Unknown"),
+        "changed_by_role": current_user["role"],
+        "reason": update.reason,
+        "timestamp": now
+    }
+    
+    # Update job
+    await db.jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "career_page_status": update.new_status,
+                "updated_at": now
+            },
+            "$push": {"career_page_history": audit_entry}
+        }
+    )
+    
+    # Create global audit log
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "job",
+        "entity_id": job_id,
+        "action": f"career_page_{update.new_status}",
+        "old_value": current_status,
+        "new_value": update.new_status,
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user.get("name"),
+        "changed_by_role": current_user["role"],
+        "reason": update.reason,
+        "timestamp": now
+    })
+    
+    updated_job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    
+    return {
+        "success": True,
+        "message": f"Job {'posted to' if update.new_status == 'live' else 'removed from'} career page",
+        "job_id": job_id,
+        "career_page_status": update.new_status,
+        "audit_entry": audit_entry
+    }
+
+
+@api_router.get("/jobs/{job_id}/career-page-history")
+async def get_career_page_history(
+    job_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Get career page status change history for a job"""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0, "career_page_history": 1, "career_page_status": 1})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    return {
+        "job_id": job_id,
+        "current_status": job.get("career_page_status", "not_posted"),
+        "history": job.get("career_page_history", [])
+    }
+
+
+@api_router.get("/career-page/jobs")
+async def get_career_page_jobs():
+    """
+    Public endpoint: Get all jobs that are live on the career page.
+    Used by the public career page to display available positions.
+    """
+    jobs = await db.jobs.find(
+        {
+            "career_page_status": "live",
+            "status": "active"
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "title": 1,
+            "description": 1,
+            "requirements": 1,
+            "location": 1,
+            "job_type": 1,
+            "salary_min": 1,
+            "salary_max": 1,
+            "department": 1,
+            "public_company_alias": 1,
+            "company_name": 1,
+            "created_at": 1
+        }
+    ).to_list(100)
+    
+    # Use public company alias if available, otherwise company name
+    for job in jobs:
+        job["display_company"] = job.get("public_company_alias") or job.get("company_name") or "Confidential"
+    
+    return jobs
+
+
 # ============== CANDIDATE PROFILE ROUTES ==============
 
 @api_router.get("/profile", response_model=CandidateProfile)
