@@ -3286,6 +3286,88 @@ async def get_candidate_audit_log(
     
     return logs
 
+
+@api_router.get("/candidate-bank/{candidate_id}/history")
+async def get_candidate_activity_history(
+    candidate_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Data Governance: Get candidate's complete activity history.
+    Internal-only endpoint for Admin, Employer, Recruiter.
+    Shows all applications, stage changes, and outcomes across all jobs.
+    """
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    # Get all applications for this candidate
+    applications = await db.applications.find(
+        {"candidate_id": candidate_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    # Enrich with job and company details
+    enriched_applications = []
+    for app in applications:
+        job = await db.jobs.find_one({"id": app.get("job_id")}, {"title": 1, "company_id": 1, "location": 1, "_id": 0})
+        company_name = "Unknown"
+        if job and job.get("company_id"):
+            company = await db.companies.find_one({"id": job.get("company_id")}, {"name": 1, "_id": 0})
+            company_name = company.get("name") if company else app.get("company_name", "Unknown")
+        
+        enriched_applications.append({
+            "application_id": app.get("id"),
+            "job_id": app.get("job_id"),
+            "job_title": job.get("title") if job else app.get("job_title", "Unknown"),
+            "company_name": company_name,
+            "job_location": job.get("location") if job else None,
+            "stage": app.get("stage", "applied"),
+            "source": app.get("source", "self"),
+            "applied_at": app.get("created_at"),
+            "last_updated": app.get("updated_at"),
+            "current_salary_at_application": app.get("current_salary"),
+            "notice_period_at_application": app.get("notice_period"),
+            "has_notes": len(app.get("notes", [])) > 0,
+            "edit_count": len(app.get("edit_history", []))
+        })
+    
+    # Get stored application history from candidate record
+    stored_history = candidate.get("application_history", [])
+    
+    # Profile freshness data
+    freshness = {
+        "last_profile_updated_at": candidate.get("last_profile_updated_at"),
+        "last_application_date": candidate.get("last_application_date"),
+        "profile_created_at": candidate.get("created_at"),
+        "total_applications": len(applications)
+    }
+    
+    # Profile audit trail for mandatory fields
+    profile_audit = candidate.get("profile_update_audit", [])[-20:]  # Last 20 entries
+    
+    return {
+        "candidate_id": candidate_id,
+        "candidate_name": candidate.get("name"),
+        "candidate_email": candidate.get("email"),
+        "applications": enriched_applications,
+        "stored_history": stored_history,
+        "freshness": freshness,
+        "profile_audit": profile_audit,
+        "summary": {
+            "total_applications": len(applications),
+            "stages": {
+                "applied": sum(1 for a in applications if a.get("stage") == "applied"),
+                "shortlisted": sum(1 for a in applications if a.get("stage") == "shortlisted"),
+                "interview": sum(1 for a in applications if a.get("stage") == "interview"),
+                "offered": sum(1 for a in applications if a.get("stage") == "offered"),
+                "hired": sum(1 for a in applications if a.get("stage") == "hired"),
+                "rejected": sum(1 for a in applications if a.get("stage") == "rejected"),
+            }
+        }
+    }
+
+
 @api_router.get("/candidate-bank/{candidate_id}/resume-history")
 async def get_candidate_resume_history(
     candidate_id: str,
