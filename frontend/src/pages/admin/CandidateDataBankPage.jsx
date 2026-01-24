@@ -754,6 +754,40 @@ export default function CandidateDataBankPage() {
                 </Select>
               </div>
 
+              {/* Data Governance: Location - Mandatory */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  Location *
+                </Label>
+                <Input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  placeholder="e.g., Mumbai, Delhi, Bangalore"
+                  className={!editLocation ? 'border-amber-400' : ''}
+                  data-testid="location-input"
+                />
+              </div>
+
+              {/* Data Governance: Experience Years - Mandatory */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Briefcase className="w-4 h-4" />
+                  Experience (years) *
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editExperience}
+                  onChange={(e) => setEditExperience(e.target.value)}
+                  placeholder="e.g., 5"
+                  className={editExperience === '' ? 'border-amber-400' : ''}
+                  data-testid="experience-input"
+                />
+                <p className="text-xs text-slate-500">Enter 0 for freshers</p>
+              </div>
+
               {/* Warning if fields missing */}
               {(!editSalary || !editNotice || !editLocation || editExperience === '') && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
