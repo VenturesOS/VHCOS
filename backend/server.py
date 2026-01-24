@@ -1435,6 +1435,9 @@ async def create_job(job_data: JobCreate, current_user: dict = Depends(require_r
         "status": initial_status,
         "team_id": team_id,
         "applicant_count": 0,
+        # Career Page Status: NEVER auto-posted, always starts as not_posted
+        "career_page_status": "not_posted",
+        "career_page_history": [],
         "approval_history": [{
             "status": initial_status,
             "changed_by": current_user["id"],
