@@ -420,7 +420,7 @@ export default function BatchUploadPage() {
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-amber-800">
-                  <strong>Salary & Notice Period are mandatory.</strong> All candidates must have these fields filled before saving.
+                  <strong>Data Governance: All mandatory fields must be filled.</strong> Salary, notice period, location, and experience are required for every candidate before saving.
                 </div>
               </div>
 
