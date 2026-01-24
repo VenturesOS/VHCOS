@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Eye, Trash2, Globe, GlobeOff, History, AlertTriangle } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Eye, Trash2, Globe, GlobeLock, History, AlertTriangle } from 'lucide-react';
 
 export default function AdminJobsPage() {
   const [jobs, setJobs] = useState([]);
@@ -170,7 +170,7 @@ export default function AdminJobsPage() {
                         onClick={() => openCareerPageDialog(job, 'removed')}
                         data-testid={`remove-career-page-${job.id}`}
                       >
-                        <GlobeOff className="w-4 h-4" />
+                        <GlobeLock className="w-4 h-4" />
                       </Button>
                     ) : (
                       <Button
@@ -226,7 +226,7 @@ export default function AdminJobsPage() {
               {careerPageAction === 'live' ? (
                 <><Globe className="w-5 h-5 text-green-600" /> Post to Career Page</>
               ) : (
-                <><GlobeOff className="w-5 h-5 text-amber-600" /> Remove from Career Page</>
+                <><GlobeLock className="w-5 h-5 text-amber-600" /> Remove from Career Page</>
               )}
             </DialogTitle>
             <DialogDescription>
