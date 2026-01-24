@@ -446,16 +446,30 @@ export default function CandidateDataBankPage() {
 
               <TabsContent value="profile">
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-                      <span className="text-[#7CB342] font-bold text-2xl">
-                        {selectedCandidate.name?.charAt(0).toUpperCase()}
-                      </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center">
+                        <span className="text-[#7CB342] font-bold text-2xl">
+                          {selectedCandidate.name?.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-xl">{selectedCandidate.name}</h3>
+                        <p className="text-slate-500">{selectedCandidate.headline}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-xl">{selectedCandidate.name}</h3>
-                      <p className="text-slate-500">{selectedCandidate.headline}</p>
-                    </div>
+                    {/* Download Resume Button in Profile Dialog */}
+                    {selectedCandidate.resume_url && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadResume(selectedCandidate)}
+                        className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
+                        data-testid="download-resume-profile-btn"
+                      >
+                        <Download className="w-4 h-4 mr-2" /> Download Resume
+                      </Button>
+                    )}
                   </div>
 
                   {/* Data Governance: Profile Freshness Metadata */}
