@@ -69,6 +69,14 @@ export const jobAPI = {
   update: (id, data) => api.put(`/jobs/${id}`, data),
   delete: (id) => api.delete(`/jobs/${id}`),
   getApplicants: (jobId, params) => api.get(`/jobs/${jobId}/applicants`, { params }),
+  // Career Page Publishing Control (Internal OS Enhancement)
+  updateCareerPageStatus: (jobId, newStatus, reason) => 
+    api.post(`/jobs/${jobId}/career-page-status`, { new_status: newStatus, reason }),
+  getCareerPageHistory: (jobId) => api.get(`/jobs/${jobId}/career-page-history`),
+  // Public career page jobs
+  getCareerPageJobs: () => api.get('/career-page/jobs'),
+  // JD Parser
+  parseJD: (jdText) => api.post('/jobs/parse-jd', { jd_text: jdText }),
 };
 
 // Application APIs
