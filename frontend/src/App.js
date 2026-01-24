@@ -105,6 +105,8 @@ function App() {
           <Route path="/employer" element={<DashboardLayout allowedRoles={["employer"]} />}>
             <Route index element={<EmployerDashboard />} />
             <Route path="analytics" element={<EmployerAnalyticsPage />} />
+            <Route path="my-team" element={<EmployerMyTeamPage />} />
+            <Route path="companies" element={<EmployerCompaniesPage />} />
             <Route path="jobs" element={<EmployerJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
