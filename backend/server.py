@@ -2988,10 +2988,15 @@ async def link_candidate_to_job(
     now = datetime.now(timezone.utc).isoformat()
     app_id = str(uuid.uuid4())
     
+    # Get company name for history
+    company = await db.companies.find_one({"id": job.get("company_id")}, {"name": 1, "_id": 0})
+    company_name = company.get("name") if company else job.get("company_name", "Unknown")
+    
     application_doc = {
         "id": app_id,
         "job_id": request.job_id,
         "job_title": job.get("title"),
+        "company_name": company_name,
         "candidate_id": request.candidate_id,
         "candidate_name": candidate.get("name"),
         "candidate_email": candidate.get("email"),
@@ -3000,6 +3005,8 @@ async def link_candidate_to_job(
         "experience_summary": candidate.get("summary"),
         "current_salary": candidate.get("current_salary"),
         "notice_period": candidate.get("notice_period"),
+        "location": candidate.get("location"),  # Data Governance: mandatory field
+        "experience_years": candidate.get("experience_years"),  # Data Governance: mandatory field
         "stage": "applied",
         "source": "manual_link",
         "match_score": 0,
@@ -3013,6 +3020,17 @@ async def link_candidate_to_job(
     }
     
     await db.applications.insert_one(application_doc)
+    
+    # Data Governance: Add to candidate's application history
+    await add_application_to_history(request.candidate_id, {
+        "id": app_id,
+        "job_id": request.job_id,
+        "job_title": job.get("title"),
+        "company_name": company_name,
+        "source": "manual_link",
+        "created_at": now,
+        "stage": "applied"
+    })
     
     return {
         "success": True,
