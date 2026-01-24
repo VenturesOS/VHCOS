@@ -56,10 +56,13 @@ const navItems = {
   employer: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/employer' },
     { icon: BarChart3, label: 'Analytics', path: '/employer/analytics' },
+    { icon: UsersRound, label: 'My Team', path: '/employer/my-team' },
+    { icon: Building2, label: 'Companies', path: '/employer/companies' },
     { icon: Briefcase, label: 'My Jobs', path: '/employer/jobs' },
     { icon: UserPlus, label: 'Post Job', path: '/employer/jobs/new' },
     { icon: ClipboardList, label: 'Applicants', path: '/employer/applicants' },
     { icon: CheckCircle, label: 'Approvals', path: '/employer/approvals' },
+    { icon: Database, label: 'Candidate Bank', path: '/employer/candidate-bank' },
     { icon: Sparkles, label: 'Find Candidates', path: '/employer/find-candidates' },
   ],
   candidate: [
