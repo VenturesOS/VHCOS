@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp } from 'lucide-react';
+import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download } from 'lucide-react';
 
 // Notice period options
 const NOTICE_PERIODS = [
