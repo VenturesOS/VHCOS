@@ -225,6 +225,16 @@ export default function EmployerJobsPage() {
                           <Globe className="w-3 h-3" /> Live on Career Page
                         </span>
                       )}
+                      {/* Assigned Recruiters Badge */}
+                      {job.assigned_recruiters?.length > 0 && (
+                        <span 
+                          className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center gap-1 cursor-pointer hover:bg-blue-200"
+                          onClick={() => openAssignmentHistoryDialog(job)}
+                          data-testid={`assigned-count-${job.id}`}
+                        >
+                          <UserCheck className="w-3 h-3" /> {job.assigned_recruiters.length} Assigned
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-slate-500">
                       <span className="flex items-center gap-1">
@@ -240,6 +250,20 @@ export default function EmployerJobsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Assign Recruiters Button - Only for active/pending jobs */}
+                  {(job.status === 'active' || job.status === 'pending_approval') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                      onClick={() => openAssignDialog(job)}
+                      data-testid={`assign-recruiters-${job.id}`}
+                    >
+                      <UserPlus className="w-4 h-4 mr-1" /> 
+                      {job.assigned_recruiters?.length > 0 ? 'Manage Recruiters' : 'Assign Recruiter'}
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="default"
                     size="sm"
