@@ -1833,6 +1833,91 @@ async def get_career_page_history(
     }
 
 
+class ShareableLinkUpdate(BaseModel):
+    """Model for toggling shareable link status"""
+    enabled: bool
+
+
+@api_router.put("/jobs/{job_id}/shareable-link")
+async def update_shareable_link(
+    job_id: str,
+    update: ShareableLinkUpdate,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Enable or disable shareable link for a job.
+    
+    Rules:
+    - Shareable link can only be enabled for jobs with career_page_status = "live"
+    - Admin has full access
+    - Employer can control jobs under their companies
+    - Recruiter can only control jobs they personally created
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Access control (same as career page status)
+    if current_user["role"] == "recruiter":
+        if job.get("posted_by") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user["role"] == "employer":
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        if team:
+            company_ids = team.get("company_ids", [])
+            recruiter_ids = team.get("recruiter_ids", [])
+            can_control = (
+                job.get("posted_by") == current_user["id"] or
+                job.get("company_id") in company_ids or
+                job.get("posted_by") in recruiter_ids
+            )
+            if not can_control:
+                raise HTTPException(status_code=403, detail="Access denied")
+        elif job.get("posted_by") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Validation: Can only enable shareable link for live jobs
+    if update.enabled and job.get("career_page_status") != "live":
+        raise HTTPException(
+            status_code=400,
+            detail="Shareable link can only be enabled for jobs that are live on the career page"
+        )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "shareable_link_enabled": update.enabled,
+                "updated_at": now
+            }
+        }
+    )
+    
+    # Audit log
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "job",
+        "entity_id": job_id,
+        "action": f"shareable_link_{'enabled' if update.enabled else 'disabled'}",
+        "old_value": job.get("shareable_link_enabled", False),
+        "new_value": update.enabled,
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user.get("name"),
+        "changed_by_role": current_user["role"],
+        "timestamp": now
+    })
+    
+    return {
+        "success": True,
+        "message": f"Shareable link {'enabled' if update.enabled else 'disabled'}",
+        "job_id": job_id,
+        "job_public_id": job.get("job_public_id"),
+        "shareable_link_enabled": update.enabled
+    }
+
+
 @api_router.get("/career-page/jobs")
 async def get_career_page_jobs():
     """
@@ -1842,11 +1927,13 @@ async def get_career_page_jobs():
     jobs = await db.jobs.find(
         {
             "career_page_status": "live",
-            "status": "active"
+            "status": "active",
+            "shareable_link_enabled": True
         },
         {
             "_id": 0,
             "id": 1,
+            "job_public_id": 1,
             "title": 1,
             "description": 1,
             "requirements": 1,
@@ -1855,6 +1942,9 @@ async def get_career_page_jobs():
             "salary_min": 1,
             "salary_max": 1,
             "department": 1,
+            "skills": 1,
+            "experience_min": 1,
+            "experience_max": 1,
             "public_company_alias": 1,
             "company_name": 1,
             "created_at": 1
