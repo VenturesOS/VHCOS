@@ -70,10 +70,14 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Routes */}
+          {/* Public Routes (No Auth Required) */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/reset-password" element={<PasswordReset />} />
+          
+          {/* Public Job Pages - Shareable Links */}
+          <Route path="/jobs/:jobId" element={<PublicJobPage />} />
+          <Route path="/application-success" element={<ApplicationSuccessPage />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<DashboardLayout allowedRoles={["admin"]} />}>
