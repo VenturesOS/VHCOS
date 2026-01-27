@@ -146,6 +146,9 @@ class JobResponse(BaseModel):
     skills: List[str] = []
     experience_min: Optional[int] = None
     experience_max: Optional[int] = None
+    # Recruiter Assignment (Employer-led mandate allocation)
+    assigned_recruiters: List[str] = []  # List of recruiter user IDs
+    assignment_history: List[dict] = []  # Audit trail for recruiter assignments
 
 class JobUpdate(BaseModel):
     title: Optional[str] = None
