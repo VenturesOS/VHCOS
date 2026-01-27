@@ -459,7 +459,7 @@ export default function EmployerJobsPage() {
                         By: {entry.changed_by_name} ({entry.changed_by_role})
                       </p>
                       {entry.reason && (
-                        <p className="text-slate-500 mt-1 italic">"{entry.reason}"</p>
+                        <p className="text-slate-500 mt-1 italic">&ldquo;{entry.reason}&rdquo;</p>
                       )}
                     </div>
                   ))
