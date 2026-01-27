@@ -174,6 +174,12 @@ export default function AdminJobsPage() {
                       <Briefcase className="w-6 h-6 text-[#7CB342]" />
                     </div>
                     <div>
+                      {/* Job Public ID Badge */}
+                      {job.job_public_id && (
+                        <Badge variant="outline" className="mb-1 text-xs font-mono">
+                          {job.job_public_id}
+                        </Badge>
+                      )}
                       <h3 className="font-heading font-semibold text-lg text-slate-900">{job.title}</h3>
                       <p className="text-slate-500 text-sm">{job.company_name || 'Company'}</p>
                       <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-slate-500">
@@ -197,6 +203,43 @@ export default function AdminJobsPage() {
                       <Globe className="w-3 h-3" /> Live
                     </span>
                   )}
+                  
+                  {/* Shareable Link Badge & Controls */}
+                  {job.career_page_status === 'live' && (
+                    <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 rounded-lg">
+                      <Link2 className="w-3 h-3 text-blue-600" />
+                      <span className="text-xs text-blue-700">Share</span>
+                      <Switch
+                        checked={job.shareable_link_enabled || false}
+                        onCheckedChange={(checked) => handleShareableLinkToggle(job, checked)}
+                        className="scale-75"
+                        data-testid={`shareable-toggle-${job.id}`}
+                      />
+                      {job.shareable_link_enabled && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => copyShareableLink(job)}
+                            title="Copy link"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => openShareableLink(job)}
+                            title="Open in new tab"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  
                   <span className={`px-2 py-1 rounded text-xs font-medium ${job.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
                     {job.status}
                   </span>
