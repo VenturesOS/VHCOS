@@ -3931,7 +3931,12 @@ async def get_candidate_audit_log(
     candidate_id: str,
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
-    """Get audit trail for candidate"""
+    """Get audit trail for candidate with proper visibility check"""
+    
+    # Check candidate visibility using unified helper
+    has_access = await check_candidate_visibility(candidate_id, current_user)
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied to this candidate")
     
     logs = await db.audit_logs.find(
         {"candidate_id": candidate_id},
@@ -3951,6 +3956,11 @@ async def get_candidate_activity_history(
     Internal-only endpoint for Admin, Employer, Recruiter.
     Shows all applications, stage changes, and outcomes across all jobs.
     """
+    # Check candidate visibility using unified helper
+    has_access = await check_candidate_visibility(candidate_id, current_user)
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied to this candidate")
+    
     candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
