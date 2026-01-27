@@ -4633,7 +4633,8 @@ async def public_apply(
     resume: UploadFile = File(None),  # Optional if resume_filename provided from parse step
     resume_filename: Optional[str] = Form(None),  # From /public/parse-resume step
     website: Optional[str] = Form(None),  # Honeypot
-    turnstile_token: Optional[str] = Form(None)
+    turnstile_token: Optional[str] = Form(None),
+    consent_given: Optional[str] = Form(None)  # Must be "true" for consent
 ):
     """
     Public job application (NO LOGIN REQUIRED).
@@ -4641,9 +4642,11 @@ async def public_apply(
     - Step 1: Candidate uploads resume via /public/parse-resume, gets parsed data
     - Step 2: Candidate reviews/edits data, adds salary & notice period, then submits here
     
+    CONSENT REQUIRED: consent_given must be "true" to process application.
+    
     Can also accept direct resume upload for single-step apply.
     """
-    # Get client IP for rate limiting
+    # Get client IP for rate limiting and consent tracking
     client_ip = request.client.host if request.client else "unknown"
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
@@ -4653,22 +4656,47 @@ async def public_apply(
     if not check_rate_limit(f"apply:{client_ip}", limit=5, window=60):
         raise HTTPException(status_code=429, detail="Too many applications. Please try again later.")
     
+    # CONSENT VALIDATION (MANDATORY)
+    if consent_given != "true":
+        raise HTTPException(
+            status_code=400, 
+            detail="Consent is required to submit your application. Please agree to the data processing terms."
+        )
+    
     # Honeypot check - if website field is filled, it's a bot
     if website:
         logger.warning(f"[BOT] Honeypot triggered from {client_ip}")
         # Return success to not tip off bots, but don't process
         return {"success": True, "message": "Application submitted successfully", "application_id": str(uuid.uuid4())}
     
-    # Verify job exists
-    job = await db.jobs.find_one({"id": job_id, "status": "active"}, {"_id": 0})
+    # Verify job exists AND is publicly accessible
+    job = await db.jobs.find_one({
+        "$or": [{"id": job_id}, {"job_public_id": job_id}],
+        "status": "active",
+        "career_page_status": "live",
+        "shareable_link_enabled": True
+    }, {"_id": 0})
+    
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found or no longer active")
+        raise HTTPException(status_code=404, detail="Job not found or no longer accepting applications")
+    
+    # Use internal job ID for application
+    internal_job_id = job.get("id")
     
     # Validate email
     import re
     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     if not re.match(email_pattern, email):
         raise HTTPException(status_code=400, detail="Invalid email address")
+    
+    # Store consent metadata
+    consent_metadata = {
+        "consent_given": True,
+        "consent_timestamp": datetime.now(timezone.utc).isoformat(),
+        "consent_ip_address": client_ip,
+        "consent_policy_version": "1.0",
+        "consent_text": "I consent to VHC Talent collecting and processing my personal and professional data for recruitment purposes. I understand I can withdraw consent at any time."
+    }
     
     # Handle resume - either from parse step or new upload
     upload_dir = Path("/app/uploads")
