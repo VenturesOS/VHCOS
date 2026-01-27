@@ -136,6 +136,13 @@ class JobResponse(BaseModel):
     created_at: str
     updated_at: Optional[str] = None
     applicant_count: int = 0
+    # Shareable Job Link Feature
+    job_public_id: Optional[str] = None  # Format: VHC/YYYY/NNNN
+    shareable_link_enabled: bool = False  # Enable/disable public shareable link
+    # Skills for job matching
+    skills: List[str] = []
+    experience_min: Optional[int] = None
+    experience_max: Optional[int] = None
 
 class JobUpdate(BaseModel):
     title: Optional[str] = None
