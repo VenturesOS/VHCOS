@@ -112,6 +112,64 @@ export default function EmployerJobsPage() {
     }
   };
 
+  // Recruiter Assignment Functions
+  const openAssignDialog = async (job) => {
+    setAssigningJob(job);
+    setSelectedRecruiters(job.assigned_recruiters || []);
+    setShowAssignDialog(true);
+    setLoadingRecruiters(true);
+    
+    try {
+      const res = await mandateAPI.getTeamRecruiters();
+      setTeamRecruiters(res.data.recruiters || []);
+    } catch (error) {
+      toast.error('Failed to load team recruiters');
+      setTeamRecruiters([]);
+    } finally {
+      setLoadingRecruiters(false);
+    }
+  };
+
+  const handleRecruiterToggle = (recruiterId) => {
+    setSelectedRecruiters(prev => 
+      prev.includes(recruiterId)
+        ? prev.filter(id => id !== recruiterId)
+        : [...prev, recruiterId]
+    );
+  };
+
+  const handleAssignRecruiters = async () => {
+    if (!assigningJob) return;
+    
+    setAssigningInProgress(true);
+    try {
+      await mandateAPI.assignRecruiters(assigningJob.id, selectedRecruiters);
+      toast.success(
+        selectedRecruiters.length === 0 
+          ? 'All recruiters unassigned from mandate' 
+          : `${selectedRecruiters.length} recruiter(s) assigned to mandate`
+      );
+      setShowAssignDialog(false);
+      loadJobs();
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      toast.error(detail || 'Failed to assign recruiters');
+    } finally {
+      setAssigningInProgress(false);
+    }
+  };
+
+  const openAssignmentHistoryDialog = async (job) => {
+    try {
+      const res = await mandateAPI.getAssignments(job.id);
+      setAssignmentHistory(res.data.assignment_history || []);
+      setAssigningJob(job);
+      setShowAssignmentHistory(true);
+    } catch (error) {
+      toast.error('Failed to load assignment history');
+    }
+  };
+
   const filteredJobs = jobs.filter((job) =>
     job.title.toLowerCase().includes(search.toLowerCase())
   );
