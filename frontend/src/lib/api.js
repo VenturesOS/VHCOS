@@ -221,11 +221,18 @@ export const matchingAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  parseJD: (text, file) => {
+  /**
+   * Parse Job Description using AI
+   * @param {string} text - JD text (for paste mode)
+   * @param {File} file - JD file (for upload mode - PDF, DOC, DOCX)
+   * @param {string} inputType - 'paste' or 'upload'
+   */
+  parseJD: (text, file, inputType = 'paste') => {
     const formData = new FormData();
     if (text) formData.append('jd_text', text);
-    if (file) formData.append('file', file);
-    return api.post('/ai/parse-jd', formData, {
+    if (file) formData.append('jd_file', file);
+    formData.append('input_type', inputType);
+    return api.post('/jobs/parse-jd', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
