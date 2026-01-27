@@ -7096,7 +7096,7 @@ Return ONLY valid JSON, no markdown or explanation."""
             system_message="You are an expert job description parser. Extract structured data accurately."
         )
         
-        response = await chat_client.send_message(parse_prompt)
+        response = await chat_client.send_message(UserMessage(content=parse_prompt))
         
         # Parse JSON response
         try:
