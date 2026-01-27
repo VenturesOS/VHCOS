@@ -7194,7 +7194,117 @@ async def assign_recruiters_to_mandate(
     current_user: dict = Depends(require_role(["admin", "employer"]))
 ):
     """
-    Assign recruiters to a job mandate.
+    Assign recruiters to a job mandate (Employer-led allocation).
+    
+    Rules:
+    - Only Employer or Admin can assign
+    - Recruiters cannot self-assign
+    - Only active/approved jobs can have recruiters assigned
+    - Recruiters must be in employer's team
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Validate job status - only active or pending_approval jobs can be assigned
+    if job.get("status") not in ["active", "pending_approval"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot assign recruiters to jobs with status '{job.get('status')}'. Job must be Active or Pending Approval."
+        )
+    
+    # Employer access control
+    if current_user["role"] == "employer":
+        # Check if employer owns this job (via team or direct posting)
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        
+        can_assign = (
+            job.get("posted_by") == current_user["id"] or
+            (team and job.get("team_id") == team.get("id")) or
+            (team and job.get("posted_by") in team.get("recruiter_ids", []))
+        )
+        
+        if not can_assign:
+            raise HTTPException(status_code=403, detail="You can only assign recruiters to mandates under your team")
+        
+        # Validate recruiters are in employer's team
+        if team:
+            team_recruiter_ids = team.get("recruiter_ids", [])
+            for rec_id in recruiter_ids:
+                if rec_id not in team_recruiter_ids:
+                    recruiter = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
+                    rec_name = recruiter.get("name", rec_id) if recruiter else rec_id
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Recruiter '{rec_name}' is not in your team"
+                    )
+    
+    # Validate all recruiter IDs exist and are active recruiters
+    for rec_id in recruiter_ids:
+        recruiter = await db.users.find_one({"id": rec_id, "role": "recruiter", "is_active": True}, {"_id": 0})
+        if not recruiter:
+            raise HTTPException(status_code=400, detail=f"Recruiter {rec_id} not found or inactive")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get recruiter details for assignment
+    recruiter_details = []
+    for rec_id in recruiter_ids:
+        rec = await db.users.find_one({"id": rec_id}, {"name": 1, "email": 1, "_id": 0})
+        if rec:
+            recruiter_details.append({
+                "id": rec_id,
+                "name": rec.get("name", "Unknown"),
+                "email": rec.get("email")
+            })
+    
+    # Get previous assignment state for audit
+    previous_assignments = job.get("assigned_recruiters", [])
+    
+    # Create audit entry
+    assignment_audit = {
+        "action": "recruiters_assigned",
+        "previous_recruiters": previous_assignments,
+        "new_recruiters": recruiter_ids,
+        "assigned_by_id": current_user["id"],
+        "assigned_by_name": current_user["name"],
+        "assigned_by_role": current_user["role"],
+        "timestamp": now
+    }
+    
+    await db.jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "assigned_recruiters": recruiter_ids,
+                "updated_at": now
+            },
+            "$push": {"assignment_history": assignment_audit}
+        }
+    )
+    
+    logging.info(f"Mandate {job.get('job_public_id', job_id)} assigned to recruiters {[r['name'] for r in recruiter_details]} by {current_user['name']} ({current_user['role']})")
+    
+    return {
+        "success": True,
+        "message": "Recruiters assigned successfully",
+        "job_id": job_id,
+        "job_public_id": job.get("job_public_id"),
+        "job_title": job.get("title"),
+        "assigned_recruiters": recruiter_details,
+        "assigned_by": current_user["name"],
+        "assigned_at": now
+    }
+
+
+@api_router.delete("/jobs/{job_id}/assign-recruiters/{recruiter_id}")
+async def remove_recruiter_from_mandate(
+    job_id: str,
+    recruiter_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Remove a single recruiter from a mandate.
     """
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
@@ -7202,52 +7312,53 @@ async def assign_recruiters_to_mandate(
     
     # Employer access control
     if current_user["role"] == "employer":
-        if job.get("company_id"):
-            company = await db.companies.find_one({"id": job["company_id"]}, {"_id": 0})
-            if not company or company.get("assigned_employer_id") != current_user["id"]:
-                raise HTTPException(status_code=403, detail="Access denied")
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        can_assign = (
+            job.get("posted_by") == current_user["id"] or
+            (team and job.get("team_id") == team.get("id"))
+        )
+        if not can_assign:
+            raise HTTPException(status_code=403, detail="Access denied")
     
-    # Validate all recruiter IDs
-    for rec_id in recruiter_ids:
-        recruiter = await db.users.find_one({"id": rec_id, "role": "recruiter"}, {"_id": 0})
-        if not recruiter:
-            raise HTTPException(status_code=400, detail=f"Recruiter {rec_id} not found")
+    current_assignments = job.get("assigned_recruiters", [])
+    if recruiter_id not in current_assignments:
+        raise HTTPException(status_code=400, detail="Recruiter is not assigned to this mandate")
     
+    new_assignments = [r for r in current_assignments if r != recruiter_id]
     now = datetime.now(timezone.utc).isoformat()
     
-    # Get recruiter names
-    recruiter_names = []
-    for rec_id in recruiter_ids:
-        rec = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
-        if rec:
-            recruiter_names.append(rec.get("name", "Unknown"))
+    # Get recruiter name for audit
+    recruiter = await db.users.find_one({"id": recruiter_id}, {"name": 1, "_id": 0})
+    recruiter_name = recruiter.get("name", "Unknown") if recruiter else "Unknown"
+    
+    assignment_audit = {
+        "action": "recruiter_removed",
+        "removed_recruiter_id": recruiter_id,
+        "removed_recruiter_name": recruiter_name,
+        "removed_by_id": current_user["id"],
+        "removed_by_name": current_user["name"],
+        "removed_by_role": current_user["role"],
+        "timestamp": now
+    }
     
     await db.jobs.update_one(
         {"id": job_id},
         {
             "$set": {
-                "assigned_recruiter_ids": recruiter_ids,
-                "assigned_recruiter_names": recruiter_names,
+                "assigned_recruiters": new_assignments,
                 "updated_at": now
             },
-            "$push": {"approval_history": {
-                "action": "recruiters_assigned",
-                "recruiter_ids": recruiter_ids,
-                "recruiter_names": recruiter_names,
-                "by_id": current_user["id"],
-                "by_name": current_user["name"],
-                "timestamp": now
-            }}
+            "$push": {"assignment_history": assignment_audit}
         }
     )
     
-    logging.info(f"Recruiters {recruiter_names} assigned to job {job_id} by {current_user['name']}")
+    logging.info(f"Recruiter {recruiter_name} removed from mandate {job_id} by {current_user['name']}")
     
     return {
-        "message": "Recruiters assigned successfully",
+        "success": True,
+        "message": f"Recruiter {recruiter_name} removed from mandate",
         "job_id": job_id,
-        "assigned_recruiter_ids": recruiter_ids,
-        "assigned_recruiter_names": recruiter_names
+        "remaining_recruiters": new_assignments
     }
 
 
@@ -7256,22 +7367,42 @@ async def get_job_assignments(
     job_id: str,
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
-    """Get recruiter assignments for a job."""
+    """Get recruiter assignments for a job with full details."""
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
     # For recruiter, check if they are assigned
     if current_user["role"] == "recruiter":
-        if current_user["id"] not in job.get("assigned_recruiter_ids", []):
+        if current_user["id"] not in job.get("assigned_recruiters", []):
             raise HTTPException(status_code=403, detail="Not assigned to this job")
+    
+    # Get recruiter details
+    assigned_details = []
+    for rec_id in job.get("assigned_recruiters", []):
+        recruiter = await db.users.find_one({"id": rec_id}, {"_id": 0, "password": 0})
+        if recruiter:
+            # Get active mandates count for this recruiter
+            active_mandates = await db.jobs.count_documents({
+                "assigned_recruiters": rec_id,
+                "status": {"$in": ["active", "pending_approval"]}
+            })
+            assigned_details.append({
+                "id": recruiter.get("id"),
+                "name": recruiter.get("name"),
+                "email": recruiter.get("email"),
+                "phone": recruiter.get("phone"),
+                "active_mandates_count": active_mandates
+            })
     
     return {
         "job_id": job_id,
+        "job_public_id": job.get("job_public_id"),
         "job_title": job.get("title"),
+        "job_status": job.get("status"),
         "team_id": job.get("team_id"),
-        "assigned_recruiter_ids": job.get("assigned_recruiter_ids", []),
-        "assigned_recruiter_names": job.get("assigned_recruiter_names", []),
+        "assigned_recruiters": assigned_details,
+        "assignment_history": job.get("assignment_history", [])
     }
 
 
