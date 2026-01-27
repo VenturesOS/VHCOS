@@ -1,0 +1,116 @@
+{
+  "summary": "Critical Role-Based Access Bug Fix in Candidate Data Bank - ALL TESTS PASSED. Backend: 27/27 tests passed. Frontend: All UI flows working correctly with no errors.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ Admin can list all candidates",
+    "✅ Admin can access John Doe detail",
+    "✅ Admin can access Jane Smith detail",
+    "✅ Admin can access audit-log endpoint",
+    "✅ Admin can access history endpoint",
+    "✅ Admin can access resume-history endpoint",
+    "✅ Employer can list candidates (sees 2: John Doe + Jane Smith)",
+    "✅ Employer can access John Doe detail (created by employer)",
+    "✅ Employer can access Jane Smith detail (created by team member)",
+    "✅ Employer can access audit-log for accessible candidates",
+    "✅ Employer can access history for accessible candidates",
+    "✅ Employer can access resume-history for accessible candidates",
+    "✅ Recruiter1 can list candidates (sees 1: Jane Smith)",
+    "✅ Recruiter1 can access Jane Smith detail (created by recruiter1)",
+    "✅ Recruiter1 gets 403 for John Doe (not created by recruiter1)",
+    "✅ Recruiter1 can access audit-log for Jane Smith",
+    "✅ Recruiter1 can access history for Jane Smith",
+    "✅ Recruiter1 can access resume-history for Jane Smith",
+    "✅ Recruiter2 sees 0 candidates (no created, no assigned jobs) - CRITICAL SECURITY VERIFIED",
+    "✅ Recruiter2 gets 403 for John Doe detail",
+    "✅ Recruiter2 gets 403 for Jane Smith detail",
+    "✅ Recruiter2 gets 403 for audit-log endpoint",
+    "✅ Recruiter2 gets 403 for history endpoint",
+    "✅ Recruiter2 gets 403 for resume-history endpoint",
+    "✅ List-Detail consistency verified for Employer",
+    "✅ List-Detail consistency verified for Recruiter1",
+    "✅ Secondary endpoints (audit-log, history, resume-history) have proper visibility checks",
+    "✅ Frontend: Employer Candidate Bank page loads correctly",
+    "✅ Frontend: Employer can open candidate profile dialog",
+    "✅ Frontend: Resume History tab works (no resumeHistory.map error)",
+    "✅ Frontend: Recruiter1 sees only Jane Smith (1 candidate)",
+    "✅ Frontend: Recruiter2 sees 0 candidates with empty state message"
+  ],
+
+  "verified_bug_fixes": {
+    "bug_1_list_detail_consistency": {
+      "description": "List endpoint and Detail endpoint now use SAME access control logic",
+      "fix_location": "check_candidate_visibility() and get_accessible_candidate_ids() helper functions",
+      "status": "FIXED AND VERIFIED"
+    },
+    "bug_2_secondary_endpoints_visibility": {
+      "description": "Secondary endpoints (audit-log, history, resume-history) now have proper candidate-level visibility checks",
+      "fix_location": "All secondary endpoints now call check_candidate_visibility() before returning data",
+      "status": "FIXED AND VERIFIED"
+    },
+    "bug_3_recruiter_job_query": {
+      "description": "Recruiter job query now uses assigned_recruiters instead of old team_id logic",
+      "fix_location": "get_accessible_candidate_ids() uses assigned_recruiters for mandate allocation compliance",
+      "status": "FIXED AND VERIFIED"
+    },
+    "bug_4_frontend_resume_history_map": {
+      "description": "resumeHistory.map error fixed by extracting resume_versions array",
+      "fix_location": "EmployerCandidateBankPage.jsx line 201, RecruiterCandidateBankPage.jsx line 197",
+      "status": "FIXED AND VERIFIED"
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_candidate_bank_access_control.py",
+    "/app/test_reports/pytest/pytest_candidate_bank_access.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_candidate_bank_access_control.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (27/27 tests passed)",
+    "frontend": "100%"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "employer": {"email": "employer@vhctalent.com", "password": "VhcTalent@2024", "note": "Sees 2 candidates: John Doe (created by self) + Jane Smith (created by team member)"},
+    "recruiter1": {"email": "recruiter@vhctalent.com", "password": "VhcTalent@2024", "note": "Sees 1 candidate: Jane Smith (created by self)"},
+    "recruiter2": {"email": "recruiter2@vhctalent.com", "password": "VhcTalent@2024", "note": "Sees 0 candidates - no created, no assigned jobs"}
+  },
+
+  "test_candidate_ids": {
+    "john_doe": "f5988726-fbee-4f9f-bd11-0d9e91496dd3",
+    "jane_smith": "4e761db5-45b2-45de-9553-ac5964b5cecb"
+  },
+
+  "seed_data_creation": "No new seed data created - used existing test candidates",
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (SMS/WhatsApp)"],
+    "note": "Email and SMS notifications are MOCKED"
+  },
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Candidate Data Bank role-based access control bug fix fully tested and verified. Key security rules verified: 1) Employer sees candidates they created + team members created + applied to their jobs, 2) Recruiter sees candidates they created + applied to their ASSIGNED mandates, 3) Recruiter2 (no candidates, no assigned jobs) correctly sees 0 candidates and gets 403 on all detail requests. Test file created at /app/backend/tests/test_candidate_bank_access_control.py with 27 comprehensive tests."
+}
