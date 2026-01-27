@@ -3637,7 +3637,173 @@ async def update_candidate_mandatory_fields(
         "fields_updated": fields_updated
     }
 
-@api_router.get("/candidate-bank", response_model=List[CandidateBankRecord])
+
+# ============== CANDIDATE VISIBILITY HELPER ==============
+
+async def check_candidate_visibility(candidate_id: str, current_user: dict) -> bool:
+    """
+    Unified visibility check for candidate data bank.
+    Returns True if user has access, False otherwise.
+    
+    Rules:
+    - Admin: Full access
+    - Employer: Candidates parsed by self, team recruiters, or applied to employer's jobs
+    - Recruiter: Candidates parsed by self, or applied to their ASSIGNED mandates
+    - Candidate: NO access
+    """
+    if current_user["role"] == "admin":
+        return True
+    
+    if current_user["role"] == "candidate":
+        return False
+    
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0, "created_by": 1, "visibility": 1})
+    if not candidate:
+        return False
+    
+    if current_user["role"] == "employer":
+        # Check if employer created this candidate
+        if candidate.get("created_by") == current_user["id"]:
+            return True
+        
+        # Check if a team member created this candidate
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        if team and candidate.get("created_by") in team.get("recruiter_ids", []):
+            return True
+        
+        # Check if candidate applied to employer's jobs
+        team_recruiter_ids = team.get("recruiter_ids", []) if team else []
+        employer_jobs = await db.jobs.find(
+            {"$or": [
+                {"posted_by": current_user["id"]},
+                {"posted_by": {"$in": team_recruiter_ids}},
+                {"company_id": {"$in": team.get("company_ids", []) if team else []}}
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        employer_job_ids = [j["id"] for j in employer_jobs]
+        
+        application = await db.applications.find_one({
+            "candidate_id": candidate_id,
+            "job_id": {"$in": employer_job_ids}
+        })
+        if application:
+            return True
+        
+        # Check legacy visibility field
+        if current_user["id"] in candidate.get("visibility", {}).get("employer_ids", []):
+            return True
+        
+        return False
+    
+    elif current_user["role"] == "recruiter":
+        # Check if recruiter created this candidate
+        if candidate.get("created_by") == current_user["id"]:
+            return True
+        
+        # Check if candidate applied to recruiter's ASSIGNED mandates
+        # CRITICAL: Use assigned_recruiters for mandate allocation compliance
+        recruiter_jobs = await db.jobs.find(
+            {"$or": [
+                {"posted_by": current_user["id"]},
+                {"assigned_recruiters": current_user["id"]}  # Aligned with mandate allocation
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        recruiter_job_ids = [j["id"] for j in recruiter_jobs]
+        
+        application = await db.applications.find_one({
+            "candidate_id": candidate_id,
+            "job_id": {"$in": recruiter_job_ids}
+        })
+        if application:
+            return True
+        
+        # Check legacy visibility field
+        if current_user["id"] in candidate.get("visibility", {}).get("recruiter_ids", []):
+            return True
+        
+        return False
+    
+    return False
+
+
+async def get_accessible_candidate_ids(current_user: dict) -> list:
+    """
+    Get list of candidate IDs accessible to the current user.
+    Used for list queries.
+    """
+    if current_user["role"] == "admin":
+        return None  # None means no filter (full access)
+    
+    if current_user["role"] == "candidate":
+        return []  # Empty list means no access
+    
+    accessible_ids = set()
+    
+    if current_user["role"] == "employer":
+        # Get employer's team
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        team_recruiter_ids = team.get("recruiter_ids", []) if team else []
+        
+        # Get jobs under employer's mandates
+        employer_jobs = await db.jobs.find(
+            {"$or": [
+                {"posted_by": current_user["id"]},
+                {"posted_by": {"$in": team_recruiter_ids}},
+                {"company_id": {"$in": team.get("company_ids", []) if team else []}}
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        employer_job_ids = [j["id"] for j in employer_jobs]
+        
+        # Get candidate IDs who applied to employer's jobs
+        applications = await db.applications.find(
+            {"job_id": {"$in": employer_job_ids}},
+            {"candidate_id": 1, "_id": 0}
+        ).to_list(10000)
+        accessible_ids.update([a.get("candidate_id") for a in applications if a.get("candidate_id")])
+        
+        # Add candidates created by employer or team
+        created_candidates = await db.candidate_bank.find(
+            {"$or": [
+                {"created_by": current_user["id"]},
+                {"created_by": {"$in": team_recruiter_ids}},
+                {"visibility.employer_ids": current_user["id"]}
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(10000)
+        accessible_ids.update([c["id"] for c in created_candidates])
+        
+    elif current_user["role"] == "recruiter":
+        # Get recruiter's ASSIGNED mandates (aligned with mandate allocation)
+        recruiter_jobs = await db.jobs.find(
+            {"$or": [
+                {"posted_by": current_user["id"]},
+                {"assigned_recruiters": current_user["id"]}  # Aligned with mandate allocation
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(1000)
+        recruiter_job_ids = [j["id"] for j in recruiter_jobs]
+        
+        # Get candidate IDs who applied to recruiter's jobs
+        applications = await db.applications.find(
+            {"job_id": {"$in": recruiter_job_ids}},
+            {"candidate_id": 1, "_id": 0}
+        ).to_list(10000)
+        accessible_ids.update([a.get("candidate_id") for a in applications if a.get("candidate_id")])
+        
+        # Add candidates created by recruiter
+        created_candidates = await db.candidate_bank.find(
+            {"$or": [
+                {"created_by": current_user["id"]},
+                {"visibility.recruiter_ids": current_user["id"]}
+            ]},
+            {"id": 1, "_id": 0}
+        ).to_list(10000)
+        accessible_ids.update([c["id"] for c in created_candidates])
+    
+    return list(accessible_ids)
 async def get_candidate_bank(
     search: Optional[str] = None,
     skills: Optional[str] = None,
