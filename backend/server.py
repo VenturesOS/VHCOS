@@ -1422,6 +1422,9 @@ async def create_job(job_data: JobCreate, current_user: dict = Depends(require_r
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     
+    # Generate unique job public ID (VHC/YYYY/NNNN format)
+    job_public_id = await generate_job_public_id()
+    
     # Determine company_id
     company_id = job_data.company_id or current_user.get("company_id", "default")
     company_name = None
@@ -1464,6 +1467,7 @@ async def create_job(job_data: JobCreate, current_user: dict = Depends(require_r
     
     job_doc = {
         "id": job_id,
+        "job_public_id": job_public_id,  # Structured Job ID
         **job_data_dict,
         "company_id": company_id,
         "company_name": company_name,
@@ -1475,6 +1479,8 @@ async def create_job(job_data: JobCreate, current_user: dict = Depends(require_r
         # Career Page Status: NEVER auto-posted, always starts as not_posted
         "career_page_status": "not_posted",
         "career_page_history": [],
+        # Shareable link: disabled by default
+        "shareable_link_enabled": False,
         "approval_history": [{
             "status": initial_status,
             "changed_by": current_user["id"],
@@ -1489,7 +1495,7 @@ async def create_job(job_data: JobCreate, current_user: dict = Depends(require_r
     
     await db.jobs.insert_one(job_doc)
     
-    logging.info(f"Job {job_id} created by {current_user['name']} ({current_user['role']}) with status {initial_status}")
+    logging.info(f"Job {job_public_id} ({job_id}) created by {current_user['name']} ({current_user['role']}) with status {initial_status}")
     
     return JobResponse(**job_doc)
 
