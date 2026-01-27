@@ -1,18 +1,38 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jobAPI } from '../../lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
+import { Badge } from '../../components/ui/badge';
+import { Separator } from '../../components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Briefcase, ArrowLeft, Save } from 'lucide-react';
+import { 
+  Briefcase, 
+  ArrowLeft, 
+  Save, 
+  Sparkles, 
+  Loader2, 
+  FileText,
+  X,
+  Plus,
+  AlertCircle
+} from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function CreateJobPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [jdText, setJdText] = useState('');
+  const [showJdParser, setShowJdParser] = useState(false);
+  const [parsedSuggestions, setParsedSuggestions] = useState(null);
+  const [skillInput, setSkillInput] = useState('');
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -22,10 +42,111 @@ export default function CreateJobPage() {
     department: '',
     salary_min: '',
     salary_max: '',
+    skills: [],
+    experience_min: '',
+    experience_max: '',
+    public_company_alias: ''
   });
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddSkill = () => {
+    if (skillInput.trim() && !formData.skills.includes(skillInput.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...prev.skills, skillInput.trim()]
+      }));
+      setSkillInput('');
+    }
+  };
+
+  const handleRemoveSkill = (skillToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills.filter(skill => skill !== skillToRemove)
+    }));
+  };
+
+  const handleParseJD = async () => {
+    if (!jdText.trim()) {
+      toast.error('Please enter a job description to parse');
+      return;
+    }
+
+    setParsing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/jobs/parse-jd`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({ jd_text: jdText })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to parse JD');
+      }
+
+      const data = await response.json();
+      setParsedSuggestions(data);
+      
+      if (data.success === false && data.parse_error) {
+        toast.error('Parsing failed: ' + data.parse_error);
+      } else {
+        toast.success('JD parsed successfully! Review suggestions below.');
+      }
+    } catch (error) {
+      toast.error('Failed to parse job description');
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const applySuggestion = (field, value) => {
+    if (field === 'skills' && Array.isArray(value)) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...new Set([...prev.skills, ...value])]
+      }));
+    } else if (field === 'requirements' && Array.isArray(value)) {
+      const reqText = value.map(r => `• ${r}`).join('\n');
+      handleChange('requirements', reqText);
+    } else if (field === 'description' && parsedSuggestions?.summary) {
+      // Combine summary with existing description
+      handleChange('description', parsedSuggestions.summary);
+    } else {
+      handleChange(field, value);
+    }
+    toast.success(`Applied suggestion for ${field}`);
+  };
+
+  const applyAllSuggestions = () => {
+    if (!parsedSuggestions) return;
+    
+    if (parsedSuggestions.title) handleChange('title', parsedSuggestions.title);
+    if (parsedSuggestions.location) handleChange('location', parsedSuggestions.location);
+    if (parsedSuggestions.salary_min) handleChange('salary_min', parsedSuggestions.salary_min);
+    if (parsedSuggestions.salary_max) handleChange('salary_max', parsedSuggestions.salary_max);
+    if (parsedSuggestions.experience_min) handleChange('experience_min', parsedSuggestions.experience_min);
+    if (parsedSuggestions.experience_max) handleChange('experience_max', parsedSuggestions.experience_max);
+    if (parsedSuggestions.summary) handleChange('description', parsedSuggestions.summary);
+    if (parsedSuggestions.requirements?.length) {
+      handleChange('requirements', parsedSuggestions.requirements.map(r => `• ${r}`).join('\n'));
+    }
+    if (parsedSuggestions.skills?.length) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...new Set([...prev.skills, ...parsedSuggestions.skills])]
+      }));
+    }
+    
+    toast.success('Applied all suggestions. Please review before saving.');
+    setParsedSuggestions(null);
+    setShowJdParser(false);
   };
 
   const handleSubmit = async (e) => {
@@ -42,6 +163,8 @@ export default function CreateJobPage() {
         ...formData,
         salary_min: formData.salary_min ? parseInt(formData.salary_min) : null,
         salary_max: formData.salary_max ? parseInt(formData.salary_max) : null,
+        experience_min: formData.experience_min ? parseInt(formData.experience_min) : null,
+        experience_max: formData.experience_max ? parseInt(formData.experience_max) : null,
       };
       await jobAPI.create(payload);
       toast.success('Job posted successfully!');
@@ -54,7 +177,7 @@ export default function CreateJobPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6" data-testid="create-job-page">
+    <div className="max-w-3xl mx-auto space-y-6" data-testid="create-job-page">
       <Button
         variant="ghost"
         onClick={() => navigate(-1)}
@@ -63,6 +186,118 @@ export default function CreateJobPage() {
         <ArrowLeft className="w-4 h-4 mr-2" /> Back
       </Button>
 
+      {/* JD Parser Section */}
+      <Card className="border-blue-200 bg-blue-50/50">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-blue-600" />
+              <CardTitle className="text-lg text-blue-900">AI Job Description Parser</CardTitle>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowJdParser(!showJdParser)}
+              className="text-blue-600 border-blue-300"
+            >
+              {showJdParser ? 'Hide' : 'Use AI Parser'}
+            </Button>
+          </div>
+          <CardDescription className="text-blue-700">
+            Paste a job description to auto-fill form fields using AI
+          </CardDescription>
+        </CardHeader>
+        
+        {showJdParser && (
+          <CardContent className="space-y-4">
+            <Textarea
+              value={jdText}
+              onChange={(e) => setJdText(e.target.value)}
+              placeholder="Paste your job description here..."
+              rows={6}
+              className="bg-white"
+              data-testid="jd-parser-input"
+            />
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleParseJD} 
+                disabled={parsing}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="parse-jd-btn"
+              >
+                {parsing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Parsing...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Parse JD
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Parsed Suggestions */}
+            {parsedSuggestions && (
+              <div className="mt-4 p-4 bg-white rounded-lg border border-blue-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-blue-900">Suggested Fields</h4>
+                  <Button size="sm" onClick={applyAllSuggestions} data-testid="apply-all-suggestions-btn">
+                    Apply All
+                  </Button>
+                </div>
+                
+                <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded">
+                  <AlertCircle className="w-4 h-4" />
+                  Review suggestions before applying - AI parsing is advisory only
+                </div>
+                
+                <div className="grid gap-3 text-sm">
+                  {parsedSuggestions.title && (
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span><strong>Title:</strong> {parsedSuggestions.title}</span>
+                      <Button size="sm" variant="ghost" onClick={() => applySuggestion('title', parsedSuggestions.title)}>
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                  {parsedSuggestions.location && (
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span><strong>Location:</strong> {parsedSuggestions.location}</span>
+                      <Button size="sm" variant="ghost" onClick={() => applySuggestion('location', parsedSuggestions.location)}>
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                  {parsedSuggestions.skills?.length > 0 && (
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span><strong>Skills:</strong> {parsedSuggestions.skills.slice(0, 5).join(', ')}{parsedSuggestions.skills.length > 5 ? '...' : ''}</span>
+                      <Button size="sm" variant="ghost" onClick={() => applySuggestion('skills', parsedSuggestions.skills)}>
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                  {(parsedSuggestions.experience_min || parsedSuggestions.experience_max) && (
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span><strong>Experience:</strong> {parsedSuggestions.experience_min || 0}-{parsedSuggestions.experience_max || parsedSuggestions.experience_min} years</span>
+                      <Button size="sm" variant="ghost" onClick={() => {
+                        if (parsedSuggestions.experience_min) applySuggestion('experience_min', parsedSuggestions.experience_min);
+                        if (parsedSuggestions.experience_max) applySuggestion('experience_max', parsedSuggestions.experience_max);
+                      }}>
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Main Form */}
       <Card className="border-slate-200">
         <CardHeader>
           <CardTitle className="font-heading text-xl flex items-center gap-2">
@@ -83,13 +318,23 @@ export default function CreateJobPage() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label>Company Alias (Public Display)</Label>
+              <Input
+                value={formData.public_company_alias}
+                onChange={(e) => handleChange('public_company_alias', e.target.value)}
+                placeholder="e.g., Leading MNC, Fortune 500 Company"
+              />
+              <p className="text-xs text-slate-500">This name will be shown on public job listings instead of the actual company name</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Location *</Label>
                 <Input
                   value={formData.location}
                   onChange={(e) => handleChange('location', e.target.value)}
-                  placeholder="e.g., New York, NY"
+                  placeholder="e.g., Mumbai, India"
                   required
                   data-testid="job-location-input"
                 />
@@ -123,6 +368,65 @@ export default function CreateJobPage() {
               />
             </div>
 
+            <Separator />
+
+            {/* Skills */}
+            <div className="space-y-2">
+              <Label>Required Skills</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={skillInput}
+                  onChange={(e) => setSkillInput(e.target.value)}
+                  placeholder="Add a skill..."
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSkill())}
+                />
+                <Button type="button" variant="outline" onClick={handleAddSkill}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              {formData.skills.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.skills.map((skill, index) => (
+                    <Badge key={index} variant="secondary" className="pr-1">
+                      {skill}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkill(skill)}
+                        className="ml-1 hover:bg-slate-300 rounded-full p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Experience */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Min Experience (Years)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.experience_min}
+                  onChange={(e) => handleChange('experience_min', e.target.value)}
+                  placeholder="e.g., 2"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Experience (Years)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.experience_max}
+                  onChange={(e) => handleChange('experience_max', e.target.value)}
+                  placeholder="e.g., 5"
+                />
+              </div>
+            </div>
+
+            {/* Salary */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Salary Min (₹ INR / Year)</Label>
@@ -151,6 +455,8 @@ export default function CreateJobPage() {
                 </div>
               </div>
             </div>
+
+            <Separator />
 
             <div className="space-y-2">
               <Label>Job Description *</Label>
@@ -185,7 +491,7 @@ export default function CreateJobPage() {
                 data-testid="submit-job-btn"
               >
                 {loading ? (
-                  <div className="spinner w-4 h-4 border-2 border-white border-t-transparent mr-2" />
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
                 )}
