@@ -55,44 +55,51 @@
 - Stored in `job_public_id` field
 - Displayed in job listings and public pages
 
-### Feature 3: JD Parsing During Job Creation ✅ ENHANCED (January 27, 2026)
-**Testing:** 13/13 backend tests passed
+### Feature 3: JD Parsing During Job Creation ✅ FIXED & VERIFIED (January 27, 2026)
+**Testing:** 23/23 backend tests passed
+
+**Bug Fixed:** "body stream already read" error
+- **Root Cause:** Frontend was calling `response.json()` then trying to read response again in error handler
+- **Fix:** Changed to `response.text()` then `JSON.parse()` - reads response exactly once
+- **Backend:** Improved error handling with proper try/finally for file cleanup
 
 **Two Input Modes:**
 1. **Paste Text** - Textarea for pasting job description text
 2. **Upload File** - Upload JD files (PDF, DOC, DOCX, TXT)
 
-**Endpoints:**
-- `POST /api/jobs/extract-jd-text` - Extract text from uploaded files (NEW)
-- `POST /api/jobs/parse-jd` - AI-powered parsing with input_type tracking
+**Architecture (Matches CV Parser Pattern):**
+- Single request → single JSON response
+- Backend handles file extraction + AI parsing in one call
+- Frontend reads response exactly ONCE
+- No streaming, no double-read issues
 
-**Extract Endpoint Response:**
+**Endpoints:**
+- `POST /api/jobs/parse-jd` - Accepts both jd_text (paste) or jd_file (upload)
+
+**Response Structure:**
 ```json
 {
   "success": true,
-  "extracted_text": "...",
-  "filename": "job_description.pdf",
-  "file_type": "pdf",
-  "char_count": 1234,
-  "extraction_method": "pdf_fitz",
-  "extracted_by": "user_id",
-  "extracted_by_role": "admin",
-  "extracted_at": "2026-01-27T10:00:00Z"
+  "title": "...",
+  "skills": [...],
+  "experience_years": 5,
+  "location": "...",
+  "summary": "...",
+  "requirements": [...],
+  "input_type": "paste|upload",
+  "parsed_by": "user_id",
+  "parsed_by_role": "admin",
+  "parsed_at": "..."
 }
 ```
 
-**Parse Endpoint Audit Metadata:**
-- `input_type`: "paste" or "upload"
-- `parsed_by`, `parsed_by_name`, `parsed_by_role`, `parsed_at`
+**Error Handling:**
+- 400 for unsupported file formats with clear message
+- 400 for empty/image-only files with "no text could be extracted"
+- 400 for missing input (neither jd_text nor jd_file)
+- Proper HTTP error codes, never 500 for validation errors
 
-**Frontend Integration:**
-- Tabbed UI: "Paste Text" | "Upload File"
-- Upload mode: File selection → Extract Text → Preview → Parse JD
-- Read-only preview of extracted text before parsing
-- Parse JD button disabled until valid input exists
-- Advisory warning: "No auto-save"
-
-**Access:** Admin, Employer, Recruiter only (Candidates denied)
+**Access:** Admin, Employer, Recruiter only (Candidates denied with 403)
 
 ---
 
