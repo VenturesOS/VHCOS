@@ -3835,34 +3835,6 @@ async def get_candidate_bank(
     # Apply visibility filter (None means full access for admin)
     if accessible_ids is not None:
         query["id"] = {"$in": accessible_ids}
-        
-        # Get jobs under recruiter's assigned mandates
-        recruiter_jobs = await db.jobs.find(
-            {"$or": [
-                {"posted_by": current_user["id"]},
-                {"team_id": team["id"]} if team else {"team_id": "__never_match__"}
-            ]},
-            {"id": 1, "_id": 0}
-        ).to_list(1000)
-        recruiter_job_ids = [j["id"] for j in recruiter_jobs]
-        
-        # Get candidate IDs who applied to recruiter's jobs
-        applications = await db.applications.find(
-            {"job_id": {"$in": recruiter_job_ids}},
-            {"candidate_id": 1, "_id": 0}
-        ).to_list(10000)
-        applied_candidate_ids = list(set([a.get("candidate_id") for a in applications if a.get("candidate_id")]))
-        
-        # Recruiter can see:
-        # 1. Candidates they parsed themselves
-        # 2. Candidates who applied to their assigned mandates' job postings
-        query["$or"] = [
-            {"created_by": current_user["id"]},
-            {"id": {"$in": applied_candidate_ids}} if applied_candidate_ids else {"id": "__never_match__"},
-            {"visibility.recruiter_ids": current_user["id"]}
-        ]
-    else:
-        return []
     
     # Search filter
     if search:
@@ -3873,10 +3845,10 @@ async def get_candidate_bank(
                 {"skills": {"$regex": search, "$options": "i"}}
             ]
         }
-        if "$or" in query:
-            query = {"$and": [{"$or": query["$or"]}, search_condition]}
+        if "id" in query:
+            query = {"$and": [{"id": query["id"]}, search_condition]}
         else:
-            query["$and"] = [search_condition]
+            query.update(search_condition)
     
     # Skills filter
     if skills:
