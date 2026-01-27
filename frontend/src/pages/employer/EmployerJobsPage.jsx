@@ -26,6 +26,16 @@ export default function EmployerJobsPage() {
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [careerPageHistory, setCareerPageHistory] = useState([]);
 
+  // Recruiter Assignment State
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [assigningJob, setAssigningJob] = useState(null);
+  const [teamRecruiters, setTeamRecruiters] = useState([]);
+  const [selectedRecruiters, setSelectedRecruiters] = useState([]);
+  const [loadingRecruiters, setLoadingRecruiters] = useState(false);
+  const [assigningInProgress, setAssigningInProgress] = useState(false);
+  const [showAssignmentHistory, setShowAssignmentHistory] = useState(false);
+  const [assignmentHistory, setAssignmentHistory] = useState([]);
+
   useEffect(() => {
     loadJobs();
   }, []);
