@@ -1,6 +1,6 @@
 # VHC Talent OS - Product Requirements Document
 
-## 🔒 BUILD STATUS: PILOT-READY STABLE (January 24, 2026)
+## 🔒 BUILD STATUS: PILOT-READY STABLE (January 27, 2026)
 
 **Phase-1 + Phase-1.5: LOCKED & APPROVED**
 **Phase-2 Part A: COMPLETE & TESTED (January 19, 2026)**
@@ -16,6 +16,64 @@
 **Internal OS Enhancement - Phase 1 (Access Control): COMPLETE & TESTED (January 24, 2026)**
 **Internal OS Enhancement - Phase 2 (Employer Portal): COMPLETE & TESTED (January 24, 2026)**
 **Internal OS Enhancement - Phase 3 (Career Page Control): COMPLETE & TESTED (January 24, 2026)**
+**Shareable Job Links + Structured Job ID + JD Parsing: COMPLETE & TESTED (January 27, 2026)**
+
+---
+
+## Latest Feature: Shareable Job Links & JD Intelligence (January 27, 2026)
+
+### Feature 1: Shareable Job Link + Public Job Landing Page ✅
+**Testing:** 16/16 backend tests passed, all frontend components verified
+
+**Backend Implementation:**
+- Job model updated with `job_public_id` and `shareable_link_enabled` fields
+- `PUT /api/jobs/{job_id}/shareable-link` - Toggle shareable link (live jobs only)
+- `GET /api/public/jobs/{job_id}` - Public job detail (visibility rules enforced)
+- `POST /api/public/apply` - Application with consent validation
+- Consent metadata stored: timestamp, IP address, policy version
+
+**Visibility Rules:**
+- Public job pages accessible ONLY when: `career_page_status = "live"` AND `shareable_link_enabled = true`
+- Company privacy: Returns `public_company_alias` instead of real company name
+
+**Frontend Components:**
+- `/jobs/{jobId}` - Public job landing page (no auth required)
+- `/application-success` - Confirmation page with styled headings
+- Application form: Resume upload, name, email, phone, current_salary, notice_period, consent checkbox
+
+**Security:**
+- Rate limiting: 5 applications per minute per IP
+- Honeypot field for bot protection
+- Consent checkbox required (unchecked by default)
+
+### Feature 2: Structured Job ID Format ✅
+**Format:** `VHC/YYYY/NNNN`
+
+**Implementation:**
+- Auto-generated on job creation using atomic sequence counter
+- Sequence resets yearly
+- Stored in `job_public_id` field
+- Displayed in job listings and public pages
+
+### Feature 3: JD Parsing During Job Creation ✅
+**Endpoint:** `POST /api/jobs/parse-jd`
+
+**Access:** Admin, Employer, Recruiter only
+
+**Output (Advisory Only):**
+- Job title
+- Key skills / skill taxonomy
+- Experience range
+- Salary range (if mentioned)
+- Location (if mentioned)
+- Role summary
+- Audit metadata (parsed_by, parsed_by_role, timestamp)
+
+**Frontend Integration:**
+- AI Job Description Parser section in Create Job page
+- "Use AI Parser" button expands parser
+- "Apply All" or individual field application
+- User must review and confirm before saving
 
 ---
 
