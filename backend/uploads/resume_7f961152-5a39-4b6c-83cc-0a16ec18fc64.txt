@@ -1,0 +1,5 @@
+Jane Smith
+Data Scientist
+Email: jane.smith@email.com
+Skills: Python, Machine Learning, TensorFlow, Data Analysis
+Experience: 3 years at DataCo
