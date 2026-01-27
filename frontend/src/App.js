@@ -85,6 +85,7 @@ function App() {
             <Route path="analytics" element={<AdminAnalyticsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="jobs" element={<AdminJobsPage />} />
+            <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="candidates" element={<AdminCandidatesPage />} />
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
