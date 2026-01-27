@@ -7027,9 +7027,12 @@ Return ONLY valid JSON, no markdown or explanation."""
             parsed = {}
         
         return {
+            "success": True,
             "title": parsed.get("title"),
             "skills": parsed.get("skills", []),
             "experience_years": parsed.get("experience_years"),
+            "experience_min": parsed.get("experience_years"),
+            "experience_max": parsed.get("experience_years"),
             "location": parsed.get("location"),
             "job_level": parsed.get("job_level"),
             "salary_min": parsed.get("salary_min"),
@@ -7038,15 +7041,22 @@ Return ONLY valid JSON, no markdown or explanation."""
             "responsibilities": parsed.get("responsibilities", []),
             "requirements": parsed.get("requirements", []),
             "raw_text": raw_text[:2000],
+            # Audit metadata
+            "parsed_by": current_user["id"],
+            "parsed_by_role": current_user["role"],
+            "parsed_at": datetime.now(timezone.utc).isoformat()
         }
         
     except Exception as e:
         logging.error(f"JD parsing error: {e}")
         # Return basic extraction if AI fails
         return {
+            "success": False,
             "title": None,
             "skills": [],
             "experience_years": None,
+            "experience_min": None,
+            "experience_max": None,
             "location": None,
             "job_level": None,
             "salary_min": None,
