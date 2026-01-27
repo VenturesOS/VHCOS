@@ -17,10 +17,51 @@
 **Internal OS Enhancement - Phase 2 (Employer Portal): COMPLETE & TESTED (January 24, 2026)**
 **Internal OS Enhancement - Phase 3 (Career Page Control): COMPLETE & TESTED (January 24, 2026)**
 **Shareable Job Links + Structured Job ID + JD Parsing: COMPLETE & TESTED (January 27, 2026)**
+**Employer-led Mandate Allocation: COMPLETE & TESTED (January 27, 2026)**
 
 ---
 
-## Latest Feature: Shareable Job Links & JD Intelligence (January 27, 2026)
+## Latest Feature: Employer-led Mandate Allocation (January 27, 2026)
+
+### Feature: Employer-led Mandate Allocation to Recruiters ✅
+**Testing:** 14/15 backend tests passed, 100% frontend tests passed
+**Test File:** `/app/backend/tests/test_mandate_assignment.py`
+
+**Objective:** Allow Employers to explicitly assign job mandates to specific Recruiters within their team.
+
+**Backend Implementation:**
+- `GET /api/employer/team-recruiters` - Returns list of team recruiters with mandate counts
+- `POST /api/jobs/{job_id}/assign-recruiters` - Assign recruiters to a mandate
+- `DELETE /api/jobs/{job_id}/assign-recruiters/{recruiter_id}` - Remove a recruiter from mandate
+- `GET /api/jobs/{job_id}/assignments` - Get assignment details with audit history
+
+**Data Model Updates:**
+- `jobs.assigned_recruiters` - Array of recruiter user IDs
+- `jobs.assignment_history` - Audit trail with who assigned, when, and to whom
+
+**Visibility Rules (CRITICAL):**
+- Recruiters can ONLY see mandates explicitly assigned to them OR jobs they posted
+- This enforces employer-led mandate allocation - recruiters cannot self-assign
+- Employer sees all team jobs
+
+**Access Control:**
+- Only Employer or Admin can assign recruiters
+- Recruiters cannot self-assign (403 Forbidden)
+- Job must be "active" or "pending_approval" to be assignable
+
+**Frontend Components:**
+- "Assign Recruiter" / "Manage Recruiters" button on eligible jobs
+- Assignment modal with recruiter checkboxes and mandate counts
+- "X Assigned" badge on jobs with assigned recruiters
+- Assignment history dialog with audit trail
+
+**Audit Trail:**
+- Every assignment, change, or revocation is logged
+- Records: action, timestamp, changed_by (name, role, id)
+
+---
+
+## Previous Feature: Shareable Job Links & JD Intelligence (January 27, 2026)
 
 ### Feature 1: Shareable Job Link + Public Job Landing Page ✅
 **Testing:** 16/16 backend tests passed, all frontend components verified
