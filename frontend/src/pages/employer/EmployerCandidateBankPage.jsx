@@ -198,7 +198,7 @@ export default function EmployerCandidateBankPage() {
         candidateBankAPI.getHistory(candidate.id),
       ]);
       setAuditLog(auditRes.data);
-      setResumeHistory(historyRes.data);
+      setResumeHistory(historyRes.data?.resume_versions || []);
       setActivityHistory(activityRes.data);
     } catch (error) {
       console.error('Failed to load details');
