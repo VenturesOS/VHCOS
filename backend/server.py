@@ -4366,10 +4366,17 @@ async def get_public_jobs(
     Get active job listings (PUBLIC - NO AUTH REQUIRED).
     For careers page on public website.
     
+    VISIBILITY RULES:
+    - Only jobs with career_page_status = "live" are visible
+    - Only jobs with shareable_link_enabled = true are visible
+    
     CLIENT PRIVACY: Returns public_company_alias instead of real company name.
-    Only ACTIVE jobs are visible to the public.
     """
-    query = {"status": "active"}
+    query = {
+        "status": "active",
+        "career_page_status": "live",
+        "shareable_link_enabled": True
+    }
     
     if search:
         query["$or"] = [
@@ -4386,37 +4393,74 @@ async def get_public_jobs(
     
     jobs = await db.jobs.find(query, {"_id": 0}).limit(limit).to_list(limit)
     
-    # CLIENT PRIVACY: Use public_company_alias for public listings
+    # CLIENT PRIVACY: Sanitize response for public view
+    sanitized_jobs = []
     for job in jobs:
-        # Mask company name with public_company_alias (privacy protection)
-        if job.get("public_company_alias"):
-            job["company_name"] = job["public_company_alias"]
-        else:
-            job["company_name"] = "Confidential Client"
-        # Remove internal company_id from public response
-        job.pop("company_id", None)
+        sanitized_jobs.append({
+            "id": job.get("id"),
+            "job_public_id": job.get("job_public_id"),
+            "title": job.get("title"),
+            "description": job.get("description"),
+            "requirements": job.get("requirements"),
+            "location": job.get("location"),
+            "job_type": job.get("job_type"),
+            "department": job.get("department"),
+            "salary_min": job.get("salary_min"),
+            "salary_max": job.get("salary_max"),
+            "skills": job.get("skills", []),
+            "experience_min": job.get("experience_min"),
+            "experience_max": job.get("experience_max"),
+            "company_name": job.get("public_company_alias") or "Confidential Client",
+            "created_at": job.get("created_at")
+        })
     
-    return jobs
+    return sanitized_jobs
 
 
 @api_router.get("/public/jobs/{job_id}")
 async def get_public_job_detail(job_id: str):
     """
     Get single job detail (PUBLIC - NO AUTH REQUIRED).
+    Supports lookup by internal ID or job_public_id (VHC/YYYY/NNNN).
+    
+    VISIBILITY RULES:
+    - Only jobs with career_page_status = "live" are visible
+    - Only jobs with shareable_link_enabled = true are visible
     
     CLIENT PRIVACY: Returns public_company_alias instead of real company name.
     """
-    job = await db.jobs.find_one({"id": job_id, "status": "active"}, {"_id": 0})
+    # Support lookup by either internal ID or job_public_id
+    job = await db.jobs.find_one({
+        "$or": [
+            {"id": job_id},
+            {"job_public_id": job_id}
+        ],
+        "status": "active",
+        "career_page_status": "live",
+        "shareable_link_enabled": True
+    }, {"_id": 0})
+    
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    # CLIENT PRIVACY: Use public_company_alias for public view
-    if job.get("public_company_alias"):
-        job["company_name"] = job["public_company_alias"]
-    else:
-        job["company_name"] = "Confidential Client"
-    # Remove internal company_id from public response
-    job.pop("company_id", None)
+    # CLIENT PRIVACY: Return only public-safe fields
+    return {
+        "id": job.get("id"),
+        "job_public_id": job.get("job_public_id"),
+        "title": job.get("title"),
+        "description": job.get("description"),
+        "requirements": job.get("requirements"),
+        "location": job.get("location"),
+        "job_type": job.get("job_type"),
+        "department": job.get("department"),
+        "salary_min": job.get("salary_min"),
+        "salary_max": job.get("salary_max"),
+        "skills": job.get("skills", []),
+        "experience_min": job.get("experience_min"),
+        "experience_max": job.get("experience_max"),
+        "company_name": job.get("public_company_alias") or "Confidential Client",
+        "created_at": job.get("created_at")
+    }
     
     return job
 
