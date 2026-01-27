@@ -7068,7 +7068,8 @@ async def parse_job_description(
     
     # Parse using AI (using GPT-5.2 via Emergent)
     try:
-        from emergentintegrations.llm.chat import chat, UserMessage
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import json
         
         parse_prompt = f"""Parse the following job description and extract structured information.
 Return a JSON object with these fields:
@@ -7088,17 +7089,19 @@ Job Description:
 
 Return ONLY valid JSON, no markdown or explanation."""
 
-        response = await chat(
-            api_key=os.environ.get("EMERGENT_API_KEY"),
-            model="gpt-5.2",
-            messages=[UserMessage(content=parse_prompt)]
+        # Initialize LlmChat client
+        chat_client = LlmChat(
+            api_key=os.environ.get("EMERGENT_LLM_KEY"),
+            session_id=str(uuid.uuid4()),
+            system_message="You are an expert job description parser. Extract structured data accurately."
         )
         
+        response = await chat_client.send_message(parse_prompt)
+        
         # Parse JSON response
-        import json
         try:
             # Clean response (remove markdown if present)
-            response_text = response.content.strip()
+            response_text = response.strip()
             if response_text.startswith("```"):
                 response_text = response_text.split("```")[1]
                 if response_text.startswith("json"):
