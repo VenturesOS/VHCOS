@@ -11,6 +11,10 @@ import PasswordReset from "./pages/auth/PasswordReset";
 // Public Website Redirect
 import PublicWebsiteRedirect from "./pages/PublicWebsite";
 
+// Public Job Pages (No Auth Required)
+import PublicJobPage from "./pages/public/PublicJobPage";
+import ApplicationSuccessPage from "./pages/public/ApplicationSuccessPage";
+
 // Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
 
