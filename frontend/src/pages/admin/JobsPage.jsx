@@ -108,15 +108,15 @@ export default function AdminJobsPage() {
   };
 
   const copyShareableLink = (job) => {
-    const jobIdForLink = job.job_public_id || job.id;
-    const link = `${window.location.origin}/jobs/${jobIdForLink}`;
+    // Use internal ID for URL (no slashes - more URL-friendly)
+    const link = `${window.location.origin}/jobs/${job.id}`;
     navigator.clipboard.writeText(link);
     toast.success('Link copied to clipboard!');
   };
 
   const openShareableLink = (job) => {
-    const jobIdForLink = job.job_public_id || job.id;
-    window.open(`/jobs/${jobIdForLink}`, '_blank');
+    // Use internal ID for URL
+    window.open(`/jobs/${job.id}`, '_blank');
   };
 
   const openHistoryDialog = async (job) => {
