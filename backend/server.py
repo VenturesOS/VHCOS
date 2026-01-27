@@ -4838,7 +4838,8 @@ async def public_apply(
     application_id = str(uuid.uuid4())
     application_doc = {
         "id": application_id,
-        "job_id": job_id,
+        "job_id": internal_job_id,
+        "job_public_id": job.get("job_public_id"),
         "candidate_id": candidate_id,
         "candidate_name": parsed_data.get("name") or name,
         "candidate_email": email,
@@ -4854,22 +4855,22 @@ async def public_apply(
         "stage": "applied",
         "source": "public_website",
         "notes": [],
+        # Consent tracking metadata
+        "consent": consent_metadata,
         "applied_at": now,
         "updated_at": now
     }
     await db.applications.insert_one(application_doc)
     
     # Update job applicant count
-    await db.jobs.update_one({"id": job_id}, {"$inc": {"applicant_count": 1}})
+    await db.jobs.update_one({"id": internal_job_id}, {"$inc": {"applicant_count": 1}})
     
-    logger.info(f"[PUBLIC APPLY] New application from {email} for job {job_id}")
+    logger.info(f"[PUBLIC APPLY] New application from {email} for job {job.get('job_public_id')} ({internal_job_id})")
     
     return {
         "success": True,
         "message": "Application submitted successfully! We'll review your profile and get back to you.",
-        "application_id": application_id,
-        "candidate_id": candidate_id,
-        "parsed_skills": parsed_data.get("skills", [])[:5]
+        "redirect_to": "/application-success"
     }
 
 
