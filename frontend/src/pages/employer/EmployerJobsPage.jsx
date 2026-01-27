@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { jobAPI } from '../../lib/api';
+import { jobAPI, mandateAPI } from '../../lib/api';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
+import { Checkbox } from '../../components/ui/checkbox';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeLock, AlertTriangle, History } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeLock, AlertTriangle, History, UserPlus, UserCheck } from 'lucide-react';
 
 export default function EmployerJobsPage() {
   const [jobs, setJobs] = useState([]);
