@@ -471,6 +471,154 @@ export default function EmployerJobsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Assign Recruiters Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-blue-600" />
+              Assign Recruiters to Mandate
+            </DialogTitle>
+            <DialogDescription>
+              Select recruiters from your team to work on this mandate. Only assigned recruiters will see this job.
+            </DialogDescription>
+          </DialogHeader>
+
+          {assigningJob && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="font-medium text-sm">{assigningJob.title}</p>
+                <p className="text-xs text-slate-500">
+                  {assigningJob.company_name} • {assigningJob.location} • {assigningJob.job_public_id || assigningJob.id.slice(0, 8)}
+                </p>
+              </div>
+
+              {loadingRecruiters ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="spinner" />
+                </div>
+              ) : teamRecruiters.length === 0 ? (
+                <div className="text-center py-6">
+                  <Users className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-500">No recruiters in your team</p>
+                  <p className="text-xs text-slate-400 mt-1">Contact admin to add recruiters to your team</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {teamRecruiters.map((recruiter) => (
+                    <div 
+                      key={recruiter.id}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedRecruiters.includes(recruiter.id)
+                          ? 'bg-blue-50 border-blue-300'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                      onClick={() => handleRecruiterToggle(recruiter.id)}
+                      data-testid={`recruiter-option-${recruiter.id}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={selectedRecruiters.includes(recruiter.id)}
+                          onCheckedChange={() => handleRecruiterToggle(recruiter.id)}
+                        />
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{recruiter.name}</p>
+                          <p className="text-xs text-slate-500">{recruiter.email}</p>
+                        </div>
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">
+                          {recruiter.active_mandates_count || 0} mandates
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-sm text-slate-500 pt-2 border-t">
+                <span>{selectedRecruiters.length} recruiter(s) selected</span>
+                {selectedRecruiters.length > 0 && (
+                  <button 
+                    className="text-blue-600 hover:underline"
+                    onClick={() => setSelectedRecruiters([])}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignRecruiters}
+              disabled={assigningInProgress || loadingRecruiters}
+              className="bg-blue-600 hover:bg-blue-700"
+              data-testid="confirm-assign-btn"
+            >
+              {assigningInProgress ? 'Assigning...' : 'Save Assignments'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assignment History Dialog */}
+      <Dialog open={showAssignmentHistory} onOpenChange={setShowAssignmentHistory}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <History className="w-5 h-5 text-blue-600" />
+              Assignment History
+            </DialogTitle>
+          </DialogHeader>
+
+          {assigningJob && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="font-medium text-sm">{assigningJob.title}</p>
+                <p className="text-xs text-slate-500">
+                  Currently assigned: {assigningJob.assigned_recruiters?.length || 0} recruiter(s)
+                </p>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {assignmentHistory.length > 0 ? (
+                  assignmentHistory.map((entry, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-lg text-sm border-l-4 border-blue-300">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`font-medium ${entry.action === 'recruiter_removed' ? 'text-red-600' : 'text-blue-600'}`}>
+                          {entry.action === 'recruiter_removed' ? 'Recruiter Removed' : 'Recruiters Assigned'}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(entry.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-slate-600">
+                        By: {entry.assigned_by_name || entry.removed_by_name} ({entry.assigned_by_role || entry.removed_by_role})
+                      </p>
+                      {entry.action === 'recruiter_removed' && (
+                        <p className="text-slate-500 mt-1">
+                          Removed: {entry.removed_recruiter_name}
+                        </p>
+                      )}
+                      {entry.new_recruiters && (
+                        <p className="text-slate-500 mt-1">
+                          Assigned: {entry.new_recruiters.length} recruiter(s)
+                        </p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-slate-400 text-sm text-center py-4">No assignment changes recorded</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
