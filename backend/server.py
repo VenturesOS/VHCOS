@@ -7124,7 +7124,9 @@ Return ONLY valid JSON, no markdown or explanation."""
             "requirements": parsed.get("requirements", []),
             "raw_text": raw_text[:2000],
             # Audit metadata
+            "input_type": input_type,
             "parsed_by": current_user["id"],
+            "parsed_by_name": current_user.get("name"),
             "parsed_by_role": current_user["role"],
             "parsed_at": datetime.now(timezone.utc).isoformat()
         }
@@ -7147,6 +7149,9 @@ Return ONLY valid JSON, no markdown or explanation."""
             "responsibilities": [],
             "requirements": [],
             "raw_text": raw_text[:2000],
+            "input_type": input_type,
+            "parsed_by": current_user["id"],
+            "parsed_by_role": current_user["role"],
             "parse_error": str(e)
         }
 
