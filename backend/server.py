@@ -1616,15 +1616,12 @@ async def get_jobs(status: Optional[str] = None, current_user: dict = Depends(ge
         else:
             query["posted_by"] = current_user["id"]
     elif current_user["role"] == "recruiter":
-        # Recruiter sees their assigned jobs and jobs they posted
-        team = await db.teams.find_one({"recruiter_ids": current_user["id"]}, {"_id": 0})
-        if team:
-            query["$or"] = [
-                {"posted_by": current_user["id"]},
-                {"team_id": team["id"]}
-            ]
-        else:
-            query["posted_by"] = current_user["id"]
+        # Recruiter sees ONLY mandates explicitly assigned to them OR jobs they posted
+        # This enforces employer-led mandate allocation - recruiters can only work on assigned mandates
+        query["$or"] = [
+            {"posted_by": current_user["id"]},  # Jobs they created
+            {"assigned_recruiters": current_user["id"]}  # Mandates explicitly assigned by employer
+        ]
     elif current_user["role"] == "candidate":
         query["status"] = "active"
     # Admin sees all jobs
