@@ -6,8 +6,12 @@ import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
+import { Switch } from '../../components/ui/switch';
+import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Eye, Trash2, Globe, GlobeLock, History, AlertTriangle } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Eye, Trash2, Globe, GlobeLock, History, AlertTriangle, Link2, Copy, ExternalLink } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function AdminJobsPage() {
   const [jobs, setJobs] = useState([]);
@@ -76,6 +80,43 @@ export default function AdminJobsPage() {
     } finally {
       setUpdatingCareerPage(false);
     }
+  };
+
+  // Shareable Link Toggle
+  const handleShareableLinkToggle = async (job, enabled) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/jobs/${job.id}/shareable-link`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled })
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to update');
+      }
+      
+      toast.success(enabled ? 'Shareable link enabled' : 'Shareable link disabled');
+      loadJobs();
+    } catch (error) {
+      toast.error(error.message || 'Failed to update shareable link');
+    }
+  };
+
+  const copyShareableLink = (job) => {
+    const jobIdForLink = job.job_public_id || job.id;
+    const link = `${window.location.origin}/jobs/${jobIdForLink}`;
+    navigator.clipboard.writeText(link);
+    toast.success('Link copied to clipboard!');
+  };
+
+  const openShareableLink = (job) => {
+    const jobIdForLink = job.job_public_id || job.id;
+    window.open(`/jobs/${jobIdForLink}`, '_blank');
   };
 
   const openHistoryDialog = async (job) => {
