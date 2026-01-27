@@ -187,7 +187,9 @@ export const jdAPI = {
 // Mandate Assignment API
 export const mandateAPI = {
   assignRecruiters: (jobId, recruiterIds) => api.post(`/jobs/${jobId}/assign-recruiters`, recruiterIds),
+  removeRecruiter: (jobId, recruiterId) => api.delete(`/jobs/${jobId}/assign-recruiters/${recruiterId}`),
   getAssignments: (jobId) => api.get(`/jobs/${jobId}/assignments`),
+  getTeamRecruiters: () => api.get('/employer/team-recruiters'),
 };
 
 // Message APIs
