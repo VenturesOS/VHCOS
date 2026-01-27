@@ -4035,9 +4035,14 @@ async def get_candidate_activity_history(
 @api_router.get("/candidate-bank/{candidate_id}/resume-history")
 async def get_candidate_resume_history(
     candidate_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
-    """Get resume version history for candidate"""
+    """Get resume version history for candidate with proper visibility check"""
+    
+    # Check candidate visibility using unified helper
+    has_access = await check_candidate_visibility(candidate_id, current_user)
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied to this candidate")
     
     candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
     if not candidate:
