@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { jobAPI } from '../../lib/api';
+import { jobAPI, matchingAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -30,11 +30,22 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+/**
+ * CreateJobPage with JD Parsing
+ * 
+ * JD Parsing Architecture (matches CV Parser pattern):
+ * - Single request → single JSON response
+ * - Backend handles file extraction + AI parsing in one call
+ * - Frontend reads response exactly once
+ * - No streaming, no double-read issues
+ * 
+ * Root cause of previous bug: Response body was being read twice
+ * when error handling tried to access response after json() was called.
+ */
 export default function CreateJobPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
-  const [extracting, setExtracting] = useState(false);
   const [showJdParser, setShowJdParser] = useState(false);
   const [parsedSuggestions, setParsedSuggestions] = useState(null);
   const [skillInput, setSkillInput] = useState('');
@@ -43,8 +54,7 @@ export default function CreateJobPage() {
   const [jdInputMode, setJdInputMode] = useState('paste'); // 'paste' or 'upload'
   const [jdText, setJdText] = useState('');
   const [jdFile, setJdFile] = useState(null);
-  const [extractedText, setExtractedText] = useState('');
-  const [extractionInfo, setExtractionInfo] = useState(null);
+  const [parseError, setParseError] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -86,120 +96,110 @@ export default function CreateJobPage() {
   const handleJdFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const allowedTypes = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain'
-      ];
-      const allowedExtensions = ['pdf', 'doc', 'docx', 'txt'];
+      const allowedExtensions = ['pdf', 'doc', 'docx'];
       const fileExt = file.name.split('.').pop().toLowerCase();
       
       if (!allowedExtensions.includes(fileExt)) {
-        toast.error('Unsupported file format. Please use PDF, DOC, DOCX, or TXT');
+        toast.error('Unsupported file format. Please use PDF, DOC, or DOCX');
+        setJdFile(null);
         return;
       }
       
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
         toast.error('File size must be less than 10MB');
+        setJdFile(null);
         return;
       }
       
       setJdFile(file);
-      setExtractedText('');
-      setExtractionInfo(null);
+      setParseError(null);
       setParsedSuggestions(null);
     }
   };
 
-  // Extract text from uploaded file
-  const handleExtractText = async () => {
-    if (!jdFile) {
-      toast.error('Please select a file first');
+  /**
+   * Parse JD - Single endpoint handles both paste and upload
+   * 
+   * Flow:
+   * 1. Send text OR file to backend in single request
+   * 2. Backend extracts text (if file) + parses with AI
+   * 3. Return single JSON response
+   * 4. Frontend reads response ONCE
+   * 
+   * This matches the CV parser architecture for reliability.
+   */
+  const handleParseJD = async () => {
+    // Validate input based on mode
+    if (jdInputMode === 'paste' && !jdText.trim()) {
+      toast.error('Please enter a job description to parse');
       return;
     }
-
-    setExtracting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('jd_file', jdFile);
-
-      const response = await fetch(`${API_URL}/api/jobs/extract-jd-text`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to extract text');
-      }
-      
-      if (data.success) {
-        setExtractedText(data.extracted_text);
-        setExtractionInfo({
-          filename: data.filename,
-          fileType: data.file_type,
-          charCount: data.char_count
-        });
-        toast.success(`Text extracted from ${data.filename} (${data.char_count} characters)`);
-      } else {
-        throw new Error(data.detail || 'Extraction failed');
-      }
-    } catch (error) {
-      toast.error(error.message || 'Failed to extract text from file');
-      setExtractedText('');
-      setExtractionInfo(null);
-    } finally {
-      setExtracting(false);
-    }
-  };
-
-  // Parse JD (works with both paste and extracted text)
-  const handleParseJD = async () => {
-    const textToParse = jdInputMode === 'paste' ? jdText : extractedText;
     
-    if (!textToParse.trim()) {
-      toast.error(jdInputMode === 'paste' 
-        ? 'Please enter a job description to parse' 
-        : 'Please extract text from the file first'
-      );
+    if (jdInputMode === 'upload' && !jdFile) {
+      toast.error('Please select a file to parse');
       return;
     }
 
     setParsing(true);
+    setParseError(null);
+    setParsedSuggestions(null);
+    
     try {
       const token = localStorage.getItem('token');
+      const formDataObj = new FormData();
+      
+      // Add input based on mode
+      if (jdInputMode === 'paste') {
+        formDataObj.append('jd_text', jdText);
+      } else {
+        formDataObj.append('jd_file', jdFile);
+      }
+      formDataObj.append('input_type', jdInputMode);
+
+      // Single request to backend - backend handles extraction + parsing
       const response = await fetch(`${API_URL}/api/jobs/parse-jd`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Authorization': `Bearer ${token}`
+          // Note: Don't set Content-Type for FormData - browser sets it with boundary
         },
-        body: new URLSearchParams({ 
-          jd_text: textToParse,
-          input_type: jdInputMode
-        })
+        body: formDataObj
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to parse JD');
-      }
-
-      const data = await response.json();
-      setParsedSuggestions(data);
+      // Read response body exactly ONCE
+      const responseText = await response.text();
       
-      if (data.success === false && data.parse_error) {
-        toast.error('Parsing failed: ' + data.parse_error);
-      } else {
-        toast.success('JD parsed successfully! Review suggestions below.');
+      // Parse JSON from text (avoids double-read issue)
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error('JSON parse error:', jsonError, 'Response:', responseText);
+        throw new Error('Invalid response from server');
       }
+      
+      // Handle HTTP errors
+      if (!response.ok) {
+        const errorMessage = data.detail || data.message || 'Failed to parse JD';
+        throw new Error(errorMessage);
+      }
+      
+      // Handle parsing errors from AI
+      if (data.success === false) {
+        const errorMessage = data.parse_error || 'JD parsing failed';
+        setParseError(errorMessage);
+        toast.error('Parsing failed: ' + errorMessage);
+        return;
+      }
+      
+      // Success - set suggestions
+      setParsedSuggestions(data);
+      toast.success('JD parsed successfully! Review suggestions below.');
+      
     } catch (error) {
-      toast.error('Failed to parse job description');
+      console.error('JD Parse error:', error);
+      setParseError(error.message);
+      toast.error(error.message || 'Failed to parse job description');
     } finally {
       setParsing(false);
     }
@@ -250,8 +250,7 @@ export default function CreateJobPage() {
   const resetParser = () => {
     setJdText('');
     setJdFile(null);
-    setExtractedText('');
-    setExtractionInfo(null);
+    setParseError(null);
     setParsedSuggestions(null);
   };
 
@@ -285,7 +284,7 @@ export default function CreateJobPage() {
   // Check if parse button should be enabled
   const canParse = jdInputMode === 'paste' 
     ? jdText.trim().length > 0 
-    : extractedText.trim().length > 0;
+    : jdFile !== null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6" data-testid="create-job-page">
@@ -327,6 +326,7 @@ export default function CreateJobPage() {
             {/* Input Mode Tabs */}
             <Tabs value={jdInputMode} onValueChange={(v) => {
               setJdInputMode(v);
+              setParseError(null);
               setParsedSuggestions(null);
             }}>
               <TabsList className="grid w-full grid-cols-2">
@@ -357,100 +357,62 @@ export default function CreateJobPage() {
               
               {/* Upload Mode */}
               <TabsContent value="upload" className="space-y-4 mt-4">
-                {/* File Upload Area */}
-                <div className="space-y-3">
-                  <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center bg-white hover:border-blue-400 transition-colors">
-                    <input
-                      type="file"
-                      id="jd-file-upload"
-                      accept=".pdf,.doc,.docx,.txt"
-                      onChange={handleJdFileSelect}
-                      className="hidden"
-                      data-testid="jd-file-input"
-                    />
-                    <label htmlFor="jd-file-upload" className="cursor-pointer">
-                      {jdFile ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle2 className="h-5 w-5" />
-                            <span className="font-medium">{jdFile.name}</span>
-                          </div>
-                          <span className="text-xs text-slate-500">
-                            {(jdFile.size / 1024).toFixed(1)} KB
-                          </span>
-                          <span className="text-xs text-blue-600 underline">Click to change file</span>
+                <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center bg-white hover:border-blue-400 transition-colors">
+                  <input
+                    type="file"
+                    id="jd-file-upload"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleJdFileSelect}
+                    className="hidden"
+                    data-testid="jd-file-input"
+                  />
+                  <label htmlFor="jd-file-upload" className="cursor-pointer">
+                    {jdFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle2 className="h-5 w-5" />
+                          <span className="font-medium">{jdFile.name}</span>
                         </div>
-                      ) : (
-                        <>
-                          <Upload className="h-8 w-8 text-blue-400 mx-auto mb-2" />
-                          <p className="text-slate-600 font-medium">Click to upload JD file</p>
-                          <p className="text-sm text-slate-400 mt-1">PDF, DOC, DOCX, or TXT (Max 10MB)</p>
-                        </>
-                      )}
-                    </label>
-                  </div>
-                  
-                  {/* Extract Button */}
-                  {jdFile && !extractedText && (
-                    <Button 
-                      onClick={handleExtractText} 
-                      disabled={extracting}
-                      className="w-full bg-blue-600 hover:bg-blue-700"
-                      data-testid="extract-text-btn"
-                    >
-                      {extracting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Extracting Text...
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="w-4 h-4 mr-2" />
-                          Extract Text from File
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  
-                  {/* Extracted Text Preview */}
-                  {extractedText && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="flex items-center gap-2 text-green-700">
-                          <Eye className="w-4 h-4" />
-                          Extracted Text Preview
-                        </Label>
-                        {extractionInfo && (
-                          <span className="text-xs text-slate-500">
-                            {extractionInfo.charCount} characters from {extractionInfo.filename}
-                          </span>
-                        )}
+                        <span className="text-xs text-slate-500">
+                          {(jdFile.size / 1024).toFixed(1)} KB
+                        </span>
+                        <span className="text-xs text-blue-600 underline">Click to change file</span>
                       </div>
-                      <Textarea
-                        value={extractedText}
-                        readOnly
-                        rows={8}
-                        className="bg-gray-50 text-slate-700 cursor-default"
-                        data-testid="extracted-text-preview"
-                      />
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          setJdFile(null);
-                          setExtractedText('');
-                          setExtractionInfo(null);
-                          setParsedSuggestions(null);
-                        }}
-                      >
-                        <X className="w-4 h-4 mr-1" />
-                        Clear & Re-upload
-                      </Button>
-                    </div>
-                  )}
+                    ) : (
+                      <>
+                        <Upload className="h-8 w-8 text-blue-400 mx-auto mb-2" />
+                        <p className="text-slate-600 font-medium">Click to upload JD file</p>
+                        <p className="text-sm text-slate-400 mt-1">PDF, DOC, or DOCX (Max 10MB)</p>
+                      </>
+                    )}
+                  </label>
                 </div>
+                
+                {jdFile && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setJdFile(null);
+                      setParseError(null);
+                      setParsedSuggestions(null);
+                    }}
+                    className="text-slate-600"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Remove File
+                  </Button>
+                )}
               </TabsContent>
             </Tabs>
+            
+            {/* Error Display */}
+            {parseError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{parseError}</span>
+              </div>
+            )}
             
             {/* Parse Button */}
             <div className="flex gap-2 pt-2">
@@ -463,7 +425,7 @@ export default function CreateJobPage() {
                 {parsing ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Parsing with AI...
+                    {jdInputMode === 'upload' ? 'Extracting & Parsing...' : 'Parsing...'}
                   </>
                 ) : (
                   <>
@@ -485,8 +447,8 @@ export default function CreateJobPage() {
                 </div>
                 
                 <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded">
-                  <AlertCircle className="w-4 h-4" />
-                  Review suggestions before applying - AI parsing is advisory only. No auto-save.
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Review suggestions before applying - AI parsing is advisory only. No auto-save.</span>
                 </div>
                 
                 {/* Audit info */}
@@ -522,11 +484,12 @@ export default function CreateJobPage() {
                       </Button>
                     </div>
                   )}
-                  {(parsedSuggestions.experience_min || parsedSuggestions.experience_max) && (
+                  {(parsedSuggestions.experience_min || parsedSuggestions.experience_max || parsedSuggestions.experience_years) && (
                     <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span><strong>Experience:</strong> {parsedSuggestions.experience_min || 0}-{parsedSuggestions.experience_max || parsedSuggestions.experience_min} years</span>
+                      <span><strong>Experience:</strong> {parsedSuggestions.experience_min || parsedSuggestions.experience_years || 0}-{parsedSuggestions.experience_max || parsedSuggestions.experience_years || 0} years</span>
                       <Button size="sm" variant="ghost" onClick={() => {
-                        if (parsedSuggestions.experience_min) applySuggestion('experience_min', parsedSuggestions.experience_min);
+                        const exp = parsedSuggestions.experience_min || parsedSuggestions.experience_years;
+                        if (exp) applySuggestion('experience_min', exp);
                         if (parsedSuggestions.experience_max) applySuggestion('experience_max', parsedSuggestions.experience_max);
                       }}>
                         Apply
