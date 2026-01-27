@@ -7036,35 +7036,56 @@ async def parse_job_description(
         
         # Save file temporarily
         file_path = UPLOAD_DIR / f"jd_{uuid.uuid4()}.{file_ext}"
-        async with aiofiles.open(file_path, "wb") as f:
-            content = await jd_file.read()
-            await f.write(content)
-        
-        # Extract text
-        if file_ext == "pdf":
-            doc = fitz.open(str(file_path))
-            for page in doc:
-                raw_text += page.get_text()
-            doc.close()
-        elif file_ext == "txt":
-            async with aiofiles.open(file_path, "r") as f:
-                raw_text = await f.read()
-        else:
-            # For DOC/DOCX, try to extract using python-docx
-            try:
-                from docx import Document
-                doc = Document(str(file_path))
-                raw_text = "\n".join([para.text for para in doc.paragraphs])
-            except:
-                raw_text = "Unable to parse DOC/DOCX file"
-        
-        # Clean up temp file
-        file_path.unlink(missing_ok=True)
+        try:
+            async with aiofiles.open(file_path, "wb") as f:
+                content = await jd_file.read()
+                await f.write(content)
+            
+            # Extract text based on file type
+            if file_ext == "pdf":
+                try:
+                    doc = fitz.open(str(file_path))
+                    for page in doc:
+                        raw_text += page.get_text()
+                    doc.close()
+                except Exception as pdf_err:
+                    logging.error(f"PDF extraction error: {pdf_err}")
+                    raise HTTPException(status_code=400, detail=f"Failed to extract text from PDF: {str(pdf_err)}")
+                    
+            elif file_ext == "txt":
+                try:
+                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                        raw_text = await f.read()
+                except Exception as txt_err:
+                    logging.error(f"TXT read error: {txt_err}")
+                    raise HTTPException(status_code=400, detail=f"Failed to read text file: {str(txt_err)}")
+                    
+            else:
+                # For DOC/DOCX, use python-docx
+                try:
+                    from docx import Document
+                    doc = Document(str(file_path))
+                    raw_text = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+                except Exception as docx_err:
+                    logging.error(f"DOCX extraction error: {docx_err}")
+                    raise HTTPException(status_code=400, detail=f"Failed to extract text from DOC/DOCX: {str(docx_err)}")
+            
+            # Validate extracted text
+            if not raw_text or not raw_text.strip():
+                raise HTTPException(status_code=400, detail="No text could be extracted from the file. The file may be empty or contain only images.")
+                
+        finally:
+            # Clean up temp file
+            if file_path.exists():
+                file_path.unlink(missing_ok=True)
     
     elif jd_text:
         raw_text = jd_text
     else:
         raise HTTPException(status_code=400, detail="Provide either jd_text or jd_file")
+    
+    # Log JD parsing usage for audit
+    logging.info(f"JD Parsing requested by {current_user['name']} ({current_user['role']}) - input_type: {input_type}, chars: {len(raw_text)}")
     
     # Parse using AI (using GPT-5.2 via Emergent)
     try:
