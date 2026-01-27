@@ -17,18 +17,14 @@ import {
   Save, 
   Sparkles, 
   Loader2, 
-  FileText,
   X,
   Plus,
   AlertCircle,
   Upload,
   FileUp,
   CheckCircle2,
-  Type,
-  Eye
+  Type
 } from 'lucide-react';
-
-const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 /**
  * CreateJobPage with JD Parsing
