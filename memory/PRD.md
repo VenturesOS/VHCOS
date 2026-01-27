@@ -18,10 +18,50 @@
 **Internal OS Enhancement - Phase 3 (Career Page Control): COMPLETE & TESTED (January 24, 2026)**
 **Shareable Job Links + Structured Job ID + JD Parsing: COMPLETE & TESTED (January 27, 2026)**
 **Employer-led Mandate Allocation: COMPLETE & TESTED (January 27, 2026)**
+**Candidate Data Bank Access Control Bug Fix: COMPLETE & TESTED (January 27, 2026)**
 
 ---
 
-## Latest Feature: Employer-led Mandate Allocation (January 27, 2026)
+## Critical Bug Fix: Candidate Data Bank Access Control (January 27, 2026)
+
+### Bug Fix: Role-Based Access Control in Candidate Data Bank ✅
+**Testing:** 27/27 backend tests passed, 100% frontend tests passed
+**Test File:** `/app/backend/tests/test_candidate_bank_access_control.py`
+
+**Issue:** Opening candidate profiles from Candidate Data Bank was failing for Employer and Recruiter roles (worked only for Admin). Error: `resumeHistory.map is not a function`.
+
+**Root Causes Identified:**
+1. **List/Detail Mismatch:** List endpoint used different access filters than Detail endpoint
+2. **Missing Visibility Checks:** Secondary endpoints (`/audit-log`, `/history`, `/resume-history`) checked role but NOT candidate-level visibility
+3. **Outdated Query Logic:** Recruiter job query used old `team_id` instead of new `assigned_recruiters`
+4. **Frontend Data Structure:** Resume history was object with `resume_versions` array, but frontend tried to map entire object
+
+**Backend Fix - Unified Access Control:**
+- Created `check_candidate_visibility(candidate_id, current_user)` helper function
+- Created `get_accessible_candidate_ids(current_user)` for list queries
+- ALL endpoints now use same visibility logic:
+  - Admin: Full access
+  - Employer: Candidates created by self, team members, or applied to employer's jobs
+  - Recruiter: Candidates created by self, or applied to their ASSIGNED mandates
+
+**Endpoints Fixed:**
+- `GET /api/candidate-bank` - Uses unified helper for list
+- `GET /api/candidate-bank/{id}` - Uses unified helper for detail
+- `GET /api/candidate-bank/{id}/audit-log` - Now has visibility check
+- `GET /api/candidate-bank/{id}/history` - Now has visibility check
+- `GET /api/candidate-bank/{id}/resume-history` - Now has visibility check
+
+**Frontend Fix:**
+- `EmployerCandidateBankPage.jsx`: `setResumeHistory(historyRes.data?.resume_versions || [])`
+- `RecruiterCandidateBankPage.jsx`: `setResumeHistory(historyRes.data?.resume_versions || [])`
+
+**Security Verification:**
+- Recruiter2 (no candidates, no assigned jobs) sees 0 candidates and gets 403 on detail requests ✅
+- No role escalation or data leakage ✅
+
+---
+
+## Previous Feature: Employer-led Mandate Allocation (January 27, 2026)
 
 ### Feature: Employer-led Mandate Allocation to Recruiters ✅
 **Testing:** 14/15 backend tests passed, 100% frontend tests passed
