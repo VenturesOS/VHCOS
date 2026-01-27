@@ -118,15 +118,12 @@ export default function CreateJobPage() {
   };
 
   /**
-   * Parse JD - Single endpoint handles both paste and upload
+   * Parse JD - Using axios-based API wrapper for reliability
    * 
-   * Flow:
-   * 1. Send text OR file to backend in single request
-   * 2. Backend extracts text (if file) + parses with AI
-   * 3. Return single JSON response
-   * 4. Frontend reads response ONCE
-   * 
-   * This matches the CV parser architecture for reliability.
+   * This matches the CV parser architecture:
+   * - Uses axios with proper interceptors
+   * - Single request → single response
+   * - No body stream issues
    */
   const handleParseJD = async () => {
     // Validate input based on mode
@@ -145,44 +142,14 @@ export default function CreateJobPage() {
     setParsedSuggestions(null);
     
     try {
-      const token = localStorage.getItem('token');
-      const formDataObj = new FormData();
+      // Use axios-based API wrapper (matches CV parser pattern)
+      const response = await matchingAPI.parseJD(
+        jdInputMode === 'paste' ? jdText : null,
+        jdInputMode === 'upload' ? jdFile : null,
+        jdInputMode
+      );
       
-      // Add input based on mode
-      if (jdInputMode === 'paste') {
-        formDataObj.append('jd_text', jdText);
-      } else {
-        formDataObj.append('jd_file', jdFile);
-      }
-      formDataObj.append('input_type', jdInputMode);
-
-      // Single request to backend - backend handles extraction + parsing
-      const response = await fetch(`${API_URL}/api/jobs/parse-jd`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-          // Note: Don't set Content-Type for FormData - browser sets it with boundary
-        },
-        body: formDataObj
-      });
-
-      // Read response body exactly ONCE
-      const responseText = await response.text();
-      
-      // Parse JSON from text (avoids double-read issue)
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (jsonError) {
-        console.error('JSON parse error:', jsonError, 'Response:', responseText);
-        throw new Error('Invalid response from server');
-      }
-      
-      // Handle HTTP errors
-      if (!response.ok) {
-        const errorMessage = data.detail || data.message || 'Failed to parse JD';
-        throw new Error(errorMessage);
-      }
+      const data = response.data;
       
       // Handle parsing errors from AI
       if (data.success === false) {
@@ -198,8 +165,9 @@ export default function CreateJobPage() {
       
     } catch (error) {
       console.error('JD Parse error:', error);
-      setParseError(error.message);
-      toast.error(error.message || 'Failed to parse job description');
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to parse job description';
+      setParseError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setParsing(false);
     }
