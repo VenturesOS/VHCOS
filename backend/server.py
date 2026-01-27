@@ -7184,6 +7184,70 @@ Return ONLY valid JSON, no markdown or explanation."""
 
 # ============== MANDATE ASSIGNMENT ==============
 
+@api_router.get("/employer/team-recruiters")
+async def get_team_recruiters(current_user: dict = Depends(require_role(["admin", "employer"]))):
+    """
+    Get list of recruiters in employer's team for mandate assignment.
+    Returns recruiter details including their current mandate workload.
+    """
+    if current_user["role"] == "employer":
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        if not team:
+            return {"recruiters": [], "team": None}
+        
+        recruiter_ids = team.get("recruiter_ids", [])
+    else:
+        # Admin can see all recruiters
+        all_recruiters = await db.users.find(
+            {"role": "recruiter", "is_active": True},
+            {"_id": 0, "password": 0}
+        ).to_list(1000)
+        
+        result = []
+        for rec in all_recruiters:
+            active_mandates = await db.jobs.count_documents({
+                "assigned_recruiters": rec["id"],
+                "status": {"$in": ["active", "pending_approval"]}
+            })
+            result.append({
+                "id": rec["id"],
+                "name": rec.get("name"),
+                "email": rec.get("email"),
+                "phone": rec.get("phone"),
+                "active_mandates_count": active_mandates
+            })
+        
+        return {"recruiters": result, "team": None}
+    
+    # Get recruiter details with mandate counts
+    recruiters = await db.users.find(
+        {"id": {"$in": recruiter_ids}, "is_active": True},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+    
+    result = []
+    for rec in recruiters:
+        active_mandates = await db.jobs.count_documents({
+            "assigned_recruiters": rec["id"],
+            "status": {"$in": ["active", "pending_approval"]}
+        })
+        result.append({
+            "id": rec["id"],
+            "name": rec.get("name"),
+            "email": rec.get("email"),
+            "phone": rec.get("phone"),
+            "active_mandates_count": active_mandates
+        })
+    
+    return {
+        "recruiters": result,
+        "team": {
+            "id": team.get("id"),
+            "name": team.get("name")
+        }
+    }
+
+
 @api_router.post("/jobs/{job_id}/assign-recruiters")
 async def assign_recruiters_to_mandate(
     job_id: str,
