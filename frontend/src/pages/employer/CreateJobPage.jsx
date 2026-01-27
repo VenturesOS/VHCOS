@@ -8,6 +8,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
 import { Separator } from '../../components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
 import { 
@@ -19,7 +20,12 @@ import {
   FileText,
   X,
   Plus,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  FileUp,
+  CheckCircle2,
+  Type,
+  Eye
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -28,10 +34,17 @@ export default function CreateJobPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
-  const [jdText, setJdText] = useState('');
+  const [extracting, setExtracting] = useState(false);
   const [showJdParser, setShowJdParser] = useState(false);
   const [parsedSuggestions, setParsedSuggestions] = useState(null);
   const [skillInput, setSkillInput] = useState('');
+  
+  // JD Parser state
+  const [jdInputMode, setJdInputMode] = useState('paste'); // 'paste' or 'upload'
+  const [jdText, setJdText] = useState('');
+  const [jdFile, setJdFile] = useState(null);
+  const [extractedText, setExtractedText] = useState('');
+  const [extractionInfo, setExtractionInfo] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -69,9 +82,92 @@ export default function CreateJobPage() {
     }));
   };
 
+  // Handle file selection for JD upload
+  const handleJdFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain'
+      ];
+      const allowedExtensions = ['pdf', 'doc', 'docx', 'txt'];
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      
+      if (!allowedExtensions.includes(fileExt)) {
+        toast.error('Unsupported file format. Please use PDF, DOC, DOCX, or TXT');
+        return;
+      }
+      
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        toast.error('File size must be less than 10MB');
+        return;
+      }
+      
+      setJdFile(file);
+      setExtractedText('');
+      setExtractionInfo(null);
+      setParsedSuggestions(null);
+    }
+  };
+
+  // Extract text from uploaded file
+  const handleExtractText = async () => {
+    if (!jdFile) {
+      toast.error('Please select a file first');
+      return;
+    }
+
+    setExtracting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('jd_file', jdFile);
+
+      const response = await fetch(`${API_URL}/api/jobs/extract-jd-text`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to extract text');
+      }
+      
+      if (data.success) {
+        setExtractedText(data.extracted_text);
+        setExtractionInfo({
+          filename: data.filename,
+          fileType: data.file_type,
+          charCount: data.char_count
+        });
+        toast.success(`Text extracted from ${data.filename} (${data.char_count} characters)`);
+      } else {
+        throw new Error(data.detail || 'Extraction failed');
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to extract text from file');
+      setExtractedText('');
+      setExtractionInfo(null);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // Parse JD (works with both paste and extracted text)
   const handleParseJD = async () => {
-    if (!jdText.trim()) {
-      toast.error('Please enter a job description to parse');
+    const textToParse = jdInputMode === 'paste' ? jdText : extractedText;
+    
+    if (!textToParse.trim()) {
+      toast.error(jdInputMode === 'paste' 
+        ? 'Please enter a job description to parse' 
+        : 'Please extract text from the file first'
+      );
       return;
     }
 
@@ -84,7 +180,10 @@ export default function CreateJobPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: new URLSearchParams({ jd_text: jdText })
+        body: new URLSearchParams({ 
+          jd_text: textToParse,
+          input_type: jdInputMode
+        })
       });
 
       if (!response.ok) {
@@ -116,7 +215,6 @@ export default function CreateJobPage() {
       const reqText = value.map(r => `• ${r}`).join('\n');
       handleChange('requirements', reqText);
     } else if (field === 'description' && parsedSuggestions?.summary) {
-      // Combine summary with existing description
       handleChange('description', parsedSuggestions.summary);
     } else {
       handleChange(field, value);
@@ -149,6 +247,14 @@ export default function CreateJobPage() {
     setShowJdParser(false);
   };
 
+  const resetParser = () => {
+    setJdText('');
+    setJdFile(null);
+    setExtractedText('');
+    setExtractionInfo(null);
+    setParsedSuggestions(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -168,13 +274,18 @@ export default function CreateJobPage() {
       };
       await jobAPI.create(payload);
       toast.success('Job posted successfully!');
-      navigate('/employer/jobs');
+      navigate(-1);
     } catch (error) {
       toast.error('Failed to create job');
     } finally {
       setLoading(false);
     }
   };
+
+  // Check if parse button should be enabled
+  const canParse = jdInputMode === 'paste' 
+    ? jdText.trim().length > 0 
+    : extractedText.trim().length > 0;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6" data-testid="create-job-page">
@@ -197,42 +308,166 @@ export default function CreateJobPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowJdParser(!showJdParser)}
+              onClick={() => {
+                setShowJdParser(!showJdParser);
+                if (!showJdParser) resetParser();
+              }}
               className="text-blue-600 border-blue-300"
             >
-              {showJdParser ? 'Hide' : 'Use AI Parser'}
+              {showJdParser ? 'Hide Parser' : 'Use AI Parser'}
             </Button>
           </div>
           <CardDescription className="text-blue-700">
-            Paste a job description to auto-fill form fields using AI
+            Paste or upload a job description to auto-fill form fields using AI
           </CardDescription>
         </CardHeader>
         
         {showJdParser && (
           <CardContent className="space-y-4">
-            <Textarea
-              value={jdText}
-              onChange={(e) => setJdText(e.target.value)}
-              placeholder="Paste your job description here..."
-              rows={6}
-              className="bg-white"
-              data-testid="jd-parser-input"
-            />
-            <div className="flex gap-2">
+            {/* Input Mode Tabs */}
+            <Tabs value={jdInputMode} onValueChange={(v) => {
+              setJdInputMode(v);
+              setParsedSuggestions(null);
+            }}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="paste" className="flex items-center gap-2">
+                  <Type className="w-4 h-4" />
+                  Paste Text
+                </TabsTrigger>
+                <TabsTrigger value="upload" className="flex items-center gap-2">
+                  <FileUp className="w-4 h-4" />
+                  Upload File
+                </TabsTrigger>
+              </TabsList>
+              
+              {/* Paste Mode */}
+              <TabsContent value="paste" className="space-y-4 mt-4">
+                <Textarea
+                  value={jdText}
+                  onChange={(e) => setJdText(e.target.value)}
+                  placeholder="Paste your job description here..."
+                  rows={8}
+                  className="bg-white"
+                  data-testid="jd-paste-input"
+                />
+                <div className="text-xs text-slate-500">
+                  {jdText.length > 0 && `${jdText.length} characters`}
+                </div>
+              </TabsContent>
+              
+              {/* Upload Mode */}
+              <TabsContent value="upload" className="space-y-4 mt-4">
+                {/* File Upload Area */}
+                <div className="space-y-3">
+                  <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center bg-white hover:border-blue-400 transition-colors">
+                    <input
+                      type="file"
+                      id="jd-file-upload"
+                      accept=".pdf,.doc,.docx,.txt"
+                      onChange={handleJdFileSelect}
+                      className="hidden"
+                      data-testid="jd-file-input"
+                    />
+                    <label htmlFor="jd-file-upload" className="cursor-pointer">
+                      {jdFile ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle2 className="h-5 w-5" />
+                            <span className="font-medium">{jdFile.name}</span>
+                          </div>
+                          <span className="text-xs text-slate-500">
+                            {(jdFile.size / 1024).toFixed(1)} KB
+                          </span>
+                          <span className="text-xs text-blue-600 underline">Click to change file</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="h-8 w-8 text-blue-400 mx-auto mb-2" />
+                          <p className="text-slate-600 font-medium">Click to upload JD file</p>
+                          <p className="text-sm text-slate-400 mt-1">PDF, DOC, DOCX, or TXT (Max 10MB)</p>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                  
+                  {/* Extract Button */}
+                  {jdFile && !extractedText && (
+                    <Button 
+                      onClick={handleExtractText} 
+                      disabled={extracting}
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                      data-testid="extract-text-btn"
+                    >
+                      {extracting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Extracting Text...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-4 h-4 mr-2" />
+                          Extract Text from File
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  
+                  {/* Extracted Text Preview */}
+                  {extractedText && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2 text-green-700">
+                          <Eye className="w-4 h-4" />
+                          Extracted Text Preview
+                        </Label>
+                        {extractionInfo && (
+                          <span className="text-xs text-slate-500">
+                            {extractionInfo.charCount} characters from {extractionInfo.filename}
+                          </span>
+                        )}
+                      </div>
+                      <Textarea
+                        value={extractedText}
+                        readOnly
+                        rows={8}
+                        className="bg-gray-50 text-slate-700 cursor-default"
+                        data-testid="extracted-text-preview"
+                      />
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setJdFile(null);
+                          setExtractedText('');
+                          setExtractionInfo(null);
+                          setParsedSuggestions(null);
+                        }}
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Clear & Re-upload
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+            
+            {/* Parse Button */}
+            <div className="flex gap-2 pt-2">
               <Button 
                 onClick={handleParseJD} 
-                disabled={parsing}
-                className="bg-blue-600 hover:bg-blue-700"
+                disabled={parsing || !canParse}
+                className="bg-blue-600 hover:bg-blue-700 flex-1"
                 data-testid="parse-jd-btn"
               >
                 {parsing ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Parsing...
+                    Parsing with AI...
                   </>
                 ) : (
                   <>
-                    <FileText className="w-4 h-4 mr-2" />
+                    <Sparkles className="w-4 h-4 mr-2" />
                     Parse JD
                   </>
                 )}
@@ -251,8 +486,16 @@ export default function CreateJobPage() {
                 
                 <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded">
                   <AlertCircle className="w-4 h-4" />
-                  Review suggestions before applying - AI parsing is advisory only
+                  Review suggestions before applying - AI parsing is advisory only. No auto-save.
                 </div>
+                
+                {/* Audit info */}
+                {parsedSuggestions.input_type && (
+                  <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded">
+                    Parsed via {parsedSuggestions.input_type === 'upload' ? 'file upload' : 'text paste'} 
+                    {parsedSuggestions.parsed_by_role && ` by ${parsedSuggestions.parsed_by_role}`}
+                  </div>
+                )}
                 
                 <div className="grid gap-3 text-sm">
                   {parsedSuggestions.title && (
@@ -286,6 +529,22 @@ export default function CreateJobPage() {
                         if (parsedSuggestions.experience_min) applySuggestion('experience_min', parsedSuggestions.experience_min);
                         if (parsedSuggestions.experience_max) applySuggestion('experience_max', parsedSuggestions.experience_max);
                       }}>
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                  {parsedSuggestions.summary && (
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span className="flex-1 mr-2"><strong>Summary:</strong> {parsedSuggestions.summary.substring(0, 100)}...</span>
+                      <Button size="sm" variant="ghost" onClick={() => applySuggestion('description', parsedSuggestions.summary)}>
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                  {parsedSuggestions.requirements?.length > 0 && (
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span><strong>Requirements:</strong> {parsedSuggestions.requirements.length} items</span>
+                      <Button size="sm" variant="ghost" onClick={() => applySuggestion('requirements', parsedSuggestions.requirements)}>
                         Apply
                       </Button>
                     </div>
