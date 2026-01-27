@@ -6934,10 +6934,92 @@ async def get_company_pipeline(
 
 # ============== JD PARSING ==============
 
+@api_router.post("/jobs/extract-jd-text")
+async def extract_jd_text_from_file(
+    jd_file: UploadFile = File(...),
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Extract text from uploaded JD file (PDF, DOC, DOCX).
+    Returns raw text for preview before parsing.
+    """
+    if not jd_file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    
+    file_ext = jd_file.filename.split(".")[-1].lower()
+    if file_ext not in ["pdf", "doc", "docx", "txt"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file format '{file_ext}'. Use PDF, DOC, DOCX, or TXT"
+        )
+    
+    # Save file temporarily
+    file_path = UPLOAD_DIR / f"jd_{uuid.uuid4()}.{file_ext}"
+    try:
+        async with aiofiles.open(file_path, "wb") as f:
+            content = await jd_file.read()
+            await f.write(content)
+        
+        raw_text = ""
+        extraction_method = ""
+        
+        # Extract text based on file type
+        if file_ext == "pdf":
+            try:
+                doc = fitz.open(str(file_path))
+                for page in doc:
+                    raw_text += page.get_text()
+                doc.close()
+                extraction_method = "pdf_fitz"
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to extract text from PDF: {str(e)}")
+                
+        elif file_ext == "txt":
+            try:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    raw_text = await f.read()
+                extraction_method = "txt_read"
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to read text file: {str(e)}")
+                
+        elif file_ext in ["doc", "docx"]:
+            try:
+                from docx import Document
+                doc = Document(str(file_path))
+                raw_text = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+                extraction_method = "docx_python"
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to extract text from DOC/DOCX: {str(e)}")
+        
+        if not raw_text.strip():
+            raise HTTPException(status_code=400, detail="No text could be extracted from the file. The file may be empty or contain only images.")
+        
+        # Log extraction for audit
+        logging.info(f"JD text extracted by {current_user['name']} ({current_user['role']}) - method: {extraction_method}, chars: {len(raw_text)}")
+        
+        return {
+            "success": True,
+            "extracted_text": raw_text.strip(),
+            "filename": jd_file.filename,
+            "file_type": file_ext,
+            "char_count": len(raw_text),
+            "extraction_method": extraction_method,
+            "extracted_by": current_user["id"],
+            "extracted_by_role": current_user["role"],
+            "extracted_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    finally:
+        # Clean up temp file
+        if file_path.exists():
+            file_path.unlink(missing_ok=True)
+
+
 @api_router.post("/jobs/parse-jd")
 async def parse_job_description(
     jd_text: Optional[str] = Form(None),
     jd_file: Optional[UploadFile] = File(None),
+    input_type: Optional[str] = Form("paste"),  # "paste" or "upload"
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
     """
