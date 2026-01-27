@@ -55,25 +55,44 @@
 - Stored in `job_public_id` field
 - Displayed in job listings and public pages
 
-### Feature 3: JD Parsing During Job Creation ✅
-**Endpoint:** `POST /api/jobs/parse-jd`
+### Feature 3: JD Parsing During Job Creation ✅ ENHANCED (January 27, 2026)
+**Testing:** 13/13 backend tests passed
 
-**Access:** Admin, Employer, Recruiter only
+**Two Input Modes:**
+1. **Paste Text** - Textarea for pasting job description text
+2. **Upload File** - Upload JD files (PDF, DOC, DOCX, TXT)
 
-**Output (Advisory Only):**
-- Job title
-- Key skills / skill taxonomy
-- Experience range
-- Salary range (if mentioned)
-- Location (if mentioned)
-- Role summary
-- Audit metadata (parsed_by, parsed_by_role, timestamp)
+**Endpoints:**
+- `POST /api/jobs/extract-jd-text` - Extract text from uploaded files (NEW)
+- `POST /api/jobs/parse-jd` - AI-powered parsing with input_type tracking
+
+**Extract Endpoint Response:**
+```json
+{
+  "success": true,
+  "extracted_text": "...",
+  "filename": "job_description.pdf",
+  "file_type": "pdf",
+  "char_count": 1234,
+  "extraction_method": "pdf_fitz",
+  "extracted_by": "user_id",
+  "extracted_by_role": "admin",
+  "extracted_at": "2026-01-27T10:00:00Z"
+}
+```
+
+**Parse Endpoint Audit Metadata:**
+- `input_type`: "paste" or "upload"
+- `parsed_by`, `parsed_by_name`, `parsed_by_role`, `parsed_at`
 
 **Frontend Integration:**
-- AI Job Description Parser section in Create Job page
-- "Use AI Parser" button expands parser
-- "Apply All" or individual field application
-- User must review and confirm before saving
+- Tabbed UI: "Paste Text" | "Upload File"
+- Upload mode: File selection → Extract Text → Preview → Parse JD
+- Read-only preview of extracted text before parsing
+- Parse JD button disabled until valid input exists
+- Advisory warning: "No auto-save"
+
+**Access:** Admin, Employer, Recruiter only (Candidates denied)
 
 ---
 
