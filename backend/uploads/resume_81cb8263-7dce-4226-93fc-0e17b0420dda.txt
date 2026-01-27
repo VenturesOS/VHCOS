@@ -1,0 +1,7 @@
+John Doe
+Software Engineer
+Email: john.doe@email.com
+Phone: +91 9876543210
+Skills: Python, JavaScript, React, Node.js, MongoDB
+Experience: 5 years at TechCorp
+Education: B.Tech in Computer Science
