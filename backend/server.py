@@ -769,6 +769,33 @@ def require_role(allowed_roles: List[str]):
         return current_user
     return role_checker
 
+
+# ============== JOB ID GENERATION ==============
+
+async def generate_job_public_id() -> str:
+    """
+    Generate a unique job public ID in format: VHC/YYYY/NNNN
+    - Prefix: VHC
+    - Year: Current calendar year
+    - Sequence: 4-digit number, resets every year
+    """
+    current_year = datetime.now(timezone.utc).year
+    
+    # Use atomic findAndModify to get next sequence number
+    counter = await db.job_sequences.find_one_and_update(
+        {"year": current_year},
+        {"$inc": {"sequence": 1}},
+        upsert=True,
+        return_document=True
+    )
+    
+    sequence = counter.get("sequence", 1)
+    
+    # Format: VHC/YYYY/NNNN
+    job_public_id = f"VHC/{current_year}/{sequence:04d}"
+    
+    return job_public_id
+
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register", response_model=TokenResponse)
