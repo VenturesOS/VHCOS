@@ -107,6 +107,9 @@ class JobBase(BaseModel):
     salary_max: Optional[int] = None
     department: Optional[str] = None
     public_company_alias: Optional[str] = None  # Masked company name for candidates
+    skills: Optional[List[str]] = []  # Required skills for the job
+    experience_min: Optional[int] = None  # Minimum years of experience
+    experience_max: Optional[int] = None  # Maximum years of experience
 
 class JobCreate(JobBase):
     company_id: Optional[str] = None  # Admin/Employer can specify company
