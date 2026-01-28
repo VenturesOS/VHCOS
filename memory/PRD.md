@@ -36,6 +36,43 @@ Any future change must:
 
 ---
 
+## P0 Career Page Apply Flow + Data Mismatch Fix (January 28, 2026)
+
+### Issue 1: Career Page Apply Modal Missing Job Description & Consent ✅
+**Testing:** 8/8 backend + 100% frontend tests passed
+
+**Problems Fixed:**
+- Apply modal wasn't showing full job description
+- Consent checkbox was missing, blocking application submission
+
+**Fixes Applied to `/app/frontend/public/website/careers.html`:**
+- Added job description section (lines 339-352) showing:
+  - Job Public ID badge (VHC/YYYY/NNNN)
+  - Full title, location, job type, experience, salary
+  - Skills badges
+  - Full description + requirements
+- Added consent checkbox in Step 2 (lines 480-490) with HTML5 required validation
+- Added consent validation in JavaScript before form submission
+
+### Issue 2: Application Data Mismatch ✅
+**Problem:** Application data was showing AI-parsed resume data (e.g., "John Doe" from resume) instead of user-provided form data.
+
+**Root Cause:** Line 4979 in server.py prioritized parsed data over form input:
+```python
+# OLD: "candidate_name": parsed_data.get("name") or name
+# NEW: "candidate_name": name or parsed_data.get("name")
+```
+
+**Fix Applied to `/app/backend/server.py` (lines 4974-4997):**
+- User-provided form data now takes priority over AI-parsed data for:
+  - `candidate_name`
+  - `candidate_phone`
+  - `location`
+
+**Note:** This fix applies to NEW applications only. Existing applications retain their original data.
+
+---
+
 ## P0 Shareable Link JSON Error Fix (January 28, 2026)
 
 ### Bug: "Failed to execute 'json' on 'Response': body stream already read" ✅
