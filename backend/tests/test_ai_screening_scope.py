@@ -122,7 +122,7 @@ class TestAIScreeningScope:
         }
         
         response = requests.post(
-            f"{BASE_URL}/api/matching/candidates",
+            f"{BASE_URL}/api/matching/find-candidates",
             json=match_request,
             headers=employer_headers
         )
@@ -172,7 +172,7 @@ class TestAIScreeningScope:
         }
         
         response = requests.post(
-            f"{BASE_URL}/api/matching/candidates",
+            f"{BASE_URL}/api/matching/find-candidates",
             json=match_request,
             headers=recruiter_headers
         )
@@ -260,7 +260,7 @@ class TestAIScreeningVsDataBankVisibility:
         # Run AI screening as recruiter
         match_request = {"jd_text": "Software Engineer"}
         response = requests.post(
-            f"{BASE_URL}/api/matching/candidates",
+            f"{BASE_URL}/api/matching/find-candidates",
             json=match_request,
             headers=recruiter_headers
         )
