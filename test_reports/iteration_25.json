@@ -1,0 +1,117 @@
+{
+  "summary": "Resume download fix verified - Both issues resolved. 1) CV/Resume files can now be downloaded from both /app/uploads and /app/backend/uploads. 2) Public applications automatically create candidates in candidate_bank for AI screening.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ GET /api/uploads/{filename} returns files from /app/uploads (HTTP 200)",
+    "✅ GET /api/uploads/{filename} returns files from /app/backend/uploads (HTTP 200)",
+    "✅ GET /api/applications/{app_id}/resume downloads file correctly (HTTP 200)",
+    "✅ GET /api/candidates/{candidate_id}/resume downloads file correctly (HTTP 200)",
+    "✅ Mithun_Khatei_VHC.pdf downloads correctly (292532 bytes)",
+    "✅ Navneet_Srivastava_VHC.docx downloads correctly (28555 bytes)",
+    "✅ Preview button opens resume in new tab",
+    "✅ Download button triggers file download with proper naming",
+    "✅ Public applications create candidates in candidate_bank with source='public_application'",
+    "✅ AI Screening finds candidates from public applications",
+    "✅ Candidate Data Bank shows candidates with source='public_application'"
+  ],
+
+  "verified_fixes": {
+    "uploads_endpoint_fix": {
+      "description": "GET /api/uploads/{filename} now checks both /app/uploads and /app/backend/uploads",
+      "file": "/app/backend/server.py",
+      "lines": "7520-7535",
+      "status": "VERIFIED WORKING"
+    },
+    "application_resume_download_fix": {
+      "description": "GET /api/applications/{app_id}/resume now checks both upload directories",
+      "file": "/app/backend/server.py",
+      "lines": "1214-1229",
+      "status": "FIXED AND VERIFIED"
+    },
+    "candidate_resume_download_fix": {
+      "description": "GET /api/candidates/{candidate_id}/resume now checks both upload directories",
+      "file": "/app/backend/server.py",
+      "lines": "1350-1365",
+      "status": "FIXED AND VERIFIED"
+    },
+    "public_application_candidate_bank": {
+      "description": "Public applications automatically insert candidates into candidate_bank collection",
+      "file": "/app/backend/server.py",
+      "lines": "4960-4970",
+      "status": "VERIFIED WORKING"
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_resume_download_fix.py",
+    "/app/test_reports/pytest/pytest_resume_download_fix.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "The original fix at lines 7520-7535 only applied to /api/uploads/{filename} endpoint",
+    "The /api/applications/{app_id}/resume and /api/candidates/{candidate_id}/resume endpoints were still using UPLOAD_DIR only",
+    "Fixed both endpoints to check /app/uploads first, then /app/backend/uploads as fallback"
+  ],
+
+  "updated_files": [
+    "/app/backend/server.py (lines 1214-1229, 1350-1365)",
+    "/app/backend/tests/test_resume_download_fix.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (6/6 tests passed)",
+    "frontend": "100%"
+  },
+
+  "test_credentials": {
+    "employer_ajit": {"email": "ajit@vhc.in", "password": "12345678"},
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "test_data": {
+    "mithun_application_id": "6a504359-0471-410c-a8e7-62f1cfbc4535",
+    "mithun_resume_file": "public_mithun_khatei_at_gmail_com_20260128_071025_Mithun_Khatei_VHC.pdf",
+    "navneet_resume_file": "public_navneetjim_at_gmail_com_20260128_064059_Navneet_Srivastava_VHC.docx"
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (SMS/WhatsApp)"],
+    "note": "Email and SMS notifications are MOCKED"
+  },
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Resume download fix complete. The issue was that files uploaded via public apply go to /app/uploads, but the download endpoints were only checking /app/backend/uploads. Fixed by updating /api/applications/{app_id}/resume and /api/candidates/{candidate_id}/resume endpoints to check both directories. The /api/uploads/{filename} endpoint was already fixed. All 3 applicants (John Doe, Nikita Mhatre, Mithun Khatei) have working resume downloads. Public applications correctly create candidates in candidate_bank with source='public_application'.",
+
+  "rca_of_the_issue": {
+    "root_cause": "Files uploaded via public career page apply form are saved to /app/uploads, but the resume download endpoints (/api/applications/{app_id}/resume and /api/candidates/{candidate_id}/resume) were only checking UPLOAD_DIR which points to /app/backend/uploads",
+    "reproduction_steps": [
+      "1. Apply to a job via public career page (careers.html)",
+      "2. Resume gets saved to /app/uploads/public_*",
+      "3. Login as employer and view applicant",
+      "4. Click Download button - returns 404 'Resume file not found'",
+      "5. The endpoint was looking in /app/backend/uploads but file was in /app/uploads"
+    ],
+    "fix_applied": "Updated both download endpoints to check /app/uploads first, then /app/backend/uploads as fallback",
+    "files_modified": [
+      "/app/backend/server.py - lines 1214-1229 (application resume download)",
+      "/app/backend/server.py - lines 1350-1365 (candidate resume download)"
+    ]
+  }
+}
