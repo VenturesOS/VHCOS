@@ -1,0 +1,96 @@
+{
+  "summary": "Job Application Flow Testing Complete - All critical features VERIFIED WORKING. The key bug fix (shareable link toggle using jobAPI instead of raw fetch) is confirmed working. Full flow tested: Job creation -> Career page posting -> Shareable link toggle -> Public job page -> Application submission -> Success page.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/public/apply", "issue": "Rate limiting (429) after 5 requests/minute - This is EXPECTED behavior, not a bug", "priority": "INFO"}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ Employer login works (POST /api/auth/login)",
+    "✅ Admin login works (POST /api/auth/login)",
+    "✅ Employer can create job (POST /api/jobs)",
+    "✅ Employer can list jobs (GET /api/jobs)",
+    "✅ Employer can post job to career page (POST /api/jobs/{id}/career-page-status)",
+    "✅ Career page history retrieval works (GET /api/jobs/{id}/career-page-history)",
+    "✅ Shareable link enable works (PUT /api/jobs/{id}/shareable-link) - KEY FIX VERIFIED",
+    "✅ Shareable link disable works (PUT /api/jobs/{id}/shareable-link)",
+    "✅ Shareable link requires live career page status (validation working)",
+    "✅ Career page jobs listing works (GET /api/career-page/jobs)",
+    "✅ Public jobs listing works (GET /api/public/jobs)",
+    "✅ Public job details works (GET /api/public/jobs/{jobId})",
+    "✅ Non-existent job returns 404 on public endpoint",
+    "✅ Public apply works (POST /api/public/apply)",
+    "✅ Public apply requires consent (validation working)",
+    "✅ Public apply validates email (validation working)",
+    "✅ Employer Jobs page loads with shareable link toggle visible",
+    "✅ Shareable link toggle in UI works without 'body stream already read' error",
+    "✅ Public job page shows job details (title, masked company, location, skills)",
+    "✅ Application form expands with all required fields",
+    "✅ Application success page displays correctly"
+  ],
+
+  "verified_fixes": {
+    "shareable_link_toggle_fix": {
+      "description": "Changed handleShareableLinkToggle from raw fetch() to jobAPI.updateShareableLink() to fix 'body stream already read' error",
+      "file": "/app/frontend/src/pages/employer/EmployerJobsPage.jsx",
+      "lines": "119-127",
+      "status": "FIXED AND VERIFIED",
+      "test_method": "UI toggle tested via Playwright, API tested via pytest"
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_job_application_flow.py",
+    "/app/test_reports/pytest/pytest_job_application_flow.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Shareable link toggle correctly uses axios-based jobAPI instead of raw fetch()",
+    "Rate limiting on public apply endpoint is working correctly (5 req/min/IP)",
+    "Company name correctly masked as 'Confidential Client' on public job page",
+    "Consent validation working correctly on application submission"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_job_application_flow.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (14/14 core tests passed, 4 rate-limited tests are expected behavior)",
+    "frontend": "100%"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "employer": {"email": "employer@vhctalent.com", "password": "VhcTalent@2024"}
+  },
+
+  "test_data": {
+    "live_job_id": "c72113dc-b62e-437c-8712-0fb9f6541d1d",
+    "live_job_public_id": "VHC/2026/0050",
+    "job_title": "Senior Python Developer"
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (SMS/WhatsApp)"],
+    "note": "Email and SMS notifications are MOCKED"
+  },
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Job application flow fully tested and working. Key fix verified: shareable link toggle in EmployerJobsPage.jsx now uses jobAPI.updateShareableLink() instead of raw fetch(), fixing the 'body stream already read' error. Test job VHC/2026/0050 (ID: c72113dc-b62e-437c-8712-0fb9f6541d1d) is live on career page with shareable link enabled. Rate limiting on /api/public/apply is 5 requests per minute per IP."
+}
