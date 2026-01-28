@@ -7519,10 +7519,20 @@ from fastapi.responses import FileResponse
 
 @api_router.get("/uploads/{filename}")
 async def get_upload(filename: str):
-    file_path = UPLOAD_DIR / filename
-    if not file_path.exists():
+    # Check both possible upload locations
+    # Primary location: /app/uploads (used by public apply)
+    primary_dir = Path("/app/uploads")
+    primary_path = primary_dir / filename
+    
+    # Secondary location: /app/backend/uploads (used by internal uploads)
+    secondary_path = UPLOAD_DIR / filename
+    
+    if primary_path.exists():
+        return FileResponse(primary_path)
+    elif secondary_path.exists():
+        return FileResponse(secondary_path)
+    else:
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path)
 
 # ============== SEED ADMIN ==============
 
