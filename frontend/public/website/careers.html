@@ -920,6 +920,7 @@
       // Validate required fields
       const salary = document.getElementById('reviewCurrentSalary').value;
       const noticePeriod = document.getElementById('reviewNoticePeriod').value;
+      const consentCheckbox = document.getElementById('reviewConsent');
       
       if (!salary) {
         messageDiv.innerHTML = `<div class="alert alert-error">Please enter your current salary.</div>`;
@@ -929,6 +930,13 @@
         messageDiv.innerHTML = `<div class="alert alert-error">Please select your notice period.</div>`;
         return;
       }
+      if (!consentCheckbox || !consentCheckbox.checked) {
+        messageDiv.innerHTML = `<div class="alert alert-error">Please provide your consent to process your data.</div>`;
+        return;
+      }
+      
+      // Add consent_given to form data
+      formData.set('consent_given', 'true');
       
       submitBtn.disabled = true;
       submitBtn.textContent = 'Submitting...';
