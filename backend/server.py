@@ -453,6 +453,9 @@ class MatchResult(BaseModel):
     explanation: str
     filtered_out: bool = False
     filter_reason: Optional[str] = None
+    # Source tracking for AI Screening results
+    source: Optional[str] = None  # "self", "parsed", "application", etc.
+    source_role: Optional[str] = None  # Role of user who added: "admin", "employer", "recruiter"
 
 class JobMatchForCandidate(BaseModel):
     job_id: str
