@@ -672,7 +672,7 @@
     })();
     
     // Apply modal - Open and initialize
-    function openApplyModal(jobId, jobTitle) {
+    async function openApplyModal(jobId, jobTitle) {
       currentJobId = jobId;
       currentJobTitle = jobTitle;
       parsedResumeData = null;
@@ -691,8 +691,75 @@
       document.getElementById('step1Form').reset();
       document.getElementById('step2Form').reset();
       
+      // Reset consent checkbox
+      const consentCheckbox = document.getElementById('reviewConsent');
+      if (consentCheckbox) consentCheckbox.checked = false;
+      
       document.getElementById('applyModal').classList.add('show');
       document.body.style.overflow = 'hidden';
+      
+      // Fetch full job details and display in modal
+      try {
+        const response = await fetch(`${API_BASE}/api/public/jobs/${jobId}`);
+        if (response.ok) {
+          const job = await response.json();
+          
+          // Update job description section in modal
+          document.getElementById('modalJobTitleFull').textContent = job.title || jobTitle;
+          document.getElementById('modalJobPublicId').textContent = job.job_public_id || '';
+          
+          // Location
+          const locationEl = document.getElementById('modalJobLocation').querySelector('span:last-child');
+          if (locationEl) locationEl.textContent = job.location || 'Not specified';
+          
+          // Job Type
+          const typeEl = document.getElementById('modalJobType').querySelector('span:last-child');
+          if (typeEl) typeEl.textContent = job.job_type || 'Full-time';
+          
+          // Experience
+          const expEl = document.getElementById('modalJobExperience').querySelector('span:last-child');
+          if (expEl) {
+            if (job.experience_min && job.experience_max) {
+              expEl.textContent = `${job.experience_min}-${job.experience_max} years`;
+            } else if (job.experience_min) {
+              expEl.textContent = `${job.experience_min}+ years`;
+            } else {
+              expEl.textContent = 'Not specified';
+            }
+          }
+          
+          // Salary
+          const salaryEl = document.getElementById('modalJobSalary').querySelector('span:last-child');
+          if (salaryEl) {
+            const salary = formatSalary(job.salary_min, job.salary_max);
+            salaryEl.textContent = salary || 'Competitive';
+          }
+          
+          // Skills
+          const skillsContainer = document.getElementById('modalJobSkills');
+          if (skillsContainer) {
+            const skills = job.skills || [];
+            if (skills.length > 0) {
+              skillsContainer.innerHTML = skills.map(s => `<span style="background: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 20px; font-size: 13px;">${escapeHtml(s)}</span>`).join('');
+            } else {
+              skillsContainer.innerHTML = '';
+            }
+          }
+          
+          // Full description
+          const descEl = document.getElementById('modalJobDescFull');
+          if (descEl) {
+            let desc = job.description || '';
+            // If requirements exist, add them too
+            if (job.requirements) {
+              desc += '<br><br><strong>Requirements:</strong><br>' + job.requirements;
+            }
+            descEl.innerHTML = desc.replace(/\n/g, '<br>');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching job details:', error);
+      }
     }
     
     function closeApplyModal() {
