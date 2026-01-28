@@ -1,0 +1,17 @@
+John Doe
+Software Engineer
+Email: john.doe.test@example.com
+Phone: +91 9876543210
+
+Summary:
+Experienced software engineer with 5+ years in Python development.
+
+Skills:
+- Python, FastAPI, Django
+- MongoDB, PostgreSQL
+- Docker, Kubernetes
+
+Experience:
+Senior Developer at Tech Corp (2020-Present)
+- Built scalable APIs using FastAPI
+- Managed MongoDB databases
