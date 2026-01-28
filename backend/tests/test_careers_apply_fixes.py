@@ -261,9 +261,9 @@ class TestEmployerViewApplications:
         token = login_response.json().get("access_token")
         headers = {"Authorization": f"Bearer {token}"}
         
-        # Get applications
+        # Get applications using correct endpoint
         response = requests.get(
-            f"{BASE_URL}/api/jobs/{self.test_job_id}/applications",
+            f"{BASE_URL}/api/applications?job_id={self.test_job_id}",
             headers=headers
         )
         assert response.status_code == 200
