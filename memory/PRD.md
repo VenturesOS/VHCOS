@@ -22,6 +22,7 @@
 **P0 Governance Fix (Shareable Links + AI Screening Scope): COMPLETE & TESTED (January 28, 2026)**
 **P0 Shareable Link JSON Error Fix: COMPLETE & TESTED (January 28, 2026)**
 **P0 Career Page Apply Flow + Data Mismatch Fix: COMPLETE & TESTED (January 28, 2026)**
+**P0 Resume Download + Candidate Bank Auto-Add Fix: COMPLETE & TESTED (January 28, 2026)**
 
 ---
 
