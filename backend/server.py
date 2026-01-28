@@ -2814,25 +2814,25 @@ async def find_matching_candidates(
     if match_req.max_experience is not None:
         must_have["max_experience"] = match_req.max_experience
     
-    # Get candidates based on role visibility
-    query = {}
-    if current_user["role"] == "employer":
-        query["$or"] = [
-            {"visibility.employer_ids": current_user["id"]},
-            {"source": "self"}  # Self-registered candidates visible to employers
-        ]
-    elif current_user["role"] == "recruiter":
-        query["$or"] = [
-            {"visibility.recruiter_ids": current_user["id"]},
-            {"created_by": current_user["id"]},
-            {"source": "self"}
-        ]
+    # CRITICAL: AI Screening searches ENTIRE candidate database
+    # This is a SYSTEM-LEVEL INTELLIGENCE function, not UI-level visibility filter
+    # DATA VISIBILITY ≠ AI SEARCH SCOPE
+    # Results are READ-ONLY, CONTEXTUAL VISIBILITY - no edit/ownership rights granted
+    query = {}  # No role-based filtering for AI screening input
     
-    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(500)
+    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(1000)
     
     results = []
     for candidate in candidates:
         match_result = await calculate_candidate_job_match(candidate, job_data, must_have if must_have else None)
+        
+        # Determine candidate source for display
+        source = candidate.get("source", "unknown")
+        created_by_role = None
+        if candidate.get("created_by"):
+            creator = await db.users.find_one({"id": candidate["created_by"]}, {"role": 1, "_id": 0})
+            if creator:
+                created_by_role = creator.get("role")
         
         results.append(MatchResult(
             candidate_id=candidate["id"],
@@ -2847,7 +2847,9 @@ async def find_matching_candidates(
             gaps=match_result.get("gaps", []),
             explanation=match_result.get("explanation", ""),
             filtered_out=match_result.get("filtered_out", False),
-            filter_reason=match_result.get("filter_reason")
+            filter_reason=match_result.get("filter_reason"),
+            source=source,
+            source_role=created_by_role
         ))
     
     # Sort by score descending, filtered_out last
