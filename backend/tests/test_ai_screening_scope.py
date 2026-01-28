@@ -73,7 +73,7 @@ class TestAIScreeningScope:
         }
         
         response = requests.post(
-            f"{BASE_URL}/api/matching/candidates",
+            f"{BASE_URL}/api/matching/find-candidates",
             json=match_request,
             headers=headers
         )
@@ -201,7 +201,7 @@ class TestAIScreeningScope:
         }
         
         response = requests.post(
-            f"{BASE_URL}/api/matching/candidates",
+            f"{BASE_URL}/api/matching/find-candidates",
             json=match_request,
             headers=headers
         )
