@@ -35,6 +35,34 @@ Any future change must:
 
 ---
 
+## P0 Shareable Link JSON Error Fix (January 28, 2026)
+
+### Bug: "Failed to execute 'json' on 'Response': body stream already read" ✅
+**Testing:** 14/14 backend + 100% frontend tests passed
+
+**Root Cause:** The `handleShareableLinkToggle` function in EmployerJobsPage.jsx and AdminJobsPage.jsx used raw `fetch()` API which attempted to read the response body twice when an error occurred.
+
+**Fix Applied:**
+- Added `updateShareableLink` to jobAPI in `/app/frontend/src/lib/api.js`
+- Changed `handleShareableLinkToggle` to use `jobAPI.updateShareableLink()` instead of raw `fetch()`
+- Same fix applied to both EmployerJobsPage.jsx and AdminJobsPage.jsx
+
+**Full Flow Verified:**
+1. ✅ Employer Creates Job → Job shown in My Jobs
+2. ✅ Employer assigns recruiters to job
+3. ✅ Employer posts job to Career Page (career_page_status='live')
+4. ✅ Employer enables Shareable Link via toggle (NO JSON ERROR)
+5. ✅ Shareable link URL: `/jobs/{jobId}`
+6. ✅ Public job landing page loads with job details
+7. ✅ Company name masked as "Confidential Client"
+8. ✅ Apply form shows: Resume upload, Name, Email, Phone, Salary, Notice Period, Consent
+9. ✅ File upload restricted to PDF, DOC, DOCX (max 5MB)
+10. ✅ Application submitted successfully
+11. ✅ Thank you page shown with "Explore Our Website" option
+12. ✅ Same flow works for Career Page direct access
+
+---
+
 ## P0 Governance Fix (January 28, 2026)
 
 ### Issue 1: Shareable Job Link Feature - VERIFIED WORKING ✅
