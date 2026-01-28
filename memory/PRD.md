@@ -1,6 +1,6 @@
 # VHC Talent OS - Product Requirements Document
 
-## 🔒 BUILD STATUS: PILOT-READY STABLE (January 27, 2026)
+## 🔒 BUILD STATUS: PILOT-READY STABLE (January 28, 2026)
 
 **Phase-1 + Phase-1.5: LOCKED & APPROVED**
 **Phase-2 Part A: COMPLETE & TESTED (January 19, 2026)**
@@ -19,6 +19,65 @@
 **Shareable Job Links + Structured Job ID + JD Parsing: COMPLETE & TESTED (January 27, 2026)**
 **Employer-led Mandate Allocation: COMPLETE & TESTED (January 27, 2026)**
 **Candidate Data Bank Access Control Bug Fix: COMPLETE & TESTED (January 27, 2026)**
+**P0 Governance Fix (Shareable Links + AI Screening Scope): COMPLETE & TESTED (January 28, 2026)**
+
+---
+
+## RULE ZERO (Standing Thumb Rule - NON-NEGOTIABLE)
+
+**Once a feature is implemented, tested, and signed off, it must NEVER be removed, disabled, or altered in behavior unless explicitly instructed by the product owner.**
+
+Any future change must:
+- Preserve all existing features
+- Be additive only
+- Never regress signed-off functionality
+
+---
+
+## P0 Governance Fix (January 28, 2026)
+
+### Issue 1: Shareable Job Link Feature - VERIFIED WORKING ✅
+**Testing:** 29/29 tests passed
+
+The Shareable Job Link feature was confirmed present and working:
+- **Public Job Landing Page:** `/jobs/{jobId}` - Accessible without auth
+- **Apply Form:** CV upload + AI parsing, consent checkbox required
+- **Toggle Control:** Visible in Admin Jobs + Employer Jobs for career_page_status='live' jobs
+- **Copy/Open Links:** Working as expected
+- **Validation:** Jobs must be live on career page before shareable link can be enabled
+
+### Issue 2: AI Screening Scope - FIXED ✅
+**Testing:** 8/8 tests passed
+
+**Problem:** AI Screening was incorrectly limited to user's visible candidates (role-based filter).
+
+**Fix:** AI Screening now searches ENTIRE candidate database:
+- **DATA VISIBILITY ≠ AI SEARCH SCOPE** (Design Principle)
+- Admin screens: 15 candidates (all)
+- Employer screens: 15 candidates (all) - despite seeing only 1 in Data Bank
+- Recruiter screens: 15 candidates (all) - despite seeing only 1 in Data Bank
+
+**Result Presentation:**
+- Source tracking added: `source`, `source_role` fields in MatchResult
+- READ-ONLY, CONTEXTUAL VISIBILITY - no edit/ownership rights granted from screening
+
+---
+
+## Feature Audit Results (January 28, 2026)
+
+All previously signed-off features verified working:
+- ✅ Shareable Job Links (live at /jobs/{jobId})
+- ✅ Public Job Landing Pages
+- ✅ Job ID format (VHC/YYYY/NNNN)
+- ✅ JD Parsing (paste + upload)
+- ✅ CV Parsing
+- ✅ Candidate Data Bank access rules
+- ✅ Employer "My Team" view
+- ✅ Employer "Companies" view
+- ✅ Mandate allocation to recruiters
+- ✅ Audit logs
+- ✅ Consent capture
+- ✅ Application success screen
 
 ---
 
