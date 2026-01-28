@@ -8,8 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
 import { Checkbox } from '../../components/ui/checkbox';
+import { Switch } from '../../components/ui/switch';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeLock, AlertTriangle, History, UserPlus, UserCheck } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeLock, AlertTriangle, History, UserPlus, UserCheck, Link2, Copy, ExternalLink } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function EmployerJobsPage() {
   const [jobs, setJobs] = useState([]);
