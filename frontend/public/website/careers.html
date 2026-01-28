@@ -335,6 +335,22 @@
         
         <div id="applyMessage"></div>
         
+        <!-- Job Description Section (shown at top of modal) -->
+        <div id="jobDescriptionSection" style="margin-bottom: 24px; padding: 20px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; border-left: 4px solid #0ea5e9;">
+          <div style="margin-bottom: 12px;">
+            <span id="modalJobPublicId" style="display: inline-block; padding: 4px 10px; background: #0ea5e9; color: white; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 8px;"></span>
+            <h3 id="modalJobTitleFull" style="font-size: 20px; font-weight: 700; color: #0f172a; margin: 0;"></h3>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; font-size: 14px; color: #475569;">
+            <span id="modalJobLocation" style="display: flex; align-items: center; gap: 6px;">📍 <span></span></span>
+            <span id="modalJobType" style="display: flex; align-items: center; gap: 6px;">💼 <span></span></span>
+            <span id="modalJobExperience" style="display: flex; align-items: center; gap: 6px;">📅 <span></span></span>
+            <span id="modalJobSalary" style="display: flex; align-items: center; gap: 6px;">💰 <span></span></span>
+          </div>
+          <div id="modalJobSkills" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;"></div>
+          <div id="modalJobDescFull" style="font-size: 14px; color: #334155; line-height: 1.7;"></div>
+        </div>
+        
         <!-- Step 1: Upload Resume -->
         <div id="step1Content" data-testid="step1-content">
           <form id="step1Form">
