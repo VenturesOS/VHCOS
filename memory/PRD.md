@@ -20,6 +20,7 @@
 **Employer-led Mandate Allocation: COMPLETE & TESTED (January 27, 2026)**
 **Candidate Data Bank Access Control Bug Fix: COMPLETE & TESTED (January 27, 2026)**
 **P0 Governance Fix (Shareable Links + AI Screening Scope): COMPLETE & TESTED (January 28, 2026)**
+**P0 Shareable Link JSON Error Fix: COMPLETE & TESTED (January 28, 2026)**
 
 ---
 
