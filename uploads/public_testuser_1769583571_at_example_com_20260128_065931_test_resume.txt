@@ -1,0 +1,16 @@
+Navneet Kumar
+Senior Software Engineer
+Email: navneet.test@email.com
+Phone: +91 9876543210
+Location: New Delhi, India
+
+Summary: Experienced software engineer with 8 years of experience in Python, FastAPI, and MongoDB.
+
+Skills: Python, FastAPI, MongoDB, Docker, AWS, React
+
+Experience:
+- Senior Software Engineer at TechCorp (2019-Present)
+- Software Developer at DevStudio (2016-2019)
+
+Education:
+- B.Tech in Computer Science, IIT Delhi (2016)
