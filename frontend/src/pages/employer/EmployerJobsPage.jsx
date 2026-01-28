@@ -118,25 +118,12 @@ export default function EmployerJobsPage() {
   // Shareable Link Functions
   const handleShareableLinkToggle = async (job, enabled) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/jobs/${job.id}/shareable-link`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ enabled })
-      });
-      
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to update');
-      }
-      
+      await jobAPI.updateShareableLink(job.id, enabled);
       toast.success(enabled ? 'Shareable link enabled' : 'Shareable link disabled');
       loadJobs();
     } catch (error) {
-      toast.error(error.message || 'Failed to update shareable link');
+      const detail = error.response?.data?.detail;
+      toast.error(detail || 'Failed to update shareable link');
     }
   };
 
