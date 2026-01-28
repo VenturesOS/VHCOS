@@ -4976,9 +4976,10 @@ async def public_apply(
         "job_id": internal_job_id,
         "job_public_id": job.get("job_public_id"),
         "candidate_id": candidate_id,
-        "candidate_name": parsed_data.get("name") or name,
+        # IMPORTANT: User-provided form data takes priority over AI-parsed data
+        "candidate_name": name or parsed_data.get("name"),
         "candidate_email": email,
-        "candidate_phone": phone,
+        "candidate_phone": phone or parsed_data.get("phone"),
         "resume_url": f"/api/uploads/{filename}" if filename else None,
         "cover_letter": cover_letter,
         "current_salary": current_salary,  # INR
