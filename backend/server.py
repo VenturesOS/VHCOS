@@ -1213,9 +1213,20 @@ async def download_application_resume(
     
     # Extract filename from URL
     original_filename = resume_url.split("/")[-1]
-    file_path = UPLOAD_DIR / original_filename
     
-    if not file_path.exists():
+    # Check both possible upload locations
+    # Primary location: /app/uploads (used by public apply)
+    primary_dir = Path("/app/uploads")
+    primary_path = primary_dir / original_filename
+    
+    # Secondary location: /app/backend/uploads (used by internal uploads)
+    secondary_path = UPLOAD_DIR / original_filename
+    
+    if primary_path.exists():
+        file_path = primary_path
+    elif secondary_path.exists():
+        file_path = secondary_path
+    else:
         raise HTTPException(status_code=404, detail="Resume file not found")
     
     # Generate proper download filename: Firstname_Lastname_VHC.ext
