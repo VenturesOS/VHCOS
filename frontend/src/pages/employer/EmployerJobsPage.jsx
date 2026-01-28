@@ -263,6 +263,41 @@ export default function EmployerJobsPage() {
                           <Globe className="w-3 h-3" /> Live on Career Page
                         </span>
                       )}
+                      {/* Shareable Link Badge & Controls - Only for live jobs */}
+                      {job.career_page_status === 'live' && (
+                        <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 rounded-lg">
+                          <Link2 className="w-3 h-3 text-blue-600" />
+                          <span className="text-xs text-blue-700">Share</span>
+                          <Switch
+                            checked={job.shareable_link_enabled || false}
+                            onCheckedChange={(checked) => handleShareableLinkToggle(job, checked)}
+                            className="scale-75"
+                            data-testid={`shareable-toggle-${job.id}`}
+                          />
+                          {job.shareable_link_enabled && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => copyShareableLink(job)}
+                                title="Copy link"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => openShareableLink(job)}
+                                title="Open in new tab"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
                       {/* Assigned Recruiters Badge */}
                       {job.assigned_recruiters?.length > 0 && (
                         <span 
