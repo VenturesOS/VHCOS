@@ -37,6 +37,38 @@ Any future change must:
 
 ---
 
+## P0 Resume Download + Candidate Bank Auto-Add Fix (January 28, 2026)
+
+### Issue 1: Resume/CV Files Not Downloading ✅
+**Testing:** 6/6 backend tests passed
+
+**Root Cause:** Files were saved to `/app/uploads` by the public apply endpoint, but download endpoints only looked in `/app/backend/uploads`.
+
+**Fixes Applied:**
+- `GET /api/uploads/{filename}` - Now checks both `/app/uploads` and `/app/backend/uploads`
+- `GET /api/applications/{app_id}/resume` - Updated to check both directories
+- `GET /api/candidates/{candidate_id}/resume` - Updated to check both directories
+
+**Verified Working:**
+- ✅ Mithun_Khatei_VHC.pdf (292KB) downloads correctly
+- ✅ Navneet_Srivastava_VHC.docx (28KB) downloads correctly
+- ✅ Preview and Download buttons work in applicant profile
+
+### Issue 2: Auto-Add to Candidate Bank ✅
+**Already Implemented - Verified Working**
+
+Public applications automatically create candidates in `candidate_bank` collection with:
+- `source: "public_application"`
+- `source_job_id: {job_id}`
+- Full profile data (name, email, phone, skills, resume)
+
+**AI Screening Coverage:**
+- ✅ 23 candidates in total data bank
+- ✅ AI Screening correctly finds and ranks candidates from public applications
+- ✅ HR Manager search correctly ranked Mithun Khatei (HR Business Partner) at score 85
+
+---
+
 ## P0 Career Page Apply Flow + Data Mismatch Fix (January 28, 2026)
 
 ### Issue 1: Career Page Apply Modal Missing Job Description & Consent ✅
