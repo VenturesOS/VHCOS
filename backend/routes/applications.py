@@ -791,7 +791,16 @@ async def find_matching_candidates(
     This is a SYSTEM-LEVEL INTELLIGENCE function, not UI-level visibility filter.
     DATA VISIBILITY ≠ AI SEARCH SCOPE
     Results are READ-ONLY, CONTEXTUAL VISIBILITY - no edit/ownership rights granted.
+    
+    OPTIMIZED: 
+    - Batch lookup for creator roles (eliminates N+1 queries)
+    - Concurrent AI matching with semaphore to control parallelism
+    - Pre-filters candidates with must-have criteria before AI scoring
     """
+    import time
+    import asyncio
+    
+    start_time = time.time()
     
     # Get job requirements
     job_data = None
@@ -811,6 +820,8 @@ async def find_matching_candidates(
     if not job_data:
         raise HTTPException(status_code=400, detail="Could not parse job requirements")
     
+    logger.info(f"[AI SCREENING] Job parsed in {time.time() - start_time:.2f}s")
+    
     # Build must-have filters
     must_have = {}
     if match_req.must_have_location:
@@ -826,42 +837,102 @@ async def find_matching_candidates(
     
     # CRITICAL: AI Screening searches ENTIRE candidate database
     # No role-based filtering for AI screening input
-    query = {}
+    # Optimization: Only fetch fields needed for matching
+    candidates = await db.candidate_bank.find(
+        {},
+        {
+            "_id": 0,
+            "id": 1,
+            "name": 1,
+            "email": 1,
+            "skills": 1,
+            "experience_years": 1,
+            "education": 1,
+            "location": 1,
+            "summary": 1,
+            "source": 1,
+            "created_by": 1
+        }
+    ).to_list(1000)
     
-    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(1000)
+    logger.info(f"[AI SCREENING] Loaded {len(candidates)} candidates in {time.time() - start_time:.2f}s")
     
-    results = []
+    # OPTIMIZATION: Batch fetch all creator user roles at once (eliminates N+1)
+    creator_ids = list(set(c.get("created_by") for c in candidates if c.get("created_by")))
+    creator_roles = {}
+    if creator_ids:
+        creators = await db.users.find(
+            {"id": {"$in": creator_ids}},
+            {"_id": 0, "id": 1, "role": 1}
+        ).to_list(len(creator_ids))
+        creator_roles = {c["id"]: c.get("role") for c in creators}
+    
+    logger.info(f"[AI SCREENING] Creator roles fetched in {time.time() - start_time:.2f}s")
+    
+    # OPTIMIZATION: Pre-filter candidates with must-have criteria BEFORE AI scoring
+    # This avoids expensive LLM calls for candidates that will be filtered anyway
+    filtered_candidates = []
+    pre_filtered_results = []
+    
     for candidate in candidates:
-        match_result = await calculate_candidate_job_match(candidate, job_data, must_have if must_have else None)
-        
-        # Determine candidate source for display
-        source = candidate.get("source", "unknown")
-        created_by_role = None
-        if candidate.get("created_by"):
-            creator = await db.users.find_one({"id": candidate["created_by"]}, {"role": 1, "_id": 0})
-            if creator:
-                created_by_role = creator.get("role")
-        
-        results.append(MatchResult(
-            candidate_id=candidate["id"],
-            candidate_name=candidate["name"],
-            candidate_email=candidate["email"],
-            score=match_result.get("score", 0),
-            skill_match_score=match_result.get("skill_match_score"),
-            experience_match_score=match_result.get("experience_match_score"),
-            matched_skills=match_result.get("matched_skills", []),
-            missing_skills=match_result.get("missing_skills", []),
-            strengths=match_result.get("strengths", []),
-            gaps=match_result.get("gaps", []),
-            explanation=match_result.get("explanation", ""),
-            filtered_out=match_result.get("filtered_out", False),
-            filter_reason=match_result.get("filter_reason"),
-            source=source,
-            source_role=created_by_role
-        ))
+        if must_have:
+            filter_result = apply_must_have_filters(candidate, must_have)
+            if not filter_result["passed"]:
+                # Add to results as filtered out (no AI call needed)
+                pre_filtered_results.append(MatchResult(
+                    candidate_id=candidate["id"],
+                    candidate_name=candidate["name"],
+                    candidate_email=candidate["email"],
+                    score=0,
+                    filtered_out=True,
+                    filter_reason=filter_result["reason"],
+                    explanation=f"Candidate excluded: {filter_result['reason']}",
+                    source=candidate.get("source", "unknown"),
+                    source_role=creator_roles.get(candidate.get("created_by"))
+                ))
+                continue
+        filtered_candidates.append(candidate)
+    
+    logger.info(f"[AI SCREENING] Pre-filtered to {len(filtered_candidates)} candidates (excluded {len(pre_filtered_results)}) in {time.time() - start_time:.2f}s")
+    
+    # OPTIMIZATION: Use concurrent AI matching with controlled parallelism
+    # Semaphore limits concurrent LLM calls to avoid overwhelming the API
+    MAX_CONCURRENT_LLM_CALLS = 5
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
+    
+    async def match_candidate(candidate: dict) -> MatchResult:
+        async with semaphore:
+            match_result = await calculate_candidate_job_match(candidate, job_data, None)  # must_have already applied
+            
+            return MatchResult(
+                candidate_id=candidate["id"],
+                candidate_name=candidate["name"],
+                candidate_email=candidate["email"],
+                score=match_result.get("score", 0),
+                skill_match_score=match_result.get("skill_match_score"),
+                experience_match_score=match_result.get("experience_match_score"),
+                matched_skills=match_result.get("matched_skills", []),
+                missing_skills=match_result.get("missing_skills", []),
+                strengths=match_result.get("strengths", []),
+                gaps=match_result.get("gaps", []),
+                explanation=match_result.get("explanation", ""),
+                filtered_out=match_result.get("filtered_out", False),
+                filter_reason=match_result.get("filter_reason"),
+                source=candidate.get("source", "unknown"),
+                source_role=creator_roles.get(candidate.get("created_by"))
+            )
+    
+    # Run AI matching concurrently
+    ai_results = await asyncio.gather(*[match_candidate(c) for c in filtered_candidates])
+    
+    # Combine pre-filtered results with AI results
+    results = list(ai_results) + pre_filtered_results
     
     # Sort by score descending, filtered_out last
     results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
+    
+    elapsed = time.time() - start_time
+    logger.info(f"[AI SCREENING] Completed {len(results)} matches in {elapsed:.2f}s ({len(filtered_candidates)} AI calls)")
     
     # Store match results for analytics
     if match_req.job_id:
@@ -873,6 +944,7 @@ async def find_matching_candidates(
             "total_candidates": len(candidates),
             "matched_count": len([r for r in results if r.score >= 50 and not r.filtered_out]),
             "filters_applied": must_have,
+            "processing_time_seconds": round(elapsed, 2),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
     
