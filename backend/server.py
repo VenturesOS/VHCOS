@@ -5121,6 +5121,9 @@ async def public_apply(
             update_data["headline"] = headline
         if filename:
             update_data["resume_url"] = f"/api/uploads/{filename}"
+        # Add R2 metadata if available
+        if r2_metadata:
+            update_data["r2_metadata"] = r2_metadata
         
         await db.candidate_bank.update_one(
             {"id": candidate_id},
