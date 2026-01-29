@@ -19,6 +19,7 @@ import fitz  # PyMuPDF for PDF text extraction
 from config import (
     ROOT_DIR,
     db,
+    db_name,
     client,
     r2_client,
     R2_ENABLED,
