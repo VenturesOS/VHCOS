@@ -3167,7 +3167,8 @@ async def add_to_candidate_bank(
         "fingerprint": fingerprint,
         "uploaded_at": now,
         "uploaded_by": current_user["id"],
-        "is_active": True
+        "is_active": True,
+        "r2_metadata": r2_metadata  # R2 storage info (None if local only)
     }
     
     if dup_check["found"]:
