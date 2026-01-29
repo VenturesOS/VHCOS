@@ -2592,6 +2592,7 @@ async def get_job_applicants(
             "current_salary": app.get("current_salary") or (candidate_data.get("current_salary") if candidate_data else None),
             "notice_period": app.get("notice_period") or (candidate_data.get("notice_period") if candidate_data else None),
             "resume_url": app.get("resume_url") or (candidate_data.get("resume_url") if candidate_data else None),
+            "r2_metadata": app.get("r2_metadata") or (candidate_data.get("r2_metadata") if candidate_data else None),
             "cover_letter": app.get("cover_letter"),
             "stage": app.get("stage", "applied"),
             "match_score": match_score,
