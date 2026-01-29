@@ -7,7 +7,7 @@ import uuid
 import logging
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Any
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import FileResponse
@@ -36,6 +36,72 @@ from services.r2_storage import generate_r2_key, upload_to_r2, get_r2_download_u
 candidates_router = APIRouter(prefix="/api", tags=["Candidate Bank"])
 
 logger = logging.getLogger(__name__)
+
+
+# ============== DATA GOVERNANCE HELPERS ==============
+
+def normalize_phone(phone: str) -> str:
+    """Normalize phone number for deduplication"""
+    if not phone:
+        return ""
+    return "".join(filter(str.isdigit, phone))[-10:]
+
+
+async def create_audit_log(
+    candidate_id: str,
+    field: str,
+    old_val: Any,
+    new_val: Any,
+    user: dict,
+    source: str
+):
+    """Create audit trail entry for candidate data changes"""
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "candidate_id": candidate_id,
+        "field_changed": field,
+        "old_value": str(old_val) if old_val else None,
+        "new_value": str(new_val) if new_val else None,
+        "updated_by_role": user["role"],
+        "updated_by_id": user["id"],
+        "updated_by_name": user["name"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": source
+    }
+    await db.audit_logs.insert_one(log_entry)
+
+
+# Data update priority: candidate > employer > recruiter > parsing
+UPDATE_PRIORITY = {
+    "candidate": 4,
+    "employer": 3,
+    "recruiter": 2,
+    "admin": 5,
+    "parsing": 1
+}
+
+
+async def should_update_field(
+    candidate_id: str,
+    field: str,
+    new_source: str,
+    database
+) -> bool:
+    """Check if update should proceed based on priority rules"""
+    # Get last update source for this field
+    last_log = await database.audit_logs.find_one(
+        {"candidate_id": candidate_id, "field_changed": field},
+        sort=[("timestamp", -1)]
+    )
+    
+    if not last_log:
+        return True
+    
+    last_source_role = last_log.get("updated_by_role", "parsing")
+    last_priority = UPDATE_PRIORITY.get(last_source_role, 1)
+    new_priority = UPDATE_PRIORITY.get(new_source, 1)
+    
+    return new_priority >= last_priority
 
 
 # ============== HELPER FUNCTIONS ==============
