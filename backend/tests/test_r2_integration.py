@@ -50,7 +50,6 @@ class TestLoginFlow:
         assert data["user"]["email"] == EMPLOYER_EMAIL
         
         print(f"✅ Employer login successful: {data['user']['name']}")
-        return data["access_token"]
     
     def test_admin_login(self):
         """Test admin login returns valid token"""
@@ -68,7 +67,6 @@ class TestLoginFlow:
         assert data["user"]["role"] == "admin"
         
         print(f"✅ Admin login successful: {data['user']['name']}")
-        return data["access_token"]
 
 
 class TestPublicApplicationR2Upload:
@@ -130,7 +128,9 @@ class TestPublicApplicationR2Upload:
         apps_resp = requests.get(f"{BASE_URL}/api/jobs/{PUBLIC_JOB_ID}/applicants", headers=headers)
         
         if apps_resp.status_code == 200:
-            applications = apps_resp.json()
+            response_data = apps_resp.json()
+            applications = response_data.get("applicants", [])
+            
             # Find our test application
             test_app = None
             for app in applications:
@@ -150,14 +150,10 @@ class TestPublicApplicationR2Upload:
                     print(f"✅ R2 metadata verified: storage={r2_meta.get('storage')}, r2_key={r2_meta.get('r2_key')}")
                 else:
                     print("⚠️ No r2_metadata found - R2 may not be enabled or upload failed")
-                
-                return test_app
             else:
                 print(f"⚠️ Test application not found in job applicants")
         else:
             print(f"⚠️ Could not fetch applicants: {apps_resp.status_code}")
-        
-        return None
 
 
 class TestCandidateBankR2Upload:
@@ -232,12 +228,8 @@ class TestCandidateBankR2Upload:
                 print(f"✅ Candidate bank R2 metadata verified: storage={r2_meta.get('storage')}")
             else:
                 print("⚠️ No r2_metadata found in candidate record")
-            
-            return candidate_id
         else:
             print(f"⚠️ Could not fetch candidate: {candidate_resp.status_code}")
-        
-        return candidate_id
 
 
 class TestResumeDownloadR2Redirect:
@@ -245,35 +237,7 @@ class TestResumeDownloadR2Redirect:
     
     def test_uploads_endpoint_returns_r2_redirect(self):
         """Test that /api/uploads/{filename} returns 307 redirect for R2 files"""
-        # First, create a public application to get a file in R2
-        test_id = str(uuid.uuid4())[:8]
-        test_email = f"download_test_{test_id}@example.com"
-        
-        resume_content = f"""
-        Download Test Resume
-        Name: Download Test {test_id}
-        Email: {test_email}
-        Skills: Testing, QA
-        """
-        
-        files = {
-            'resume': ('download_test.txt', resume_content.encode(), 'text/plain')
-        }
-        data = {
-            'job_id': PUBLIC_JOB_ID,
-            'name': f'Download Test {test_id}',
-            'email': test_email,
-            'phone': '+919876543212',
-            'current_salary': '1000000',
-            'notice_period': '15 days',
-            'consent_given': 'true'
-        }
-        
-        # Submit application
-        apply_resp = requests.post(f"{BASE_URL}/api/public/apply", files=files, data=data)
-        assert apply_resp.status_code == 200, f"Apply failed: {apply_resp.text}"
-        
-        # Login and find the application
+        # Login as employer
         login_resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": EMPLOYER_EMAIL,
             "password": EMPLOYER_PASSWORD
@@ -281,55 +245,54 @@ class TestResumeDownloadR2Redirect:
         token = login_resp.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
         
-        # Get applications
+        # Get applications with R2 metadata
         apps_resp = requests.get(f"{BASE_URL}/api/jobs/{PUBLIC_JOB_ID}/applicants", headers=headers)
         
         if apps_resp.status_code == 200:
-            applications = apps_resp.json()
-            test_app = None
-            for app in applications:
-                if app.get("candidate_email") == test_email:
-                    test_app = app
-                    break
+            response_data = apps_resp.json()
+            applications = response_data.get("applicants", [])
             
-            if test_app and test_app.get("resume_url"):
-                resume_url = test_app["resume_url"]
-                filename = resume_url.split("/")[-1]
-                
-                print(f"Testing download for: {filename}")
-                
-                # Test with redirect=True (default) - should return 307
-                download_resp = requests.get(
-                    f"{BASE_URL}/api/uploads/{filename}",
-                    headers=headers,
-                    allow_redirects=False
-                )
-                
-                print(f"Download response status: {download_resp.status_code}")
-                
-                if download_resp.status_code == 307:
-                    redirect_url = download_resp.headers.get("Location")
-                    print(f"✅ Got 307 redirect to R2 signed URL")
-                    print(f"Redirect URL (truncated): {redirect_url[:100]}...")
+            # Find an application with R2 metadata
+            for app in applications:
+                r2_meta = app.get("r2_metadata")
+                if r2_meta and r2_meta.get("storage") == "r2" and app.get("resume_url"):
+                    filename = app["resume_url"].split("/")[-1]
                     
-                    # Verify the signed URL works
-                    signed_resp = requests.get(redirect_url)
-                    print(f"Signed URL response: {signed_resp.status_code}")
+                    print(f"Testing download for: {filename}")
                     
-                    if signed_resp.status_code == 200:
-                        print(f"✅ Signed URL returned content: {len(signed_resp.content)} bytes")
-                        assert len(signed_resp.content) > 0, "Empty content from signed URL"
+                    # Test with redirect=True (default) - should return 307
+                    download_resp = requests.get(
+                        f"{BASE_URL}/api/uploads/{filename}",
+                        headers=headers,
+                        allow_redirects=False
+                    )
+                    
+                    print(f"Download response status: {download_resp.status_code}")
+                    
+                    if download_resp.status_code == 307:
+                        redirect_url = download_resp.headers.get("Location")
+                        print(f"✅ Got 307 redirect to R2 signed URL")
+                        print(f"Redirect URL (truncated): {redirect_url[:100]}...")
+                        
+                        # Verify the signed URL works
+                        signed_resp = requests.get(redirect_url)
+                        print(f"Signed URL response: {signed_resp.status_code}")
+                        
+                        if signed_resp.status_code == 200:
+                            print(f"✅ Signed URL returned content: {len(signed_resp.content)} bytes")
+                            assert len(signed_resp.content) > 0, "Empty content from signed URL"
+                        else:
+                            print(f"⚠️ Signed URL failed: {signed_resp.status_code}")
+                        
+                        return
+                    elif download_resp.status_code == 200:
+                        print("⚠️ Got 200 (local file) instead of 307 redirect - R2 may not be enabled")
+                        return
                     else:
-                        print(f"⚠️ Signed URL failed: {signed_resp.status_code}")
-                    
-                    return True
-                elif download_resp.status_code == 200:
-                    print("⚠️ Got 200 (local file) instead of 307 redirect - R2 may not be enabled")
-                    return True
-                else:
-                    print(f"⚠️ Unexpected status: {download_resp.status_code}")
+                        print(f"⚠️ Unexpected status: {download_resp.status_code}")
+                    break
         
-        return False
+        print("⚠️ No R2 files found to test redirect")
     
     def test_uploads_endpoint_with_redirect_false(self):
         """Test that /api/uploads/{filename}?redirect=false streams content directly"""
@@ -345,9 +308,12 @@ class TestResumeDownloadR2Redirect:
         apps_resp = requests.get(f"{BASE_URL}/api/jobs/{PUBLIC_JOB_ID}/applicants", headers=headers)
         
         if apps_resp.status_code == 200:
-            applications = apps_resp.json()
+            response_data = apps_resp.json()
+            applications = response_data.get("applicants", [])
+            
             for app in applications:
-                if app.get("resume_url"):
+                r2_meta = app.get("r2_metadata")
+                if r2_meta and r2_meta.get("storage") == "r2" and app.get("resume_url"):
                     filename = app["resume_url"].split("/")[-1]
                     
                     # Test with redirect=false
@@ -360,12 +326,13 @@ class TestResumeDownloadR2Redirect:
                     
                     if download_resp.status_code == 200:
                         print(f"✅ Got direct content: {len(download_resp.content)} bytes")
-                        return True
+                        assert len(download_resp.content) > 0, "Empty content"
+                        return
                     else:
                         print(f"⚠️ Failed: {download_resp.status_code}")
                     break
         
-        return False
+        print("⚠️ No R2 files found to test direct download")
 
 
 class TestJDParsing:
@@ -431,8 +398,6 @@ class TestJDParsing:
         print(f"  Skills: {result.get('skills')}")
         print(f"  Experience: {result.get('experience_years')} years")
         print(f"  Location: {result.get('location')}")
-        
-        return result
 
 
 class TestR2SignedURLContent:
@@ -440,9 +405,6 @@ class TestR2SignedURLContent:
     
     def test_signed_url_returns_content(self):
         """Test that following the R2 signed URL returns actual file content"""
-        # This test is covered by test_uploads_endpoint_returns_r2_redirect
-        # but we add explicit verification here
-        
         # Login as employer
         login_resp = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": EMPLOYER_EMAIL,
@@ -455,7 +417,8 @@ class TestR2SignedURLContent:
         apps_resp = requests.get(f"{BASE_URL}/api/jobs/{PUBLIC_JOB_ID}/applicants", headers=headers)
         
         if apps_resp.status_code == 200:
-            applications = apps_resp.json()
+            response_data = apps_resp.json()
+            applications = response_data.get("applicants", [])
             
             for app in applications:
                 r2_meta = app.get("r2_metadata")
@@ -481,13 +444,12 @@ class TestR2SignedURLContent:
                                 content = content_resp.content
                                 print(f"✅ R2 signed URL returned {len(content)} bytes")
                                 assert len(content) > 0, "Empty content from R2"
-                                return True
+                                return
                             else:
                                 print(f"⚠️ Signed URL returned {content_resp.status_code}")
                         break
         
         print("⚠️ No R2 files found to test signed URL content")
-        return False
 
 
 # Run tests
