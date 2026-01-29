@@ -1,0 +1,11 @@
+
+        Candidate Bank R2 Test Resume
+        Name: Jane CandidateBank 204d7097
+        Email: candidate_bank_r2_204d7097@example.com
+        Phone: +91 9876543211
+        Skills: React, Node.js, TypeScript, PostgreSQL
+        Experience: 7 years
+        Location: Bangalore, India
+        Current Salary: 2000000 INR
+        Notice Period: 60 days
+        
