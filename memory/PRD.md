@@ -1404,24 +1404,27 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 ```
 /app/backend/
 ├── config.py           # Environment, DB, R2 config
-├── server.py           # Main app (now minimal)
+├── server.py           # Main app + remaining business modules
 ├── models/             # Pydantic models
 │   └── __init__.py
-├── routes/             # FastAPI routers
+├── routes/             # FastAPI routers (8 modules extracted)
 │   ├── __init__.py
-│   ├── auth.py         # Phase 5
-│   ├── public.py       # Phase 6
-│   ├── files.py        # Phase 7
-│   ├── admin.py        # Phase 8
-│   ├── jobs.py         # Phase 9
-│   ├── candidates.py   # Phase 10
-│   └── applications.py # Phase 11
+│   ├── auth.py         # Phase 5: Authentication
+│   ├── public.py       # Phase 6: Public endpoints
+│   ├── files.py        # Phase 7: File serving
+│   ├── admin.py        # Phase 8: Admin/User management
+│   ├── jobs.py         # Phase 9: Job CRUD, career page, mandates
+│   ├── candidates.py   # Phase 10: Candidate bank, visibility
+│   ├── applications.py # Phase 11: Applications, AI matching
+│   └── settings.py     # Phase 12: Settings, alerts, notifications
 ├── services/           # External service clients
-│   ├── r2_storage.py   # Phase 4
-│   └── matching_engine.py
+│   ├── r2_storage.py   # Cloudflare R2
+│   ├── matching_engine.py # AI matching
+│   ├── notification_service.py
+│   └── whatsapp_service.py
 └── utils/              # Helper functions
-    ├── auth.py         # Phase 3
-    └── governance.py   # Phase 3
+    ├── auth.py         # Auth helpers
+    └── governance.py   # Data governance
 ```
 
 ---
