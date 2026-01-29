@@ -3500,7 +3500,8 @@ async def batch_save_candidates(
                 "fingerprint": candidate.fingerprint,
                 "uploaded_at": now,
                 "uploaded_by": current_user["id"],
-                "is_active": True
+                "is_active": True,
+                "r2_metadata": candidate.r2_metadata  # R2 storage info
             }
             
             if dup_check["found"]:
