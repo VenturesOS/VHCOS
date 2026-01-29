@@ -5001,6 +5001,7 @@ async def public_apply(
     filename = None
     resume_text = ""
     parsed_data = {}
+    r2_metadata = None  # R2 storage metadata (populated if R2 upload succeeds)
     
     if resume_filename:
         # Two-step flow: resume was already parsed, use the existing file
