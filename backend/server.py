@@ -7568,6 +7568,22 @@ async def get_upload(filename: str):
 # ============== SEED ADMIN ==============
 
 @app.on_event("startup")
+async def validate_mongodb_connection():
+    """
+    Validates MongoDB connectivity on application startup.
+    CRITICAL: Application must fail loudly if database is not accessible.
+    """
+    try:
+        # Ping MongoDB to verify connectivity
+        await client.admin.command("ping")
+        logging.info("MongoDB Atlas connected successfully")
+        logging.info(f"Database: {db_name}")
+    except Exception as e:
+        logging.error(f"MongoDB connection failed: {str(e)}")
+        logging.error("Application cannot start without database connection. Please check MONGODB_URI.")
+        raise RuntimeError(f"MongoDB connection failed: {str(e)}")
+
+@app.on_event("startup")
 async def seed_admin():
     """
     Seeds admin user from environment variables on first run.
