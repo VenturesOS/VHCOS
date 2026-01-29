@@ -1242,10 +1242,51 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 - ✅ All audit logging preserved
 
 **Remaining Phases (Future):**
-- Phase 9: Jobs Routes Extraction
 - Phase 10: Candidate Bank Routes Extraction
 - Phase 11: Applications & AI Matching Routes
 - Phase 12: Settings Routes Extraction
+
+### Phase 9 Jobs Routes Regression Testing ✅ (January 29, 2026)
+
+**Test Results: 24/24 PASSED (100%)**
+
+| Test | Description | Result |
+|------|-------------|--------|
+| 1-4 | Job CRUD (List, Create, Get, Update) | ✅ PASS |
+| 5-8 | Career Page Control & Public Listing | ✅ PASS |
+| 9-12 | Mandate Assignment & Team Recruiters | ✅ PASS |
+| 13-15 | Job Approval Workflow | ✅ PASS |
+| 16-17 | Role-Based Visibility | ✅ PASS |
+| 18 | Employer Job Creation (Direct Active) | ✅ PASS |
+| 19-20 | Unauthorized Access Rejection (403) | ✅ PASS |
+| 21-24 | Link/Status Toggle & Deletion | ✅ PASS |
+
+**Endpoints Extracted to `/app/backend/routes/jobs.py`:**
+- `POST/GET/PUT/DELETE /api/jobs` - Job CRUD
+- `POST /api/jobs/{job_id}/transition` - Status transitions
+- `GET /api/jobs/pending-approval` - Pending approval list
+- `GET /api/jobs/browse` - Public job browsing
+- `POST /api/jobs/{job_id}/career-page-status` - Career page control
+- `GET /api/jobs/{job_id}/career-page-history` - Audit history
+- `PUT /api/jobs/{job_id}/shareable-link` - Shareable link toggle
+- `GET /api/career-page/jobs` - Public career page listing
+- `POST /api/jobs/extract-jd-text` - JD text extraction
+- `POST /api/jobs/parse-jd` - AI-powered JD parsing
+- `GET /api/employer/team-recruiters` - Team recruiters list
+- `POST /api/jobs/{job_id}/assign-recruiters` - Mandate assignment
+- `DELETE /api/jobs/{job_id}/assign-recruiters/{recruiter_id}` - Remove assignment
+- `GET /api/jobs/{job_id}/assignments` - Get job assignments
+- `POST /api/jobs/with-notifications` - Job creation with notifications
+- `POST /api/jobs/{job_id}/notify-candidates` - Manual notification trigger
+
+**Constraints Respected:**
+- ✅ ZERO behavior changes
+- ✅ ZERO feature removal
+- ✅ ZERO refactor beyond extraction
+- ✅ NO frontend changes
+- ✅ All role checks preserved
+- ✅ All approval workflows preserved
+- ✅ All audit logging preserved
 
 **Architecture:**
 ```
