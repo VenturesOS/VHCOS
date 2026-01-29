@@ -1,0 +1,14 @@
+Jane R2BankTest
+Data Scientist
+Email: jane.r2banktest@example.com
+Phone: +1-555-9876
+
+EXPERIENCE:
+- Lead Data Scientist at DataCorp (2021-2024)
+- Data Analyst at Analytics Inc (2019-2021)
+
+SKILLS:
+Python, TensorFlow, PyTorch, SQL, AWS SageMaker, MLOps
+
+EDUCATION:
+PhD Machine Learning, Stanford 2019
