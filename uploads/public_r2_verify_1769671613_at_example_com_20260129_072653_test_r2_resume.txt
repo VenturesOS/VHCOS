@@ -1,0 +1,9 @@
+Test Resume for R2 Verification
+Name: R2 Verify Test
+Email: r2_verify@example.com
+Phone: +91 9876543213
+Skills: Python, R2, Testing, FastAPI, MongoDB
+Experience: 5 years
+Location: Mumbai, India
+Current Salary: 1200000 INR
+Notice Period: 30 days
