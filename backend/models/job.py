@@ -15,6 +15,9 @@ class JobBase(BaseModel):
     salary_max: Optional[int] = None
     department: Optional[str] = None
     public_company_alias: Optional[str] = None  # Masked company name for candidates
+    skills: Optional[List[str]] = []  # Required skills for the job
+    experience_min: Optional[int] = None  # Minimum years of experience
+    experience_max: Optional[int] = None  # Maximum years of experience
 
 
 class JobCreate(JobBase):
@@ -46,6 +49,16 @@ class JobResponse(BaseModel):
     created_at: str
     updated_at: Optional[str] = None
     applicant_count: int = 0
+    # Shareable Job Link Feature
+    job_public_id: Optional[str] = None  # Format: VHC/YYYY/NNNN
+    shareable_link_enabled: bool = False  # Enable/disable public shareable link
+    # Skills for job matching
+    skills: List[str] = []
+    experience_min: Optional[int] = None
+    experience_max: Optional[int] = None
+    # Recruiter Assignment (Employer-led mandate allocation)
+    assigned_recruiters: List[str] = []  # List of recruiter user IDs
+    assignment_history: List[dict] = []  # Audit trail for recruiter assignments
 
 
 class JobUpdate(BaseModel):
