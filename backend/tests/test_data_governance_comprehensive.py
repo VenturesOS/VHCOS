@@ -8,7 +8,7 @@ import os
 import uuid
 
 # Test configuration - use public URL
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://task-assign-5.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://recruit-cloud-store.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}

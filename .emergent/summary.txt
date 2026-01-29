@@ -1,51 +1,43 @@
 <analysis>**original_problem_statement:**
-The user has requested a new feature: **Employer-Led Mandate Allocation to Recruiters**.
-
-PRODUCT REQUIREMENTS:
--   **Objective:** Allow an Employer role to explicitly assign created job mandates to specific Recruiter users within their team.
--   **Permissions:** Only Employers can assign mandates. Recruiters cannot self-assign.
--   **UI:** The Employer's job list should have an Assign Recruiter button for each eligible mandate (status: Approved or Active). This button should open a modal to select one or more recruiters from the employer's team.
--   **Data Model:** The  collection must be updated to store  (an array of recruiter user IDs) and an  audit trail (recording who assigned, when, and to whom).
--   **Visibility:** Recruiters must only be able to see and work on mandates that are explicitly assigned to them.
--   **Auditability:** Every assignment, change, or revocation must be logged.
-
-This request follows the successful implementation and bug-fixing of three prior features: Shareable Job Links, Structured Job IDs, and a multi-modal (paste/upload) JD Parser.
+The user initiated a series of critical tasks to make the application production-ready.
+1.  **Employer-Led Mandate Allocation:** Implement a feature for Employers to assign job mandates to specific Recruiters.
+2.  **Critical Bug Fix (Candidate Access):** Resolve a role-based access bug where Employers and Recruiters could not open candidate profiles they were permitted to see in the list view.
+3.  **P0 Governance & Regression Fixes:** Address several critical regressions and bugs reported by the user, including a non-functional Shareable Job Link feature, incorrect AI Screening scope, and a body stream already read JSON error in the frontend.
+4.  **Career Page & Application Flow Bugs:** Fix issues on the public career page, including a missing consent checkbox that blocked applications and a data mismatch where AI-parsed test data from resumes overwrote user-submitted form data.
+5.  **Resume Download/Preview Failure:** Fix a bug preventing users from previewing or downloading uploaded CVs.
+6.  **Infrastructure Wiring (MongoDB Atlas):** Migrate the backend connection from a local MongoDB instance to a production-ready MongoDB Atlas cluster using a  environment variable.
+7.  **Infrastructure Wiring (Cloudflare R2):** Integrate Cloudflare R2 as the primary object storage for all file uploads (resumes, JDs), replacing the local filesystem storage.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack recruitment portal (FastAPI, React, MongoDB) with role-based access. All previously requested features, including a 10-point enterprise enhancement and three new features (Shareable Job Links, Structured Job IDs, JD Parser), have been implemented, tested, and signed off by the user. The JD Parsing feature, which initially had bugs related to response handling and missing dependencies, has been fixed and stabilized. The system's data was recently wiped (except for admin users) to establish a clean Day-0 internal production baseline. The backend logic is contained within a monolithic  file.
+The application is a full-stack recruitment portal (React, FastAPI, MongoDB) that has been successfully wired to connect to a MongoDB Atlas cluster. All major features, including role-based access, JD/CV parsing, a candidate data bank, and employer-led mandate allocation, have been implemented and stabilized through several rounds of bug fixes. Critical regressions related to shareable job links and AI screening scope have been resolved. The application's file handling logic has been refactored to support Cloudflare R2 for object storage, with a graceful fallback to the local filesystem if R2 is not configured. All known bugs reported by the user in this session have been addressed.
 
 **Last working item**:
--   **Last item agent was working:** The agent began implementing the Employer-led Mandate Allocation feature. It analyzed the existing job and team structures and identified the relevant backend file () and frontend page (). The agent then updated the Pydantic models in  to include the necessary fields for tracking assignments.
--   **Status:** IN PROGRESS
--   **Agent Testing Done:** N
+-   **Last item agent was working:** The agent finished integrating Cloudflare R2 as the primary object storage backend. This involved adding a  client, modifying all file upload flows to save to R2, and updating download endpoints to serve files via secure, time-limited signed URLs. The implementation includes a fallback to local storage if R2 environment variables are not set.
+-   **Status:** USER VERIFICATION PENDING
+-   **Agent Testing Done:** Y
 -   **Which testing method agent to use?** both
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0): Implement Employer-led Mandate Allocation**
-    -   **Description:** The primary task is to build the mandate allocation feature as specified in the product requirements. This involves backend API development for assigning recruiters and frontend UI work for the employer's interface.
-    -   **Status:** IN PROGRESS
+-   **Issue 1 (P0): Verify Cloudflare R2 Integration**
+    -   **Description:** The R2 integration has been implemented and tested with the local fallback. The user now needs to provide the production R2 credentials in the environment (, , , ) to verify the end-to-end cloud storage flow.
+    -   **Status:** USER VERIFICATION PENDING
     -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** Both
 
 **In progress Task List**:
--   **Task 1 (P0): Implement Employer-led Mandate Allocation**
-    -   **Where to resume:** The agent has already updated the  Pydantic model in  to include  and . The next step is to enhance the existing  endpoint to implement the required business logic:
-        1.  Validate that the user is an Employer.
-        2.  Verify the job status is active or approved.
-        3.  Confirm the selected recruiters are part of the employer's team.
-        4.  Update the  field on the job document.
-        5.  Add a detailed entry to the  audit log.
-    -   **What will be achieved with this?** Employers will be able to control which recruiters can work on specific jobs, and the system will enforce this visibility.
-    -   **Status:** IN PROGRESS
+-   **Task 1 (P0): Cloudflare R2 Storage Wiring**
+    -   **Where to resume:** The code implementation is complete. The next step is for the user to set the R2 environment variables and perform an end-to-end test of file uploads and downloads (e.g., applying for a job with a resume).
+    -   **What will be achieved with this?** A scalable, production-grade object storage solution for all user-uploaded files, removing reliance on the local container filesystem.
+    -   **Status:** USER VERIFICATION PENDING
     -   **Should Test frontend/backend/both after fix?** Both
-    -   **Blocked on something:** No
+    -   **Blocked on something:** User action (providing environment variables).
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P1: Refactor :** This is an approved, high-priority technical debt item. The goal is to break down the monolithic  file into smaller, domain-specific modules using FastAPI's . This task should be started after the mandate allocation feature is complete.
+    -   **P1: Refactor :** This is an approved, high-priority technical debt item. The goal is to break down the monolithic  into a modular structure using FastAPI's . This should be the next major task after the infrastructure wiring is fully verified.
 -   **Future Tasks:**
     -   **P2:** WhatsApp Automation for notifications.
     -   **P2:** Email Campaign Automation for marketing.
@@ -53,17 +45,17 @@ The application is a full-stack recruitment portal (FastAPI, React, MongoDB) wit
     -   **P2:** Payment & Billing integration (Stripe).
 
 **Completed work in this session**
--   **Data Cleanup & Production Baseline:** Successfully performed a full data wipe (excluding admin users) and established a clean Day-0 production state, which the user signed off on.
--   **Feature 1: Shareable Job Link & Public Page (DONE):** Implemented a public-facing job page with a unique URL, an application form with a consent checkbox, and a post-submission confirmation screen.
--   **Feature 2: Structured Job ID (DONE):** Implemented a  formatted public job ID, generated sequentially via a new  collection in MongoDB.
--   **Feature 3: JD Parsing Enhancement (DONE & FIXED):**
-    -   Initially implemented a JD parser that took pasted text.
-    -   Enhanced it to support both text pasting and file uploads (PDF, DOC, DOCX).
-    -   **Bug Fix 1 (body stream already read):** Resolved a critical frontend bug by refactoring the  call to a consistent  wrapper in , preventing the response body from being read multiple times.
-    -   **Bug Fix 2 (No module named docx):** Fixed a backend file extraction error by installing the  dependency and adding it to .
+-   **Feature: Employer-led Mandate Allocation (DONE):** Implemented the backend logic and frontend UI for employers to assign jobs to specific recruiters. Tested and verified by the testing agent.
+-   **Bug Fix: Candidate Data Bank Access Control (DONE):** Fixed a critical bug where users couldn't view candidate profiles. Created a unified access control function in  and fixed a related frontend  error.
+-   **Bug Fix: Shareable Job Link & AI Screening Regressions (DONE):** Restored the shareable job link feature on the Employer dashboard and corrected the AI screening engine to search the entire candidate database, not just the user's visible subset.
+-   **Bug Fix: Body stream already read JSON Error (DONE):** Fixed a recurring frontend error by refactoring API calls in  and  to use a standardized  wrapper.
+-   **Bug Fix: Career Page Apply Flow & Data Mismatch (DONE):** Added a missing consent checkbox to the public  page and corrected backend logic to prioritize user-submitted form data over AI-parsed resume data.
+-   **Bug Fix: Resume Download/Preview Failure (DONE):** Fixed a 404 error caused by an incorrect file path in the download endpoint, allowing resumes to be downloaded and previewed correctly.
+-   **Infrastructure: MongoDB Atlas Wiring (DONE):** Successfully modified the backend to connect to MongoDB using the  environment variable and added a startup ping for connectivity validation.
+-   **Infrastructure: Cloudflare R2 Storage Wiring (DONE - Pending Verification):** Implemented the complete logic to use R2 for file storage, including  client setup, signed URLs for downloads, and metadata storage in MongoDB.
 
 **Earlier issues found/mentioned but not fixed**
-None.
+-   **Issue 1: Inconsistent  Key:** A minor inconsistency ( vs. ) exists across the frontend codebase. While not causing a blocking issue currently, standardizing this would improve maintainability. This was noted in the initial handoff and remains unfixed.
 
 **Known issue recurrence from previous fork**
 None.
@@ -72,118 +64,37 @@ None.
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, MongoDB (Motor), Pydantic, file handling for uploads (, ), managing Python dependencies with 
-Usage:   
-  pip <command> [options]
-
-Commands:
-  install                     Install packages.
-  lock                        Generate a lock file.
-  download                    Download packages.
-  uninstall                   Uninstall packages.
-  freeze                      Output installed packages in requirements format.
-  inspect                     Inspect the python environment.
-  list                        List installed packages.
-  show                        Show information about installed packages.
-  check                       Verify installed packages have compatible dependencies.
-  config                      Manage local and global configuration.
-  search                      Search PyPI for packages.
-  cache                       Inspect and manage pip's wheel cache.
-  index                       Inspect information available from package indexes.
-  wheel                       Build wheels from your requirements.
-  hash                        Compute hashes of package archives.
-  completion                  A helper command used for command completion.
-  debug                       Show information useful for debugging.
-  help                        Show help for commands.
-
-General Options:
-  -h, --help                  Show help.
-  --debug                     Let unhandled exceptions propagate outside the
-                              main subroutine, instead of logging them to
-                              stderr.
-  --isolated                  Run pip in an isolated mode, ignoring
-                              environment variables and user configuration.
-  --require-virtualenv        Allow pip to only run in a virtual environment;
-                              exit with an error otherwise.
-  --python <python>           Run pip with the specified Python interpreter.
-  -v, --verbose               Give more output. Option is additive, and can be
-                              used up to 3 times.
-  -V, --version               Show version and exit.
-  -q, --quiet                 Give less output. Option is additive, and can be
-                              used up to 3 times (corresponding to WARNING,
-                              ERROR, and CRITICAL logging levels).
-  --log <path>                Path to a verbose appending log.
-  --no-input                  Disable prompting for input.
-  --keyring-provider <keyring_provider>
-                              Enable the credential lookup via the keyring
-                              library if user input is allowed. Specify which
-                              mechanism to use [auto, disabled, import,
-                              subprocess]. (default: auto)
-  --proxy <proxy>             Specify a proxy in the form
-                              scheme://[user:passwd@]proxy.server:port.
-  --retries <retries>         Maximum attempts to establish a new HTTP
-                              connection. (default: 5)
-  --timeout <sec>             Set the socket timeout (default 15 seconds).
-  --exists-action <action>    Default action when a path already exists:
-                              (s)witch, (i)gnore, (w)ipe, (b)ackup, (a)bort.
-  --trusted-host <hostname>   Mark this host or host:port pair as trusted,
-                              even though it does not have valid or any HTTPS.
-  --cert <path>               Path to PEM-encoded CA certificate bundle. If
-                              provided, overrides the default. See 'SSL
-                              Certificate Verification' in pip documentation
-                              for more information.
-  --client-cert <path>        Path to SSL client certificate, a single file
-                              containing the private key and the certificate
-                              in PEM format.
-  --cache-dir <dir>           Store the cache data in <dir>.
-  --no-cache-dir              Disable the cache.
-  --disable-pip-version-check
-                              Don't periodically check PyPI to determine
-                              whether a new version of pip is available for
-                              download. Implied with --no-index.
-  --no-color                  Suppress colored output.
-  --use-feature <feature>     Enable new functionality, that may be backward
-                              incompatible.
-  --use-deprecated <feature>  Enable deprecated functionality, that will be
-                              removed in the future.
-  --resume-retries <resume_retries>
-                              Maximum attempts to resume or restart an
-                              incomplete download. (default: 5).
--   **Frontend**: React,  for API calls,  components (including Tabs), form handling with file uploads, and conditional UI rendering.
+-   **Backend**: FastAPI, MongoDB (Motor), Pydantic.
+-   **Frontend**: React, , .
+-   **Storage**: Cloudflare R2 integration using  (S3-compatible client). Generation of pre-signed URLs for secure, time-limited downloads.
+-   **Infrastructure**: Configuration via environment variables for database () and object storage ().
 
 **key DB schema**
--   **jobs:** Added  (string),  (bool),  (list of recruiter IDs),  (list of audit dicts).
--   **applications:** Added a  field (dict) to store consent metadata (, ).
--   **counters:** A new collection was created to manage the auto-incrementing sequence for .
--   **audit_logs:** Now includes entries for JD parsing events, capturing input type (paste/upload).
+-   **candidate_bank & applications:** Now include an  object () when files are stored in R2. The  field is now either a local path or an R2 key.
 
 **changes in tech stack**
--   Added  to the backend dependencies to handle text extraction from  files.
+-   The application is now architected to use **Cloudflare R2** for object storage, moving away from reliance on the local filesystem.
 
 **All files of reference**
--   : The monolithic backend file, heavily modified for all new features and bug fixes.
--   : Updated to include .
--   : Significantly refactored to implement and later fix the JD Parser UI and logic.
--   : New page for displaying a single public job.
--   : New page for confirming a successful application.
--   : Updated to include a standardized  wrapper for the JD parsing API.
--   : Updated to display the  and a toggle for the shareable link.
+-   : The central file for all backend changes, including feature logic, bug fixes, and infrastructure wiring for both MongoDB Atlas and Cloudflare R2.
+-   : Key file for implementing the mandate allocation UI and fixing several UI-related bugs and regressions.
+-   : Modified to fix the public application flow by adding a consent checkbox and dynamic job descriptions.
+-   : Updated to standardize API calls using , which resolved a critical body stream already read error.
 
 **Areas that need refactoring**:
--    remains the highest priority for refactoring into a modular structure. The user has approved this, and it should be addressed after the current feature is completed.
--   A minor inconsistency in  keys ( vs ) was noted across the frontend codebase. While the immediate bug related to this was fixed, a global cleanup to standardize the key would improve maintainability.
+-    is now extremely large and complex. It is the highest-priority candidate for refactoring into a modular, router-based architecture. This has been approved by the user and should be the next major task.
 
 **key api endpoints**
--   ****: The enhanced and fixed JD parsing endpoint that now reliably handles text paste, PDF, and DOCX uploads.
--   ****: A new public endpoint to fetch details for a single job landing page.
--   ****: The public application endpoint, updated to store consent metadata.
--   ****: New endpoint to enable/disable a job's public shareable link.
--   ****: The existing endpoint that is the target for modification in the current task.
+-   : The core endpoint for the mandate allocation feature.
+-    (and related sub-endpoints): Access control logic was completely overhauled to fix a critical bug.
+-   : Logic was corrected to ensure AI screening runs on the entire database.
+-   : Heavily modified to prioritize user-submitted data over AI-parsed data and to integrate R2 uploads.
+-   : Re-architected to serve files from Cloudflare R2 via signed URLs, with a fallback to the local filesystem.
 
 **Critical Info for New Agent**
--   The JD Parsing feature was a source of recurring bugs. It has been stabilized by mimicking the architecture of the working CV parser and fixing both frontend response handling and a missing backend dependency (). Be mindful of this if any further issues arise.
--   The system is at a Day-0 internal production baseline. Do not perform any data-destructive actions without explicit user approval.
--   The user has approved the  refactoring, but it is to be done *after* the current Mandate Allocation feature is completed.
+-   **Infrastructure is Config-Driven:** The app now depends on environment variables for both the database () and file storage ( keys). If the R2 keys are not present, the system is designed to gracefully fall back to local file storage in . Your immediate next step should be to confirm with the user if they will provide the R2 credentials for final verification.
+-   **Refactoring is the Next Priority:** The user has approved a major refactoring of the monolithic  file. This should be the main focus after the R2 integration is signed off.
+-   **Strict No Regression Rule:** The user has emphasized that no previously implemented and signed-off features should be removed or broken. Always run regression checks after making changes.
 
 **documents and test reports created in this job**
 -   
@@ -192,41 +103,50 @@ General Options:
 -   
 -   
 -   
--    (Continuously updated)
+-    (Continuously updated with completed tasks and fixes)
 
 **Last 10 User Messages and any pending HUMAN messages**
--   User requests a new feature: Employer-led mandate allocation to recruiters. **This is the current task.**
--   User reports the JD Parser is failing again for DOC/DOCX files and provides a screenshot showing a toast error message.
--   User reports the JD parsing feature is still failing with a body stream already read error and provides screenshots.
--   User signs off on the completed data cleanup, confirming the system is at a Day-0 production baseline.
--   User provides multiple short confirmations (, , etc.) regarding the cleanup status.
--   User instructs the agent to continue work.
--   User clarifies priorities, instructing the agent to finish the current task (data cleanup) before starting new work.
--   User provides detailed requirements for three new features: Shareable Job Links, Structured Job IDs, and JD Parsing.
--   User provides a refined version of the requirements for the three new features.
+1.  **Request:** Integrate Cloudflare R2 for file storage. (Current Task)
+2.  **Report:** CV preview/download is broken. Application data should be added to the candidate bank for AI screening. (FIXED)
+3.  **Report:** JSON error (body stream already read) is still occurring when toggling job status on the career page. Provided a detailed end-to-end flow to test. (FIXED)
+4.  **Report:** Career page has issues: job description isn't fully displayed, and the consent checkbox is missing, blocking applications. Also, applicant data is being mismatched with test data. (FIXED)
+5.  **Report:** Critical regression - Shareable Job Link feature was removed. AI Screening scope is incorrect. Mandated a full feature audit. (FIXED)
+6.  **Report:** Job posting to career page is failing with a JSON error. (FIXED)
+7.  **Report:** Critical bug where Employer/Recruiter roles cannot open candidate profiles from the data bank. (FIXED)
+8.  **Confirmation:** Approved the plan to fix the candidate data bank access bug.
+9.  **Request:** Implement Employer-led mandate allocation. (DONE)
+10. **Confirmation:** Approved the plan to implement mandate allocation.
 
 **Project Health Check:**
 -   **Broken**: None
 -   **Mocked**: , .
 
 **3rd Party Integrations**
--   **OpenAI GPT-5.2**: Used for resume/JD parsing via Emergent LLM Key.
+-   **OpenAI GPT-4/5.2**: Used for resume/JD parsing (via Emergent LLM Key).
+-   **MongoDB Atlas**: Now the primary database backend, configured via .
+-   **Cloudflare R2**: Now the primary object storage, configured via  environment variables.
+-   **Cloudflare Turnstile**: Used for bot protection on public forms.
 -   **Resend**: Integrated for email notifications (mocked).
 -   **Twilio**: Stubbed for future WhatsApp notifications (mocked).
--   **Cloudflare Turnstile**: Used for bot protection.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES (Used for Phase 2 verification, new features, and bug fixes).
+-   **Testing agent used after significant changes**: YES (Used extensively for bug fixes and feature verification).
 -   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None in this session.
--   **Known regressions**: None.
+-   **Test files created**:
+    -   
+    -   
+    -   
+    -   
+    -   
+    -   
+-   **Known regressions**: All regressions reported during this session have been fixed.
 
 **Credentials to test flow:**
 -   **Admin:**  / 
--   **Employer:**  / 
+-   **Employer (Primary Test):**  / 
+-   **Employer (User Provided):**  / 
 -   **Recruiter:**  / 
--   **Candidate:**  / 
 
 **What agent forgot to execute**
--   The major approved task of refactoring  was started but then deferred based on user instructions to prioritize other work. It remains the most significant piece of pending technical debt.
--   Did not perform a global find-and-replace to fix the  vs.  inconsistency in  usage across the frontend.</analysis>
+-   The global find-and-replace to standardize  keys ( vs. ) is still pending from the initial handoff.
+-   The major approved task of refactoring  was deferred and is now the highest priority upcoming task.</analysis>
