@@ -2042,6 +2042,8 @@ async def get_company_pipeline(
     """
     Get company profile with pipeline view.
     Shows mandates, revenue breakdown, and detailed pipeline.
+    
+    OPTIMIZED: Uses batch lookups and aggregations to eliminate N+1 queries.
     """
     company = await db.companies.find_one({"id": company_id}, {"_id": 0})
     if not company:
@@ -2052,16 +2054,29 @@ async def get_company_pipeline(
         if company.get("assigned_employer_id") != current_user["id"]:
             raise HTTPException(status_code=403, detail="Access denied")
     
-    # Get all jobs for this company
-    jobs = await db.jobs.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
+    # Get all jobs for this company (minimal fields)
+    jobs = await db.jobs.find(
+        {"company_id": company_id},
+        {"_id": 0, "id": 1, "title": 1, "job_level": 1, "status": 1, "assigned_recruiter_ids": 1}
+    ).to_list(10000)
     
     total_mandates = len(jobs)
-    active_mandates = len([j for j in jobs if j.get("status") == "active"])
-    closed_mandates = len([j for j in jobs if j.get("status") == "closed"])
+    active_mandates = sum(1 for j in jobs if j.get("status") == "active")
+    closed_mandates = sum(1 for j in jobs if j.get("status") == "closed")
+    job_ids = [j["id"] for j in jobs]
     
     # Get revenue
     revenues = await db.revenue.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
     total_revenue = sum(r.get("final_revenue", 0) for r in revenues)
+    revenue_by_job = {}
+    for r in revenues:
+        jid = r.get("job_id")
+        if jid not in revenue_by_job:
+            revenue_by_job[jid] = {"expected": 0, "closed": 0}
+        if r.get("is_closed"):
+            revenue_by_job[jid]["closed"] += r.get("final_revenue", 0)
+        else:
+            revenue_by_job[jid]["expected"] += r.get("final_revenue", 0)
     
     # Get commercials
     commercials = await db.commercials.find(
@@ -2072,26 +2087,46 @@ async def get_company_pipeline(
     pct_fees = [c.get("fee_percentage", 0) for c in commercials if c.get("fee_percentage")]
     avg_commercial_pct = sum(pct_fees) / len(pct_fees) if pct_fees else 0
     
-    # Build pipeline table
+    # OPTIMIZATION: Batch fetch all recruiter names at once (eliminates N+1)
+    recruiter_ids = set()
+    for job in jobs:
+        for rec_id in job.get("assigned_recruiter_ids", []):
+            recruiter_ids.add(rec_id)
+    
+    recruiter_names = {}
+    if recruiter_ids:
+        recruiters = await db.users.find(
+            {"id": {"$in": list(recruiter_ids)}},
+            {"_id": 0, "id": 1, "name": 1}
+        ).to_list(len(recruiter_ids))
+        recruiter_names = {r["id"]: r.get("name", "Unknown") for r in recruiters}
+    
+    # OPTIMIZATION: Batch get application stage counts via aggregation (eliminates N+1)
+    apps_pipeline = [
+        {"$match": {"job_id": {"$in": job_ids}}},
+        {"$group": {
+            "_id": {"job_id": "$job_id", "stage": "$stage"},
+            "count": {"$sum": 1}
+        }}
+    ]
+    app_stats = await db.applications.aggregate(apps_pipeline).to_list(10000)
+    
+    # Build stage counts by job
+    stage_counts_by_job = {}
+    for stat in app_stats:
+        jid = stat["_id"]["job_id"]
+        stage = stat["_id"]["stage"] or "applied"
+        if jid not in stage_counts_by_job:
+            stage_counts_by_job[jid] = {}
+        stage_counts_by_job[jid][stage] = stat["count"]
+    
+    # Build pipeline table (no N+1 queries - all data pre-fetched)
     pipeline = []
     for job in jobs:
-        job_revenues = [r for r in revenues if r.get("job_id") == job["id"]]
-        expected_revenue = sum(r.get("final_revenue", 0) for r in job_revenues if not r.get("is_closed"))
-        closed_revenue = sum(r.get("final_revenue", 0) for r in job_revenues if r.get("is_closed"))
+        job_rev = revenue_by_job.get(job["id"], {"expected": 0, "closed": 0})
         
-        # Get recruiters for this job
-        recruiters = []
-        for rec_id in job.get("assigned_recruiter_ids", []):
-            rec = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
-            if rec:
-                recruiters.append(rec.get("name", "Unknown"))
-        
-        # Get application count by stage
-        apps = await db.applications.find({"job_id": job["id"]}, {"stage": 1, "_id": 0}).to_list(10000)
-        stage_counts = {}
-        for app in apps:
-            stage = app.get("stage", "applied")
-            stage_counts[stage] = stage_counts.get(stage, 0) + 1
+        # Get recruiter names from pre-fetched map
+        recruiters = [recruiter_names.get(rec_id, "Unknown") for rec_id in job.get("assigned_recruiter_ids", [])]
         
         pipeline.append({
             "job_id": job["id"],
@@ -2099,9 +2134,9 @@ async def get_company_pipeline(
             "job_level": job.get("job_level"),
             "status": job.get("status"),
             "recruiters": recruiters,
-            "stage_counts": stage_counts,
-            "expected_revenue": round(expected_revenue, 2),
-            "closed_revenue": round(closed_revenue, 2),
+            "stage_counts": stage_counts_by_job.get(job["id"], {}),
+            "expected_revenue": round(job_rev["expected"], 2),
+            "closed_revenue": round(job_rev["closed"], 2),
         })
     
     return {
