@@ -30,7 +30,7 @@ from utils.governance import create_profile_audit_entry
 from services.matching_engine import find_similar_candidate, generate_resume_fingerprint
 
 # Import R2 storage helpers
-from services.r2_storage import generate_r2_key, upload_to_r2, get_r2_download_url
+from services.r2_storage import generate_r2_key, upload_to_r2, get_r2_signed_url
 
 # Create router for candidate bank endpoints
 candidates_router = APIRouter(prefix="/api", tags=["Candidate Bank"])
