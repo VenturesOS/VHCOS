@@ -6,3 +6,4 @@ from .public import public_router
 from .files import files_router
 from .admin import admin_router
 from .jobs import jobs_router
+from .candidates import candidates_router
