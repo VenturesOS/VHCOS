@@ -437,7 +437,7 @@ async def download_candidate_resume(
         r2_key = r2_metadata.get("r2_key")
         if r2_key:
             try:
-                signed_url = await get_r2_download_url(r2_key)
+                signed_url = get_r2_signed_url(r2_key)
                 if signed_url:
                     from fastapi.responses import RedirectResponse
                     return RedirectResponse(url=signed_url, status_code=302)
