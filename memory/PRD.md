@@ -1202,6 +1202,7 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 | 9 | Jobs Routes Extraction | ✅ Complete | `/app/backend/routes/jobs.py` |
 | 10 | Candidate Bank Routes | ✅ Complete | `/app/backend/routes/candidates.py` |
 | 11 | Applications & AI Matching | ✅ Complete | `/app/backend/routes/applications.py` |
+| 12 | Settings & Alerts | ✅ Complete | `/app/backend/routes/settings.py` |
 
 ### Phase 8 Admin Routes Regression Testing ✅ (January 29, 2026)
 
