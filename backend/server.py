@@ -1,8 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import hashlib
@@ -17,59 +15,24 @@ import bcrypt
 import aiofiles
 import fitz  # PyMuPDF for PDF text extraction
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+# Import configuration from config.py
+from config import (
+    ROOT_DIR,
+    db,
+    client,
+    r2_client,
+    R2_ENABLED,
+    R2_BUCKET_NAME,
+    JWT_SECRET_KEY,
+    JWT_ALGORITHM,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    UPLOAD_DIR,
+    PARENT_UPLOAD_DIR
+)
 
-# MongoDB connection - Atlas compatible
-# CRITICAL: Connection string MUST be provided via environment variable
-mongodb_uri = os.environ.get('MONGODB_URI') or os.environ.get('MONGO_URL')
-if not mongodb_uri:
-    raise RuntimeError("MONGODB_URI environment variable is required. Application cannot start without database connection.")
-
-client = AsyncIOMotorClient(mongodb_uri)
-
-# Database name - MUST be vhc_talent_os (production database)
-db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
-if db_name != 'vhc_talent_os':
-    logging.warning(f"DB_NAME is set to '{db_name}' but production database is 'vhc_talent_os'")
-db = client[db_name]
-
-# ============== CLOUDFLARE R2 STORAGE ==============
+# Import boto3 for type hints (r2_client operations)
 import boto3
 from botocore.config import Config
-
-# R2 Configuration from environment variables
-R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID')
-R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
-R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
-R2_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME', 'vhc-talent-os-storage')
-R2_ENDPOINT = os.environ.get('R2_ENDPOINT')
-
-# R2 client - only initialize if credentials are provided
-r2_client = None
-R2_ENABLED = False
-
-if R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY:
-    try:
-        r2_endpoint = R2_ENDPOINT or f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-        r2_client = boto3.client(
-            's3',
-            endpoint_url=r2_endpoint,
-            aws_access_key_id=R2_ACCESS_KEY_ID,
-            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-            config=Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'path'}
-            ),
-            region_name='auto'
-        )
-        R2_ENABLED = True
-        logging.info(f"Cloudflare R2 client initialized. Bucket: {R2_BUCKET_NAME}")
-    except Exception as e:
-        logging.warning(f"Cloudflare R2 initialization failed: {e}. Using local storage fallback.")
-        R2_ENABLED = False
-else:
-    logging.info("Cloudflare R2 credentials not configured. Using local storage.")
 
 
 async def upload_to_r2(file_content: bytes, object_key: str, content_type: str = "application/octet-stream") -> dict:
