@@ -100,7 +100,7 @@ app.include_router(auth_router)
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# Note: security, auth helpers, and governance helpers are now imported from utils/
+# Note: Auth routes extracted to routes/auth.py and included via app.include_router()
 
 # ============== JOB ID GENERATION ==============
 
