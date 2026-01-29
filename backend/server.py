@@ -3242,6 +3242,7 @@ async def add_to_candidate_bank(
                 f"{current_user['role']}_ids": [current_user["id"]]
             },
             "match_cache": [],
+            "r2_metadata": r2_metadata,  # R2 storage info for active resume
             "created_at": now,
             "updated_at": now,
             "created_by": current_user["id"],
