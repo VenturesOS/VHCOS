@@ -1834,17 +1834,17 @@ async def get_employer_analytics(
     """
     Employer analytics dashboard.
     Scoped to assigned companies and teams only.
+    
+    OPTIMIZED: Uses MongoDB aggregation pipelines and batch lookups to eliminate N+1 queries.
     """
+    import time
+    start_time = time.time()
+    
     # Get companies assigned to this employer (or all for admin)
-    if current_user["role"] == "employer":
-        assigned_companies = await db.companies.find(
-            {"assigned_employer_id": current_user["id"]},
-            {"_id": 0}
-        ).to_list(1000)
-        company_ids = [c["id"] for c in assigned_companies]
-    else:
-        assigned_companies = await db.companies.find({}, {"_id": 0}).to_list(1000)
-        company_ids = [c["id"] for c in assigned_companies]
+    company_query = {"assigned_employer_id": current_user["id"]} if current_user["role"] == "employer" else {}
+    assigned_companies = await db.companies.find(company_query, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+    company_ids = [c["id"] for c in assigned_companies]
+    company_names = {c["id"]: c.get("name", "Unknown") for c in assigned_companies}
     
     if not company_ids:
         return {
@@ -1860,104 +1860,167 @@ async def get_employer_analytics(
             "recruiter_contribution": [],
         }
     
-    # Get jobs for these companies
+    # ========== JOBS: Get minimal fields needed ==========
     jobs = await db.jobs.find(
         {"company_id": {"$in": company_ids}},
-        {"_id": 0}
+        {"_id": 0, "id": 1, "status": 1, "company_id": 1, "team_id": 1, "assigned_recruiter_ids": 1}
     ).to_list(10000)
     
-    active_jobs = [j for j in jobs if j.get("status") == "active"]
+    active_jobs_count = sum(1 for j in jobs if j.get("status") == "active")
     job_ids = [j["id"] for j in jobs]
     
-    # Get applications for these jobs
-    applications = await db.applications.find(
-        {"job_id": {"$in": job_ids}},
-        {"_id": 0}
-    ).to_list(100000)
+    # ========== APPLICATIONS: Aggregation for counts ==========
+    apps_pipeline = [
+        {"$match": {"job_id": {"$in": job_ids}}},
+        {"$group": {
+            "_id": "$job_id",
+            "total": {"$sum": 1},
+            "offered": {"$sum": {"$cond": [{"$eq": ["$stage", "offered"]}, 1, 0]}},
+            "hired": {"$sum": {"$cond": [{"$eq": ["$stage", "hired"]}, 1, 0]}}
+        }}
+    ]
+    app_stats = await db.applications.aggregate(apps_pipeline).to_list(10000)
+    app_stats_map = {r["_id"]: r for r in app_stats}
     
-    # Get revenue
-    revenues = await db.revenue.find(
-        {"company_id": {"$in": company_ids}},
-        {"_id": 0}
-    ).to_list(10000)
+    offers_pending = sum(s.get("offered", 0) for s in app_stats)
     
-    pipeline_revenue = sum(r.get("final_revenue", 0) for r in revenues if not r.get("is_closed"))
-    closed_revenue = sum(r.get("final_revenue", 0) for r in revenues if r.get("is_closed"))
+    # ========== REVENUE: Aggregation for KPIs ==========
+    revenue_pipeline = [
+        {"$match": {"company_id": {"$in": company_ids}}},
+        {"$group": {
+            "_id": None,
+            "pipeline_revenue": {"$sum": {"$cond": [{"$eq": ["$is_closed", False]}, "$final_revenue", 0]}},
+            "closed_revenue": {"$sum": {"$cond": [{"$eq": ["$is_closed", True]}, "$final_revenue", 0]}}
+        }}
+    ]
+    revenue_kpis = await db.revenue.aggregate(revenue_pipeline).to_list(1)
+    pipeline_revenue = revenue_kpis[0]["pipeline_revenue"] if revenue_kpis else 0
+    closed_revenue = revenue_kpis[0]["closed_revenue"] if revenue_kpis else 0
     
-    # Offers pending
-    offers_pending = len([a for a in applications if a.get("stage") == "offered"])
+    # Revenue by company aggregation
+    company_revenue_pipeline = [
+        {"$match": {"company_id": {"$in": company_ids}}},
+        {"$group": {
+            "_id": "$company_id",
+            "pipeline": {"$sum": {"$cond": [{"$eq": ["$is_closed", False]}, "$final_revenue", 0]}},
+            "closed": {"$sum": {"$cond": [{"$eq": ["$is_closed", True]}, "$final_revenue", 0]}}
+        }}
+    ]
+    revenue_by_company = await db.revenue.aggregate(company_revenue_pipeline).to_list(100)
+    revenue_map = {r["_id"]: r for r in revenue_by_company}
     
-    # Average fee percentage
+    # Revenue by job for recruiter calculations
+    revenue_by_job_pipeline = [
+        {"$match": {"job_id": {"$in": job_ids}}},
+        {"$group": {
+            "_id": "$job_id",
+            "total_revenue": {"$sum": "$final_revenue"}
+        }}
+    ]
+    revenue_by_job = await db.revenue.aggregate(revenue_by_job_pipeline).to_list(10000)
+    job_revenue_map = {r["_id"]: r["total_revenue"] for r in revenue_by_job}
+    
+    # ========== COMMERCIALS: Average fee percentage ==========
     commercials = await db.commercials.find(
         {"company_id": {"$in": company_ids}, "is_active": True},
-        {"_id": 0}
+        {"_id": 0, "fee_percentage": 1}
     ).to_list(1000)
-    
     pct_fees = [c.get("fee_percentage", 0) for c in commercials if c.get("fee_percentage")]
     avg_fee = sum(pct_fees) / len(pct_fees) if pct_fees else 0
     
-    # Company-wise revenue
+    # ========== BUILD COMPANY REVENUE (No N+1 - using pre-fetched data) ==========
+    jobs_by_company = {}
+    for j in jobs:
+        cid = j.get("company_id")
+        jobs_by_company[cid] = jobs_by_company.get(cid, 0) + 1
+    
     company_revenue = []
     for company in assigned_companies:
-        comp_revs = [r for r in revenues if r.get("company_id") == company["id"]]
+        cid = company["id"]
+        rev_data = revenue_map.get(cid, {"pipeline": 0, "closed": 0})
         company_revenue.append({
-            "company_id": company["id"],
+            "company_id": cid,
             "company_name": company.get("name"),
-            "pipeline": sum(r.get("final_revenue", 0) for r in comp_revs if not r.get("is_closed")),
-            "closed": sum(r.get("final_revenue", 0) for r in comp_revs if r.get("is_closed")),
-            "mandates": len([j for j in jobs if j.get("company_id") == company["id"]]),
+            "pipeline": rev_data.get("pipeline", 0),
+            "closed": rev_data.get("closed", 0),
+            "mandates": jobs_by_company.get(cid, 0),
         })
     
-    # Get teams for this employer
-    teams = await db.teams.find(
-        {"employer_id": current_user["id"]} if current_user["role"] == "employer" else {},
-        {"_id": 0}
-    ).to_list(100)
+    # ========== TEAMS PERFORMANCE ==========
+    team_query = {"employer_id": current_user["id"]} if current_user["role"] == "employer" else {}
+    teams = await db.teams.find(team_query, {"_id": 0, "id": 1, "name": 1}).to_list(100)
     
     team_performance = []
     for team in teams:
         team_jobs = [j for j in jobs if j.get("team_id") == team["id"]]
-        team_job_ids = [j["id"] for j in team_jobs]
-        team_apps = [a for a in applications if a.get("job_id") in team_job_ids]
-        team_revs = [r for r in revenues if r.get("job_id") in team_job_ids]
+        team_job_ids = {j["id"] for j in team_jobs}
+        
+        # Sum from pre-aggregated data
+        team_apps = sum(app_stats_map.get(jid, {}).get("total", 0) for jid in team_job_ids)
+        team_hired = sum(app_stats_map.get(jid, {}).get("hired", 0) for jid in team_job_ids)
+        team_revenue = sum(job_revenue_map.get(jid, 0) for jid in team_job_ids)
+        
+        # For revenue split, we need to re-query by team but this is bounded
+        team_rev_pipeline = [
+            {"$match": {"job_id": {"$in": list(team_job_ids)}}},
+            {"$group": {
+                "_id": None,
+                "pipeline": {"$sum": {"$cond": [{"$eq": ["$is_closed", False]}, "$final_revenue", 0]}},
+                "closed": {"$sum": {"$cond": [{"$eq": ["$is_closed", True]}, "$final_revenue", 0]}}
+            }}
+        ]
+        team_rev_result = await db.revenue.aggregate(team_rev_pipeline).to_list(1) if team_job_ids else []
         
         team_performance.append({
             "team_id": team["id"],
             "team_name": team.get("name"),
             "mandates": len(team_jobs),
-            "applications": len(team_apps),
-            "hired": len([a for a in team_apps if a.get("stage") == "hired"]),
-            "pipeline_revenue": sum(r.get("final_revenue", 0) for r in team_revs if not r.get("is_closed")),
-            "closed_revenue": sum(r.get("final_revenue", 0) for r in team_revs if r.get("is_closed")),
+            "applications": team_apps,
+            "hired": team_hired,
+            "pipeline_revenue": team_rev_result[0]["pipeline"] if team_rev_result else 0,
+            "closed_revenue": team_rev_result[0]["closed"] if team_rev_result else 0,
         })
     
-    # Recruiter contribution
-    recruiter_contribution = []
+    # ========== RECRUITER CONTRIBUTION (Batch lookup - no N+1) ==========
     recruiter_ids = set()
     for job in jobs:
         for rec_id in job.get("assigned_recruiter_ids", []):
             recruiter_ids.add(rec_id)
     
+    # Batch fetch all recruiter names at once
+    recruiter_names = {}
+    if recruiter_ids:
+        recruiters = await db.users.find(
+            {"id": {"$in": list(recruiter_ids)}},
+            {"_id": 0, "id": 1, "name": 1}
+        ).to_list(len(recruiter_ids))
+        recruiter_names = {r["id"]: r.get("name", "Unknown") for r in recruiters}
+    
+    recruiter_contribution = []
     for rec_id in recruiter_ids:
         rec_jobs = [j for j in jobs if rec_id in j.get("assigned_recruiter_ids", [])]
-        rec_job_ids = [j["id"] for j in rec_jobs]
-        rec_apps = [a for a in applications if a.get("job_id") in rec_job_ids]
-        rec_revs = [r for r in revenues if r.get("job_id") in rec_job_ids]
+        rec_job_ids = {j["id"] for j in rec_jobs}
         
-        recruiter = await db.users.find_one({"id": rec_id}, {"name": 1, "_id": 0})
+        # Sum from pre-aggregated data
+        rec_apps = sum(app_stats_map.get(jid, {}).get("total", 0) for jid in rec_job_ids)
+        rec_hired = sum(app_stats_map.get(jid, {}).get("hired", 0) for jid in rec_job_ids)
+        rec_revenue = sum(job_revenue_map.get(jid, 0) for jid in rec_job_ids)
         
         recruiter_contribution.append({
             "recruiter_id": rec_id,
-            "recruiter_name": recruiter.get("name", "Unknown") if recruiter else "Unknown",
+            "recruiter_name": recruiter_names.get(rec_id, "Unknown"),
             "mandates": len(rec_jobs),
-            "applications": len(rec_apps),
-            "hired": len([a for a in rec_apps if a.get("stage") == "hired"]),
-            "revenue": sum(r.get("final_revenue", 0) for r in rec_revs),
+            "applications": rec_apps,
+            "hired": rec_hired,
+            "revenue": rec_revenue,
         })
+    
+    elapsed = time.time() - start_time
+    logging.info(f"[EMPLOYER ANALYTICS] Completed in {elapsed:.2f}s")
     
     return {
         "kpis": {
-            "active_mandates": len(active_jobs),
+            "active_mandates": active_jobs_count,
             "pipeline_revenue": round(pipeline_revenue, 2),
             "closed_revenue": round(closed_revenue, 2),
             "offers_pending": offers_pending,
