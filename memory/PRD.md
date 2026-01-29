@@ -38,6 +38,44 @@ Any future change must:
 
 ---
 
+## Infrastructure: Cloudflare R2 Storage Integration (January 29, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 8/8 tests passed (100% backend, 100% frontend)
+
+Integrated Cloudflare R2 as the primary object storage for all file uploads, replacing reliance on local filesystem storage.
+
+### Implementation Details
+**Endpoints with R2 Support:**
+- `POST /api/public/apply` - Public application resume upload → R2
+- `POST /api/candidate-bank/add` - Candidate bank resume upload → R2
+- `POST /api/candidate-bank/batch-parse` - Batch resume parsing → R2
+- `GET /api/uploads/{filename}` - Returns 307 redirect to R2 signed URL
+
+**Storage Behavior:**
+- Primary storage: Cloudflare R2 (bucket: `vhc-talent-os-storage`)
+- Download method: 307 redirect to time-limited signed URL (600s expiry)
+- Local storage: Temporary only (for text extraction/PDF parsing)
+- Fallback: Graceful fallback to local storage if R2 not configured
+
+**MongoDB Schema Update:**
+- Added `r2_metadata` field to `applications` and `candidate_bank` collections
+- Structure: `{storage: "r2", r2_key: "...", original_filename: "...", content_type: "...", uploaded_at: "..."}`
+
+**Environment Variables:**
+```
+R2_ACCOUNT_ID=<cloudflare-account-id>
+R2_ACCESS_KEY_ID=<r2-access-key>
+R2_SECRET_ACCESS_KEY=<r2-secret-key>
+R2_BUCKET_NAME=vhc-talent-os-storage
+```
+
+**Database Verification:**
+- Applications with R2 storage: 5
+- Candidates with R2 storage: 6
+
+---
+
 ## P0 Resume Download + Candidate Bank Auto-Add Fix (January 28, 2026)
 
 ### Issue 1: Resume/CV Files Not Downloading ✅
