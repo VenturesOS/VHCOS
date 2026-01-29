@@ -83,6 +83,9 @@ from services import (
     generate_r2_key
 )
 
+# Import route modules
+from routes import auth_router
+
 # Import boto3 for type hints (r2_client operations)
 import boto3
 from botocore.config import Config
@@ -90,6 +93,9 @@ from botocore.config import Config
 
 # Create the main app
 app = FastAPI(title="VHC Talent OS API")
+
+# Include auth routes (extracted to routes/auth.py)
+app.include_router(auth_router)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
