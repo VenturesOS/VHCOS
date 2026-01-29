@@ -1300,7 +1300,8 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 │   ├── auth.py         # Phase 5
 │   ├── public.py       # Phase 6
 │   ├── files.py        # Phase 7
-│   └── admin.py        # Phase 8
+│   ├── admin.py        # Phase 8
+│   └── jobs.py         # Phase 9
 ├── services/           # External service clients
 │   └── r2_storage.py   # Phase 4
 └── utils/              # Helper functions
