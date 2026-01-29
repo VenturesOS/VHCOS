@@ -115,6 +115,9 @@ app.include_router(candidates_router)
 # Include applications & AI matching routes (extracted to routes/applications.py)
 app.include_router(applications_router)
 
+# Include settings & alerts routes (extracted to routes/settings.py)
+app.include_router(settings_router)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
