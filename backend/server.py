@@ -3273,6 +3273,7 @@ class BatchUploadCandidate(BaseModel):
     experience_years: int  # MANDATORY - Data Governance (can be 0 for freshers)
     file_id: str  # Reference to uploaded file
     fingerprint: str  # Resume fingerprint for dedup
+    r2_metadata: Optional[dict] = None  # R2 storage info from parse response
 
 class BatchSaveRequest(BaseModel):
     """Request body for batch save"""
