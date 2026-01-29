@@ -2855,62 +2855,8 @@ async def get_notification_stats(current_user: dict = Depends(require_role(["adm
 
 import asyncio
 
-# Override job creation to trigger notifications
-_original_create_job = None
-
-@api_router.post("/jobs/with-notifications", response_model=JobResponse)
-async def create_job_with_notifications(
-    job_data: JobCreate,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
-):
-    """
-    Create a new job and trigger notifications to matching candidates.
-    This is an alternative endpoint that includes notification triggering.
-    """
-    now = datetime.now(timezone.utc).isoformat()
-    job_id = str(uuid.uuid4())
-    
-    # Get company_id for employers
-    company_id = None
-    if current_user["role"] == "employer":
-        company_id = current_user.get("company_id")
-    
-    job_doc = {
-        "id": job_id,
-        **job_data.model_dump(),
-        "company_id": company_id,
-        "posted_by": current_user["id"],
-        "status": "active",
-        "applicant_count": 0,
-        "created_at": now
-    }
-    
-    await db.jobs.insert_one(job_doc)
-    
-    # Trigger notifications in background (non-blocking)
-    asyncio.create_task(trigger_job_notifications_background(db, job_id))
-    
-    return JobResponse(**job_doc)
-
-
-@api_router.post("/jobs/{job_id}/notify-candidates")
-async def manually_trigger_notifications(
-    job_id: str,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
-):
-    """
-    Manually trigger notifications for a job.
-    Useful for re-notifying or notifying after job update.
-    """
-    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    # Trigger in background
-    asyncio.create_task(trigger_job_notifications_background(db, job_id))
-    
-    return {"message": "Notification task started", "job_id": job_id}
-
+# Note: Job notification routes have been extracted to routes/jobs.py
+# Endpoints: /api/jobs/with-notifications, /api/jobs/{job_id}/notify-candidates
 
 # Note: PUBLIC API routes have been extracted to routes/public.py
 # Endpoints: /api/public/jobs, /api/public/jobs/{job_id}, /api/public/parse-resume,
