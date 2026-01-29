@@ -1176,46 +1176,94 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 
 ---
 
-## P1 Technical Debt: Backend Refactoring ✅ IN PROGRESS (January 24, 2026)
+## P0 Technical Debt: Backend Refactoring ✅ IN PROGRESS (January 29, 2026)
 
-### server.py Modularization - Phase 1 Complete
+### server.py Modularization - Phases 1-8 Complete
 
-**Status:** Structural foundation created, original server.py preserved
+**Status:** Major modularization effort ongoing with strict zero-behavior-change policy
 
-**Completed Work:**
+**Completed Phases:**
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Core Config Module | ✅ Created | `/app/backend/core/config.py` |
-| Database Module | ✅ Created | `/app/backend/core/database.py` |
-| Security Module | ✅ Created | `/app/backend/core/security.py` |
-| Data Governance Helpers | ✅ Created | `/app/backend/core/helpers.py` |
-| User Models | ✅ Created | `/app/backend/models/user.py` |
-| Job Models | ✅ Created | `/app/backend/models/job.py` |
-| Candidate Models | ✅ Created | `/app/backend/models/candidate.py` |
-| Application Models | ✅ Created | `/app/backend/models/application.py` |
-| Company Models | ✅ Created | `/app/backend/models/company.py` |
-| Team Models | ✅ Created | `/app/backend/models/team.py` |
-| Referral Models | ✅ Created | `/app/backend/models/referral.py` |
-| Message Models | ✅ Created | `/app/backend/models/message.py` |
-| Candidate Bank Models | ✅ Created | `/app/backend/models/candidate_bank.py` |
-| Alerts Models | ✅ Created | `/app/backend/models/alerts.py` |
-| Commercial Models | ✅ Created | `/app/backend/models/commercial.py` |
-| Matching Models | ✅ Created | `/app/backend/models/matching.py` |
-| Auth Routes | ✅ Created | `/app/backend/routes/auth.py` |
+| Phase | Description | Status | Location |
+|-------|-------------|--------|----------|
+| 1 | Configuration Extraction | ✅ Complete | `/app/backend/config.py` |
+| 2 | Pydantic Models Extraction | ✅ Complete | `/app/backend/models/` |
+| 3 | Auth & Governance Helpers | ✅ Complete | `/app/backend/utils/` |
+| 4 | R2 Storage Services | ✅ Complete | `/app/backend/services/r2_storage.py` |
+| 5 | Auth Routes Extraction | ✅ Complete | `/app/backend/routes/auth.py` |
+| 6 | Public Routes Extraction | ✅ Complete | `/app/backend/routes/public.py` |
+| 7 | File Serving Routes | ✅ Complete | `/app/backend/routes/files.py` |
+| 8 | Admin Routes Extraction | ✅ Complete | `/app/backend/routes/admin.py` |
+
+### Phase 8 Admin Routes Regression Testing ✅ (January 29, 2026)
+
+**Test Results: 22/22 PASSED (100%)**
+
+| Test | Description | Result |
+|------|-------------|--------|
+| 1 | Admin Login | ✅ PASS |
+| 2 | List Users (Admin Only) | ✅ PASS |
+| 3 | Get Single User | ✅ PASS |
+| 4 | Create Employer User | ✅ PASS |
+| 5 | Create Recruiter User | ✅ PASS |
+| 6 | Update User | ✅ PASS |
+| 7 | Admin Password Reset | ✅ PASS |
+| 8 | Toggle User Status (Disable) | ✅ PASS |
+| 9 | Toggle User Status (Re-enable) | ✅ PASS |
+| 10 | Delete User (Soft Delete) | ✅ PASS |
+| 11 | Get Employers List | ✅ PASS |
+| 12 | Assign Recruiter to Employer | ✅ PASS |
+| 13 | Admin Pipeline View | ✅ PASS |
+| 14-18 | Access Control (403 enforcement) | ✅ PASS |
+| 19 | Admin Can Reset Own Password | ✅ PASS |
+| 20 | Prevent Admin Self-Deactivation | ✅ PASS |
+| 21-22 | Unauthenticated/Invalid Token | ✅ PASS |
+
+**Endpoints Extracted to `/app/backend/routes/admin.py`:**
+- `GET /api/users` - List all users (admin only)
+- `GET /api/users/{user_id}` - Get single user
+- `PUT /api/users/{user_id}` - Update user
+- `DELETE /api/users/{user_id}` - Soft delete user
+- `POST /api/admin/users` - Create user with any role
+- `POST /api/admin/users/{user_id}/reset-password` - Reset password
+- `POST /api/admin/users/{user_id}/toggle-status` - Enable/disable user
+- `GET /api/admin/employers` - List employers
+- `POST /api/admin/assign-recruiter` - Assign recruiter to employer
+- `GET /api/admin/pipeline` - Admin collective pipeline view
 
 **Constraints Respected:**
-- ✅ NO functional changes
-- ✅ NO schema changes
-- ✅ NO API contract changes
-- ✅ Behavior remains identical
-- ✅ All 80+ tests passing
+- ✅ ZERO behavior changes
+- ✅ ZERO feature removal
+- ✅ ZERO refactor beyond extraction
+- ✅ NO frontend changes
+- ✅ All permission checks preserved
+- ✅ All audit logging preserved
 
-**Documentation:** `/app/backend/REFACTORING.md`
+**Remaining Phases (Future):**
+- Phase 9: Jobs Routes Extraction
+- Phase 10: Candidate Bank Routes Extraction
+- Phase 11: Applications & AI Matching Routes
+- Phase 12: Settings Routes Extraction
 
-**Remaining Work (Future):**
-- Migrate server.py to use module imports
-- Extract remaining route modules
+**Architecture:**
+```
+/app/backend/
+├── config.py           # Environment, DB, R2 config
+├── server.py           # Main app (progressively smaller)
+├── models/             # Pydantic models
+│   └── __init__.py
+├── routes/             # FastAPI routers
+│   ├── __init__.py
+│   ├── auth.py         # Phase 5
+│   ├── public.py       # Phase 6
+│   ├── files.py        # Phase 7
+│   └── admin.py        # Phase 8
+├── services/           # External service clients
+│   └── r2_storage.py   # Phase 4
+└── utils/              # Helper functions
+    ├── auth.py         # Phase 3
+    └── governance.py   # Phase 3
+```
 
 ---
 
