@@ -114,37 +114,13 @@ api_router = APIRouter(prefix="/api")
 
 # Note: Auth routes extracted to routes/auth.py and included via app.include_router()
 
-# ============== JOB ID GENERATION ==============
-
-async def generate_job_public_id() -> str:
-    """
-    Generate a unique job public ID in format: VHC/YYYY/NNNN
-    - Prefix: VHC
-    - Year: Current calendar year
-    - Sequence: 4-digit number, resets every year
-    """
-    current_year = datetime.now(timezone.utc).year
-    
-    # Use atomic findAndModify to get next sequence number
-    counter = await db.job_sequences.find_one_and_update(
-        {"year": current_year},
-        {"$inc": {"sequence": 1}},
-        upsert=True,
-        return_document=True
-    )
-    
-    sequence = counter.get("sequence", 1)
-    
-    # Format: VHC/YYYY/NNNN
-    job_public_id = f"VHC/{current_year}/{sequence:04d}"
-    
-    return job_public_id
-
-# Note: AUTH ROUTES have been extracted to routes/auth.py
-# Endpoints: /api/auth/register, /api/auth/login, /api/auth/me, /api/auth/reset-password
-
 # Note: USER MANAGEMENT (ADMIN) routes have been extracted to routes/admin.py
 # Endpoints: /api/users, /api/users/{user_id}, /api/admin/users, /api/admin/pipeline, etc.
+
+# Note: JOB ROUTES have been extracted to routes/jobs.py
+# Endpoints: /api/jobs, /api/jobs/{job_id}, /api/jobs/{job_id}/transition,
+#            /api/jobs/{job_id}/career-page-status, /api/jobs/{job_id}/shareable-link,
+#            /api/career-page/jobs, /api/jobs/parse-jd, /api/jobs/{job_id}/assign-recruiters, etc.
 
 # ============== CV DOWNLOAD ENDPOINT ==============
 
