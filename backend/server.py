@@ -5152,6 +5152,7 @@ async def public_apply(
             "resume_text": resume_text[:5000],
             "is_active": True,
             "linked_user_id": None,  # Not linked to any user account
+            "r2_metadata": r2_metadata,  # R2 storage metadata (None if local storage)
             "created_at": now,
             "updated_at": now
         }
@@ -5169,6 +5170,7 @@ async def public_apply(
         "candidate_email": email,
         "candidate_phone": phone or parsed_data.get("phone"),
         "resume_url": f"/api/uploads/{filename}" if filename else None,
+        "r2_metadata": r2_metadata,  # R2 storage metadata (None if local storage)
         "cover_letter": cover_letter,
         "current_salary": current_salary,  # INR
         "notice_period": notice_period,
