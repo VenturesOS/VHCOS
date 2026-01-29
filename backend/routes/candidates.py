@@ -24,10 +24,10 @@ from models import (
 
 # Import utilities
 from utils import get_current_user, require_role
-from utils.governance import (
-    find_similar_candidate, should_update_field, create_audit_log,
-    create_profile_audit_entry, generate_resume_fingerprint, normalize_phone
-)
+from utils.governance import create_profile_audit_entry
+
+# Import matching engine helpers for deduplication
+from services.matching_engine import find_similar_candidate, generate_resume_fingerprint
 
 # Import R2 storage helpers
 from services.r2_storage import generate_r2_key, upload_to_r2, get_r2_download_url
