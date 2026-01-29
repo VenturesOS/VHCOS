@@ -2673,26 +2673,7 @@ async def add_to_candidate_bank(
         }
 
 # ============== PHASE-2: BATCH CV UPLOAD ==============
-
-class BatchUploadCandidate(BaseModel):
-    """Single candidate data for batch save"""
-    temp_id: str  # Temporary ID from parse response
-    name: str
-    email: str
-    phone: Optional[str] = None
-    skills: List[str] = []
-    experience_summary: Optional[str] = None
-    current_salary: int  # MANDATORY - INR
-    notice_period: str  # MANDATORY
-    location: str  # MANDATORY - Data Governance
-    experience_years: int  # MANDATORY - Data Governance (can be 0 for freshers)
-    file_id: str  # Reference to uploaded file
-    fingerprint: str  # Resume fingerprint for dedup
-    r2_metadata: Optional[dict] = None  # R2 storage info from parse response
-
-class BatchSaveRequest(BaseModel):
-    """Request body for batch save"""
-    candidates: List[BatchUploadCandidate]
+# BatchUploadCandidate and BatchSaveRequest imported from models/
 
 @api_router.post("/candidate-bank/batch-parse")
 async def batch_parse_resumes(
