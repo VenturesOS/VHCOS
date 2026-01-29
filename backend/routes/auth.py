@@ -1,22 +1,30 @@
 """
-Authentication routes.
+VHC Talent OS - Authentication Routes
+Handles user registration, login, and password management.
 """
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
 
-from core.database import db
-from core.security import (
+# Import configuration
+from config import db
+
+# Import models
+from models import (
+    UserCreate, UserLogin, UserResponse, PasswordReset, TokenResponse
+)
+
+# Import utilities
+from utils import (
     hash_password, verify_password, create_access_token, get_current_user
 )
-from models.user import (
-    UserCreate, UserLogin, UserResponse, TokenResponse, PasswordReset
-)
-
-router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post("/register", response_model=TokenResponse)
+# Create router for auth endpoints
+auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+
+@auth_router.post("/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
@@ -77,7 +85,7 @@ async def register(user_data: UserCreate):
     return TokenResponse(access_token=access_token, user=user_response, requires_password_reset=False)
 
 
-@router.post("/login", response_model=TokenResponse)
+@auth_router.post("/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     if not user or not verify_password(credentials.password, user["password"]):
@@ -104,12 +112,12 @@ async def login(credentials: UserLogin):
     return TokenResponse(access_token=access_token, user=user_response, requires_password_reset=requires_reset)
 
 
-@router.get("/me", response_model=UserResponse)
+@auth_router.get("/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(**current_user)
 
 
-@router.post("/reset-password")
+@auth_router.post("/reset-password")
 async def reset_password(reset_data: PasswordReset, current_user: dict = Depends(get_current_user)):
     """Reset password - validates current password and sets new one"""
     # Get user with password
