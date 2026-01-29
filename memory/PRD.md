@@ -1248,8 +1248,38 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 - ✅ All permission checks preserved
 - ✅ All audit logging preserved
 
-**Remaining Phases (Future):**
-- Phase 12: Settings Routes Extraction
+**Remaining Phases (Future - Optional):**
+- Phase 13: Team Management Routes
+- Phase 14: Referral Management Routes
+- Phase 15: Commercial Intelligence Routes
+- Phase 16: Analytics Dashboard Routes
+
+### Phase 12 Settings & Alerts Regression Testing ✅ (January 29, 2026)
+
+**Test Results: 9/9 PASSED (100%)**
+
+| Test | Description | Result |
+|------|-------------|--------|
+| 1-2 | Global Settings CRUD (Admin) | ✅ PASS |
+| 3 | Notification Stats (Admin) | ✅ PASS |
+| 4-5 | Access Control (403 Enforcement) | ✅ PASS |
+| 6-8 | No Side Effects on Jobs/Candidates/Apps | ✅ PASS |
+| 9 | Backend Health Check | ✅ PASS |
+
+**Endpoints Extracted to `/app/backend/routes/settings.py`:**
+- `GET/PUT /api/settings` - Global settings (Admin)
+- `GET/POST/PUT/DELETE /api/alerts/preferences` - Job alert prefs
+- `POST /api/alerts/pause` - Pause alerts
+- `POST /api/alerts/resume` - Resume alerts
+- `POST /api/alerts/whatsapp/opt-in` - WhatsApp opt-in
+- `POST /api/alerts/whatsapp/opt-out` - WhatsApp opt-out
+- `PUT /api/alerts/whatsapp/number` - Update WhatsApp number
+- `GET /api/notifications/history` - Notification history
+- `GET /api/admin/notifications/stats` - Notification stats
+
+**server.py Current State:**
+- Now contains only app setup, router inclusions, and remaining business modules
+- Remaining modules (Team, Referral, Commercial, Analytics) can be extracted in future phases
 
 ### Phase 11 Applications & AI Matching Regression Testing ✅ (January 29, 2026)
 
