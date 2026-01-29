@@ -5038,10 +5038,33 @@ async def public_apply(
         safe_email = email.replace('@', '_at_').replace('.', '_')
         filename = f"public_{safe_email}_{timestamp}_{resume.filename}"
         
+        # Read file content once
+        content = await resume.read()
+        
+        # Save locally first (needed for text extraction)
         file_path = upload_dir / filename
         async with aiofiles.open(file_path, 'wb') as f:
-            content = await resume.read()
             await f.write(content)
+        
+        # Upload to R2 if enabled (async, for permanent storage)
+        r2_metadata = None
+        if R2_ENABLED:
+            try:
+                r2_key = generate_r2_key("applications", resume.filename)
+                r2_result = await upload_to_r2(content, r2_key, resume.content_type or "application/octet-stream")
+                if r2_result.get("storage") == "r2":
+                    r2_metadata = {
+                        "storage": "r2",
+                        "r2_key": r2_key,
+                        "original_filename": resume.filename,
+                        "filename": filename,
+                        "content_type": resume.content_type,
+                        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                        "uploaded_by_role": "public"
+                    }
+                    logging.info(f"[R2] Resume uploaded to R2: {r2_key}")
+            except Exception as e:
+                logging.error(f"[R2] Upload failed, using local storage: {e}")
         
         # Extract resume text
         try:
