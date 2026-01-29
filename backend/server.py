@@ -84,7 +84,7 @@ from services import (
 )
 
 # Import route modules
-from routes import auth_router, public_router, files_router, admin_router
+from routes import auth_router, public_router, files_router, admin_router, jobs_router
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
