@@ -31,6 +31,39 @@ from config import (
     PARENT_UPLOAD_DIR
 )
 
+# Import models from models/
+from models import (
+    # Auth models
+    UserBase, UserCreate, UserLogin, UserResponse, UserUpdate,
+    AdminUserCreate, AdminPasswordReset, PasswordReset, TokenResponse,
+    # Job models
+    JobBase, JobCreate, JobResponse, JobUpdate, JobStateTransition,
+    CareerPageStatusUpdate, JDParseRequest, JDParseResponse, MandateAssignment,
+    # Candidate models
+    CandidateProfile, CandidateProfileUpdate,
+    # Application models
+    ApplicationBase, ApplicationCreate, ApplicationResponse,
+    ApplicationUpdate, ApplicationDetailUpdate, AuditLogEntry, NoteCreate,
+    # Company models
+    CompanyBase, CompanyCreate, CompanyResponse, CompanyUpdate,
+    # Team models
+    TeamCreate, TeamUpdate, TeamResponse,
+    # Referral models
+    ReferralCreate, ReferralResponse, ReferralStatusUpdate,
+    # Message models
+    MessageBase, MessageCreate, MessageResponse,
+    # Candidate Bank models
+    CandidateBankRecord, CandidateBankUpdate, CandidateBankAuditLogEntry,
+    BatchUploadCandidate, BatchSaveRequest,
+    # Matching models
+    MatchRequest, MatchResult, JobMatchForCandidate,
+    # Alert models
+    JobAlertPreferences, JobAlertCreate, WhatsAppOptIn, NotificationLogEntry,
+    # Commercial models
+    CommercialCreate, CommercialUpdate, CommercialResponse,
+    RevenueEntry, RevenueUpdate
+)
+
 # Import boto3 for type hints (r2_client operations)
 import boto3
 from botocore.config import Config
