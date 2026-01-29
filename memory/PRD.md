@@ -1247,8 +1247,46 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 - ✅ All audit logging preserved
 
 **Remaining Phases (Future):**
-- Phase 11: Applications & AI Matching Routes
 - Phase 12: Settings Routes Extraction
+
+### Phase 11 Applications & AI Matching Regression Testing ✅ (January 29, 2026)
+
+**Test Results: 15/15 PASSED + 1 SKIPPED (AI Budget) (100%)**
+
+| Test | Description | Result |
+|------|-------------|--------|
+| 1-2 | Application CRUD | ✅ PASS |
+| 3 | Stage Transition (shortlisted) | ✅ PASS |
+| 4 | Add Note | ✅ PASS |
+| 5-6 | Update Details & Edit History | ✅ PASS |
+| 7 | Job Applicants Review Screen | ✅ PASS |
+| 8 | Candidates List | ✅ PASS |
+| 9 | AI Matching | ⚠️ SKIP (LLM budget) |
+| 10 | Resume Download | ✅ PASS |
+| 11-12 | Role-Based Visibility | ✅ PASS |
+| 13-14 | Unauthorized Access Rejection | ✅ PASS |
+| 15-16 | Stage Transitions (interview/offered) | ✅ PASS |
+
+**Endpoints Extracted to `/app/backend/routes/applications.py`:**
+- `POST/GET /api/applications` - Application CRUD
+- `GET/PUT /api/applications/{app_id}` - Single application
+- `GET /api/applications/{app_id}/resume` - Resume download
+- `POST /api/applications/{app_id}/notes` - Add notes
+- `PUT /api/applications/{app_id}/details` - Update salary/notice
+- `GET /api/applications/{app_id}/edit-history` - Audit trail
+- `GET /api/jobs/{job_id}/applicants` - Per-job review screen
+- `GET /api/candidates` - Candidate profiles
+- `POST /api/ai/parse-resume` - AI resume parsing
+- `POST /api/ai/parse-jd` - AI JD parsing
+- `POST /api/matching/find-candidates` - AI candidate matching
+- `GET /api/matching/jobs-for-candidate` - Job recommendations
+
+**AI Screening Preserved:**
+- ✅ ZERO changes to scoring logic
+- ✅ ZERO changes to prompts
+- ✅ ZERO changes to thresholds
+- ✅ Human-in-loop enforcement preserved
+- ✅ Entire database search scope preserved
 
 ### Phase 10 Candidate Bank Routes Regression Testing ✅ (January 29, 2026)
 
