@@ -103,6 +103,9 @@ app.include_router(public_router)
 # Include file serving routes (extracted to routes/files.py)
 app.include_router(files_router)
 
+# Include admin routes (extracted to routes/admin.py)
+app.include_router(admin_router)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
