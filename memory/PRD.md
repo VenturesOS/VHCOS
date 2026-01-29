@@ -1245,9 +1245,46 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 - ✅ All audit logging preserved
 
 **Remaining Phases (Future):**
-- Phase 10: Candidate Bank Routes Extraction
 - Phase 11: Applications & AI Matching Routes
 - Phase 12: Settings Routes Extraction
+
+### Phase 10 Candidate Bank Routes Regression Testing ✅ (January 29, 2026)
+
+**Test Results: 16/16 PASSED (100%)**
+
+| Test | Description | Result |
+|------|-------------|--------|
+| 1-5 | Candidate Bank CRUD & History | ✅ PASS |
+| 6 | Mandatory Fields Update (salary/notice) | ✅ PASS |
+| 7-8 | Role-Based Visibility (Employer/Recruiter) | ✅ PASS |
+| 9 | Unauthenticated Access Rejection | ✅ PASS |
+| 10-11 | Resume Download (Both Endpoints) | ✅ PASS |
+| 12 | Recruiter Restricted from Non-Visible | ✅ PASS |
+| 13 | Link Candidate to Job | ✅ PASS |
+| 14-15 | Search & Filter | ✅ PASS |
+| 16 | Update Candidate Record | ✅ PASS |
+
+**Endpoints Extracted to `/app/backend/routes/candidates.py`:**
+- `GET /api/candidate-bank` - List with visibility rules
+- `GET /api/candidate-bank/{candidate_id}` - Single record with access control
+- `PUT /api/candidate-bank/{candidate_id}` - Update with audit logging
+- `POST /api/candidate-bank/add` - Add from resume upload
+- `POST /api/candidate-bank/batch-parse` - Batch CV parsing
+- `POST /api/candidate-bank/batch-save` - Batch save with validation
+- `PUT /api/candidate-bank/{candidate_id}/salary-notice` - Mandatory fields
+- `GET /api/candidate-bank/{candidate_id}/audit-log` - Audit trail
+- `GET /api/candidate-bank/{candidate_id}/history` - Activity history
+- `GET /api/candidate-bank/{candidate_id}/resume-history` - Resume versions
+- `GET /api/candidate-bank/{candidate_id}/download-resume` - Resume download
+- `GET /api/candidates/{candidate_id}/resume` - Resume download (alternate)
+- `POST /api/applications/link-candidate` - Link to job
+
+**Data Governance Preserved:**
+- ✅ Visibility rules per role (Admin/Employer/Recruiter)
+- ✅ Mandatory field enforcement (salary, notice, location, experience)
+- ✅ Audit logging for all changes
+- ✅ Profile freshness tracking
+- ✅ Deduplication via fingerprint
 
 ### Phase 9 Jobs Routes Regression Testing ✅ (January 29, 2026)
 
