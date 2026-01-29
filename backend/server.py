@@ -3375,6 +3375,7 @@ async def batch_parse_resumes(
                 "filename": file.filename,
                 "file_id": file_id,
                 "fingerprint": fingerprint,
+                "r2_metadata": r2_metadata,  # R2 storage info (None if local only)
                 "success": True,
                 "parsed_data": {
                     "name": parsed_data.get("name", "Unknown"),
