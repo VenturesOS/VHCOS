@@ -1,0 +1,9 @@
+
+        Test Resume for R2 Integration
+        Name: John R2Test 54468dda
+        Email: test_r2_54468dda@example.com
+        Phone: +91 9876543210
+        Skills: Python, FastAPI, MongoDB, AWS
+        Experience: 5 years
+        Location: Mumbai, India
+        
