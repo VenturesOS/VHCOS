@@ -97,6 +97,9 @@ app = FastAPI(title="VHC Talent OS API")
 # Include auth routes (extracted to routes/auth.py)
 app.include_router(auth_router)
 
+# Include public routes (extracted to routes/public.py)
+app.include_router(public_router)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
