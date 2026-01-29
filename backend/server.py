@@ -7793,6 +7793,24 @@ async def validate_mongodb_connection():
         raise RuntimeError(f"MongoDB connection failed: {str(e)}")
 
 @app.on_event("startup")
+async def validate_r2_connection():
+    """
+    Validates Cloudflare R2 connectivity on application startup.
+    Non-blocking: Falls back to local storage if R2 is not available.
+    """
+    if R2_ENABLED:
+        try:
+            # List buckets to verify connectivity
+            r2_client.list_buckets()
+            logging.info("Cloudflare R2 successfully connected and operational")
+            logging.info(f"R2 Bucket: {R2_BUCKET_NAME}")
+        except Exception as e:
+            logging.warning(f"Cloudflare R2 connectivity check failed: {e}")
+            logging.warning("R2 may still work - some operations may succeed despite list_buckets failure")
+    else:
+        logging.info("Cloudflare R2 not configured - using local storage")
+
+@app.on_event("startup")
 async def seed_admin():
     """
     Seeds admin user from environment variables on first run.
