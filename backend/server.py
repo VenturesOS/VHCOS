@@ -1635,7 +1635,6 @@ async def get_admin_analytics(
         {"$project": {"_id": 0, "id": 1, "status": 1, "company_id": 1, "assigned_recruiter_ids": 1}}
     ]
     jobs = await db.jobs.aggregate(jobs_pipeline).to_list(10000)
-    jobs_by_id = {j["id"]: j for j in jobs}
     active_jobs_count = sum(1 for j in jobs if j.get("status") == "active")
     
     # ========== APPLICATIONS AGGREGATION (Stage Distribution) ==========
@@ -1844,7 +1843,6 @@ async def get_employer_analytics(
     company_query = {"assigned_employer_id": current_user["id"]} if current_user["role"] == "employer" else {}
     assigned_companies = await db.companies.find(company_query, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
     company_ids = [c["id"] for c in assigned_companies]
-    company_names = {c["id"]: c.get("name", "Unknown") for c in assigned_companies}
     
     if not company_ids:
         return {
@@ -1958,7 +1956,6 @@ async def get_employer_analytics(
         # Sum from pre-aggregated data
         team_apps = sum(app_stats_map.get(jid, {}).get("total", 0) for jid in team_job_ids)
         team_hired = sum(app_stats_map.get(jid, {}).get("hired", 0) for jid in team_job_ids)
-        team_revenue = sum(job_revenue_map.get(jid, 0) for jid in team_job_ids)
         
         # For revenue split, we need to re-query by team but this is bounded
         team_rev_pipeline = [
