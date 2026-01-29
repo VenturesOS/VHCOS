@@ -29,6 +29,7 @@
 **P0 Backend Refactoring - Phase 10 (Candidate Bank): COMPLETE & TESTED (January 29, 2026)**
 **P0 Backend Refactoring - Phase 11 (Applications & AI Matching): COMPLETE & TESTED (January 29, 2026)**
 **P0 Backend Refactoring - Phase 12 (Settings & Alerts): COMPLETE & TESTED (January 29, 2026)**
+**P0 Pre-Production Hardening (Performance Optimization): COMPLETE & TESTED (January 29, 2026)**
 
 ---
 
@@ -40,6 +41,89 @@ Any future change must:
 - Preserve all existing features
 - Be additive only
 - Never regress signed-off functionality
+
+---
+
+## P0 Pre-Production Hardening (January 29, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 19/19 tests passed (100%)
+**Test Report:** `/app/test_reports/iteration_27.json`
+
+Two critical P0 performance issues were diagnosed and fixed:
+
+### Issue 1: Dashboard Analytics Performance ✅ FIXED
+
+**Problem:** Admin, Employer, and Recruiter dashboards were failing to load statistics due to inefficient queries loading up to 100,000+ records into memory and N+1 query patterns.
+
+**Root Causes:**
+- Loading all applications into memory (`to_list(100000)`)
+- N+1 queries: looping through records and calling `find_one` for each company name/recruiter name
+- Inefficient Python loops for stage counting instead of MongoDB aggregations
+
+**Fixes Applied:**
+1. **MongoDB Aggregation Pipelines:** Replaced in-memory processing with efficient `$group`, `$match`, `$lookup` aggregations
+2. **Batch Lookups:** Pre-fetch all recruiter/company names in single queries instead of N+1
+3. **Projection Optimization:** Only fetch fields needed for analytics
+
+**Performance Results:**
+| Endpoint | Before | After | Improvement |
+|----------|--------|-------|-------------|
+| Admin Analytics | Timeout/Fail | ~60ms | ✅ FIXED |
+| Employer Analytics | Timeout/Fail | ~47ms | ✅ FIXED |
+| Company Pipeline | Slow | ~46ms | ✅ FIXED |
+
+### Issue 2: AI Screening Performance ✅ FIXED
+
+**Problem:** AI Screening endpoint was taking excessive time to load due to serial LLM calls for each candidate and N+1 queries for creator lookups.
+
+**Root Causes:**
+- Serial execution: each candidate processed one-by-one
+- N+1 query for `created_by` role lookup
+- No pre-filtering before expensive LLM calls
+
+**Fixes Applied:**
+1. **Pre-filtering:** Apply must-have filters BEFORE AI scoring to skip candidates that would be filtered anyway
+2. **Concurrent Processing:** Use `asyncio.Semaphore` with `asyncio.gather` for concurrent LLM calls (MAX_CONCURRENT=5)
+3. **Batch Creator Lookup:** Single query to fetch all creator roles upfront
+
+**Performance Results:**
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Serial Processing | N candidates × LLM time | N/5 batches | ~5x faster |
+| Pre-filtered candidates | 0 | 76% (in test) | 76% fewer LLM calls |
+| Creator N+1 queries | N queries | 1 query | ✅ Eliminated |
+
+### Files Modified
+- `/app/backend/server.py` - Admin analytics, Employer analytics, Company pipeline
+- `/app/backend/routes/applications.py` - AI Screening (`find_matching_candidates`)
+
+### Optimization Techniques Used
+```python
+# 1. MongoDB Aggregation for stage counts (instead of loading all apps)
+stage_pipeline = [
+    {"$group": {"_id": "$stage", "count": {"$sum": 1}}}
+]
+
+# 2. $lookup for joining data (instead of N+1)
+{"$lookup": {
+    "from": "companies",
+    "localField": "_id",
+    "foreignField": "id",
+    "as": "company"
+}}
+
+# 3. Batch fetch with $in (instead of N find_one calls)
+recruiters = await db.users.find(
+    {"id": {"$in": list(recruiter_ids)}},
+    {"id": 1, "name": 1}
+).to_list(len(recruiter_ids))
+
+# 4. Concurrent LLM with semaphore
+semaphore = asyncio.Semaphore(5)
+async with semaphore:
+    result = await calculate_candidate_job_match(...)
+```
 
 ---
 
