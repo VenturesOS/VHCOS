@@ -1672,7 +1672,7 @@ async def get_admin_analytics(
                 updated = datetime.fromisoformat(app.get("updated_at", app["created_at"]).replace("Z", "+00:00"))
                 total_days += (updated - created).days
                 valid_count += 1
-            except:
+            except (ValueError, KeyError, TypeError):
                 pass
         avg_time_to_close = total_days / valid_count if valid_count > 0 else 0
     
