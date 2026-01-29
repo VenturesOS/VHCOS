@@ -1,0 +1,14 @@
+John R2Test
+Software Engineer
+Email: john.r2test@example.com
+Phone: +1-555-0123
+
+EXPERIENCE:
+- Senior Developer at Tech Corp (2020-2024)
+- Developer at StartupXYZ (2018-2020)
+
+SKILLS:
+Python, JavaScript, React, FastAPI, MongoDB, AWS, Docker
+
+EDUCATION:
+BS Computer Science, MIT 2018
