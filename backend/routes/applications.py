@@ -90,7 +90,7 @@ def calculate_career_stability(experience: List[dict]) -> Dict[str, Any]:
                     else:
                         end_year = int(end.split("/")[-1] if "/" in end else end[:4])
                     tenure_months = (end_year - start_year) * 12
-                except:
+                except (ValueError, IndexError, TypeError):
                     pass
         
         total_tenure += tenure_months
