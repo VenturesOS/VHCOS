@@ -128,15 +128,6 @@ def generate_r2_key(category: str, original_filename: str) -> str:
     return f"{category}/{now.year}/{now.month:02d}/{file_uuid}{file_ext}"
 
 
-# ============== JWT Configuration ==============
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'vhc-secret-key')
-JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('ACCESS_TOKEN_EXPIRE_MINUTES', 1440))
-
-# Create upload directory
-UPLOAD_DIR = ROOT_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
-
 # Create the main app
 app = FastAPI(title="VHC Talent OS API")
 
