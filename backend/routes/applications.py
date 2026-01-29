@@ -1,0 +1,933 @@
+"""
+VHC Talent OS - Applications & AI Matching Routes
+Handles all application lifecycle operations including CRUD, stage transitions,
+AI screening, candidate-job matching, and audit history.
+"""
+import uuid
+import logging
+import re
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any
+from pathlib import Path
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, ConfigDict
+import aiofiles
+
+# Import configuration
+from config import db, UPLOAD_DIR
+
+# Import models
+from models import (
+    ApplicationCreate, ApplicationResponse, ApplicationUpdate,
+    CandidateProfile, MatchResult, MatchRequest, JobMatchForCandidate,
+    NoteCreate, ApplicationDetailUpdate
+)
+
+# Import utilities
+from utils import get_current_user, require_role
+from utils.governance import (
+    add_application_to_history, update_application_in_history,
+    create_profile_audit_entry
+)
+
+# Import AI matching engine
+from services.matching_engine import (
+    parse_resume_with_ai,
+    parse_job_description_with_ai,
+    calculate_candidate_job_match,
+    apply_must_have_filters,
+    generate_resume_fingerprint,
+    find_similar_candidate
+)
+
+# Create router for applications endpoints
+applications_router = APIRouter(prefix="/api", tags=["Applications"])
+
+logger = logging.getLogger(__name__)
+
+
+# ============== HELPER FUNCTIONS ==============
+
+def extract_text_from_pdf(file_path: Path) -> str:
+    """Extract text from PDF file"""
+    import fitz
+    try:
+        doc = fitz.open(file_path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        return text
+    except Exception as e:
+        logger.error(f"PDF extraction error: {e}")
+        return ""
+
+
+def calculate_career_stability(experience: List[dict]) -> Dict[str, Any]:
+    """Calculate career stability score based on job history"""
+    if not experience:
+        return {"score": "yellow", "quick_changes": 0, "avg_tenure_months": 0}
+    
+    quick_changes = 0  # Jobs with tenure < 12 months
+    total_tenure = 0
+    
+    for job in experience:
+        # Estimate tenure from dates if available
+        start = job.get("start_date")
+        end = job.get("end_date", "present")
+        
+        # If we can't calculate, assume average tenure
+        tenure_months = 24  # Default assumption
+        
+        if start:
+            # Simple calculation (could be improved)
+            if isinstance(start, str) and "20" in start:
+                try:
+                    start_year = int(start.split("/")[-1] if "/" in start else start[:4])
+                    if end == "present":
+                        end_year = datetime.now().year
+                    else:
+                        end_year = int(end.split("/")[-1] if "/" in end else end[:4])
+                    tenure_months = (end_year - start_year) * 12
+                except:
+                    pass
+        
+        total_tenure += tenure_months
+        if tenure_months < 12:
+            quick_changes += 1
+    
+    avg_tenure = total_tenure / len(experience) if experience else 0
+    
+    # Score determination
+    if quick_changes == 0 and avg_tenure >= 24:
+        score = "green"
+    elif quick_changes <= 1 and avg_tenure >= 12:
+        score = "yellow"
+    else:
+        score = "red"
+    
+    return {
+        "score": score,
+        "quick_changes": quick_changes,
+        "avg_tenure_months": round(avg_tenure)
+    }
+
+
+# ============== PYDANTIC MODELS ==============
+
+class ApplicantReviewResponse(BaseModel):
+    """Enhanced applicant data for review screen"""
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    job_id: str
+    candidate_id: str
+    candidate_name: Optional[str] = None
+    candidate_email: Optional[str] = None
+    candidate_phone: Optional[str] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    experience_summary: Optional[str] = None
+    skills: Optional[List[str]] = None
+    experience_years: Optional[int] = None
+    location: Optional[str] = None
+    current_salary: Optional[int] = None
+    notice_period: Optional[str] = None
+    resume_url: Optional[str] = None
+    cover_letter: Optional[str] = None
+    stage: str = "applied"
+    match_score: Optional[int] = None
+    must_haves_met: Optional[List[Dict]] = None
+    career_stability: Optional[Dict] = None
+    applied_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    notes: List[Dict] = []
+    edit_history: List[Dict] = []
+    last_edited_by: Optional[Dict] = None
+    manually_edited: bool = False
+
+
+# ============== APPLICATION RESUME DOWNLOAD ==============
+
+@applications_router.get("/applications/{app_id}/resume")
+async def download_application_resume(
+    app_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Download candidate resume with proper naming: Firstname_Lastname_VHC.ext
+    
+    Permission checks:
+    - Admin: Can access any resume
+    - Employer/Recruiter: Only resumes for candidates who applied to their jobs
+    """
+    # Get application
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Permission check for non-admin
+    if current_user["role"] != "admin":
+        job = await db.jobs.find_one({"id": application["job_id"]}, {"_id": 0})
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Check if user has access to this job
+        has_access = (
+            job.get("created_by") == current_user["id"] or
+            job.get("company_id") == current_user.get("company_id") or
+            job.get("assigned_recruiter") == current_user["id"]
+        )
+        if not has_access:
+            raise HTTPException(status_code=403, detail="Access denied to this resume")
+    
+    # Get resume URL
+    resume_url = application.get("resume_url")
+    if not resume_url:
+        # Try to get from candidate profile (check both candidates and candidate_bank)
+        if application.get("candidate_id"):
+            candidate = await db.candidates.find_one({"id": application["candidate_id"]}, {"_id": 0})
+            if not candidate:
+                candidate = await db.candidate_bank.find_one({"id": application["candidate_id"]}, {"_id": 0})
+            if candidate:
+                resume_url = candidate.get("resume_url")
+    
+    if not resume_url:
+        raise HTTPException(status_code=404, detail="Resume not found for this application")
+    
+    # Extract filename from URL
+    original_filename = resume_url.split("/")[-1]
+    
+    # Check both possible upload locations
+    primary_dir = Path("/app/uploads")
+    primary_path = primary_dir / original_filename
+    secondary_path = UPLOAD_DIR / original_filename
+    
+    if primary_path.exists():
+        file_path = primary_path
+    elif secondary_path.exists():
+        file_path = secondary_path
+    else:
+        raise HTTPException(status_code=404, detail="Resume file not found")
+    
+    # Generate proper download filename
+    candidate_name = application.get("candidate_name", "Unknown_Candidate")
+    name_parts = candidate_name.strip().split()
+    
+    if len(name_parts) >= 2:
+        first_name = name_parts[0]
+        last_name = name_parts[-1]
+    elif len(name_parts) == 1:
+        first_name = name_parts[0]
+        last_name = "Unknown"
+    else:
+        first_name = "Unknown"
+        last_name = "Candidate"
+    
+    first_name = re.sub(r'[^a-zA-Z0-9]', '', first_name)
+    last_name = re.sub(r'[^a-zA-Z0-9]', '', last_name)
+    
+    file_ext = file_path.suffix
+    download_filename = f"{first_name}_{last_name}_VHC{file_ext}"
+    
+    return FileResponse(
+        file_path,
+        filename=download_filename,
+        media_type="application/octet-stream"
+    )
+
+
+# ============== APPLICATION CRUD ==============
+
+@applications_router.post("/applications", response_model=ApplicationResponse)
+async def create_application(app_data: ApplicationCreate, current_user: dict = Depends(require_role(["candidate"]))):
+    """Create a new application (candidate applies for a job)"""
+    # Check if job exists
+    job = await db.jobs.find_one({"id": app_data.job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if already applied
+    existing = await db.applications.find_one({
+        "job_id": app_data.job_id,
+        "candidate_id": current_user["id"]
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Already applied to this job")
+    
+    # Get candidate's data from candidate_bank if exists
+    candidate_bank = await db.candidate_bank.find_one(
+        {"$or": [{"linked_user_id": current_user["id"]}, {"email": current_user["email"]}]},
+        {"_id": 0}
+    )
+    
+    app_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get company name
+    company = await db.companies.find_one({"id": job.get("company_id")}, {"name": 1, "_id": 0})
+    company_name = company.get("name") if company else job.get("company_name", "Unknown")
+    
+    app_doc = {
+        "id": app_id,
+        "job_id": app_data.job_id,
+        "candidate_id": current_user["id"],
+        "candidate_name": current_user["name"],
+        "candidate_email": current_user["email"],
+        "job_title": job.get("title"),
+        "company_name": company_name,
+        "cover_letter": app_data.cover_letter,
+        "status": "active",
+        "stage": "applied",
+        "source": "self",
+        "notes": [],
+        "edit_history": [],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    # Include candidate bank data if available
+    if candidate_bank:
+        app_doc["current_salary"] = candidate_bank.get("current_salary")
+        app_doc["notice_period"] = candidate_bank.get("notice_period")
+        app_doc["location"] = candidate_bank.get("location")
+        app_doc["experience_years"] = candidate_bank.get("experience_years")
+        app_doc["skills"] = candidate_bank.get("skills", [])
+        app_doc["resume_url"] = candidate_bank.get("resume_url")
+    
+    await db.applications.insert_one(app_doc)
+    
+    # Increment applicant count
+    await db.jobs.update_one({"id": app_data.job_id}, {"$inc": {"applicant_count": 1}})
+    
+    # Data Governance: Add to candidate's application history if they exist in candidate_bank
+    if candidate_bank:
+        await add_application_to_history(candidate_bank["id"], {
+            "id": app_id,
+            "job_id": app_data.job_id,
+            "job_title": job.get("title"),
+            "company_name": company_name,
+            "source": "self",
+            "created_at": now,
+            "stage": "applied"
+        })
+    
+    return ApplicationResponse(**app_doc)
+
+
+@applications_router.get("/applications", response_model=List[ApplicationResponse])
+async def get_applications(job_id: Optional[str] = None, stage: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Get applications with role-based filtering"""
+    query = {}
+    
+    if current_user["role"] == "candidate":
+        query["candidate_id"] = current_user["id"]
+    elif current_user["role"] == "employer":
+        # Get employer's jobs
+        jobs = await db.jobs.find({"posted_by": current_user["id"]}, {"id": 1, "_id": 0}).to_list(1000)
+        job_ids = [j["id"] for j in jobs]
+        query["job_id"] = {"$in": job_ids}
+    
+    if job_id:
+        query["job_id"] = job_id
+    if stage:
+        query["stage"] = stage
+    
+    applications = await db.applications.find(query, {"_id": 0}).to_list(1000)
+    return [ApplicationResponse(**a) for a in applications]
+
+
+@applications_router.get("/applications/{app_id}", response_model=ApplicationResponse)
+async def get_application(app_id: str, current_user: dict = Depends(get_current_user)):
+    """Get single application"""
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return ApplicationResponse(**application)
+
+
+@applications_router.put("/applications/{app_id}", response_model=ApplicationResponse)
+async def update_application(app_id: str, update_data: ApplicationUpdate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
+    """Update application with stage tracking"""
+    # Get current application for history tracking
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+    update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.applications.update_one({"id": app_id}, {"$set": update_dict})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Data Governance: Update candidate history if stage changed
+    if "stage" in update_dict and application.get("candidate_id"):
+        new_stage = update_dict["stage"]
+        outcome = None
+        if new_stage in ["hired", "rejected", "dropped"]:
+            outcome = new_stage
+        await update_application_in_history(
+            application["candidate_id"],
+            app_id,
+            new_stage,
+            outcome
+        )
+    
+    updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    return ApplicationResponse(**updated_application)
+
+
+@applications_router.post("/applications/{app_id}/notes")
+async def add_note(app_id: str, note_data: NoteCreate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
+    """Add note to application"""
+    note = {
+        "id": str(uuid.uuid4()),
+        "content": note_data.content,
+        "author_id": current_user["id"],
+        "author_name": current_user["name"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    result = await db.applications.update_one(
+        {"id": app_id},
+        {"$push": {"notes": note}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    return {"message": "Note added successfully", "note": note}
+
+
+@applications_router.put("/applications/{app_id}/details")
+async def update_application_details(
+    app_id: str, 
+    update_data: ApplicationDetailUpdate, 
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Controlled editing of applicant details (salary, notice period, skills, experience summary).
+    
+    Data Precedence: Candidate self-edit > Employer edit > Recruiter edit > Resume parsing
+    - Manual edits override parsed data
+    - Resume parsing will NEVER overwrite manual edits (manually_edited flag)
+    
+    All edits are logged with full audit trail.
+    """
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update_dict = {}
+    audit_entries = []
+    
+    editable_fields = {
+        "current_salary": update_data.current_salary,
+        "notice_period": update_data.notice_period,
+        "skills": update_data.skills,
+        "experience_summary": update_data.experience_summary
+    }
+    
+    for field, new_value in editable_fields.items():
+        if new_value is not None:
+            old_value = application.get(field)
+            
+            if old_value != new_value:
+                update_dict[field] = new_value
+                
+                audit_entry = {
+                    "field": field,
+                    "old_value": old_value,
+                    "new_value": new_value,
+                    "updated_by_id": current_user["id"],
+                    "updated_by_name": current_user["name"],
+                    "updated_by_role": current_user["role"],
+                    "timestamp": now
+                }
+                audit_entries.append(audit_entry)
+    
+    if not update_dict:
+        return {"message": "No changes detected", "application_id": app_id}
+    
+    # Set metadata
+    update_dict["updated_at"] = now
+    update_dict["manually_edited"] = True
+    update_dict["last_edited_by"] = {
+        "name": current_user["name"],
+        "role": current_user["role"],
+        "user_id": current_user["id"],
+        "timestamp": now
+    }
+    
+    # Update application with audit trail
+    result = await db.applications.update_one(
+        {"id": app_id},
+        {
+            "$set": update_dict,
+            "$push": {"edit_history": {"$each": audit_entries}}
+        }
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Also update candidate_bank if the candidate exists there
+    if application.get("candidate_id"):
+        candidate_update = {}
+        audit_fields = []
+        if "current_salary" in update_dict:
+            candidate_update["current_salary"] = update_dict["current_salary"]
+            audit_fields.append("current_salary")
+        if "notice_period" in update_dict:
+            candidate_update["notice_period"] = update_dict["notice_period"]
+            audit_fields.append("notice_period")
+        if "skills" in update_dict:
+            candidate_update["skills"] = update_dict["skills"]
+        if "experience_summary" in update_dict:
+            candidate_update["summary"] = update_dict["experience_summary"]
+        
+        if candidate_update:
+            candidate_update["updated_at"] = now
+            candidate_update["manually_edited"] = True
+            candidate_update["last_profile_updated_at"] = now
+            candidate_update["last_updated_by"] = current_user["id"]
+            await db.candidate_bank.update_one(
+                {"id": application["candidate_id"]},
+                {"$set": candidate_update}
+            )
+            
+            # Data Governance: Add audit entries for mandatory field changes
+            if audit_fields:
+                candidate = await db.candidate_bank.find_one({"id": application["candidate_id"]}, {"_id": 0})
+                if candidate:
+                    for field in audit_fields:
+                        old_entry = next((e for e in audit_entries if e["field"] == field), None)
+                        if old_entry:
+                            profile_audit = create_profile_audit_entry(
+                                field, old_entry["old_value"], old_entry["new_value"],
+                                current_user["id"], current_user["name"], current_user["role"],
+                                "application_edit"
+                            )
+                            await db.candidate_bank.update_one(
+                                {"id": application["candidate_id"]},
+                                {"$push": {"profile_update_audit": profile_audit}}
+                            )
+    
+    updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    
+    return {
+        "message": "Application details updated successfully",
+        "application_id": app_id,
+        "changes": [
+            {"field": e["field"], "old_value": e["old_value"], "new_value": e["new_value"]}
+            for e in audit_entries
+        ],
+        "updated_by": {
+            "name": current_user["name"],
+            "role": current_user["role"]
+        },
+        "application": ApplicationResponse(**updated_application)
+    }
+
+
+@applications_router.get("/applications/{app_id}/edit-history")
+async def get_application_edit_history(
+    app_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Get the full edit history (audit trail) for an application."""
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0, "edit_history": 1, "last_edited_by": 1})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    return {
+        "application_id": app_id,
+        "edit_history": application.get("edit_history", []),
+        "last_edited_by": application.get("last_edited_by")
+    }
+
+
+# ============== JOB APPLICANTS (Per-Job Review Screen) ==============
+
+@applications_router.get("/jobs/{job_id}/applicants")
+async def get_job_applicants(
+    job_id: str, 
+    stage: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Get all applicants for a specific job with enriched data for review.
+    Returns candidate details, match scores, must-have indicators, salary, and notice period.
+    """
+    # Verify job exists and user has access
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # For employers, verify they own the job
+    if current_user["role"] == "employer" and job.get("posted_by") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view applicants for this job")
+    
+    # Build query
+    query = {"job_id": job_id}
+    if stage:
+        query["stage"] = stage
+    
+    # Get all applications for this job
+    applications = await db.applications.find(query, {"_id": 0}).to_list(1000)
+    
+    # Parse job requirements for must-have matching
+    job_requirements = []
+    if job.get("requirements"):
+        job_requirements = [r.strip().lower() for r in job.get("requirements", "").split(",") if r.strip()]
+    
+    enriched_applicants = []
+    
+    for app in applications:
+        # Get additional candidate data from candidate_bank if available
+        candidate_data = await db.candidate_bank.find_one(
+            {"$or": [
+                {"id": app.get("candidate_id")},
+                {"email": app.get("candidate_email")}
+            ]},
+            {"_id": 0}
+        )
+        
+        # Calculate match score based on skills overlap
+        app_skills = app.get("skills") or (candidate_data.get("skills") if candidate_data else []) or []
+        app_skills_lower = [s.lower() for s in app_skills]
+        
+        # Calculate must-haves met
+        must_haves_met = []
+        matched_requirements = 0
+        for req in job_requirements:
+            is_met = any(req in skill or skill in req for skill in app_skills_lower)
+            must_haves_met.append({"requirement": req, "met": is_met})
+            if is_met:
+                matched_requirements += 1
+        
+        # Calculate match score (percentage of requirements met)
+        match_score = int((matched_requirements / len(job_requirements) * 100)) if job_requirements else 0
+        
+        # Get career stability from candidate_bank or calculate
+        career_stability = None
+        if candidate_data and candidate_data.get("experience"):
+            career_stability = calculate_career_stability(candidate_data.get("experience", []))
+        
+        # Build enriched response
+        enriched = {
+            "id": app.get("id"),
+            "job_id": app.get("job_id"),
+            "candidate_id": app.get("candidate_id"),
+            "candidate_name": app.get("candidate_name") or (candidate_data.get("name") if candidate_data else None),
+            "candidate_email": app.get("candidate_email") or (candidate_data.get("email") if candidate_data else None),
+            "candidate_phone": app.get("candidate_phone") or (candidate_data.get("phone") if candidate_data else None),
+            "headline": app.get("headline") or (candidate_data.get("headline") if candidate_data else None),
+            "summary": candidate_data.get("summary") if candidate_data else None,
+            "experience_summary": app.get("experience_summary") or (candidate_data.get("summary") if candidate_data else None),
+            "skills": app_skills,
+            "experience_years": app.get("experience_years") or (candidate_data.get("experience_years") if candidate_data else None),
+            "location": app.get("location") or (candidate_data.get("location") if candidate_data else None),
+            "current_salary": app.get("current_salary") or (candidate_data.get("current_salary") if candidate_data else None),
+            "notice_period": app.get("notice_period") or (candidate_data.get("notice_period") if candidate_data else None),
+            "resume_url": app.get("resume_url") or (candidate_data.get("resume_url") if candidate_data else None),
+            "r2_metadata": app.get("r2_metadata") or (candidate_data.get("r2_metadata") if candidate_data else None),
+            "cover_letter": app.get("cover_letter"),
+            "stage": app.get("stage", "applied"),
+            "match_score": match_score,
+            "must_haves_met": must_haves_met,
+            "career_stability": career_stability,
+            "applied_at": app.get("applied_at") or app.get("created_at"),
+            "updated_at": app.get("updated_at"),
+            "notes": app.get("notes", []),
+            "edit_history": app.get("edit_history", []),
+            "last_edited_by": app.get("last_edited_by"),
+            "manually_edited": app.get("manually_edited", False)
+        }
+        
+        enriched_applicants.append(enriched)
+    
+    # Sort by match score (highest first), then by applied date
+    enriched_applicants.sort(key=lambda x: (-(x.get("match_score") or 0), x.get("applied_at") or ""))
+    
+    return {
+        "job": {
+            "id": job.get("id"),
+            "title": job.get("title"),
+            "location": job.get("location"),
+            "job_type": job.get("job_type"),
+            "salary_min": job.get("salary_min"),
+            "salary_max": job.get("salary_max"),
+            "requirements": job.get("requirements"),
+            "applicant_count": len(applications)
+        },
+        "applicants": enriched_applicants,
+        "stage_counts": {
+            "applied": sum(1 for a in applications if a.get("stage") == "applied"),
+            "shortlisted": sum(1 for a in applications if a.get("stage") == "shortlisted"),
+            "interview": sum(1 for a in applications if a.get("stage") == "interview"),
+            "offered": sum(1 for a in applications if a.get("stage") == "offered"),
+            "hired": sum(1 for a in applications if a.get("stage") == "hired"),
+            "rejected": sum(1 for a in applications if a.get("stage") == "rejected"),
+            "on_hold": sum(1 for a in applications if a.get("stage") == "on_hold"),
+            "over_budget": sum(1 for a in applications if a.get("stage") == "over_budget"),
+            "not_qualified": sum(1 for a in applications if a.get("stage") == "not_qualified")
+        }
+    }
+
+
+# ============== CANDIDATE MANAGEMENT (Admin/Recruiter) ==============
+
+@applications_router.get("/candidates", response_model=List[CandidateProfile])
+async def get_candidates(current_user: dict = Depends(require_role(["admin", "recruiter", "employer"]))):
+    """Get all candidate profiles"""
+    profiles = await db.candidate_profiles.find({}, {"_id": 0}).to_list(1000)
+    return [CandidateProfile(**p) for p in profiles]
+
+
+@applications_router.get("/candidates/{candidate_id}", response_model=CandidateProfile)
+async def get_candidate(candidate_id: str, current_user: dict = Depends(require_role(["admin", "recruiter", "employer"]))):
+    """Get single candidate profile"""
+    profile = await db.candidate_profiles.find_one({"user_id": candidate_id}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return CandidateProfile(**profile)
+
+
+# ============== AI MATCHING ENGINE ==============
+
+@applications_router.post("/ai/parse-resume")
+async def ai_parse_resume(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Parse resume using AI and optionally add to candidate data bank"""
+    if not file.filename.lower().endswith(('.pdf', '.doc', '.docx', '.txt')):
+        raise HTTPException(status_code=400, detail="Only PDF, DOC, DOCX, TXT files allowed")
+    
+    # Save file temporarily
+    file_id = str(uuid.uuid4())
+    file_ext = Path(file.filename).suffix
+    temp_path = UPLOAD_DIR / f"temp_{file_id}{file_ext}"
+    
+    async with aiofiles.open(temp_path, 'wb') as f:
+        content = await file.read()
+        await f.write(content)
+    
+    # Extract text
+    if file_ext.lower() == '.pdf':
+        resume_text = extract_text_from_pdf(temp_path)
+    else:
+        async with aiofiles.open(temp_path, 'r', errors='ignore') as f:
+            resume_text = await f.read()
+    
+    if not resume_text.strip():
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Could not extract text from file")
+    
+    # Parse with AI
+    result = await parse_resume_with_ai(resume_text)
+    
+    if not result["success"]:
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=result.get("error", "Parsing failed"))
+    
+    # Generate fingerprint
+    fingerprint = generate_resume_fingerprint(resume_text)
+    result["data"]["resume_fingerprint"] = fingerprint
+    
+    temp_path.unlink(missing_ok=True)
+    
+    return {"success": True, "parsed_data": result["data"]}
+
+
+@applications_router.post("/ai/parse-jd")
+async def ai_parse_job_description(
+    jd_text: str = Form(None),
+    file: UploadFile = File(None),
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Parse job description using AI"""
+    text_to_parse = jd_text
+    
+    if file:
+        file_ext = Path(file.filename).suffix
+        temp_path = UPLOAD_DIR / f"temp_jd_{uuid.uuid4()}{file_ext}"
+        
+        async with aiofiles.open(temp_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+        
+        if file_ext.lower() == '.pdf':
+            text_to_parse = extract_text_from_pdf(temp_path)
+        else:
+            async with aiofiles.open(temp_path, 'r', errors='ignore') as f:
+                text_to_parse = await f.read()
+        
+        temp_path.unlink(missing_ok=True)
+    
+    if not text_to_parse or not text_to_parse.strip():
+        raise HTTPException(status_code=400, detail="No job description text provided")
+    
+    result = await parse_job_description_with_ai(text_to_parse)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error", "Parsing failed"))
+    
+    return {"success": True, "parsed_data": result["data"]}
+
+
+@applications_router.post("/matching/find-candidates", response_model=List[MatchResult])
+async def find_matching_candidates(
+    match_req: MatchRequest,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Find candidates matching job requirements with AI scoring.
+    
+    CRITICAL: AI Screening searches ENTIRE candidate database.
+    This is a SYSTEM-LEVEL INTELLIGENCE function, not UI-level visibility filter.
+    DATA VISIBILITY ≠ AI SEARCH SCOPE
+    Results are READ-ONLY, CONTEXTUAL VISIBILITY - no edit/ownership rights granted.
+    """
+    
+    # Get job requirements
+    job_data = None
+    if match_req.job_id:
+        job = await db.jobs.find_one({"id": match_req.job_id}, {"_id": 0})
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        # Parse existing job description
+        jd_result = await parse_job_description_with_ai(job.get("description", "") + " " + job.get("requirements", ""))
+        if jd_result["success"]:
+            job_data = jd_result["data"]
+    elif match_req.jd_text:
+        jd_result = await parse_job_description_with_ai(match_req.jd_text)
+        if jd_result["success"]:
+            job_data = jd_result["data"]
+    
+    if not job_data:
+        raise HTTPException(status_code=400, detail="Could not parse job requirements")
+    
+    # Build must-have filters
+    must_have = {}
+    if match_req.must_have_location:
+        must_have["location"] = match_req.must_have_location
+    if match_req.must_have_qualification:
+        must_have["required_qualification"] = match_req.must_have_qualification
+    if match_req.must_have_skills:
+        must_have["mandatory_skills"] = match_req.must_have_skills
+    if match_req.min_experience is not None:
+        must_have["min_experience"] = match_req.min_experience
+    if match_req.max_experience is not None:
+        must_have["max_experience"] = match_req.max_experience
+    
+    # CRITICAL: AI Screening searches ENTIRE candidate database
+    # No role-based filtering for AI screening input
+    query = {}
+    
+    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(1000)
+    
+    results = []
+    for candidate in candidates:
+        match_result = await calculate_candidate_job_match(candidate, job_data, must_have if must_have else None)
+        
+        # Determine candidate source for display
+        source = candidate.get("source", "unknown")
+        created_by_role = None
+        if candidate.get("created_by"):
+            creator = await db.users.find_one({"id": candidate["created_by"]}, {"role": 1, "_id": 0})
+            if creator:
+                created_by_role = creator.get("role")
+        
+        results.append(MatchResult(
+            candidate_id=candidate["id"],
+            candidate_name=candidate["name"],
+            candidate_email=candidate["email"],
+            score=match_result.get("score", 0),
+            skill_match_score=match_result.get("skill_match_score"),
+            experience_match_score=match_result.get("experience_match_score"),
+            matched_skills=match_result.get("matched_skills", []),
+            missing_skills=match_result.get("missing_skills", []),
+            strengths=match_result.get("strengths", []),
+            gaps=match_result.get("gaps", []),
+            explanation=match_result.get("explanation", ""),
+            filtered_out=match_result.get("filtered_out", False),
+            filter_reason=match_result.get("filter_reason"),
+            source=source,
+            source_role=created_by_role
+        ))
+    
+    # Sort by score descending, filtered_out last
+    results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
+    
+    # Store match results for analytics
+    if match_req.job_id:
+        await db.match_results.insert_one({
+            "id": str(uuid.uuid4()),
+            "job_id": match_req.job_id,
+            "searched_by": current_user["id"],
+            "searched_by_role": current_user["role"],
+            "total_candidates": len(candidates),
+            "matched_count": len([r for r in results if r.score >= 50 and not r.filtered_out]),
+            "filters_applied": must_have,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return results
+
+
+@applications_router.get("/matching/jobs-for-candidate", response_model=List[JobMatchForCandidate])
+async def get_matching_jobs_for_candidate(
+    current_user: dict = Depends(require_role(["candidate"]))
+):
+    """Get matching jobs for current candidate based on their profile"""
+    
+    # Get candidate from data bank
+    candidate = await db.candidate_bank.find_one(
+        {"linked_user_id": current_user["id"]},
+        {"_id": 0}
+    )
+    
+    if not candidate:
+        # Fallback to candidate_profiles
+        profile = await db.candidate_profiles.find_one(
+            {"user_id": current_user["id"]},
+            {"_id": 0}
+        )
+        if not profile:
+            return []
+        candidate = profile
+    
+    # Get active jobs
+    jobs = await db.jobs.find({"status": "active"}, {"_id": 0}).to_list(100)
+    
+    results = []
+    for job in jobs:
+        # Parse job requirements
+        jd_text = f"{job.get('title', '')} {job.get('description', '')} {job.get('requirements', '')}"
+        jd_result = await parse_job_description_with_ai(jd_text)
+        
+        if not jd_result["success"]:
+            continue
+        
+        job_data = jd_result["data"]
+        match_result = await calculate_candidate_job_match(candidate, job_data)
+        
+        if match_result.get("score", 0) >= 30:  # Only show relevant matches
+            results.append(JobMatchForCandidate(
+                job_id=job["id"],
+                job_title=job["title"],
+                company_name=job.get("company_name"),
+                location=job.get("location", ""),
+                score=match_result.get("score", 0),
+                explanation=match_result.get("explanation", ""),
+                matched_skills=match_result.get("matched_skills", [])
+            ))
+    
+    # Sort by score
+    results.sort(key=lambda x: x.score, reverse=True)
+    
+    return results[:20]  # Return top 20 matches
