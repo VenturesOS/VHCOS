@@ -3111,6 +3111,26 @@ async def add_to_candidate_bank(
         content = await file.read()
         await f.write(content)
     
+    # Upload to R2 if enabled
+    r2_metadata = None
+    if R2_ENABLED:
+        try:
+            r2_key = generate_r2_key("candidate-bank", file.filename)
+            r2_result = await upload_to_r2(content, r2_key, file.content_type or "application/octet-stream")
+            if r2_result.get("storage") == "r2":
+                r2_metadata = {
+                    "storage": "r2",
+                    "r2_key": r2_key,
+                    "original_filename": file.filename,
+                    "content_type": file.content_type,
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                    "uploaded_by": current_user["id"],
+                    "uploaded_by_role": current_user["role"]
+                }
+                logging.info(f"[R2] Candidate bank resume uploaded to R2: {r2_key}")
+        except Exception as e:
+            logging.error(f"[R2] Candidate bank upload failed, using local storage: {e}")
+    
     # Extract and parse
     if file_ext.lower() == '.pdf':
         resume_text = extract_text_from_pdf(file_path)
