@@ -1372,7 +1372,7 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 ```
 /app/backend/
 ├── config.py           # Environment, DB, R2 config
-├── server.py           # Main app (progressively smaller)
+├── server.py           # Main app (now minimal)
 ├── models/             # Pydantic models
 │   └── __init__.py
 ├── routes/             # FastAPI routers
@@ -1382,9 +1382,11 @@ Enterprise-grade data governance layer enforcing mandatory candidate fields, pro
 │   ├── files.py        # Phase 7
 │   ├── admin.py        # Phase 8
 │   ├── jobs.py         # Phase 9
-│   └── candidates.py   # Phase 10
+│   ├── candidates.py   # Phase 10
+│   └── applications.py # Phase 11
 ├── services/           # External service clients
-│   └── r2_storage.py   # Phase 4
+│   ├── r2_storage.py   # Phase 4
+│   └── matching_engine.py
 └── utils/              # Helper functions
     ├── auth.py         # Phase 3
     └── governance.py   # Phase 3
