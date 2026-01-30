@@ -51,7 +51,9 @@ class JobResponse(BaseModel):
     applicant_count: int = 0
     # Shareable Job Link Feature
     job_public_id: Optional[str] = None  # Format: VHC/YYYY/NNNN
-    shareable_link_enabled: bool = False  # Enable/disable public shareable link
+    shareable_link_enabled: bool = False  # Enable/disable public shareable link (requires career page live)
+    mandate_shareable_link_enabled: bool = False  # Enable/disable mandate-level shareable link (bypasses career page)
+    mandate_share_token: Optional[str] = None  # Secure token for mandate links
     # Skills for job matching
     skills: List[str] = []
     experience_min: Optional[int] = None
