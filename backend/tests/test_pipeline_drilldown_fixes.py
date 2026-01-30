@@ -378,7 +378,7 @@ class TestIssue4RecruiterJobPostingApproval:
             "description": "Test job created by recruiter for approval workflow testing",
             "requirements": "Test requirements",
             "location": "Remote",
-            "job_type": "full_time",
+            "job_type": "full-time",
             "experience_min": 2,
             "experience_max": 5,
             "salary_min": 500000,
@@ -413,7 +413,7 @@ class TestIssue4RecruiterJobPostingApproval:
             "title": unique_title,
             "description": "Test job for approval workflow",
             "location": "Remote",
-            "job_type": "full_time"
+            "job_type": "full-time"
         }
         
         create_response = requests.post(
