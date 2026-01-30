@@ -212,7 +212,7 @@ export default function EmployerCandidateBankPage() {
         <div>
           <h1 className="text-2xl font-heading font-bold text-slate-900">Candidate Data Bank</h1>
           <p className="text-sm text-slate-500 mt-1">
-            View candidates you've added, your team's uploads, and applicants to your job postings
+            View candidates you&apos;ve added, your team&apos;s uploads, and applicants to your job postings
           </p>
         </div>
         <Button 
@@ -229,7 +229,7 @@ export default function EmployerCandidateBankPage() {
         <Info className="w-5 h-5 text-blue-600 mt-0.5" />
         <div className="text-sm text-blue-800">
           <p className="font-medium">Access Control:</p>
-          <p>You can only see candidates that you've added, candidates added by your team members, or candidates who have applied to your job postings.</p>
+          <p>You can only see candidates that you&apos;ve added, candidates added by your team members, or candidates who have applied to your job postings.</p>
         </div>
       </div>
 
