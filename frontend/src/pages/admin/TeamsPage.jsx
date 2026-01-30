@@ -91,7 +91,13 @@ export default function TeamsPage() {
       return;
     }
     try {
-      await teamAPI.create(createForm);
+      // Send empty company_ids - backend will auto-attach from employer
+      await teamAPI.create({
+        name: createForm.name,
+        employer_id: createForm.employer_id,
+        recruiter_ids: createForm.recruiter_ids,
+        company_ids: [], // Backend auto-attaches from employer
+      });
       toast.success('Team created successfully');
       setShowCreate(false);
       resetForm();
@@ -107,10 +113,10 @@ export default function TeamsPage() {
       return;
     }
     try {
+      // Only update name and recruiters - companies are managed via Companies tab
       await teamAPI.update(selectedTeam.id, {
         name: createForm.name,
         recruiter_ids: createForm.recruiter_ids,
-        company_ids: createForm.company_ids,
       });
       toast.success('Team updated successfully');
       setShowEdit(false);
