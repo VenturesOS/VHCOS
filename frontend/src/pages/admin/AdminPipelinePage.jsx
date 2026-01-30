@@ -334,6 +334,50 @@ export default function AdminPipelinePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Application Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading text-red-600 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" /> Remove from Pipeline
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove <strong>{applicationToDelete?.candidate_name}</strong> from the pipeline?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-700">
+                <strong>Note:</strong> This will only remove the candidate from this job&apos;s pipeline.
+              </p>
+              <ul className="text-sm text-amber-600 mt-2 space-y-1 list-disc list-inside">
+                <li>The candidate will NOT be deleted from the data bank</li>
+                <li>Historical data will be preserved for audit</li>
+                <li>This action can be undone by re-adding the candidate</li>
+              </ul>
+            </div>
+            {applicationToDelete && (
+              <div className="text-sm text-slate-600">
+                <p><strong>Job:</strong> {applicationToDelete.job_title}</p>
+                <p><strong>Current Stage:</strong> {applicationToDelete.stage}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteApplication}
+              data-testid="confirm-delete-application-btn"
+            >
+              Remove from Pipeline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
