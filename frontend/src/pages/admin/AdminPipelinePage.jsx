@@ -238,7 +238,7 @@ export default function AdminPipelinePage() {
                     {applications.map((app) => (
                       <div 
                         key={app.id}
-                        className="p-3 bg-white rounded-lg border border-slate-100 hover:shadow-sm transition-shadow"
+                        className="p-3 bg-white rounded-lg border border-slate-100 hover:shadow-sm transition-shadow group"
                       >
                         <div className="flex items-start gap-2">
                           <div className="w-8 h-8 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
@@ -247,8 +247,20 @@ export default function AdminPipelinePage() {
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm text-slate-900 truncate">
-                              {app.candidate_name}
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="font-medium text-sm text-slate-900 truncate">
+                                {app.candidate_name}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => openDeleteDialog(app)}
+                                title="Remove from pipeline"
+                                data-testid={`delete-app-${app.id}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
                             </div>
                             <div className="text-xs text-slate-500 truncate">
                               {app.job_title}
