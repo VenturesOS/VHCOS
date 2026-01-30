@@ -12,7 +12,8 @@ from config import db
 
 # Import models
 from models import (
-    UserResponse, UserUpdate, AdminUserCreate, AdminPasswordReset
+    UserResponse, UserUpdate, AdminUserCreate, AdminPasswordReset,
+    CompanyCreate, CompanyResponse, CompanyUpdate
 )
 
 # Import utilities
@@ -21,6 +22,93 @@ from utils import hash_password, require_role
 
 # Create router for admin endpoints
 admin_router = APIRouter(prefix="/api", tags=["Admin"])
+
+
+# ============== COMPANY MANAGEMENT (ADMIN) ==============
+
+@admin_router.get("/companies", response_model=List[CompanyResponse])
+async def get_all_companies(current_user: dict = Depends(require_role(["admin"]))):
+    """
+    Get all companies (Admin only).
+    Returns complete list of companies with assigned employer info.
+    """
+    companies = await db.companies.find({}, {"_id": 0}).to_list(1000)
+    
+    # Enrich with employer names
+    result = []
+    for company in companies:
+        if company.get("assigned_employer_id"):
+            employer = await db.users.find_one(
+                {"id": company["assigned_employer_id"]},
+                {"_id": 0, "name": 1}
+            )
+            if employer:
+                company["assigned_employer_name"] = employer.get("name")
+        result.append(CompanyResponse(**company))
+    
+    return result
+
+
+@admin_router.post("/companies", response_model=CompanyResponse)
+async def create_company(
+    company_data: CompanyCreate,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Create a new company (Admin only).
+    """
+    company = {
+        "id": str(uuid.uuid4()),
+        "name": company_data.name,
+        "description": company_data.description,
+        "industry": company_data.industry,
+        "website": company_data.website,
+        "location": company_data.location,
+        "hr_contacts": [c.model_dump() for c in (company_data.hr_contacts or [])],
+        "assigned_employer_id": None,
+        "assigned_employer_name": None,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.companies.insert_one(company)
+    return CompanyResponse(**company)
+
+
+@admin_router.get("/companies/{company_id}", response_model=CompanyResponse)
+async def get_company(
+    company_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Get company details by ID.
+    Admin: can access any company
+    Employer: can only access assigned companies
+    """
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Employer access control
+    if current_user["role"] == "employer":
+        # Check if employer is assigned to this company via team
+        teams = await db.teams.find(
+            {"employer_id": current_user["id"], "company_ids": company_id},
+            {"_id": 0, "id": 1}
+        ).to_list(1)
+        if not teams:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Enrich with employer name
+    if company.get("assigned_employer_id"):
+        employer = await db.users.find_one(
+            {"id": company["assigned_employer_id"]},
+            {"_id": 0, "name": 1}
+        )
+        if employer:
+            company["assigned_employer_name"] = employer.get("name")
+    
+    return CompanyResponse(**company)
 
 
 # ============== USER MANAGEMENT (ADMIN) ==============
