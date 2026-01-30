@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { companyAPI, userAPI } from '../../lib/api';
+import { companyAPI, userAPI, commercialAPI } from '../../lib/api';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -9,7 +9,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Building2, Globe, MapPin, Plus, Edit2, UserCircle } from 'lucide-react';
+import { Search, Building2, Globe, MapPin, Plus, Edit2, UserCircle, DollarSign, Briefcase } from 'lucide-react';
 
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState([]);
