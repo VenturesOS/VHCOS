@@ -207,14 +207,26 @@ export default function CompaniesPage() {
                     <h3 className="font-heading font-semibold text-lg text-slate-900 truncate">
                       {company.name}
                     </h3>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => openEdit(company)}
-                      className="shrink-0"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => openEdit(company)}
+                        title="Edit company"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => openDelete(company)}
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                        title="Delete company"
+                        data-testid={`delete-company-${company.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-sm text-slate-500">{company.industry || 'Industry not specified'}</p>
                   {company.location && (
