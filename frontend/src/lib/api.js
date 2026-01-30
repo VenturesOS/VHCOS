@@ -296,7 +296,11 @@ export const candidateBankAPI = {
       } 
     }),
   // Phase-2: Link candidate to job
-  linkToJob: (candidateId, jobId) => api.post('/applications/link-candidate', { candidate_id: candidateId, job_id: jobId }),
+  linkToJob: (candidateId, jobId, expectedSalary) => api.post('/applications/link-candidate', { 
+    candidate_id: candidateId, 
+    job_id: jobId,
+    expected_salary: expectedSalary
+  }),
 };
 
 export default api;
