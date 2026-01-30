@@ -115,7 +115,7 @@ export default function EmployerJobsPage() {
     }
   };
 
-  // Shareable Link Functions
+  // Shareable Link Functions (Career Page)
   const handleShareableLinkToggle = async (job, enabled) => {
     try {
       await jobAPI.updateShareableLink(job.id, enabled);
@@ -125,6 +125,43 @@ export default function EmployerJobsPage() {
       const detail = error.response?.data?.detail;
       toast.error(detail || 'Failed to update shareable link');
     }
+  };
+
+  // Mandate Shareable Link Functions (Independent of Career Page)
+  const handleMandateShareableLinkToggle = async (job, enabled) => {
+    try {
+      const res = await jobAPI.updateMandateShareableLink(job.id, enabled);
+      if (enabled && res.data.mandate_share_token) {
+        // Auto-copy to clipboard when enabled
+        const link = `${window.location.origin}/apply/mandate/${job.id}?token=${res.data.mandate_share_token}`;
+        navigator.clipboard.writeText(link);
+        toast.success('Mandate link enabled and copied to clipboard!');
+      } else {
+        toast.success('Mandate link disabled');
+      }
+      loadJobs();
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      toast.error(detail || 'Failed to update mandate shareable link');
+    }
+  };
+
+  const copyMandateShareableLink = (job) => {
+    if (!job.mandate_share_token) {
+      toast.error('Mandate link token not available');
+      return;
+    }
+    const link = `${window.location.origin}/apply/mandate/${job.id}?token=${job.mandate_share_token}`;
+    navigator.clipboard.writeText(link);
+    toast.success('Mandate link copied to clipboard!');
+  };
+
+  const openMandateShareableLink = (job) => {
+    if (!job.mandate_share_token) {
+      toast.error('Mandate link token not available');
+      return;
+    }
+    window.open(`/apply/mandate/${job.id}?token=${job.mandate_share_token}`, '_blank');
   };
 
   const copyShareableLink = (job) => {
