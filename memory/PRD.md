@@ -49,6 +49,45 @@ Any future change must:
 
 ---
 
+## Team Creation Auto-Attach Companies (January 30, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 11/12 backend tests passed (91.7%), 100% frontend verified
+**Test Report:** `/app/test_reports/iteration_34.json`
+
+### Problem Fixed
+When Admin creates a team, the system was redundantly asking to assign companies even though companies are already assigned to employers. This was confusing because:
+- Company already exists and is assigned to employer
+- Manual re-selection was unnecessary
+
+### Solution Implemented
+**Auto-Attach Logic:** When employer is selected during team creation, companies already assigned to that employer are automatically included.
+
+**Backend Changes:**
+- New endpoint: `GET /api/employers/{employer_id}/companies` - Returns companies assigned to specific employer
+- Updated `POST /api/teams` - Auto-attaches employer's companies + merges with explicitly selected companies (no duplicates)
+
+**Frontend Changes:**
+- `TeamsPage.jsx` - Added `fetchEmployerCompanies()` function
+- Green info box shows auto-attached companies count and badges
+- "Additional Companies" section shows remaining companies for optional selection
+- Toast notification confirms auto-attach action
+
+### UX Flow
+1. Admin clicks "Create Team"
+2. Admin fills team name
+3. Admin selects employer → Companies auto-attach instantly
+4. Green box shows: "2 company(ies) auto-attached - Companies assigned to this employer are automatically included"
+5. Admin can optionally add more companies from the "Additional Companies" section
+6. Admin assigns recruiters and creates team
+
+### Files Modified
+- `/app/backend/server.py` - Team creation logic + new endpoint
+- `/app/frontend/src/pages/admin/TeamsPage.jsx` - Auto-attach UI
+- `/app/frontend/src/lib/api.js` - New API method
+
+---
+
 ## Mandate Shareable Links (January 30, 2026)
 
 ### Overview ✅ VERIFIED
