@@ -161,7 +161,6 @@ export default function TeamsPage() {
       name: '',
       employer_id: '',
       recruiter_ids: [],
-      company_ids: [],
     });
     setAutoAttachedCompanies([]);
   };
