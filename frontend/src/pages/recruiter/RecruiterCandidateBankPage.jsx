@@ -66,14 +66,28 @@ export default function RecruiterCandidateBankPage() {
     setEditNotice(candidate.notice_period || '');
     setEditLocation(candidate.location || '');
     setEditExperience(candidate.experience_years?.toString() || '0');
+    setExpectedCTC('');
+    setExpectedCTCType('amount');
     setSelectedJobId('');
     loadJobs();
     setShowAddApplicant(true);
   };
 
+  // Calculate expected CTC based on type
+  const calculateExpectedCTC = () => {
+    if (!expectedCTC) return null;
+    const currentSalary = parseInt(editSalary) || 0;
+    if (expectedCTCType === 'percentage') {
+      const hikePercent = parseFloat(expectedCTC);
+      return Math.round(currentSalary * (1 + hikePercent / 100));
+    }
+    return parseInt(expectedCTC);
+  };
+
   const handleAddAsApplicant = async () => {
     const salaryNum = parseInt(editSalary);
     const expNum = parseInt(editExperience);
+    const expectedSalary = calculateExpectedCTC();
     
     if (!editSalary || salaryNum <= 0) {
       toast.error('Current salary (INR) is mandatory');
