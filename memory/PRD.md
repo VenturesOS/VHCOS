@@ -31,6 +31,7 @@
 **Employer Pipeline View with Stage Control: COMPLETE & TESTED (January 30, 2026)**
 **Commercial ↔ Company ↔ Job Relationship: COMPLETE & TESTED (January 30, 2026)**
 **Candidate Name Fix + Expected CTC Feature: COMPLETE & TESTED (January 30, 2026)**
+**Employer Dashboard Stats Fix + UI Redesign: COMPLETE & TESTED (January 30, 2026)**
 
 ---
 
