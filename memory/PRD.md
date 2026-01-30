@@ -50,6 +50,58 @@ Any future change must:
 
 ---
 
+## DELETE Capabilities for Core Entities (January 30, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 16/16 backend tests passed (100%), All frontend UI verified
+**Test Report:** `/app/test_reports/iteration_35.json`
+
+### Feature Description
+Admin-only soft delete for core entities with proper cascade rules and confirmation dialogs.
+
+### Entities Covered
+
+**1. Company Profiles**
+- Endpoint: `DELETE /api/companies/{company_id}`
+- Cascade Rules:
+  - Jobs linked to company → status set to `archived`
+  - Teams with company → company_id removed from company_ids
+  - Commercials for company → is_active set to false
+  - Applications → preserved for audit
+- UI: Delete button (trash icon) on each company card with confirmation dialog
+
+**2. Candidates from Pipeline (Applications)**
+- Endpoint: `DELETE /api/applications/{app_id}`
+- Behavior: Soft delete - marks stage/status as `removed`
+- **Important:** Does NOT delete candidate from data bank
+- UI: Delete button appears on hover in pipeline cards with clarification dialog
+
+**3. User Profiles (Existing)**
+- `DELETE /api/admin/users/{user_id}` - Already existed (soft delete)
+
+**4. Job Postings (Existing)**
+- `DELETE /api/jobs/{job_id}` - Already existed
+
+**5. Commercials (Existing)**
+- `DELETE /api/commercials/{commercial_id}` - Already existed
+
+**6. Teams (Existing)**
+- `DELETE /api/teams/{team_id}` - Already existed (soft delete)
+
+### Files Modified
+- `/app/backend/routes/admin.py` - Company update and delete endpoints
+- `/app/backend/routes/applications.py` - Application delete endpoint
+- `/app/frontend/src/pages/admin/CompaniesPage.jsx` - Delete button and dialog
+- `/app/frontend/src/pages/admin/AdminPipelinePage.jsx` - Delete button and dialog
+- `/app/frontend/src/lib/api.js` - Added delete methods
+
+### Permission Model
+- All DELETE operations: **Admin only**
+- Confirmation required before delete
+- Soft delete preferred (preserves audit trail)
+
+---
+
 ## Team Creation Auto-Attach Companies (January 30, 2026)
 
 ### Overview ✅ VERIFIED
