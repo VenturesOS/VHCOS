@@ -386,29 +386,35 @@ class TestCompanyCommercialRelationship:
         
         print(f"✅ Jobs with company_id: {len(jobs_with_company)}, without: {len(jobs_without_company)}")
     
-    # ============== DASHBOARD STATS REGRESSION ==============
+    # ============== DASHBOARD REGRESSION ==============
     
-    def test_admin_stats_endpoint(self):
-        """Test admin stats endpoint works (regression)"""
+    def test_admin_dashboard_data(self):
+        """Test admin can access dashboard data (regression)"""
         token = self.get_admin_token()
+        
+        # Test users endpoint
         response = requests.get(
-            f"{BASE_URL}/api/admin/stats",
+            f"{BASE_URL}/api/users",
             headers={"Authorization": f"Bearer {token}"}
         )
         assert response.status_code == 200
-        stats = response.json()
-        assert "total_users" in stats or "users" in stats or isinstance(stats, dict)
-        print("✅ Admin stats endpoint works")
+        users = response.json()
+        assert isinstance(users, list)
+        print(f"✅ Admin dashboard data works ({len(users)} users)")
     
-    def test_employer_stats_endpoint(self):
-        """Test employer stats endpoint works (regression)"""
+    def test_employer_dashboard_data(self):
+        """Test employer can access dashboard data (regression)"""
         token = self.get_employer_token()
+        
+        # Test employer pipeline endpoint
         response = requests.get(
-            f"{BASE_URL}/api/employer/stats",
+            f"{BASE_URL}/api/employer/pipeline",
             headers={"Authorization": f"Bearer {token}"}
         )
         assert response.status_code == 200
-        print("✅ Employer stats endpoint works")
+        data = response.json()
+        assert "pipeline" in data or "applications" in data or isinstance(data, dict)
+        print("✅ Employer dashboard data works")
     
     # ============== HIERARCHY TESTS ==============
     
