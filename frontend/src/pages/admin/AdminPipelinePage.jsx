@@ -69,6 +69,28 @@ export default function AdminPipelinePage() {
     setSelectedJob('all');
   };
 
+  // Delete application state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [applicationToDelete, setApplicationToDelete] = useState(null);
+
+  const openDeleteDialog = (app) => {
+    setApplicationToDelete(app);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteApplication = async () => {
+    if (!applicationToDelete) return;
+    try {
+      await applicationAPI.delete(applicationToDelete.id);
+      toast.success(`${applicationToDelete.candidate_name} removed from pipeline`);
+      setShowDeleteDialog(false);
+      setApplicationToDelete(null);
+      loadPipeline();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to remove candidate');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
