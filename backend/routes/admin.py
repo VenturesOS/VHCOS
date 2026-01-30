@@ -199,36 +199,88 @@ async def assign_recruiter_to_employer(
 async def get_admin_pipeline(
     employer_id: Optional[str] = None,
     recruiter_id: Optional[str] = None,
+    team_id: Optional[str] = None,
     job_id: Optional[str] = None,
     current_user: dict = Depends(require_role(["admin"]))
 ):
     """
     Admin collective pipeline view across all employers and recruiters.
     Read-only aggregated view for management oversight.
+    
+    Filter Hierarchy:
+    - employer_id: Filter by employer (via teams → companies → jobs)
+    - team_id: Filter by specific team (jobs under that team)
+    - recruiter_id: Filter by recruiter (jobs they posted or are assigned to)
+    - job_id: Filter by specific job
+    
+    FIXED: Proper relationship joins via Team → Company → Job links.
     """
-    # Build filter
-    match_filter = {}
+    # Build the job filter based on provided parameters
+    job_filter = {}
     
     if job_id:
-        match_filter["job_id"] = job_id
+        # Direct job filter - most specific
+        job_filter["id"] = job_id
+    elif team_id:
+        # Filter by team - jobs with this team_id
+        job_filter["team_id"] = team_id
+    elif employer_id:
+        # Filter by employer - get all companies/teams for this employer
+        # Teams link employers to companies
+        employer_teams = await db.teams.find(
+            {"employer_id": employer_id},
+            {"_id": 0, "id": 1, "company_ids": 1}
+        ).to_list(100)
+        
+        team_ids = [t["id"] for t in employer_teams]
+        company_ids = []
+        for t in employer_teams:
+            company_ids.extend(t.get("company_ids", []))
+        
+        # Jobs either have team_id or company_id or posted_by employer
+        if team_ids or company_ids:
+            job_filter["$or"] = []
+            if team_ids:
+                job_filter["$or"].append({"team_id": {"$in": team_ids}})
+            if company_ids:
+                job_filter["$or"].append({"company_id": {"$in": company_ids}})
+            # Also include jobs directly posted by employer
+            job_filter["$or"].append({"posted_by": employer_id})
+        else:
+            # Employer has no teams/companies - filter by posted_by only
+            job_filter["posted_by"] = employer_id
+    elif recruiter_id:
+        # Filter by recruiter - jobs they posted or are assigned to
+        # Check team membership for recruiter
+        recruiter_teams = await db.teams.find(
+            {"recruiter_ids": recruiter_id},
+            {"_id": 0, "id": 1}
+        ).to_list(100)
+        recruiter_team_ids = [t["id"] for t in recruiter_teams]
+        
+        job_filter["$or"] = [
+            {"posted_by": recruiter_id}
+        ]
+        if recruiter_team_ids:
+            job_filter["$or"].append({"team_id": {"$in": recruiter_team_ids}})
     
-    # Get all applications
-    applications = await db.applications.find(match_filter, {"_id": 0}).to_list(10000)
+    # Get jobs matching the filter
+    if job_filter:
+        jobs = await db.jobs.find(job_filter, {"_id": 0}).to_list(10000)
+    else:
+        jobs = await db.jobs.find({}, {"_id": 0}).to_list(10000)
     
-    # Get job details for filtering and display
-    job_ids = list(set(app["job_id"] for app in applications))
-    jobs = await db.jobs.find({"id": {"$in": job_ids}}, {"_id": 0}).to_list(1000)
     jobs_map = {j["id"]: j for j in jobs}
+    job_ids = list(jobs_map.keys())
     
-    # Apply employer filter if specified
-    if employer_id:
-        employer_job_ids = [j["id"] for j in jobs if j.get("company_id") == employer_id or j.get("created_by") == employer_id]
-        applications = [app for app in applications if app["job_id"] in employer_job_ids]
-    
-    # Apply recruiter filter if specified
-    if recruiter_id:
-        recruiter_job_ids = [j["id"] for j in jobs if j.get("created_by") == recruiter_id or j.get("assigned_recruiter") == recruiter_id]
-        applications = [app for app in applications if app["job_id"] in recruiter_job_ids]
+    # Get applications for these jobs
+    if job_ids:
+        applications = await db.applications.find(
+            {"job_id": {"$in": job_ids}},
+            {"_id": 0}
+        ).to_list(100000)
+    else:
+        applications = []
     
     # Define all pipeline stages
     all_stages = ["applied", "shortlisted", "interview", "offered", "hired", "rejected", "on_hold", "over_budget", "not_qualified"]
@@ -241,14 +293,14 @@ async def get_admin_pipeline(
         if stage not in pipeline_data:
             stage = "applied"
         
-        job = jobs_map.get(app["job_id"], {})
+        job = jobs_map.get(app.get("job_id"), {})
         
         pipeline_data[stage].append({
-            "id": app["id"],
+            "id": app.get("id"),
             "candidate_name": app.get("candidate_name", "Unknown"),
             "candidate_email": app.get("candidate_email"),
             "job_title": app.get("job_title") or job.get("title", "Unknown"),
-            "job_id": app["job_id"],
+            "job_id": app.get("job_id"),
             "company_name": job.get("company_name", ""),
             "match_score": app.get("match_score", 0),
             "applied_at": app.get("created_at"),
@@ -263,6 +315,7 @@ async def get_admin_pipeline(
     # Get filter options
     employers = await db.users.find({"role": "employer"}, {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(1000)
     recruiters = await db.users.find({"role": "recruiter"}, {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(1000)
+    teams = await db.teams.find({}, {"_id": 0, "id": 1, "name": 1, "employer_id": 1}).to_list(1000)
     
     return {
         "pipeline": pipeline_data,
@@ -271,6 +324,7 @@ async def get_admin_pipeline(
         "filters": {
             "employers": employers,
             "recruiters": recruiters,
+            "teams": teams,
             "jobs": [{"id": j["id"], "title": j.get("title", "Untitled")} for j in jobs]
         }
     }
