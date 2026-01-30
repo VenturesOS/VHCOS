@@ -55,6 +55,7 @@ import EmployerCandidateBankPage from "./pages/employer/EmployerCandidateBankPag
 import EmployerAnalyticsPage from "./pages/employer/EmployerAnalyticsPage";
 import EmployerMyTeamPage from "./pages/employer/EmployerMyTeamPage";
 import EmployerCompaniesPage from "./pages/employer/EmployerCompaniesPage";
+import EmployerPipelinePage from "./pages/employer/EmployerPipelinePage";
 
 // Candidate Pages
 import CandidateDashboard from "./pages/candidate/CandidateDashboard";
