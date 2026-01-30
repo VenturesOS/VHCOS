@@ -129,7 +129,7 @@ export default function RecruiterCandidateBankPage() {
         );
       }
 
-      const res = await candidateBankAPI.linkToJob(applicantCandidate.id, selectedJobId);
+      const res = await candidateBankAPI.linkToJob(applicantCandidate.id, selectedJobId, expectedSalary);
       toast.success(res.data.message);
       setShowAddApplicant(false);
       loadCandidates();
