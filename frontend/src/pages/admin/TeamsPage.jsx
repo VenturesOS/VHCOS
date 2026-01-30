@@ -147,9 +147,7 @@ export default function TeamsPage() {
       name: team.name,
       employer_id: team.employer_id,
       recruiter_ids: team.recruiter_ids || [],
-      company_ids: team.company_ids || [],
     });
-    setAutoAttachedCompanies([]); // Clear auto-attached for edit mode
     setShowEdit(true);
   };
 
