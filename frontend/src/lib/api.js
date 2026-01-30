@@ -53,6 +53,7 @@ export const userAPI = {
   toggleStatus: (id) => api.post(`/admin/users/${id}/toggle-status`),
   getEmployers: () => api.get('/admin/employers'),
   assignRecruiter: (recruiterId, employerId) => api.post('/admin/assign-recruiter', null, { params: { recruiter_id: recruiterId, employer_id: employerId } }),
+  getEmployerCompanies: (employerId) => api.get(`/employers/${employerId}/companies`),
 };
 
 // Admin APIs
