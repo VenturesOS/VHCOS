@@ -26,6 +26,7 @@ class ApplicationResponse(BaseModel):
     company_name: Optional[str] = None
     cover_letter: Optional[str] = None
     current_salary: Optional[int] = None  # INR
+    expected_salary: Optional[int] = None  # INR - Expected CTC
     notice_period: Optional[str] = None
     skills: Optional[List[str]] = None
     experience_years: Optional[int] = None
