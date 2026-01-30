@@ -158,6 +158,7 @@ export default function TeamsPage() {
       recruiter_ids: team.recruiter_ids || [],
       company_ids: team.company_ids || [],
     });
+    setAutoAttachedCompanies([]); // Clear auto-attached for edit mode
     setShowEdit(true);
   };
 
@@ -173,6 +174,7 @@ export default function TeamsPage() {
       recruiter_ids: [],
       company_ids: [],
     });
+    setAutoAttachedCompanies([]);
   };
 
   const toggleRecruiter = (recruiterId) => {
