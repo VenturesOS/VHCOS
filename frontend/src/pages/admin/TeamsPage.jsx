@@ -27,6 +27,10 @@ export default function TeamsPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null);
   
+  // Auto-attach companies state
+  const [autoAttachedCompanies, setAutoAttachedCompanies] = useState([]);
+  const [loadingEmployerCompanies, setLoadingEmployerCompanies] = useState(false);
+  
   // Form state
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -57,6 +61,43 @@ export default function TeamsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fetch companies assigned to selected employer (for auto-attach)
+  const fetchEmployerCompanies = async (employerId) => {
+    if (!employerId) {
+      setAutoAttachedCompanies([]);
+      return;
+    }
+    
+    setLoadingEmployerCompanies(true);
+    try {
+      const res = await userAPI.getEmployerCompanies(employerId);
+      const empCompanies = res.data.companies || [];
+      setAutoAttachedCompanies(empCompanies);
+      
+      // Auto-select these companies in the form
+      const autoCompanyIds = empCompanies.map(c => c.id);
+      setCreateForm(prev => ({
+        ...prev,
+        company_ids: autoCompanyIds
+      }));
+      
+      if (empCompanies.length > 0) {
+        toast.success(`${empCompanies.length} company(ies) auto-attached from employer`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch employer companies:', error);
+      setAutoAttachedCompanies([]);
+    } finally {
+      setLoadingEmployerCompanies(false);
+    }
+  };
+
+  // Handle employer selection - auto-fetch companies
+  const handleEmployerChange = (employerId) => {
+    setCreateForm(prev => ({ ...prev, employer_id: employerId, company_ids: [] }));
+    fetchEmployerCompanies(employerId);
   };
 
   const handleCreate = async () => {
