@@ -347,7 +347,7 @@ export default function TeamsPage() {
               <Label>Team Owner (Employer) *</Label>
               <Select
                 value={createForm.employer_id}
-                onValueChange={(value) => setCreateForm({ ...createForm, employer_id: value })}
+                onValueChange={handleEmployerChange}
               >
                 <SelectTrigger data-testid="employer-select">
                   <SelectValue placeholder="Select an employer" />
@@ -361,6 +361,37 @@ export default function TeamsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Auto-Attached Companies Info */}
+            {createForm.employer_id && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3" data-testid="auto-attach-info">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-green-800">
+                      {loadingEmployerCompanies ? 'Loading...' : 
+                        autoAttachedCompanies.length > 0 
+                          ? `${autoAttachedCompanies.length} company(ies) auto-attached`
+                          : 'No companies assigned to this employer yet'}
+                    </p>
+                    {autoAttachedCompanies.length > 0 && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Companies assigned to this employer are automatically included. You can add more below.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {autoAttachedCompanies.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {autoAttachedCompanies.map(comp => (
+                      <Badge key={comp.id} variant="secondary" className="bg-green-100 text-green-700 text-xs">
+                        {comp.name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Recruiters Selection */}
             <div className="space-y-2">
@@ -393,14 +424,26 @@ export default function TeamsPage() {
               )}
             </div>
 
-            {/* Companies Selection */}
+            {/* Additional Companies Selection (optional - for adding more companies) */}
             <div className="space-y-2">
-              <Label>Assign Companies</Label>
+              <div className="flex items-center gap-2">
+                <Label>Additional Companies</Label>
+                <span className="text-xs text-slate-400">(optional)</span>
+              </div>
+              <p className="text-xs text-slate-500 -mt-1">
+                Add more companies to this team beyond the auto-attached ones.
+              </p>
               <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                {companies.length === 0 ? (
-                  <p className="text-sm text-slate-400">No companies available</p>
+                {companies.filter(c => !autoAttachedCompanies.find(ac => ac.id === c.id)).length === 0 ? (
+                  <p className="text-sm text-slate-400">
+                    {autoAttachedCompanies.length > 0 
+                      ? 'All available companies are already attached'
+                      : 'No companies available'}
+                  </p>
                 ) : (
-                  companies.map((comp) => (
+                  companies
+                    .filter(c => !autoAttachedCompanies.find(ac => ac.id === c.id))
+                    .map((comp) => (
                     <label 
                       key={comp.id} 
                       className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer"
@@ -419,8 +462,10 @@ export default function TeamsPage() {
                   ))
                 )}
               </div>
-              {createForm.company_ids.length > 0 && (
-                <p className="text-xs text-slate-500">{createForm.company_ids.length} company(ies) selected</p>
+              {createForm.company_ids.length > autoAttachedCompanies.length && (
+                <p className="text-xs text-slate-500">
+                  {createForm.company_ids.length - autoAttachedCompanies.length} additional company(ies) selected
+                </p>
               )}
             </div>
           </div>
