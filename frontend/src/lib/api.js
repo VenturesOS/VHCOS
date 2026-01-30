@@ -75,8 +75,10 @@ export const jobAPI = {
   getCareerPageHistory: (jobId) => api.get(`/jobs/${jobId}/career-page-history`),
   // Public career page jobs
   getCareerPageJobs: () => api.get('/career-page/jobs'),
-  // Shareable Job Link Control
+  // Shareable Job Link Control (Career Page)
   updateShareableLink: (jobId, enabled) => api.put(`/jobs/${jobId}/shareable-link`, { enabled }),
+  // Mandate Shareable Link Control (Independent of Career Page)
+  updateMandateShareableLink: (jobId, enabled) => api.put(`/jobs/${jobId}/mandate-shareable-link`, { enabled }),
   // JD Parser
   parseJD: (jdText) => api.post('/jobs/parse-jd', { jd_text: jdText }),
 };
