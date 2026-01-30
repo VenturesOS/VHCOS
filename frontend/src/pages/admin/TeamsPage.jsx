@@ -186,15 +186,6 @@ export default function TeamsPage() {
     }));
   };
 
-  const toggleCompany = (companyId) => {
-    setCreateForm(prev => ({
-      ...prev,
-      company_ids: prev.company_ids.includes(companyId)
-        ? prev.company_ids.filter(id => id !== companyId)
-        : [...prev.company_ids, companyId]
-    }));
-  };
-
   const filteredTeams = teams.filter((t) =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     t.employer_name?.toLowerCase().includes(search.toLowerCase())
