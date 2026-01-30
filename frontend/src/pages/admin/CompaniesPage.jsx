@@ -241,6 +241,33 @@ export default function CompaniesPage() {
                   <p className="text-xs text-amber-600 mt-2">No employer assigned</p>
                 )}
               </div>
+
+              {/* Commercial Terms Section */}
+              {(() => {
+                const commercial = getCompanyCommercial(company.id);
+                return (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign className="w-4 h-4 text-green-600" />
+                      <span className="text-xs text-slate-500">Commercial Terms:</span>
+                    </div>
+                    {commercial ? (
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">
+                          {commercial.type === 'percentage' && `${commercial.fee_percentage}% Fee`}
+                          {commercial.type === 'fixed' && `₹${commercial.fixed_amount?.toLocaleString()} Fixed`}
+                          {commercial.type === 'level_based' && 'Level-based'}
+                        </Badge>
+                        <Badge variant="outline" className="text-slate-600">
+                          {commercial.commercial_name}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-amber-600">No commercial configured</p>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         ))}
