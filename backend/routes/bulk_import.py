@@ -411,15 +411,20 @@ async def parse_bulk_import(
                 # Upload to R2
                 r2_result = await upload_to_r2(file_content, r2_key, content_type)
                 
-                # Generate fingerprint
-                fingerprint = generate_resume_fingerprint(file_content)
-                
                 candidate.resume_file_id = file_id
-                candidate.resume_fingerprint = fingerprint
                 candidate.r2_metadata = r2_result
                 
                 # Parse resume for enrichment
                 resume_text = extract_text_from_file(file_content, original_filename)
+                
+                # Generate fingerprint from extracted text (not raw bytes)
+                if resume_text:
+                    fingerprint = generate_resume_fingerprint(resume_text)
+                    candidate.resume_fingerprint = fingerprint
+                else:
+                    # Fallback: use hash of file content
+                    import hashlib
+                    candidate.resume_fingerprint = hashlib.sha256(file_content).hexdigest()[:32]
                 
                 if resume_text and len(resume_text) > 100:
                     try:
