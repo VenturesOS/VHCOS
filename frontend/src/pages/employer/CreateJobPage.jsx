@@ -530,6 +530,84 @@ export default function CreateJobPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Client Company Selection */}
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-4">
+              <div className="flex items-center gap-2 text-slate-700">
+                <Building2 className="w-5 h-5 text-[#7CB342]" />
+                <span className="font-semibold">Client Company *</span>
+              </div>
+              
+              {loadingCompanies ? (
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading companies...</span>
+                </div>
+              ) : companies.length === 0 ? (
+                <div className="text-amber-600 text-sm bg-amber-50 p-3 rounded flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>No companies assigned. Please contact admin to assign companies to your account.</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Select
+                    value={formData.company_id}
+                    onValueChange={handleCompanyChange}
+                    required
+                  >
+                    <SelectTrigger data-testid="company-select">
+                      <SelectValue placeholder="Select client company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companies.map(company => (
+                        <SelectItem key={company.id} value={company.id}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-slate-400" />
+                            <span>{company.name}</span>
+                            {company.industry && (
+                              <span className="text-xs text-slate-400">• {company.industry}</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  {/* Selected Company Commercial Info */}
+                  {selectedCompany && selectedCompany.commercial && (
+                    <div className="p-3 bg-white rounded border border-slate-200">
+                      <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+                        <DollarSign className="w-4 h-4 text-green-600" />
+                        <span className="font-medium">Commercial Terms</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {selectedCompany.commercial.fee_percentage && (
+                          <div>
+                            <span className="text-slate-500">Fee:</span>
+                            <span className="ml-1 font-medium text-green-700">
+                              {selectedCompany.commercial.fee_percentage}%
+                            </span>
+                          </div>
+                        )}
+                        {selectedCompany.commercial.payment_terms && (
+                          <div>
+                            <span className="text-slate-500">Terms:</span>
+                            <span className="ml-1">{selectedCompany.commercial.payment_terms}</span>
+                          </div>
+                        )}
+                      </div>
+                      {selectedCompany.commercial.commercial_slabs?.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-slate-100">
+                          <p className="text-xs text-slate-500">Level-based slabs available</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+            
             <div className="space-y-2">
               <Label>Job Title *</Label>
               <Input
