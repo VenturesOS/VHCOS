@@ -279,7 +279,7 @@ export default function EmployerJobsPage() {
                     <Briefcase className="w-6 h-6 text-[#7CB342]" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-heading font-semibold text-lg text-slate-900">{job.title}</h3>
                       {/* Career Page Status Badge */}
                       {job.career_page_status === 'live' && (
@@ -314,6 +314,41 @@ export default function EmployerJobsPage() {
                                 size="sm"
                                 className="h-6 w-6 p-0"
                                 onClick={() => openShareableLink(job)}
+                                title="Open in new tab"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {/* Mandate Shareable Link - For Assigned Mandates (Independent of Career Page) */}
+                      {job.status === 'active' && (
+                        <div className="flex items-center gap-2 px-2 py-1 bg-purple-50 rounded-lg" data-testid={`mandate-link-section-${job.id}`}>
+                          <GlobeLock className="w-3 h-3 text-purple-600" />
+                          <span className="text-xs text-purple-700">Mandate Link</span>
+                          <Switch
+                            checked={job.mandate_shareable_link_enabled || false}
+                            onCheckedChange={(checked) => handleMandateShareableLinkToggle(job, checked)}
+                            className="scale-75"
+                            data-testid={`mandate-shareable-toggle-${job.id}`}
+                          />
+                          {job.mandate_shareable_link_enabled && job.mandate_share_token && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => copyMandateShareableLink(job)}
+                                title="Copy mandate link"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => openMandateShareableLink(job)}
                                 title="Open in new tab"
                               >
                                 <ExternalLink className="w-3 h-3" />
