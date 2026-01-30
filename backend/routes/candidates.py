@@ -1456,7 +1456,7 @@ async def link_candidate_to_job(
         "phone": candidate.get("phone"),  # Keep for backward compatibility
         "resume_url": candidate.get("resume_url"),
         "current_salary": candidate.get("current_salary"),
-        "expected_salary": None,  # To be set by recruiter/employer
+        "expected_salary": request.expected_salary,  # From request or None
         "notice_period": candidate.get("notice_period"),
         "skills": candidate.get("skills", []),
         "experience_years": candidate.get("experience_years"),
