@@ -29,6 +29,7 @@
 **P0 Dashboard Stats Endpoints: COMPLETE & TESTED (January 30, 2026)**
 **P0 Data Relationship & Pipeline Drill-Down Fix: COMPLETE & TESTED (January 30, 2026)**
 **Employer Pipeline View with Stage Control: COMPLETE & TESTED (January 30, 2026)**
+**Commercial ↔ Company ↔ Job Relationship: COMPLETE & TESTED (January 30, 2026)**
 
 ---
 
