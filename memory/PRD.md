@@ -51,6 +51,80 @@ Any future change must:
 
 ---
 
+## Bulk Candidate Import Tool (January 30, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 16/16 backend tests passed (100%), Frontend fully verified
+**Test Report:** `/app/test_reports/iteration_36.json`
+
+### Feature Description
+Admin-only tool for controlled production-grade candidate data seeding. Upload Excel + ZIP of resumes → Parse & Preview → Confirm & Save to Candidate Bank.
+
+### Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/admin/bulk-import/template` | GET | Download Excel template |
+| `/api/admin/bulk-import/parse` | POST | Parse Excel + ZIP, return merged data |
+| `/api/admin/bulk-import/save` | POST | Save reviewed candidates to Candidate Bank |
+| `/api/admin/bulk-import/batches` | GET | List all import batches for audit |
+
+### Data Flow
+1. Admin downloads Excel template
+2. Admin fills template with candidate metadata
+3. Admin creates ZIP with resume files (PDF/DOC/DOCX)
+4. Admin uploads both files and clicks **Parse & Preview**
+5. System parses Excel, extracts resumes from ZIP, uploads to R2
+6. System parses resumes with AI for enrichment
+7. System merges data (Excel takes priority)
+8. Admin reviews merged data, selects candidates to import
+9. Admin clicks **Confirm & Save**
+10. System saves to Candidate Bank with `source='bulk_import'` and `import_batch_id`
+
+### Excel Template Columns
+| Column | Required | Description |
+|--------|----------|-------------|
+| full_name | Yes | Candidate's full name |
+| email | Yes* | Email address |
+| phone | Yes* | Phone number |
+| current_location | No | City/Location |
+| experience_years | No | Years of experience |
+| skills | No | Comma-separated skills |
+| current_salary | No | Current CTC in INR |
+| notice_period | No | Notice period (e.g., "30 days") |
+| resume_filename | Yes | Must match a file in ZIP |
+
+*At least one of email or phone is required.
+
+### Data Merge Rules
+- **Excel data = Primary truth**
+- **Resume parsed data = Enrichment only**
+- **Email/Phone**: Excel ALWAYS overrides
+- **Skills**: Merge (deduplicated)
+- **Missing Excel fields**: May be filled from resume
+
+### Validation Rules
+- ❌ Error: Missing name
+- ❌ Error: Missing both email AND phone
+- ❌ Error: Resume file not found in ZIP
+- ⚠️ Warning: Missing location, salary, notice period
+
+### Traceability
+Every imported candidate includes:
+```json
+{
+  "source": "bulk_import",
+  "import_batch_id": "uuid",
+  "uploaded_by_role": "admin"
+}
+```
+
+### Files Created
+- `/app/backend/routes/bulk_import.py` - Backend endpoints
+- `/app/frontend/src/pages/admin/BulkImportPage.jsx` - Frontend UI
+- Navigation link in sidebar under "Bulk Import"
+
+---
+
 ## DELETE Capabilities for Core Entities (January 30, 2026)
 
 ### Overview ✅ VERIFIED
