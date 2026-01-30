@@ -1446,15 +1446,20 @@ async def link_candidate_to_job(
         "id": application_id,
         "candidate_id": request.candidate_id,
         "job_id": request.job_id,
-        "email": candidate.get("email"),
-        "name": candidate.get("name"),
-        "phone": candidate.get("phone"),
+        "candidate_email": candidate.get("email"),
+        "candidate_name": candidate.get("name"),
+        "candidate_phone": candidate.get("phone"),
+        "email": candidate.get("email"),  # Keep for backward compatibility
+        "name": candidate.get("name"),  # Keep for backward compatibility
+        "phone": candidate.get("phone"),  # Keep for backward compatibility
         "resume_url": candidate.get("resume_url"),
         "current_salary": candidate.get("current_salary"),
+        "expected_salary": None,  # To be set by recruiter/employer
         "notice_period": candidate.get("notice_period"),
         "skills": candidate.get("skills", []),
         "experience_years": candidate.get("experience_years"),
         "location": candidate.get("location"),
+        "job_title": job.get("title"),  # Add job title for display
         "stage": "applied",
         "source": current_user["role"],
         "source_role": current_user["role"],
