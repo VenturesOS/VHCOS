@@ -480,6 +480,45 @@ export default function CompaniesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDelete} onOpenChange={setShowDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading text-red-600 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" /> Delete Company
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{selectedCompany?.name}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-700 font-medium">This action will:</p>
+              <ul className="text-sm text-red-600 mt-2 space-y-1 list-disc list-inside">
+                <li>Archive all jobs linked to this company</li>
+                <li>Remove company from all teams</li>
+                <li>Deactivate commercials for this company</li>
+              </ul>
+            </div>
+            <p className="text-sm text-slate-500">
+              Applications and historical data will be preserved for audit purposes.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              data-testid="confirm-delete-company-btn"
+            >
+              Delete Company
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
