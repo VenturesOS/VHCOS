@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { jobAPI, matchingAPI } from '../../lib/api';
+import { jobAPI, matchingAPI, employerPortalAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -23,7 +23,9 @@ import {
   Upload,
   FileUp,
   CheckCircle2,
-  Type
+  Type,
+  Building2,
+  DollarSign
 } from 'lucide-react';
 
 /**
