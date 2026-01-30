@@ -17,7 +17,6 @@ export default function TeamsPage() {
   const [teams, setTeams] = useState([]);
   const [employers, setEmployers] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
-  const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   
@@ -27,7 +26,7 @@ export default function TeamsPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null);
   
-  // Auto-attach companies state
+  // Auto-attach companies state (read-only display)
   const [autoAttachedCompanies, setAutoAttachedCompanies] = useState([]);
   const [loadingEmployerCompanies, setLoadingEmployerCompanies] = useState(false);
   
@@ -36,7 +35,6 @@ export default function TeamsPage() {
     name: '',
     employer_id: '',
     recruiter_ids: [],
-    company_ids: [],
   });
 
   useEffect(() => {
@@ -46,16 +44,14 @@ export default function TeamsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [teamsRes, employersRes, usersRes, companiesRes] = await Promise.all([
+      const [teamsRes, employersRes, usersRes] = await Promise.all([
         teamAPI.getAll(),
         userAPI.getEmployers(),
         userAPI.getAll(),
-        companyAPI.getAll(),
       ]);
       setTeams(teamsRes.data);
       setEmployers(employersRes.data);
       setRecruiters(usersRes.data.filter(u => u.role === 'recruiter'));
-      setCompanies(companiesRes.data);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
