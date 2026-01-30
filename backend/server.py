@@ -263,6 +263,34 @@ async def get_teams(current_user: dict = Depends(require_role(["admin", "employe
     return [TeamResponse(**t) for t in teams]
 
 
+@api_router.get("/employers/{employer_id}/companies")
+async def get_employer_companies(
+    employer_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Get companies assigned to a specific employer (Admin only).
+    Used for auto-populating company selection when creating a team.
+    """
+    # Verify employer exists
+    employer = await db.users.find_one({"id": employer_id, "role": "employer"}, {"_id": 0})
+    if not employer:
+        raise HTTPException(status_code=404, detail="Employer not found")
+    
+    # Get companies assigned to this employer
+    companies = await db.companies.find(
+        {"assigned_employer_id": employer_id, "status": "active"},
+        {"_id": 0}
+    ).to_list(100)
+    
+    return {
+        "employer_id": employer_id,
+        "employer_name": employer.get("name"),
+        "companies": companies,
+        "count": len(companies)
+    }
+
+
 @api_router.get("/employer/my-team")
 async def get_employer_team_with_metrics(current_user: dict = Depends(require_role(["employer"]))):
     """
