@@ -100,6 +100,7 @@ function App() {
             <Route path="hierarchy" element={<HierarchyPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="bulk-import" element={<BulkImportPage />} />
           </Route>
 
           {/* Recruiter Routes */}
