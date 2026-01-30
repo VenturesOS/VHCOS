@@ -390,7 +390,8 @@ async def public_apply(
     resume_filename: Optional[str] = Form(None),  # From /public/parse-resume step
     website: Optional[str] = Form(None),  # Honeypot
     turnstile_token: Optional[str] = Form(None),
-    consent_given: Optional[str] = Form(None)  # Must be "true" for consent
+    consent_given: Optional[str] = Form(None),  # Must be "true" for consent
+    mandate_token: Optional[str] = Form(None)  # Optional: for mandate shareable links
 ):
     """
     Public job application (NO LOGIN REQUIRED).
