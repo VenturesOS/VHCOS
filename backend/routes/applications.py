@@ -378,6 +378,78 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
     return ApplicationResponse(**updated_application)
 
 
+@applications_router.delete("/applications/{app_id}")
+async def delete_application(
+    app_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Remove candidate from pipeline (Admin only).
+    
+    Soft delete: Sets status to 'removed' and preserves data for audit.
+    This removes the candidate from the job pipeline but:
+    - Does NOT delete the candidate from the data bank
+    - Does NOT delete the candidate's user account
+    - Preserves audit trail
+    
+    Use cases:
+    - Duplicate application cleanup
+    - Candidate requested removal
+    - Data quality corrections
+    """
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Soft delete - mark as removed
+    await db.applications.update_one(
+        {"id": app_id},
+        {"$set": {
+            "stage": "removed",
+            "status": "removed",
+            "removed_at": now,
+            "removed_by": current_user["id"],
+            "removed_by_name": current_user.get("name"),
+            "updated_at": now
+        }}
+    )
+    
+    # Update candidate history if exists
+    if application.get("candidate_id"):
+        await update_application_in_history(
+            application["candidate_id"],
+            app_id,
+            "removed",
+            "removed"
+        )
+    
+    # Audit log
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "application",
+        "entity_id": app_id,
+        "action": "removed_from_pipeline",
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user.get("name"),
+        "changed_by_role": current_user["role"],
+        "timestamp": now,
+        "details": {
+            "candidate_name": application.get("candidate_name"),
+            "candidate_email": application.get("candidate_email"),
+            "job_id": application.get("job_id"),
+            "previous_stage": application.get("stage")
+        }
+    })
+    
+    return {
+        "message": "Candidate removed from pipeline successfully",
+        "application_id": app_id,
+        "candidate_name": application.get("candidate_name")
+    }
+
+
 @applications_router.post("/applications/{app_id}/notes")
 async def add_note(app_id: str, note_data: NoteCreate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
     """Add note to application"""
