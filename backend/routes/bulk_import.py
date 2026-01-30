@@ -351,7 +351,7 @@ async def parse_bulk_import(
             if pd.notna(excel_exp):
                 try:
                     excel_experience_years = int(float(excel_exp))
-                except:
+                except (ValueError, TypeError):
                     pass
             
             # Parse salary safely
@@ -360,7 +360,7 @@ async def parse_bulk_import(
             if pd.notna(excel_salary):
                 try:
                     excel_current_salary = int(float(excel_salary))
-                except:
+                except (ValueError, TypeError):
                     pass
             
             excel_notice_period = str(row.get('notice_period', '')).strip() if pd.notna(row.get('notice_period')) else None
