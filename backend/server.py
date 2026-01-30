@@ -508,6 +508,129 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
     return {"companies": enriched_companies}
 
 
+@api_router.get("/employer/pipeline")
+async def get_employer_pipeline(
+    recruiter_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    current_user: dict = Depends(require_role(["employer"]))
+):
+    """
+    Employer pipeline view with stage control.
+    Shows all applications for jobs under employer's teams/companies.
+    
+    Features:
+    - Combined pipeline across all assigned companies
+    - Filter by recruiter or specific job
+    - Full application details for stage transitions
+    
+    Role-based access: Employer can only see their assigned companies/teams.
+    """
+    # Get employer's team
+    team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+    
+    if not team:
+        return {
+            "pipeline": {stage: [] for stage in ["applied", "shortlisted", "interview", "offered", "hired", "rejected", "on_hold"]},
+            "stage_counts": {stage: 0 for stage in ["applied", "shortlisted", "interview", "offered", "hired", "rejected", "on_hold"]},
+            "total_applications": 0,
+            "filters": {"recruiters": [], "jobs": []}
+        }
+    
+    company_ids = team.get("company_ids", [])
+    recruiter_ids = team.get("recruiter_ids", [])
+    
+    # Build job filter - jobs under employer's companies or team
+    job_filter = {
+        "$or": [
+            {"team_id": team["id"]},
+            {"company_id": {"$in": company_ids}} if company_ids else {"_id": None},
+            {"posted_by": {"$in": recruiter_ids + [current_user["id"]]}}
+        ]
+    }
+    
+    # Apply job_id filter if specified
+    if job_id:
+        job_filter = {"id": job_id, **job_filter}
+    
+    # Get all jobs matching filter
+    jobs = await db.jobs.find(job_filter, {"_id": 0}).to_list(1000)
+    job_ids = [j["id"] for j in jobs]
+    jobs_map = {j["id"]: j for j in jobs}
+    
+    # Apply recruiter filter to jobs if specified
+    if recruiter_id:
+        recruiter_job_ids = [
+            j["id"] for j in jobs 
+            if j.get("posted_by") == recruiter_id or recruiter_id in j.get("assigned_recruiters", [])
+        ]
+        job_ids = [jid for jid in job_ids if jid in recruiter_job_ids]
+    
+    # Get all applications for these jobs
+    if job_ids:
+        applications = await db.applications.find(
+            {"job_id": {"$in": job_ids}},
+            {"_id": 0}
+        ).to_list(10000)
+    else:
+        applications = []
+    
+    # Define pipeline stages
+    all_stages = ["applied", "shortlisted", "interview", "offered", "hired", "rejected", "on_hold"]
+    
+    # Group applications by stage
+    pipeline_data = {stage: [] for stage in all_stages}
+    
+    for app in applications:
+        stage = app.get("stage", "applied")
+        if stage not in pipeline_data:
+            stage = "applied"
+        
+        job = jobs_map.get(app.get("job_id"), {})
+        
+        pipeline_data[stage].append({
+            "id": app.get("id"),
+            "candidate_id": app.get("candidate_id"),
+            "candidate_name": app.get("candidate_name", "Unknown"),
+            "candidate_email": app.get("candidate_email"),
+            "candidate_phone": app.get("candidate_phone"),
+            "job_id": app.get("job_id"),
+            "job_title": app.get("job_title") or job.get("title", "Unknown"),
+            "company_name": job.get("company_name", ""),
+            "match_score": app.get("match_score", 0),
+            "current_salary": app.get("current_salary"),
+            "expected_salary": app.get("expected_salary"),
+            "notice_period": app.get("notice_period"),
+            "experience_years": app.get("experience_years"),
+            "resume_url": app.get("resume_url"),
+            "applied_at": app.get("created_at"),
+            "updated_at": app.get("updated_at"),
+            "notes": app.get("notes", []),
+            "stage": stage
+        })
+    
+    # Calculate stage counts
+    stage_counts = {stage: len(apps) for stage, apps in pipeline_data.items()}
+    
+    # Get recruiter details for filter dropdown
+    recruiters = []
+    if recruiter_ids:
+        recruiter_docs = await db.users.find(
+            {"id": {"$in": recruiter_ids}},
+            {"_id": 0, "id": 1, "name": 1, "email": 1}
+        ).to_list(100)
+        recruiters = recruiter_docs
+    
+    return {
+        "pipeline": pipeline_data,
+        "stage_counts": stage_counts,
+        "total_applications": len(applications),
+        "filters": {
+            "recruiters": recruiters,
+            "jobs": [{"id": j["id"], "title": j.get("title", "Untitled"), "company_name": j.get("company_name")} for j in jobs]
+        }
+    }
+
+
 @api_router.get("/teams/{team_id}", response_model=TeamResponse)
 async def get_team(team_id: str, current_user: dict = Depends(require_role(["admin", "employer"]))):
     """Get a specific team by ID."""
