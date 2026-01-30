@@ -224,7 +224,7 @@ export default function RecruiterCandidateBankPage() {
         <div>
           <h1 className="text-2xl font-heading font-bold text-slate-900">Candidate Data Bank</h1>
           <p className="text-sm text-slate-500 mt-1">
-            View candidates you've parsed and applicants to your assigned mandates
+            View candidates you have parsed and applicants to your assigned mandates
           </p>
         </div>
         <Button 
@@ -241,7 +241,7 @@ export default function RecruiterCandidateBankPage() {
         <Info className="w-5 h-5 text-blue-600 mt-0.5" />
         <div className="text-sm text-blue-800">
           <p className="font-medium">Access Control:</p>
-          <p>You can only see candidates that you've parsed or candidates who have applied to jobs under your assigned mandates.</p>
+          <p>You can only see candidates that you have parsed or candidates who have applied to jobs under your assigned mandates.</p>
         </div>
       </div>
 
