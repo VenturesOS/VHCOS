@@ -474,18 +474,32 @@ async def get_employer_dashboard_stats(current_user: dict = Depends(require_role
     """
     # Get jobs for this employer
     if current_user["role"] == "employer":
-        # Get jobs created by employer or for their companies
+        # Get jobs created by employer or for their companies/teams
         company_ids = []
-        teams = await db.teams.find({"employer_id": current_user["id"]}, {"company_ids": 1, "_id": 0}).to_list(100)
+        team_ids = []
+        
+        # Get all teams (including disabled) to find related jobs
+        teams = await db.teams.find(
+            {"employer_id": current_user["id"]},
+            {"id": 1, "company_ids": 1, "_id": 0}
+        ).to_list(100)
+        
         for team in teams:
+            team_ids.append(team.get("id"))
             company_ids.extend(team.get("company_ids", []))
         
-        jobs_query = {
-            "$or": [
-                {"created_by": current_user["id"]},
-                {"company_id": {"$in": company_ids}} if company_ids else {"_id": None}
-            ]
-        }
+        # Build flexible query - employer can see jobs they created, 
+        # jobs for their companies, or jobs under their teams
+        or_conditions = [
+            {"created_by": current_user["id"]},
+            {"posted_by": current_user["id"]}
+        ]
+        if company_ids:
+            or_conditions.append({"company_id": {"$in": company_ids}})
+        if team_ids:
+            or_conditions.append({"team_id": {"$in": team_ids}})
+        
+        jobs_query = {"$or": or_conditions}
     else:
         # Admin sees all
         jobs_query = {}
