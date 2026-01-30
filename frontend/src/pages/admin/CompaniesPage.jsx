@@ -14,6 +14,7 @@ import { Search, Building2, Globe, MapPin, Plus, Edit2, UserCircle, DollarSign, 
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState([]);
   const [employers, setEmployers] = useState([]);
+  const [commercials, setCommercials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -42,17 +43,24 @@ export default function CompaniesPage() {
 
   const loadData = async () => {
     try {
-      const [companiesRes, employersRes] = await Promise.all([
+      const [companiesRes, employersRes, commercialsRes] = await Promise.all([
         companyAPI.getAll(),
         userAPI.getEmployers(),
+        commercialAPI.getAll(),
       ]);
       setCompanies(companiesRes.data);
       setEmployers(employersRes.data);
+      setCommercials(commercialsRes.data || []);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get commercial for a company
+  const getCompanyCommercial = (companyId) => {
+    return commercials.find(c => c.company_id === companyId && c.is_active);
   };
 
   const handleCreate = async () => {
