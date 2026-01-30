@@ -111,6 +111,112 @@ async def get_company(
     return CompanyResponse(**company)
 
 
+@admin_router.put("/companies/{company_id}", response_model=CompanyResponse)
+async def update_company(
+    company_id: str,
+    company_data: CompanyCreate,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Update company details (Admin only).
+    """
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = {
+        "name": company_data.name,
+        "description": company_data.description,
+        "industry": company_data.industry,
+        "website": company_data.website,
+        "location": company_data.location,
+        "updated_at": now
+    }
+    
+    await db.companies.update_one(
+        {"id": company_id},
+        {"$set": update_data}
+    )
+    
+    updated_company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    return CompanyResponse(**updated_company)
+
+
+@admin_router.delete("/companies/{company_id}")
+async def delete_company(
+    company_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Delete/Deactivate a company (Admin only).
+    
+    Soft delete: Sets status to 'deleted' and preserves data integrity.
+    
+    Cascade rules:
+    - Jobs linked to this company: Marked as 'archived' (not deleted)
+    - Teams with this company: Company removed from team's company_ids
+    - Applications: Preserved (historical data)
+    - Commercials: Deactivated
+    """
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Soft delete - set status to 'deleted'
+    await db.companies.update_one(
+        {"id": company_id},
+        {"$set": {
+            "status": "deleted",
+            "deleted_at": now,
+            "deleted_by": current_user["id"]
+        }}
+    )
+    
+    # Archive jobs linked to this company
+    jobs_archived = await db.jobs.update_many(
+        {"company_id": company_id, "status": {"$ne": "archived"}},
+        {"$set": {"status": "archived", "updated_at": now}}
+    )
+    
+    # Remove company from teams' company_ids
+    await db.teams.update_many(
+        {"company_ids": company_id},
+        {"$pull": {"company_ids": company_id}}
+    )
+    
+    # Deactivate commercials for this company
+    await db.commercials.update_many(
+        {"company_id": company_id},
+        {"$set": {"is_active": False, "updated_at": now}}
+    )
+    
+    # Audit log
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "company",
+        "entity_id": company_id,
+        "action": "deleted",
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user.get("name"),
+        "changed_by_role": current_user["role"],
+        "timestamp": now,
+        "details": {
+            "jobs_archived": jobs_archived.modified_count,
+            "company_name": company.get("name")
+        }
+    })
+    
+    return {
+        "message": "Company deleted successfully",
+        "company_id": company_id,
+        "jobs_archived": jobs_archived.modified_count
+    }
+
+
 # ============== USER MANAGEMENT (ADMIN) ==============
 
 @admin_router.get("/users", response_model=List[UserResponse])
