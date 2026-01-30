@@ -260,7 +260,9 @@ export default function TeamsPage() {
               <Building2 className="w-5 h-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{companies.length}</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {new Set(teams.flatMap(t => t.company_ids || [])).size}
+              </p>
               <p className="text-xs text-slate-500">Companies</p>
             </div>
           </CardContent>
