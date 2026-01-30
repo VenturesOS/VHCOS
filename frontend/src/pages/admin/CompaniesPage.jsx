@@ -95,6 +95,19 @@ export default function CompaniesPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!selectedCompany) return;
+    try {
+      const res = await companyAPI.delete(selectedCompany.id);
+      toast.success(`Company deleted. ${res.data.jobs_archived || 0} jobs archived.`);
+      setShowDelete(false);
+      setSelectedCompany(null);
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete company');
+    }
+  };
+
   const handleAssignEmployer = async () => {
     if (!selectedCompany || !selectedEmployer) {
       toast.error('Please select an employer');
@@ -122,6 +135,11 @@ export default function CompaniesPage() {
       location: company.location || '',
     });
     setShowEdit(true);
+  };
+
+  const openDelete = (company) => {
+    setSelectedCompany(company);
+    setShowDelete(true);
   };
 
   const openAssign = (company) => {
