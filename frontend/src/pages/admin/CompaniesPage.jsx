@@ -9,7 +9,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Building2, Globe, MapPin, Plus, Edit2, UserCircle, DollarSign, Briefcase } from 'lucide-react';
+import { Search, Building2, Globe, MapPin, Plus, Edit2, UserCircle, DollarSign, Briefcase, Trash2, AlertCircle } from 'lucide-react';
 
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState([]);
@@ -20,6 +20,7 @@ export default function CompaniesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedEmployer, setSelectedEmployer] = useState('');
   const [createForm, setCreateForm] = useState({
