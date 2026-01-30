@@ -158,6 +158,8 @@ async def create_team(team_data: TeamCreate, current_user: dict = Depends(requir
     - One Employer (team owner/manager)
     - Multiple Recruiters (team members)
     - Multiple Companies (client companies the team manages)
+    
+    AUTO-ATTACH: Companies already assigned to the employer are automatically included.
     """
     # Validate employer exists and has correct role
     employer = await db.users.find_one({"id": team_data.employer_id, "role": "employer"}, {"_id": 0})
@@ -172,9 +174,19 @@ async def create_team(team_data: TeamCreate, current_user: dict = Depends(requir
             raise HTTPException(status_code=400, detail=f"Recruiter {recruiter_id} not found")
         recruiter_names.append(recruiter.get("name", "Unknown"))
     
-    # Validate all companies exist
+    # AUTO-ATTACH: Get companies already assigned to this employer
+    employer_companies = await db.companies.find(
+        {"assigned_employer_id": team_data.employer_id, "status": "active"},
+        {"_id": 0, "id": 1, "name": 1}
+    ).to_list(100)
+    
+    # Merge: employer's existing companies + any explicitly provided company_ids
+    auto_company_ids = [c["id"] for c in employer_companies]
+    merged_company_ids = list(set(auto_company_ids + team_data.company_ids))
+    
+    # Validate and get names for all companies
     company_names = []
-    for company_id in team_data.company_ids:
+    for company_id in merged_company_ids:
         company = await db.companies.find_one({"id": company_id}, {"_id": 0})
         if not company:
             raise HTTPException(status_code=400, detail=f"Company {company_id} not found")
