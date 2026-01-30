@@ -79,6 +79,7 @@ function App() {
           
           {/* Public Job Pages - Shareable Links */}
           <Route path="/jobs/:jobId" element={<PublicJobPage />} />
+          <Route path="/apply/mandate/:jobId" element={<MandateApplyPage />} />
           <Route path="/application-success" element={<ApplicationSuccessPage />} />
 
           {/* Admin Routes */}
