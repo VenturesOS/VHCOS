@@ -38,6 +38,7 @@ const navItems = {
     { icon: ClipboardList, label: 'Pipeline', path: '/admin/pipeline' },
     { icon: UserCircle, label: 'Candidates', path: '/admin/candidates' },
     { icon: Database, label: 'Candidate Bank', path: '/admin/candidate-bank' },
+    { icon: Upload, label: 'Bulk Import', path: '/admin/bulk-import' },
     { icon: Building2, label: 'Companies', path: '/admin/companies' },
     { icon: DollarSign, label: 'Commercials', path: '/admin/commercials' },
     { icon: UsersRound, label: 'Teams', path: '/admin/teams' },
