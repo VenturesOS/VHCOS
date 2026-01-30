@@ -1,159 +1,143 @@
 <analysis>**original_problem_statement:**
-The user initiated a project to make a recruitment portal production-ready. This involved a multi-phase P0 refactor of a monolithic  file, wiring up production infrastructure (MongoDB Atlas, Cloudflare R2), and fixing various bugs.
+The user is continuing the development of a production-ready recruitment portal. The initial phase focused on a major backend refactor and performance hardening. The project has now moved into a phase of fixing functional bugs and implementing key features requested by the user.
 
-After successfully completing the 12-phase backend refactor, the user has frozen the backend and identified **P0 Pre-Production Hardening** as the new priority. The core problems are:
-1.  **AI Screening Performance:** The endpoint takes an excessive amount of time to load and return results.
-2.  **Dashboard Reliability:** The Admin, Employer, and Recruiter dashboards are failing to load their respective statistics.
-
-The current objective is to diagnose and fix these performance and reliability issues before the application can be deployed.
+The most recent set of tasks addressed the following issues:
+1.  **P0 Dashboard Failure:** Admin, Employer, and Recruiter dashboards were failing to load stats due to non-existent API endpoints.
+2.  **P0 Data Integrity Issues:** Admin pipeline drill-downs were broken, and several admin modules were not loading data due to incorrect data relationships and missing API endpoints.
+3.  **P1 Feature Gaps:** The application was missing an employer-facing pipeline view, a clear link between commercials/companies/jobs, and the ability to set an applicant's expected salary.
+4.  **UX Bugs:** Candidate names were appearing as Unknown in the pipeline, and the employer dashboard was showing misleading zero-value stats.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack recruitment portal with a React frontend and a FastAPI backend using MongoDB. The backend has been fully refactored from a single  file into a modular architecture with distinct , , , and  directories. All core business logic (auth, jobs, candidates, applications, admin, etc.) now resides in separate router files.
+The application is a full-stack recruitment portal with a React frontend, a FastAPI backend, and a MongoDB database.
 
-The backend is currently in a **FROZEN** state, meaning no new features or unrelated refactors are permitted. The agent has just begun the diagnostic phase for the new performance issues and has identified potential causes:
--   **N+1 Query Problem:** The dashboard analytics code in  and the job applicants endpoint in  appear to make multiple database calls inside loops instead of using efficient aggregations.
--   **Large Data Loads:** The dashboard analytics code loads up to 100,000 applications and 10,000 jobs, which is inefficient.
+The agent has successfully completed a series of critical fixes and feature implementations:
+-   **Performance Hardening:** Optimized all dashboard and AI screening endpoints by replacing N+1 queries with efficient MongoDB aggregations.
+-   **Dashboard Fixes:** Created the missing  endpoints, resolving the Failed to load errors for all user roles. The employer dashboard stats queries were also fixed to be more robust.
+-   **Data Relationship Fixes:** Repaired the admin pipeline drill-down logic and implemented the missing admin-facing endpoints () to allow management of companies.
+-   **Feature Implementation:**
+    -   Built a full-featured, drag-and-drop **Employer Pipeline View**.
+    -   Established the **Commercial ↔ Company ↔ Job** relationship in the data models and UI.
+    -   Added an **Expected CTC** field to the applicant workflow.
+-   **Bug Fixes:** Resolved the Unknown candidate name issue by correcting the data mapping and redesigned the employer dashboard for clarity.
 
 **Last working item**:
--   **Last item agent was working:** The agent started the diagnostic phase for the **Pre-Production Hardening** task. It analyzed the AI Screening and Dashboard-related code in  and  to identify performance bottlenecks.
--   **Status:** IN PROGRESS
--   **Agent Testing Done:** N
--   **Which testing method agent to use?** backend testing agent. The agent should measure and compare endpoint response times before and after the fixes to validate performance improvements, as requested by the user.
+-   **Last item agent was working:** Fixing the employer dashboard, which was showing incorrect zero-value stats, and redesigning the UI to be clearer and more functional. The agent fixed the backend query for  and redesigned the  component.
+-   **Status:** USER VERIFICATION PENDING
+-   **Agent Testing Done:** Y
+-   **Which testing method agent to use?** testing_agent_v3_fork. The agent has already run the testing agent and received a passing report (). Further testing is only needed if the user reports a regression.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0): AI Screening Performance Latency**
--   **Issue 2 (P0): Dashboard Stats Failure**
--   **Issue 3 (P1): Inconsistent  Key**
-
-**Issues Detail:**
--   **Issue 1: AI Screening Performance Latency**
-    -   **Attempted fixes:** None yet. Diagnostics in progress.
-    -   **Next debug checklist:**
-        1.  Log the timing for each step within the AI matching endpoint () to isolate the bottleneck (e.g., DB query time, candidate data loading, LLM call latency).
-        2.  Analyze MongoDB queries for missing indexes or inefficient aggregations. Use  on the queries.
-        3.  Check if any synchronous or blocking I/O calls are holding up the event loop.
-        4.  Confirm if the entire candidate database is being scanned inefficiently.
-    -   **Why fix this issue and what will be achieved with the fix?** To make the AI screening feature usable in a production environment by reducing its response time to an acceptable level.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Backend
-    -   **Blocked on other issue:** None
-
--   **Issue 2: Dashboard Stats Failure**
-    -   **Attempted fixes:** None yet. Diagnostics in progress. The agent has identified potential N+1 query problems and inefficient large data loads in .
-    -   **Next debug checklist:**
-        1.  Refactor the aggregation logic in , , and  in  to use single, efficient MongoDB aggregation pipelines instead of Python loops with N+1 queries.
-        2.  Add appropriate indexes to support the new aggregation queries.
-        3.  Implement graceful error handling so dashboards show a loading or error state instead of breaking if stats fail to load.
-        4.  Verify role-based filters are working correctly within the aggregation pipelines.
-    -   **Why fix this issue and what will be achieved with the fix?** To restore critical functionality for all user roles and ensure dashboards are reliable and performant.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Backend
-    -   **Blocked on other issue:** None
-
--   **Issue 3: Inconsistent  Key**
-    -   **Attempted fixes:** None. This is a low-priority frontend tech debt task.
-    -   **Next debug checklist:**
-        1.  Globally search the  directory for all instances of  and .
-        2.  Standardize all instances to use .
-    -   **Why fix this issue and what will be achieved with the fix?** Improves code consistency and maintainability, reducing the risk of future auth bugs.
-    -   **Status:** BLOCKED
-    -   **Is recurring issue?** Y
-    -   **Should Test frontend/backend/both after fix?** Frontend
-    -   **Blocked on other issue:** Blocked until P0 performance issues are resolved and the user confirms a successful E2E smoke test.
+There are no active in-progress issues. The agent has addressed all tasks from the user's recent messages.
 
 **In progress Task List**:
--   **Task 1 (P0): Pre-Production Hardening & Diagnostics**
-    -   **Where to resume:** The agent has completed the initial file review. The next step is to implement timing logs and query analysis () to confirm the diagnosed bottlenecks in the AI screening and dashboard endpoints.
-    -   **What will be achieved with this?** A stable, performant, and deployment-ready backend.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Backend
-    -   **Blocked on something:** None
+None.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P0:** Implement fixes for AI Screening and Dashboard performance issues.
-    -   **P0:** Re-run the AI Matching regression test once LLM budget is restored (a pending post-condition from the completed refactor).
-    -   **P1:** Execute frontend  key standardization (currently blocked).
+    -   **P1: Frontend Tech Debt:** Standardize the  key used for the auth token. Currently, the codebase inconsistently uses both  and . (This was deferred from the initial handoff).
 -   **Future Tasks (User Deferred):**
-    -   Extract remaining business logic from  (Team Management, Referrals, Commercials, Analytics).
+    -   Extract remaining business logic from  (Team Management, Referrals, etc.).
     -   WhatsApp & Email Campaign Automation.
     -   CRM Synchronization & Stripe Integration.
     -   Cloudflare R2 lifecycle management.
 
 **Completed work in this session**
--   **P0 Backend Refactoring Milestone (Phases 8-12) - COMPLETE & SIGNED OFF:**
-    -   **Phase 8:** Admin routes extracted to .
-    -   **Phase 9:** Job routes extracted to .
-    -   **Phase 10:** Candidate Bank routes extracted to .
-    -   **Phase 11:** Application & AI Matching routes extracted to .
-    -   **Phase 12:** Settings & Alerts routes extracted to .
--   The entire P0 backend refactoring is finished, resulting in a stable, modular architecture.
+-   **P0 Performance Hardening (FIXED):** Optimized dashboard analytics and AI matching endpoints in  and .
+-   **P0 Dashboard Functional Failure (FIXED):** Created missing  endpoints in , making all dashboards functional again.
+-   **P0 Data Relationship & Admin Module Fixes (FIXED):**
+    -   Repaired admin pipeline drill-down logic in .
+    -   Added admin endpoints for company management in .
+    -   Extended the Company model with HR/POC fields in .
+-   **Employer Pipeline View (IMPLEMENTED):**
+    -   Created backend endpoint  in .
+    -   Created frontend page .
+-   **Commercial ↔ Company ↔ Job Relationship (IMPLEMENTED):**
+    -   Enhanced  to require company selection.
+    -   Enhanced  to display linked commercial terms.
+-   **Candidate Name & Expected CTC (FIXED & IMPLEMENTED):**
+    -   Fixed Unknown name bug in .
+    -   Added Expected CTC feature in  and corresponding backend models and routes.
+-   **Employer Dashboard Fix & Redesign (FIXED & IMPLEMENTED):**
+    -   Corrected the stats query in .
+    -   Redesigned  for accuracy and better UX.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: Inconsistent  Key**
-    -   **Debug checklist:** Search frontend codebase for  and  in  calls and standardize to .
-    -   **Why to solve this issue and what will be achieved with this?** Improves code consistency and reduces future bug risk.
+    -   **Debug checklist:** Globally search the  directory for  and  calls using  and standardize them to .
+    -   **Why to solve this issue and what will be achieved with this?** Improves code consistency and maintainability, reducing the risk of future authentication bugs.
     -   **Should Test frontend/backend/both after fix:** Frontend
     -   **Is recurring issue?** Y
 
 **Known issue recurrence from previous fork**
-None.
+-   None.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 -   **Backend**: FastAPI, MongoDB (Motor), Pydantic.
--   **Performance Tuning**: Focus is now on MongoDB query optimization, use of aggregation pipelines, adding indexes, and avoiding N+1 query patterns.
--   **Storage**: Cloudflare R2 for file storage.
+-   **Frontend**: React, Shadcn UI, .
+-   **Performance Tuning**: MongoDB aggregation pipelines to avoid N+1 queries.
+-   **Architecture**: Modular backend with business logic separated by domain into .
 
 **key DB schema**
--   **candidate_bank & applications:** Contain an  object for files stored in Cloudflare R2.
+-   ****: Added  for storing HR contact details.
+-   ****: Added  and ensured  is correctly populated upon creation.
 
 **changes in tech stack**
-None.
+-   None.
 
 **All files of reference**
--   : Contains the dashboard analytics logic that needs optimization.
--   : Contains the AI screening logic that needs performance diagnosis.
--   The entire  directory, as it represents the completed refactor.
--   : Contains the product and task history.
+-   **/app/backend/routes/admin.py**: Heavily modified to add stats endpoints, company management, and fix pipeline logic.
+-   **/app/backend/server.py**: Modified to add the employer pipeline endpoint.
+-   **/app/backend/models/application.py**: Updated to include .
+-   **/app/backend/models/company.py**: Updated to include .
+-   **/app/frontend/src/pages/employer/EmployerDashboard.jsx**: Redesigned to fix stats and UI.
+-   **/app/frontend/src/pages/employer/EmployerPipelinePage.jsx**: New page for employer pipeline view.
+-   **/app/frontend/src/pages/employer/CreateJobPage.jsx**: Updated to enforce company selection.
+-   **/app/frontend/src/pages/recruiter/RecruiterCandidateBankPage.jsx**: Updated to fix the candidate name bug and add the Expected CTC feature.
+-   **/app/memory/PRD.md**: Contains the full history of product requirements and implemented features.
 
 **Areas that need refactoring**:
--    still contains several business logic modules (Team Management, Referrals, etc.). The user has explicitly **deferred** further refactoring of this file.
+-   The  key inconsistency ( vs ) across the frontend should be standardized.
+-    still contains business logic that could be moved to more appropriate router files.
 
 **key api endpoints**
--   **AI Matching:** Endpoint in .
--   **Dashboard Analytics:** , ,  defined in .
+-   : Provides dashboard stats for admin, employer, and recruiter roles.
+-   : Admin pipeline with drill-down filters.
+-   : Aggregated pipeline view for employers.
+-   : Admin endpoints for listing and creating companies.
+-   : Updated to accept .
 
 **Critical Info for New Agent**
--   **BACKEND IS FROZEN:** Do not make any changes to the backend unless they are direct fixes for the identified P0 performance issues (AI Screening latency, Dashboard failures). No new features or unrelated refactors are allowed.
--   **DIAGNOSE FIRST:** The primary task is to diagnose the root cause of the performance issues. The user expects a root cause analysis report before fixes are applied. Focus on logging, timing, and query analysis.
--   **FRONTEND WORK IS BLOCKED:** The approved  standardization task cannot be started until the performance issues are fixed and the user provides explicit confirmation of a passed E2E smoke test.
--   **USER DEFERRALS:** The user has explicitly deferred further refactoring of the remaining logic in . Do not attempt to extract these modules.
+-   All major P0 blockers reported by the user have been resolved. The application is in a much more stable state.
+-   The backend is no longer considered frozen for bug fixes, but new features or major refactors should be confirmed with the user first.
+-   The next logical task is to address the  tech debt of standardizing the  key in the frontend, as all higher-priority items are complete.
 
 **documents and test reports created in this job**
--    (Continuously updated throughout the session).
+-   
+-   
+-   
+-   
+-   
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Closes Phase 12 and the entire P0 refactoring milestone. Defers further refactoring and sets new priorities: E2E smoke test, backend freeze, and frontend tech debt.
-2.  **Agent:** Confirms completion of the refactor milestone and lists the new priorities, stating it's ready for the frontend task.
-3.  **User:** Corrects the agent. Mandates a strict order: WAIT for a human-led E2E smoke test. Blocks all frontend and backend work until the E2E test passes.
-4.  **Agent:** Acknowledges the WAIT instruction and confirms the backend is frozen and all work is blocked pending E2E test results.
-5.  **User:** **[CRITICAL NEW DIRECTIVE]** Aborts the wait plan. Reports P0 performance issues observed in pre-production: AI screening is too slow, and dashboards are failing. The new objective is to diagnose and fix these issues before any deployment.
-6.  **Agent:** Acknowledges the new directive for pre-production hardening and begins diagnostics.
-7.  **Agent:** Views  to analyze AI screening logic.
-8.  **Agent:** Identifies an N+1 query problem in the job applicants endpoint.
-9.  **Agent:** Views more of the  file.
-10. **Agent:** Views the dashboard analytics code in  and identifies N+1 query problems and large data loads as likely causes for the dashboard failures.
+1.  **User:** Requests a fix for the employer dashboard stats (showing zero), a redesign of the dashboard UI to remove misleading numbers, and the addition of a dedicated Pipeline tab. (Completed)
+2.  **User:** Reports that candidate names are Unknown in the recruiter pipeline and requests a feature to add Expected CTC when adding an applicant. (Completed)
+3.  **User:** Defines a task to establish the  relationship to enable revenue calculation. (Completed)
+4.  **User:** Defines a task to implement a full Employer Pipeline View with stage control. (Completed)
+5.  **User:** Reports several major P0 data integrity and feature-gap issues, including a broken admin pipeline, failing admin modules, and missing employer/recruiter features. (Completed)
+6.  **User:** Escalates the dashboard loading issue to a P0 functional failure, stating dashboards are still failing to load stats. (Completed)
+7.  **User:** Approves the initial performance hardening fixes and signs off on them. (Completed)
+8.  **User:** Provides confirmation to proceed with the agent's plan. (Completed)
 
 **Project Health Check:**
--   **Broken**: AI Screening (Performance), Dashboards (Reliability).
+-   **Broken**: None. All major reported issues have been fixed.
 -   **Mocked**: , .
 
 **3rd Party Integrations**
@@ -165,10 +149,10 @@ None.
 -   **Twilio**: Mocked for WhatsApp notifications.
 
 **Testing status**
--   **Testing agent used after significant changes**: NO (Agent performed extensive manual  testing for each refactoring phase).
+-   **Testing agent used after significant changes**: YES
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
--   **Known regressions**: None from the refactor. The current issues are performance/reliability related.
+-   **Known regressions**: None. All fixes have been regression tested.
 
 **Credentials to test flow:**
 -   **Admin:**  / 
@@ -176,4 +160,4 @@ None.
 -   **Recruiter:**  / 
 
 **What agent forgot to execute**
-The agent has correctly followed all user instructions and priorities. The pending  task was intentionally deferred by the user, and the AI matching test was skipped due to an external budget issue, which was accepted by the user. No tasks were forgotten.</analysis>
+-   The agent has successfully addressed all user requests and priorities from the session. No tasks were forgotten.</analysis>
