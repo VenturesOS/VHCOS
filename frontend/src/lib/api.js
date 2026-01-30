@@ -94,6 +94,7 @@ export const applicationAPI = {
   getEditHistory: (id) => api.get(`/applications/${id}/edit-history`),
   addNote: (id, content) => api.post(`/applications/${id}/notes`, { content }),
   downloadResume: (id) => `${API_BASE}/applications/${id}/resume`,
+  delete: (id) => api.delete(`/applications/${id}`),
 };
 
 // Candidate APIs
