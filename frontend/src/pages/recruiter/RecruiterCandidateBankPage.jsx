@@ -43,6 +43,8 @@ export default function RecruiterCandidateBankPage() {
   const [editNotice, setEditNotice] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editExperience, setEditExperience] = useState('');
+  const [expectedCTC, setExpectedCTC] = useState('');
+  const [expectedCTCType, setExpectedCTCType] = useState('amount'); // 'amount' or 'percentage'
   const [linking, setLinking] = useState(false);
 
   useEffect(() => {
