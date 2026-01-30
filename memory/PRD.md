@@ -47,6 +47,32 @@ Any future change must:
 
 ---
 
+## P1 Tech Debt - localStorage Key Standardization (January 30, 2026)
+
+### Overview ✅ COMPLETE
+**Issue:** Inconsistent localStorage key usage across frontend - some components used `token` while the auth system used `vhc_token`, causing authentication failures in certain flows.
+
+### Problem Identified
+The auth library (`lib/auth.js`) and API library (`lib/api.js`) correctly used `vhc_token`, but three pages were still using the legacy `token` key:
+- `RecruiterCandidateBankPage.jsx` - Resume download authentication
+- `EmployerCandidateBankPage.jsx` - Resume download authentication  
+- `CandidateDataBankPage.jsx` - Resume download authentication
+
+### Fix Applied
+Standardized all `localStorage.getItem('token')` calls to `localStorage.getItem('vhc_token')`.
+
+**Files Modified:**
+- `/app/frontend/src/pages/recruiter/RecruiterCandidateBankPage.jsx`
+- `/app/frontend/src/pages/employer/EmployerCandidateBankPage.jsx`
+- `/app/frontend/src/pages/admin/CandidateDataBankPage.jsx`
+
+### Verification
+- All localStorage operations now consistently use `vhc_token`
+- No remaining instances of `localStorage.*('token')` in codebase
+- Frontend loads correctly after changes
+
+---
+
 ## P0 Data Relationship & Pipeline Drill-Down Fix (January 30, 2026)
 
 ### Overview ✅ VERIFIED
