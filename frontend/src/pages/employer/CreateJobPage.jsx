@@ -48,6 +48,11 @@ export default function CreateJobPage() {
   const [parsedSuggestions, setParsedSuggestions] = useState(null);
   const [skillInput, setSkillInput] = useState('');
   
+  // Company selection state
+  const [companies, setCompanies] = useState([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  
   // JD Parser state
   const [jdInputMode, setJdInputMode] = useState('paste'); // 'paste' or 'upload'
   const [jdText, setJdText] = useState('');
@@ -66,8 +71,38 @@ export default function CreateJobPage() {
     skills: [],
     experience_min: '',
     experience_max: '',
-    public_company_alias: ''
+    public_company_alias: '',
+    company_id: '',
+    company_name: ''
   });
+
+  // Load assigned companies on mount
+  useEffect(() => {
+    const loadCompanies = async () => {
+      try {
+        const res = await employerPortalAPI.getMyCompanies();
+        setCompanies(res.data.companies || []);
+      } catch (error) {
+        console.error('Failed to load companies:', error);
+      } finally {
+        setLoadingCompanies(false);
+      }
+    };
+    loadCompanies();
+  }, []);
+
+  // Handle company selection
+  const handleCompanyChange = (companyId) => {
+    const company = companies.find(c => c.id === companyId);
+    if (company) {
+      setSelectedCompany(company);
+      setFormData(prev => ({
+        ...prev,
+        company_id: company.id,
+        company_name: company.name
+      }));
+    }
+  };
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
