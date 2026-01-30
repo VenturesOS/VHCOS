@@ -118,7 +118,15 @@ export const companyAPI = {
   getAll: () => api.get('/companies'),
   getById: (id) => api.get(`/companies/${id}`),
   update: (id, data) => api.put(`/companies/${id}`, data),
+  delete: (id) => api.delete(`/companies/${id}`),
   assignEmployer: (companyId, employerId) => api.put(`/companies/${companyId}/assign-employer`, null, { params: { employer_id: employerId } }),
+};
+
+// Application APIs (for pipeline management)
+export const applicationAPI = {
+  delete: (id) => api.delete(`/applications/${id}`),
+  addNote: (id, content) => api.post(`/applications/${id}/notes`, { content }),
+  updateDetails: (id, data) => api.put(`/applications/${id}/details`, data),
 };
 
 // Team APIs (Admin only - Phase A Governance)
