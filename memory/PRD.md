@@ -36,6 +36,7 @@
 **Mandate Shareable Links (Independent of Career Page): COMPLETE & TESTED (January 30, 2026)**
 **Team Creation Auto-Attach Companies: COMPLETE & TESTED (January 30, 2026)**
 **DELETE Capabilities for Core Entities: COMPLETE & TESTED (January 30, 2026)**
+**Bulk Candidate Import Tool: COMPLETE & TESTED (January 30, 2026)**
 
 ---
 
