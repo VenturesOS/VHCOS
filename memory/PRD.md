@@ -109,6 +109,49 @@ hr_contacts: Optional[List[HRContact]]
 
 ---
 
+## Employer Pipeline View with Stage Control (January 30, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 20/20 tests passed (100%)
+**Test Report:** `/app/test_reports/iteration_29.json`
+
+### Features Implemented
+
+#### Backend: GET /api/employer/pipeline
+New endpoint for employer-scoped pipeline view:
+- Returns applications for all jobs under employer's teams/companies
+- Filter by `recruiter_id` or `job_id`
+- Full application details for stage transitions
+
+**Files Modified:** `/app/backend/server.py`
+
+#### Frontend: /employer/pipeline
+New Kanban-style pipeline page:
+- 7 stage columns (Applied → Shortlisted → Interview → Offered → Hired → Rejected → On Hold)
+- **Drag-and-drop** to move candidates between stages
+- **Filter dropdowns** for recruiter and job
+- **Candidate detail dialog** with:
+  - Contact info, salary, experience
+  - Resume download link
+  - Stage transition buttons
+  - Notes section with add note capability
+- Stage summary cards at top
+
+**Files Created:**
+- `/app/frontend/src/pages/employer/EmployerPipelinePage.jsx`
+
+**Files Modified:**
+- `/app/frontend/src/App.js` - Route added
+- `/app/frontend/src/components/layout/Sidebar.jsx` - Nav link added
+- `/app/frontend/src/lib/api.js` - employerPortalAPI.getPipeline added
+
+### Role-Based Access
+- **Employer:** Sees only their assigned companies/teams' applications
+- **Stage Transition:** Uses existing `PUT /api/applications/{id}` endpoint
+- **Add Note:** Uses existing `POST /api/applications/{id}/notes` endpoint
+
+---
+
 ## P0 Pre-Production Hardening (January 29, 2026)
 
 ### Overview ✅ VERIFIED
