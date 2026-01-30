@@ -142,7 +142,7 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
                 # Filter out binary garbage
                 text = ''.join(c for c in text if c.isprintable() or c in '\n\r\t')
                 return text
-            except:
+            except Exception:
                 return ""
         
         return ""
