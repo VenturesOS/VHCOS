@@ -258,6 +258,11 @@ export default function CreateJobPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    if (!formData.company_id) {
+      toast.error('Please select a client company');
+      return;
+    }
+    
     if (!formData.title || !formData.description || !formData.location || !formData.job_type) {
       toast.error('Please fill in all required fields');
       return;
