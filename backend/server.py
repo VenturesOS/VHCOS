@@ -277,9 +277,12 @@ async def get_employer_companies(
     if not employer:
         raise HTTPException(status_code=404, detail="Employer not found")
     
-    # Get companies assigned to this employer
+    # Get companies assigned to this employer (include None status for backwards compatibility)
     companies = await db.companies.find(
-        {"assigned_employer_id": employer_id, "status": "active"},
+        {
+            "assigned_employer_id": employer_id,
+            "$or": [{"status": "active"}, {"status": None}, {"status": {"$exists": False}}]
+        },
         {"_id": 0}
     ).to_list(100)
     
