@@ -54,6 +54,7 @@ class ApplicationUpdate(BaseModel):
 class ApplicationDetailUpdate(BaseModel):
     """Model for controlled editing of applicant details by Admin/Employer/Recruiter"""
     current_salary: Optional[int] = None  # INR
+    expected_salary: Optional[int] = None  # INR - Expected CTC
     notice_period: Optional[str] = None
     skills: Optional[List[str]] = None
     experience_summary: Optional[str] = None  # Brief summary of experience
