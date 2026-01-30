@@ -71,17 +71,6 @@ export default function TeamsPage() {
       const res = await userAPI.getEmployerCompanies(employerId);
       const empCompanies = res.data.companies || [];
       setAutoAttachedCompanies(empCompanies);
-      
-      // Auto-select these companies in the form
-      const autoCompanyIds = empCompanies.map(c => c.id);
-      setCreateForm(prev => ({
-        ...prev,
-        company_ids: autoCompanyIds
-      }));
-      
-      if (empCompanies.length > 0) {
-        toast.success(`${empCompanies.length} company(ies) auto-attached from employer`);
-      }
     } catch (error) {
       console.error('Failed to fetch employer companies:', error);
       setAutoAttachedCompanies([]);
@@ -92,7 +81,7 @@ export default function TeamsPage() {
 
   // Handle employer selection - auto-fetch companies
   const handleEmployerChange = (employerId) => {
-    setCreateForm(prev => ({ ...prev, employer_id: employerId, company_ids: [] }));
+    setCreateForm(prev => ({ ...prev, employer_id: employerId }));
     fetchEmployerCompanies(employerId);
   };
 
