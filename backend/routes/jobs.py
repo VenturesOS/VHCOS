@@ -71,6 +71,11 @@ class ShareableLinkUpdate(BaseModel):
     enabled: bool
 
 
+class MandateShareableLinkUpdate(BaseModel):
+    """Model for toggling mandate-level shareable link status"""
+    enabled: bool
+
+
 # ============== JOB CRUD ==============
 
 @jobs_router.post("/jobs", response_model=JobResponse)
