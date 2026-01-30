@@ -427,12 +427,33 @@ async def public_apply(
         return {"success": True, "message": "Application submitted successfully", "application_id": str(uuid.uuid4())}
     
     # Verify job exists AND is publicly accessible
-    job = await db.jobs.find_one({
-        "$or": [{"id": job_id}, {"job_public_id": job_id}],
-        "status": "active",
-        "career_page_status": "live",
-        "shareable_link_enabled": True
-    }, {"_id": 0})
+    # Support two access paths:
+    # 1. Career page link: career_page_status = "live" AND shareable_link_enabled = True
+    # 2. Mandate link: mandate_shareable_link_enabled = True AND valid mandate_token
+    
+    job = None
+    application_source = "career_page"
+    
+    if mandate_token:
+        # Mandate link access - bypasses career page requirement
+        job = await db.jobs.find_one({
+            "$or": [{"id": job_id}, {"job_public_id": job_id}],
+            "status": "active",
+            "mandate_shareable_link_enabled": True,
+            "mandate_share_token": mandate_token
+        }, {"_id": 0})
+        if job:
+            application_source = "mandate_link"
+    
+    if not job:
+        # Try career page access
+        job = await db.jobs.find_one({
+            "$or": [{"id": job_id}, {"job_public_id": job_id}],
+            "status": "active",
+            "career_page_status": "live",
+            "shareable_link_enabled": True
+        }, {"_id": 0})
+        application_source = "career_page"
     
     if not job:
         raise HTTPException(status_code=404, detail="Job not found or no longer accepting applications")
