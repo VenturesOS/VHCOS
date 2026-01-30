@@ -174,9 +174,12 @@ async def create_team(team_data: TeamCreate, current_user: dict = Depends(requir
             raise HTTPException(status_code=400, detail=f"Recruiter {recruiter_id} not found")
         recruiter_names.append(recruiter.get("name", "Unknown"))
     
-    # AUTO-ATTACH: Get companies already assigned to this employer
+    # AUTO-ATTACH: Get companies already assigned to this employer (include None/missing status for backwards compatibility)
     employer_companies = await db.companies.find(
-        {"assigned_employer_id": team_data.employer_id, "status": "active"},
+        {
+            "assigned_employer_id": team_data.employer_id,
+            "$or": [{"status": "active"}, {"status": None}, {"status": {"$exists": False}}]
+        },
         {"_id": 0, "id": 1, "name": 1}
     ).to_list(100)
     
