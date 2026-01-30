@@ -133,6 +133,8 @@ export const employerPortalAPI = {
   getMyTeam: () => api.get('/employer/my-team'),
   // Companies panel - assigned companies with commercials, mandates, pipelines
   getMyCompanies: () => api.get('/employer/companies'),
+  // Pipeline view - all applications with stage control
+  getPipeline: (params) => api.get('/employer/pipeline', { params }),
 };
 
 // Referral APIs (Phase A Governance)
