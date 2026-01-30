@@ -29,6 +29,7 @@ import SettingsPage from "./pages/admin/SettingsPage";
 import CandidateDataBankPage from "./pages/admin/CandidateDataBankPage";
 import AdminPipelinePage from "./pages/admin/AdminPipelinePage";
 import BatchUploadPage from "./pages/admin/BatchUploadPage";
+import BulkImportPage from "./pages/admin/BulkImportPage";
 import TeamsPage from "./pages/admin/TeamsPage";
 import HierarchyPage from "./pages/admin/HierarchyPage";
 import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
