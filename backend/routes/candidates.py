@@ -1393,6 +1393,7 @@ class LinkCandidateRequest(BaseModel):
     """Request to link a candidate to a job as an applicant"""
     candidate_id: str
     job_id: str
+    expected_salary: Optional[int] = None  # Expected CTC in INR
 
 
 @candidates_router.post("/applications/link-candidate")
@@ -1404,6 +1405,7 @@ async def link_candidate_to_job(
     Create an application record linking a Candidate Data Bank record to a job.
     Does NOT duplicate the candidate - just creates an application.
     Inherits salary & notice period from Candidate Data Bank.
+    Expected CTC can be set during link.
     """
     # Validate candidate exists
     candidate = await db.candidate_bank.find_one({"id": request.candidate_id}, {"_id": 0})
