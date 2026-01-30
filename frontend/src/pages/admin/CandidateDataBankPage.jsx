@@ -152,7 +152,7 @@ export default function CandidateDataBankPage() {
       return;
     }
     // Use the API URL for download with auth token
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('vhc_token');
     const downloadUrl = candidateBankAPI.getResumeDownloadUrl(candidate.id);
     
     // Create a temporary anchor element to trigger download

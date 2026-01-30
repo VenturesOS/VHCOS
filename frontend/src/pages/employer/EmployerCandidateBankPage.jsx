@@ -141,7 +141,7 @@ export default function EmployerCandidateBankPage() {
       toast.error('No resume available for this candidate');
       return;
     }
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('vhc_token');
     const downloadUrl = candidateBankAPI.getResumeDownloadUrl(candidate.id);
     const link = document.createElement('a');
     link.href = `${downloadUrl}?token=${token}`;
