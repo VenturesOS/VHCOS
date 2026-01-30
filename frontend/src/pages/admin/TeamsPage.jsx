@@ -443,7 +443,7 @@ export default function TeamsPage() {
           <DialogHeader>
             <DialogTitle className="font-heading">Edit Team</DialogTitle>
             <DialogDescription>
-              Update team details. Note: Team owner cannot be changed after creation.
+              Update team details. Note: Team owner and companies cannot be changed after creation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
@@ -464,6 +464,33 @@ export default function TeamsPage() {
               </div>
             </div>
 
+            {/* Companies (Read-Only - linked to Employer) */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Building2 className="w-4 h-4" />
+                Assigned Companies
+                <span className="text-xs text-slate-400 font-normal">(from employer)</span>
+              </Label>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                {selectedTeam?.company_names?.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTeam.company_names.map((name, idx) => (
+                      <Badge key={idx} variant="secondary" className="bg-white border text-slate-700">
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No companies assigned. Assign companies in the Companies tab.
+                  </p>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">
+                To change companies, update them in the Companies tab.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label>Assign Recruiters</Label>
               <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
@@ -481,29 +508,6 @@ export default function TeamsPage() {
                     <div className="flex-1">
                       <p className="text-sm font-medium text-slate-700">{rec.name}</p>
                       <p className="text-xs text-slate-400">{rec.email}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Assign Companies</Label>
-              <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                {companies.map((comp) => (
-                  <label 
-                    key={comp.id} 
-                    className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={createForm.company_ids.includes(comp.id)}
-                      onChange={() => toggleCompany(comp.id)}
-                      className="rounded border-slate-300 text-[#7CB342] focus:ring-[#7CB342]"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-700">{comp.name}</p>
-                      <p className="text-xs text-slate-400">{comp.industry || 'No industry'}</p>
                     </div>
                   </label>
                 ))}
