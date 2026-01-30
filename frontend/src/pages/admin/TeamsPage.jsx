@@ -362,34 +362,32 @@ export default function TeamsPage() {
               </Select>
             </div>
 
-            {/* Auto-Attached Companies Info */}
+            {/* Companies (Read-Only - Auto-attached from Employer) */}
             {createForm.employer_id && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3" data-testid="auto-attach-info">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-green-800">
-                      {loadingEmployerCompanies ? 'Loading...' : 
-                        autoAttachedCompanies.length > 0 
-                          ? `${autoAttachedCompanies.length} company(ies) auto-attached`
-                          : 'No companies assigned to this employer yet'}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Assigned Companies
+                  <span className="text-xs text-slate-400 font-normal">(from employer)</span>
+                </Label>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3" data-testid="auto-attach-info">
+                  {loadingEmployerCompanies ? (
+                    <p className="text-sm text-slate-500">Loading companies...</p>
+                  ) : autoAttachedCompanies.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {autoAttachedCompanies.map(comp => (
+                        <Badge key={comp.id} variant="secondary" className="bg-white border text-slate-700">
+                          {comp.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      No companies assigned to this employer. 
+                      <span className="text-slate-400 ml-1">Assign companies in the Companies tab.</span>
                     </p>
-                    {autoAttachedCompanies.length > 0 && (
-                      <p className="text-xs text-green-600 mt-1">
-                        Companies assigned to this employer are automatically included. You can add more below.
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
-                {autoAttachedCompanies.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {autoAttachedCompanies.map(comp => (
-                      <Badge key={comp.id} variant="secondary" className="bg-green-100 text-green-700 text-xs">
-                        {comp.name}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -421,51 +419,6 @@ export default function TeamsPage() {
               </div>
               {createForm.recruiter_ids.length > 0 && (
                 <p className="text-xs text-slate-500">{createForm.recruiter_ids.length} recruiter(s) selected</p>
-              )}
-            </div>
-
-            {/* Additional Companies Selection (optional - for adding more companies) */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label>Additional Companies</Label>
-                <span className="text-xs text-slate-400">(optional)</span>
-              </div>
-              <p className="text-xs text-slate-500 -mt-1">
-                Add more companies to this team beyond the auto-attached ones.
-              </p>
-              <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                {companies.filter(c => !autoAttachedCompanies.find(ac => ac.id === c.id)).length === 0 ? (
-                  <p className="text-sm text-slate-400">
-                    {autoAttachedCompanies.length > 0 
-                      ? 'All available companies are already attached'
-                      : 'No companies available'}
-                  </p>
-                ) : (
-                  companies
-                    .filter(c => !autoAttachedCompanies.find(ac => ac.id === c.id))
-                    .map((comp) => (
-                    <label 
-                      key={comp.id} 
-                      className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={createForm.company_ids.includes(comp.id)}
-                        onChange={() => toggleCompany(comp.id)}
-                        className="rounded border-slate-300 text-[#7CB342] focus:ring-[#7CB342]"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-700">{comp.name}</p>
-                        <p className="text-xs text-slate-400">{comp.industry || 'No industry'}</p>
-                      </div>
-                    </label>
-                  ))
-                )}
-              </div>
-              {createForm.company_ids.length > autoAttachedCompanies.length && (
-                <p className="text-xs text-slate-500">
-                  {createForm.company_ids.length - autoAttachedCompanies.length} additional company(ies) selected
-                </p>
               )}
             </div>
           </div>
