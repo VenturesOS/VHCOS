@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { teamAPI, userAPI, companyAPI } from '../../lib/api';
+import { teamAPI, userAPI } from '../../lib/api';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { 
   Search, Users, Building2, Plus, Edit2, Trash2, 
-  UserCircle, Briefcase, ChevronRight, AlertCircle, CheckCircle2, Info
+  UserCircle, Briefcase, ChevronRight, AlertCircle
 } from 'lucide-react';
 
 export default function TeamsPage() {
