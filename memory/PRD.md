@@ -48,6 +48,68 @@ Any future change must:
 
 ---
 
+## Mandate Shareable Links (January 30, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 16/16 tests passed (100% backend, 100% frontend)
+**Test Report:** `/app/test_reports/iteration_33.json`
+
+### Feature Description
+Enables shareable links for assigned mandates that are **INDEPENDENT of career page visibility**. This allows employers/admins to share job links for:
+- Confidential searches
+- Recruiter-only jobs
+- Jobs not intended for public career page
+
+### Implementation Details
+
+**Backend Endpoints:**
+- `PUT /api/jobs/{job_id}/mandate-shareable-link` - Enable/disable mandate link (admin/employer only)
+- `GET /api/public/mandate/{job_id}?token={token}` - Public job detail via mandate link
+- `POST /api/public/apply` - Updated to accept `mandate_token` parameter
+
+**Database Schema:**
+```json
+// Job collection additions:
+{
+  "mandate_shareable_link_enabled": false,
+  "mandate_share_token": "secure-token-string"
+}
+
+// Application collection addition:
+{
+  "application_channel": "mandate_link" | "career_page"
+}
+```
+
+**Frontend:**
+- **EmployerJobsPage.jsx** - Purple "Mandate Link" toggle with copy/open buttons
+- **AdminJobsPage.jsx** - Purple "Mandate" toggle with copy/open buttons  
+- **MandateApplyPage.jsx** - New page at `/apply/mandate/:jobId?token={token}`
+
+### Security
+- Token-based access (24-byte URL-safe token)
+- New token generated each time link is enabled (old links invalidated)
+- Role-scoped: Only admin and employer can enable mandate links
+- Company name preserved as "Confidential Client"
+
+### URL Format
+```
+/apply/mandate/{job_id}?token={mandate_share_token}
+Example: /apply/mandate/abc123?token=dgOX-51L-e3CuhlqLBJXSzY7GDzCFlq-
+```
+
+### Files Modified
+- `/app/backend/routes/jobs.py` - New endpoint
+- `/app/backend/routes/public.py` - New endpoint + updated apply
+- `/app/backend/models/job.py` - New fields
+- `/app/frontend/src/pages/employer/EmployerJobsPage.jsx` - UI toggle
+- `/app/frontend/src/pages/admin/JobsPage.jsx` - UI toggle
+- `/app/frontend/src/pages/public/MandateApplyPage.jsx` - New page
+- `/app/frontend/src/lib/api.js` - New API method
+- `/app/frontend/src/App.js` - New route
+
+---
+
 ## P1 Tech Debt - localStorage Key Standardization (January 30, 2026)
 
 ### Overview ✅ COMPLETE
