@@ -574,6 +574,97 @@ async def update_shareable_link(
     }
 
 
+@jobs_router.put("/jobs/{job_id}/mandate-shareable-link")
+async def update_mandate_shareable_link(
+    job_id: str,
+    update: MandateShareableLinkUpdate,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Enable or disable mandate-level shareable link for a job.
+    
+    This allows sharing job links INDEPENDENT of career page visibility.
+    Useful for:
+    - Assigned mandates to recruiters
+    - Confidential searches
+    - Jobs not intended for public career page
+    
+    Rules:
+    - Only Admin and Employer can enable mandate shareable links
+    - Job must be in 'active' status
+    - Generates a secure token for the shareable link
+    """
+    import secrets
+    
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Access control
+    if current_user["role"] == "employer":
+        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+        if team:
+            company_ids = team.get("company_ids", [])
+            recruiter_ids = team.get("recruiter_ids", [])
+            can_control = (
+                job.get("posted_by") == current_user["id"] or
+                job.get("company_id") in company_ids or
+                job.get("posted_by") in recruiter_ids
+            )
+            if not can_control:
+                raise HTTPException(status_code=403, detail="Access denied")
+        elif job.get("posted_by") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Validation: Job must be active
+    if job.get("status") != "active":
+        raise HTTPException(
+            status_code=400,
+            detail="Mandate shareable link can only be enabled for active jobs"
+        )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Generate secure token if enabling
+    mandate_share_token = job.get("mandate_share_token")
+    if update.enabled and not mandate_share_token:
+        mandate_share_token = secrets.token_urlsafe(24)
+    
+    await db.jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "mandate_shareable_link_enabled": update.enabled,
+                "mandate_share_token": mandate_share_token if update.enabled else None,
+                "updated_at": now
+            }
+        }
+    )
+    
+    # Audit log
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "job",
+        "entity_id": job_id,
+        "action": f"mandate_shareable_link_{'enabled' if update.enabled else 'disabled'}",
+        "old_value": job.get("mandate_shareable_link_enabled", False),
+        "new_value": update.enabled,
+        "changed_by": current_user["id"],
+        "changed_by_name": current_user.get("name"),
+        "changed_by_role": current_user["role"],
+        "timestamp": now
+    })
+    
+    return {
+        "success": True,
+        "message": f"Mandate shareable link {'enabled' if update.enabled else 'disabled'}",
+        "job_id": job_id,
+        "job_public_id": job.get("job_public_id"),
+        "mandate_shareable_link_enabled": update.enabled,
+        "mandate_share_token": mandate_share_token if update.enabled else None
+    }
+
+
 @jobs_router.get("/career-page/jobs")
 async def get_career_page_jobs():
     """
