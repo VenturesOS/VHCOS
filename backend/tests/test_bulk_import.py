@@ -60,7 +60,7 @@ class TestBulkImportTemplate:
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
-        self.token = response.json()["token"]
+        self.token = response.json()["access_token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_download_template_success(self):
@@ -98,7 +98,7 @@ class TestBulkImportParse:
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
-        self.token = response.json()["token"]
+        self.token = response.json()["access_token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_parse_missing_excel(self):
@@ -199,7 +199,7 @@ class TestBulkImportSave:
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
-        self.token = response.json()["token"]
+        self.token = response.json()["access_token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_save_invalid_batch_id(self):
@@ -324,7 +324,7 @@ class TestBulkImportBatches:
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
-        self.token = response.json()["token"]
+        self.token = response.json()["access_token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_list_batches_success(self):
@@ -361,7 +361,7 @@ class TestDataMergeLogic:
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
-        self.token = response.json()["token"]
+        self.token = response.json()["access_token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_excel_priority_in_merge(self):
@@ -415,7 +415,7 @@ class TestValidation:
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
-        self.token = response.json()["token"]
+        self.token = response.json()["access_token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_validation_errors_reported(self):
@@ -463,7 +463,7 @@ class TestCandidateBankIntegration:
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
-        self.token = response.json()["token"]
+        self.token = response.json()["access_token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_saved_candidates_in_bank(self):
