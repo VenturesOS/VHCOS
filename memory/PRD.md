@@ -153,6 +153,57 @@ New Kanban-style pipeline page:
 
 ---
 
+## Commercial ↔ Company ↔ Job Relationship (January 30, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 22/22 tests passed (100%)
+**Test Report:** `/app/test_reports/iteration_30.json`
+
+### Relationship Chain
+```
+Team → Company → Commercial → Job
+     ↓
+Employer is assigned to Team
+Team has company_ids[]
+Commercial has company_id
+Job has company_id
+     ↓
+Revenue = offered_salary × commercial.fee_percentage
+```
+
+### Features Implemented
+
+#### 1. Admin Companies Page - Commercial Terms Display
+- Each company card now shows "Commercial Terms" section
+- Fee badges displayed (e.g., "8.33% Fee", "Level-based")
+- Shows "No commercial configured" for companies without commercials
+
+**Files Modified:** `/app/frontend/src/pages/admin/CompaniesPage.jsx`
+
+#### 2. Employer Job Creation - Company Selection
+- **Mandatory company selector** added to Create Job page
+- Only shows companies assigned to employer (via team)
+- Displays selected company's commercial info (fee, payment terms)
+- Shows warning when employer has no assigned companies
+
+**Files Modified:** `/app/frontend/src/pages/employer/CreateJobPage.jsx`
+
+#### 3. Data Model - Job Links to Company
+- `JobCreate` already supports `company_id` and `company_name`
+- Jobs now properly linked to companies for revenue calculation
+- Revenue calculation: `job.company_id → commercial.company_id → fee_percentage`
+
+### Revenue Calculation Ready
+```python
+# Example flow:
+job = {"company_id": "abc123", "offered_salary": 1500000}
+commercial = db.commercials.find_one({"company_id": "abc123", "is_active": True})
+revenue = job["offered_salary"] * (commercial["fee_percentage"] / 100)
+# Result: 1500000 * 0.0833 = ₹125,000
+```
+
+---
+
 ## P0 Pre-Production Hardening (January 29, 2026)
 
 ### Overview ✅ VERIFIED
