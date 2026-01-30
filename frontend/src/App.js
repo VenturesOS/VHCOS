@@ -14,6 +14,7 @@ import PublicWebsiteRedirect from "./pages/PublicWebsite";
 // Public Job Pages (No Auth Required)
 import PublicJobPage from "./pages/public/PublicJobPage";
 import ApplicationSuccessPage from "./pages/public/ApplicationSuccessPage";
+import MandateApplyPage from "./pages/public/MandateApplyPage";
 
 // Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
