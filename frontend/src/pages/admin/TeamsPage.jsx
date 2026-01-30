@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { 
   Search, Users, Building2, Plus, Edit2, Trash2, 
-  UserCircle, Briefcase, ChevronRight, AlertCircle 
+  UserCircle, Briefcase, ChevronRight, AlertCircle, CheckCircle2, Info
 } from 'lucide-react';
 
 export default function TeamsPage() {
