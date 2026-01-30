@@ -1,37 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="12" failures="0" skipped="0" tests="16" time="3.535" timestamp="2026-01-30T20:46:12.840069+00:00" hostname="agent-env-848637f2-4b2b-4827-a1ce-7a3cb4e1b995"><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_template_requires_auth" time="0.080" /><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_parse_requires_auth" time="0.044" /><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_save_requires_auth" time="0.043" /><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_batches_requires_auth" time="0.036" /><testcase classname="tests.test_bulk_import.TestBulkImportTemplate" name="test_download_template_success" time="0.270"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:63: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_missing_excel" time="0.258"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:101: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_missing_zip" time="0.260"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:101: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_invalid_excel_type" time="0.257"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:101: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_success_with_test_files" time="0.262"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:101: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportSave" name="test_save_invalid_batch_id" time="0.257"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:202: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportSave" name="test_save_empty_candidates" time="0.262"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:202: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportSave" name="test_full_parse_and_save_flow" time="0.262"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:202: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestBulkImportBatches" name="test_list_batches_success" time="0.261"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:327: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestDataMergeLogic" name="test_excel_priority_in_merge" time="0.257"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:364: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestValidation" name="test_validation_errors_reported" time="0.256"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:418: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase><testcase classname="tests.test_bulk_import.TestCandidateBankIntegration" name="test_saved_candidates_in_bank" time="0.294"><error message="failed on setup with &quot;KeyError: 'token'&quot;">tests/test_bulk_import.py:466: in setup
-    self.token = response.json()["token"]
-                 ^^^^^^^^^^^^^^^^^^^^^^^^
-E   KeyError: 'token'</error></testcase></testsuite></testsuites>
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="16" time="50.415" timestamp="2026-01-30T20:46:41.103822+00:00" hostname="agent-env-848637f2-4b2b-4827-a1ce-7a3cb4e1b995"><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_template_requires_auth" time="0.055" /><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_parse_requires_auth" time="0.042" /><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_save_requires_auth" time="0.037" /><testcase classname="tests.test_bulk_import.TestBulkImportAuth" name="test_batches_requires_auth" time="0.032" /><testcase classname="tests.test_bulk_import.TestBulkImportTemplate" name="test_download_template_success" time="0.371" /><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_missing_excel" time="0.344" /><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_missing_zip" time="0.305" /><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_invalid_excel_type" time="0.293" /><testcase classname="tests.test_bulk_import.TestBulkImportParse" name="test_parse_success_with_test_files" time="13.954" /><testcase classname="tests.test_bulk_import.TestBulkImportSave" name="test_save_invalid_batch_id" time="0.381" /><testcase classname="tests.test_bulk_import.TestBulkImportSave" name="test_save_empty_candidates" time="0.331" /><testcase classname="tests.test_bulk_import.TestBulkImportSave" name="test_full_parse_and_save_flow" time="11.946" /><testcase classname="tests.test_bulk_import.TestBulkImportBatches" name="test_list_batches_success" time="0.325" /><testcase classname="tests.test_bulk_import.TestDataMergeLogic" name="test_excel_priority_in_merge" time="12.621" /><testcase classname="tests.test_bulk_import.TestValidation" name="test_validation_errors_reported" time="8.918" /><testcase classname="tests.test_bulk_import.TestCandidateBankIntegration" name="test_saved_candidates_in_bank" time="0.344"><failure message="AttributeError: 'list' object has no attribute 'get'">tests/test_bulk_import.py:479: in test_saved_candidates_in_bank
+    candidates = data.get('candidates', [])
+                 ^^^^^^^^
+E   AttributeError: 'list' object has no attribute 'get'</failure></testcase></testsuite></testsuites>
