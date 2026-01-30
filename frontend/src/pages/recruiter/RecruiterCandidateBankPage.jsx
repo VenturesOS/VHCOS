@@ -697,6 +697,43 @@ export default function RecruiterCandidateBankPage() {
                 />
               </div>
 
+              {/* Expected CTC Section */}
+              <div className="space-y-2 p-4 bg-green-50 rounded-lg border border-green-200">
+                <Label className="flex items-center gap-2 text-green-700">
+                  <TrendingUp className="w-4 h-4" />
+                  Expected CTC
+                </Label>
+                <div className="flex gap-2">
+                  <Select value={expectedCTCType} onValueChange={setExpectedCTCType}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="amount">Amount (₹)</SelectItem>
+                      <SelectItem value="percentage">Hike (%)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={expectedCTC}
+                    onChange={(e) => setExpectedCTC(e.target.value)}
+                    placeholder={expectedCTCType === 'amount' ? 'e.g., 1500000' : 'e.g., 30'}
+                    className="flex-1"
+                  />
+                </div>
+                {expectedCTC && editSalary && (
+                  <p className="text-sm text-green-700">
+                    Expected: <strong>{formatSalaryINR(calculateExpectedCTC())}</strong>
+                    {expectedCTCType === 'percentage' && (
+                      <span className="ml-2 text-green-600">
+                        ({expectedCTC}% hike from {formatSalaryINR(parseInt(editSalary))})
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+
               {(!editSalary || !editNotice || !editLocation || editExperience === '') && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
