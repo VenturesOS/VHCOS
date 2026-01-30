@@ -117,6 +117,7 @@ function App() {
             <Route path="analytics" element={<EmployerAnalyticsPage />} />
             <Route path="my-team" element={<EmployerMyTeamPage />} />
             <Route path="companies" element={<EmployerCompaniesPage />} />
+            <Route path="pipeline" element={<EmployerPipelinePage />} />
             <Route path="jobs" element={<EmployerJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
