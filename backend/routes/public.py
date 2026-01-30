@@ -238,6 +238,56 @@ async def get_public_job_detail(job_id: str):
     }
 
 
+@public_router.get("/mandate/{job_id}")
+async def get_mandate_job_detail(job_id: str, token: str):
+    """
+    Get single job detail via mandate shareable link (PUBLIC - NO AUTH REQUIRED).
+    Supports lookup by internal ID or job_public_id (VHC/YYYY/NNNN).
+    
+    SECURITY: Requires valid mandate_share_token to access.
+    This endpoint BYPASSES career page visibility requirements.
+    
+    Use case: Sharing jobs that are not on the public career page,
+    such as assigned mandates or confidential searches.
+    """
+    if not token:
+        raise HTTPException(status_code=400, detail="Share token is required")
+    
+    # Support lookup by either internal ID or job_public_id
+    job = await db.jobs.find_one({
+        "$or": [
+            {"id": job_id},
+            {"job_public_id": job_id}
+        ],
+        "status": "active",
+        "mandate_shareable_link_enabled": True,
+        "mandate_share_token": token
+    }, {"_id": 0})
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or link is invalid/expired")
+    
+    # Return public-safe fields (same as career page job detail)
+    return {
+        "id": job.get("id"),
+        "job_public_id": job.get("job_public_id"),
+        "title": job.get("title"),
+        "description": job.get("description"),
+        "requirements": job.get("requirements"),
+        "location": job.get("location"),
+        "job_type": job.get("job_type"),
+        "department": job.get("department"),
+        "salary_min": job.get("salary_min"),
+        "salary_max": job.get("salary_max"),
+        "skills": job.get("skills", []),
+        "experience_min": job.get("experience_min"),
+        "experience_max": job.get("experience_max"),
+        "company_name": job.get("public_company_alias") or "Confidential Client",
+        "created_at": job.get("created_at"),
+        "is_mandate_link": True  # Flag to differentiate from career page links
+    }
+
+
 @public_router.post("/parse-resume")
 async def public_parse_resume(
     request: Request,
