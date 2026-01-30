@@ -202,7 +202,7 @@ async def create_team(team_data: TeamCreate, current_user: dict = Depends(requir
         "employer_name": employer.get("name"),
         "recruiter_ids": team_data.recruiter_ids,
         "recruiter_names": recruiter_names,
-        "company_ids": team_data.company_ids,
+        "company_ids": merged_company_ids,  # Use merged list (auto + explicit)
         "company_names": company_names,
         "status": "active",
         "active_jobs_count": 0,
@@ -227,14 +227,14 @@ async def create_team(team_data: TeamCreate, current_user: dict = Depends(requir
             {"$set": {"team_id": team_id, "updated_at": now}}
         )
     
-    # Update companies with employer assignment
-    for company_id in team_data.company_ids:
+    # Update companies with employer assignment and team_id
+    for company_id in merged_company_ids:
         await db.companies.update_one(
             {"id": company_id},
             {"$set": {"assigned_employer_id": team_data.employer_id, "team_id": team_id, "updated_at": now}}
         )
     
-    logging.info(f"Team '{team_data.name}' created by {current_user['name']}")
+    logging.info(f"Team '{team_data.name}' created by {current_user['name']} with {len(merged_company_ids)} companies (auto-attached: {len(auto_company_ids)})")
     
     return TeamResponse(**team_doc)
 
