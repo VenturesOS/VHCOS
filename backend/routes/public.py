@@ -661,6 +661,7 @@ async def public_apply(
         "headline": headline or parsed_data.get("headline"),
         "stage": "applied",
         "source": "public_website",
+        "application_channel": application_source,  # "career_page" or "mandate_link"
         "notes": [],
         # Consent tracking metadata
         "consent": consent_metadata,
