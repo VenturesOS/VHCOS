@@ -1,0 +1,91 @@
+{
+  "summary": "Mandate Shareable Links Feature - Complete Testing. All backend tests passed (16/16). Frontend UI verified for Employer Jobs, Admin Jobs, and MandateApplyPage. Feature allows employers/admin to generate secure shareable links for assigned mandates independent of career page visibility.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ PUT /api/jobs/{job_id}/mandate-shareable-link - Admin can enable mandate link",
+    "✅ PUT /api/jobs/{job_id}/mandate-shareable-link - Employer can enable mandate link",
+    "✅ PUT /api/jobs/{job_id}/mandate-shareable-link - Disable mandate link works",
+    "✅ PUT /api/jobs/{job_id}/mandate-shareable-link - Requires active job status",
+    "✅ GET /api/public/mandate/{job_id}?token={token} - Returns job details with valid token",
+    "✅ GET /api/public/mandate/{job_id}?token=invalid - Returns 404 for invalid token",
+    "✅ GET /api/public/mandate/{job_id} (no token) - Returns 422 validation error",
+    "✅ GET /api/public/mandate/{job_id}?token=any (non-existent job) - Returns 404",
+    "✅ POST /api/public/apply with mandate_token - Application accepted via mandate link",
+    "✅ POST /api/public/apply with invalid mandate_token - Falls back to career page or rejects",
+    "✅ Job response includes mandate_shareable_link_enabled and mandate_share_token fields",
+    "✅ Recruiter cannot enable mandate shareable links (403/404)",
+    "✅ Unauthenticated users cannot enable mandate links (401/403)",
+    "✅ Application channel tracking works for mandate link applications",
+    "✅ FRONTEND: Employer Jobs page shows 'Mandate Link' toggle for active jobs",
+    "✅ FRONTEND: Admin Jobs page shows 'Mandate' toggle for active jobs",
+    "✅ FRONTEND: MandateApplyPage displays job details with 'Private Listing' badge",
+    "✅ FRONTEND: MandateApplyPage shows application form with all required fields",
+    "✅ FRONTEND: MandateApplyPage shows 'Access Denied' for invalid/expired tokens"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_mandate_shareable_link.py",
+    "/app/test_reports/pytest/pytest_mandate_shareable_link.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Token regeneration on enable/disable: Each time mandate link is enabled, a new token is generated. This is secure but means old links become invalid.",
+    "Dual access path: Public apply endpoint correctly tries mandate link first, then falls back to career page access",
+    "Role-based access control: Only admin and employer can enable mandate links, recruiters are correctly denied",
+    "Privacy preserved: Company name shows as 'Confidential Client' on mandate apply page"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_mandate_shareable_link.py (new test file)"
+  ],
+
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "employer": {"email": "employer@vhctalent.com", "password": "VhcTalent@2024"}
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (WhatsApp)"],
+    "note": "Email and WhatsApp notifications are MOCKED"
+  },
+
+  "seed_data_creation": "No new seed data created - used existing job data",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Mandate Shareable Links feature fully tested. Key endpoints: PUT /api/jobs/{job_id}/mandate-shareable-link (enable/disable), GET /api/public/mandate/{job_id}?token={token} (public job detail), POST /api/public/apply with mandate_token (application). Token changes each time link is enabled. Test job ID: c72113dc-b62e-437c-8712-0fb9f6541d1d. Frontend pages: EmployerJobsPage, AdminJobsPage (both show Mandate Link toggle), MandateApplyPage (/apply/mandate/:jobId?token=xxx).",
+
+  "feature_summary": {
+    "feature_name": "Mandate Shareable Links",
+    "description": "Allows employers/admin to generate secure shareable links for assigned mandates, independent of career page visibility",
+    "key_components": [
+      "Backend: PUT /api/jobs/{job_id}/mandate-shareable-link endpoint",
+      "Backend: GET /api/public/mandate/{job_id}?token={token} endpoint",
+      "Backend: POST /api/public/apply with mandate_token support",
+      "Frontend: Mandate Link toggle on Employer/Admin Jobs pages",
+      "Frontend: MandateApplyPage for public mandate applications"
+    ],
+    "security": "Token-based access, role-scoped (admin/employer only), new token generated on each enable"
+  }
+}
