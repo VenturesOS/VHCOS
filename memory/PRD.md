@@ -52,7 +52,33 @@ Any future change must:
 
 Two critical P0 performance issues were diagnosed and fixed:
 
-### Issue 1: Dashboard Analytics Performance ✅ FIXED
+### Issue 1: Dashboard Stats Endpoints Missing ✅ FIXED (January 30, 2026)
+
+**Problem:** All dashboards (Admin, Employer, Recruiter) showing "Failed to load dashboard stats" because the `/api/stats/*` endpoints did not exist (404).
+
+**Root Cause:** Frontend called `/api/stats/admin`, `/api/stats/employer`, `/api/stats/recruiter` but these endpoints were never created. The existing `/api/analytics/*` endpoints had a different schema.
+
+**Fix Applied:**
+Created 4 new stats endpoints in `/app/backend/routes/admin.py`:
+- `GET /api/stats/admin` - Admin dashboard stats (total_users, total_jobs, total_applications, total_companies, users_by_role, recent_applications)
+- `GET /api/stats/employer` - Employer dashboard stats (my_jobs, total_applicants, stage_stats)
+- `GET /api/stats/recruiter` - Recruiter dashboard stats (total_jobs, total_candidates, pipeline_stats)
+- `GET /api/stats/candidate` - Candidate dashboard stats (total_applications, application_stats)
+
+**Schema Guarantee:**
+All endpoints ALWAYS return complete schema even when data is empty:
+```json
+// Admin: total_users=0, total_jobs=0, users_by_role={}, recent_applications=[]
+// Employer: my_jobs=0, stage_stats={applied:0, shortlisted:0, hired:0, ...}
+// Recruiter: total_jobs=0, pipeline_stats={applied:0, shortlisted:0, hired:0, ...}
+```
+
+**Verification:**
+- Admin Dashboard: ✅ Shows 10 users, 11 jobs, 38 applications, 3 companies
+- Employer Dashboard: ✅ Shows 0 jobs, 0 applicants (empty scope handled)
+- Recruiter Dashboard: ✅ Shows 1 mandate, 0 candidates (empty scope handled)
+
+### Issue 2: Dashboard Analytics Performance ✅ FIXED (Earlier)
 
 **Problem:** Admin, Employer, and Recruiter dashboards were failing to load statistics due to inefficient queries loading up to 100,000+ records into memory and N+1 query patterns.
 
