@@ -34,6 +34,7 @@
 **Employer Dashboard Stats Fix + UI Redesign: COMPLETE & TESTED (January 30, 2026)**
 **P1 Tech Debt - localStorage Key Standardization: COMPLETE (January 30, 2026)**
 **Mandate Shareable Links (Independent of Career Page): COMPLETE & TESTED (January 30, 2026)**
+**Team Creation Auto-Attach Companies: COMPLETE & TESTED (January 30, 2026)**
 
 ---
 
