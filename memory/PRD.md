@@ -1,6 +1,6 @@
 # VHC Talent OS - Product Requirements Document
 
-## 🔒 BUILD STATUS: PILOT-READY STABLE (January 29, 2026)
+## 🔒 BUILD STATUS: PILOT-READY STABLE (January 30, 2026)
 
 **Phase-1 + Phase-1.5: LOCKED & APPROVED**
 **Phase-2 Part A: COMPLETE & TESTED (January 19, 2026)**
@@ -24,12 +24,10 @@
 **P0 Career Page Apply Flow + Data Mismatch Fix: COMPLETE & TESTED (January 28, 2026)**
 **P0 Resume Download + Candidate Bank Auto-Add Fix: COMPLETE & TESTED (January 28, 2026)**
 **Infrastructure: Cloudflare R2 Storage Integration: COMPLETE & VERIFIED (January 29, 2026)**
-**P0 Backend Refactoring - Phase 8 (Admin Routes): COMPLETE & TESTED (January 29, 2026)**
-**P0 Backend Refactoring - Phase 9 (Jobs Routes): COMPLETE & TESTED (January 29, 2026)**
-**P0 Backend Refactoring - Phase 10 (Candidate Bank): COMPLETE & TESTED (January 29, 2026)**
-**P0 Backend Refactoring - Phase 11 (Applications & AI Matching): COMPLETE & TESTED (January 29, 2026)**
-**P0 Backend Refactoring - Phase 12 (Settings & Alerts): COMPLETE & TESTED (January 29, 2026)**
+**P0 Backend Refactoring - Phase 8-12: COMPLETE & TESTED (January 29, 2026)**
 **P0 Pre-Production Hardening (Performance Optimization): COMPLETE & TESTED (January 29, 2026)**
+**P0 Dashboard Stats Endpoints: COMPLETE & TESTED (January 30, 2026)**
+**P0 Data Relationship & Pipeline Drill-Down Fix: COMPLETE & TESTED (January 30, 2026)**
 
 ---
 
@@ -41,6 +39,72 @@ Any future change must:
 - Preserve all existing features
 - Be additive only
 - Never regress signed-off functionality
+
+---
+
+## P0 Data Relationship & Pipeline Drill-Down Fix (January 30, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 22/22 tests passed (100%)
+**Test Report:** `/app/test_reports/iteration_28.json`
+
+### Issue 1: Admin Pipeline Drill-Down ✅ FIXED
+
+**Problem:** Admin dashboard showed correct overall pipeline but filtering by employer/team/recruiter returned zeros.
+
+**Root Cause:** Incorrect field references in filter logic:
+- Was checking `company_id == employer_id` (user ID vs company ID mismatch)
+- Was checking `assigned_recruiter` (singular) instead of `assigned_recruiter_ids` (plural array)
+- Missing team-based relationship traversal
+
+**Fix Applied:**
+```python
+# New filter logic uses team relationships:
+# employer_id -> teams.employer_id -> team.company_ids -> jobs.company_id/team_id
+# recruiter_id -> teams.recruiter_ids -> jobs.team_id or jobs.posted_by
+```
+
+**Files Modified:** `/app/backend/routes/admin.py`
+
+### Issue 2: Admin Companies/Teams/Commercials ✅ FIXED
+
+**Problem:** `/api/companies` returned 404 (endpoint missing).
+
+**Fix Applied:**
+- Added `GET /api/companies` - List all companies (admin only)
+- Added `POST /api/companies` - Create company (admin only)
+- Added `GET /api/companies/{id}` - Get company details
+
+**Files Modified:** `/app/backend/routes/admin.py`
+
+### Issue 3: Employer Pipeline View ✅ EXISTING
+
+**Status:** Already implemented at `/api/employer/my-team` - returns team members with pipeline metrics, revenue, mandates.
+
+### Issue 4: Recruiter Job Posting with Approval ✅ EXISTING
+
+**Status:** Already implemented:
+- Recruiter creates job → status = `pending_approval`
+- Employer/Admin approves via `POST /api/jobs/{id}/transition`
+- Audit log tracks all status changes
+
+### Issue 5: Company HR/POC Details ✅ ADDED
+
+**Problem:** Company profile lacked HR contact information.
+
+**Fix Applied:**
+```python
+class HRContact(BaseModel):
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    designation: Optional[str]
+
+# Added to CompanyCreate, CompanyResponse, CompanyUpdate
+hr_contacts: Optional[List[HRContact]]
+```
+
+**Files Modified:** `/app/backend/models/company.py`
 
 ---
 
