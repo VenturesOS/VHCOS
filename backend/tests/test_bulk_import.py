@@ -476,7 +476,8 @@ class TestCandidateBankIntegration:
         assert response.status_code == 200, f"Failed to get candidate bank: {response.text}"
         
         data = response.json()
-        candidates = data.get('candidates', [])
+        # API returns array directly
+        candidates = data if isinstance(data, list) else data.get('candidates', [])
         
         # Look for bulk_import sourced candidates
         bulk_import_candidates = [c for c in candidates if c.get('source') == 'bulk_import']
