@@ -23,7 +23,8 @@ import {
   UsersRound,
   CheckCircle,
   DollarSign,
-  Upload
+  Upload,
+  History
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
