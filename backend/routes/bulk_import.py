@@ -361,7 +361,7 @@ async def parse_excel_only(
         
         # Normalize column names (remove * and whitespace)
         original_cols = list(df.columns)
-        df.columns = [col.strip().rstrip('*').strip().lower().replace(' ', '_').replace('.', '_') for col in df.columns]
+        df.columns = [col.strip().rstrip('*').strip().rstrip('.').strip().lower().replace(' ', '_').replace('.', '_') for col in df.columns]
         columns_found = original_cols
         
         logger.info(f"[EXCEL PARSE] Columns: {list(df.columns)}")
@@ -609,7 +609,7 @@ async def parse_cv_zip(
             else:
                 df = pd.read_excel(io.BytesIO(excel_content))
             
-            df.columns = [col.strip().rstrip('*').strip().lower().replace(' ', '_').replace('.', '_') for col in df.columns]
+            df.columns = [col.strip().rstrip('*').strip().rstrip('.').strip().lower().replace(' ', '_').replace('.', '_') for col in df.columns]
             
             for _, row in df.iterrows():
                 email = str(row.get('email', '')).strip().lower() if pd.notna(row.get('email')) else None
