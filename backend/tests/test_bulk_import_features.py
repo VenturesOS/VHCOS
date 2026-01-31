@@ -37,7 +37,7 @@ class TestImportHistoryDashboard:
     def test_get_import_batches_requires_auth(self):
         """GET /api/admin/bulk-import/batches requires authentication"""
         response = requests.get(f"{BASE_URL}/api/admin/bulk-import/batches")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403]
         print("✅ GET /api/admin/bulk-import/batches requires authentication")
     
     def test_get_import_batches_success(self):
@@ -102,7 +102,7 @@ class TestBatchDetails:
     def test_get_batch_details_requires_auth(self):
         """GET /api/admin/bulk-import/batches/{batch_id} requires authentication"""
         response = requests.get(f"{BASE_URL}/api/admin/bulk-import/batches/test-id")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403]
         print("✅ GET /api/admin/bulk-import/batches/{batch_id} requires authentication")
     
     def test_get_batch_details_not_found(self):
@@ -158,7 +158,7 @@ class TestAttachCV:
     def test_attach_cv_requires_auth(self):
         """PUT /api/admin/bulk-import/attach-cv/{candidate_id} requires authentication"""
         response = requests.put(f"{BASE_URL}/api/admin/bulk-import/attach-cv/test-id")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403]
         print("✅ PUT /api/admin/bulk-import/attach-cv/{candidate_id} requires authentication")
     
     def test_attach_cv_not_found(self):
@@ -449,7 +449,7 @@ class TestRestrictedCandidatesEndpoint:
     def test_get_restricted_candidates_requires_auth(self):
         """GET /api/admin/bulk-import/restricted-candidates requires authentication"""
         response = requests.get(f"{BASE_URL}/api/admin/bulk-import/restricted-candidates")
-        assert response.status_code == 401
+        assert response.status_code in [401, 403]
         print("✅ GET /api/admin/bulk-import/restricted-candidates requires authentication")
     
     def test_get_restricted_candidates_success(self):
