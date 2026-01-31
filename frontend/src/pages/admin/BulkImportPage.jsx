@@ -348,10 +348,16 @@ export default function BulkImportPage() {
             Two modes: Excel-Only (no CV) or CV/ZIP (with resumes)
           </p>
         </div>
-        <Button variant="outline" onClick={handleDownloadTemplate} data-testid="download-template-btn">
-          <Download className="w-4 h-4 mr-2" />
-          Download Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => navigate('/admin/import-history')} data-testid="import-history-btn">
+            <History className="w-4 h-4 mr-2" />
+            Import History
+          </Button>
+          <Button variant="outline" onClick={handleDownloadTemplate} data-testid="download-template-btn">
+            <Download className="w-4 h-4 mr-2" />
+            Download Template
+          </Button>
+        </div>
       </div>
 
       {/* Governance Notice */}
