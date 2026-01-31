@@ -682,12 +682,30 @@ export default function CandidateDataBankPage() {
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
                       <span className="text-[#7CB342] font-bold text-2xl">
-                        {selectedCandidate.name?.charAt(0).toUpperCase() || '?'}
+                        {(isEditingProfile ? editProfileForm.name : selectedCandidate.name)?.charAt(0).toUpperCase() || '?'}
                       </span>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-xl">{selectedCandidate.name || 'Unknown'}</h3>
-                      <p className="text-slate-500">{selectedCandidate.designation || selectedCandidate.headline || '-'}</p>
+                    <div className="flex-1">
+                      {isEditingProfile ? (
+                        <Input
+                          value={editProfileForm.name}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, name: e.target.value })}
+                          className="text-xl font-semibold mb-1"
+                          placeholder="Full Name"
+                        />
+                      ) : (
+                        <h3 className="font-semibold text-xl">{selectedCandidate.name || 'Unknown'}</h3>
+                      )}
+                      {isEditingProfile ? (
+                        <Input
+                          value={editProfileForm.designation}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, designation: e.target.value })}
+                          className="text-sm"
+                          placeholder="Designation/Headline"
+                        />
+                      ) : (
+                        <p className="text-slate-500">{selectedCandidate.designation || selectedCandidate.headline || '-'}</p>
+                      )}
                     </div>
                   </div>
 
@@ -698,7 +716,15 @@ export default function CandidateDataBankPage() {
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <Phone className="w-3 h-3" /> Contact No. *
                       </p>
-                      <p className="font-medium">{selectedCandidate.phone || <span className="text-amber-600">Unknown</span>}</p>
+                      {isEditingProfile ? (
+                        <Input
+                          value={editProfileForm.phone}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, phone: e.target.value })}
+                          placeholder="Phone number"
+                        />
+                      ) : (
+                        <p className="font-medium">{selectedCandidate.phone || <span className="text-amber-600">Unknown</span>}</p>
+                      )}
                     </div>
 
                     {/* Email */}
@@ -714,7 +740,17 @@ export default function CandidateDataBankPage() {
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" /> Work Experience *
                       </p>
-                      <p className="font-medium">{selectedCandidate.experience_years || 0} years</p>
+                      {isEditingProfile ? (
+                        <Input
+                          type="number"
+                          min="0"
+                          value={editProfileForm.experience_years}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, experience_years: e.target.value })}
+                          placeholder="Years"
+                        />
+                      ) : (
+                        <p className="font-medium">{selectedCandidate.experience_years || 0} years</p>
+                      )}
                     </div>
 
                     {/* Current CTC */}
@@ -722,9 +758,23 @@ export default function CandidateDataBankPage() {
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <DollarSign className="w-3 h-3" /> Current CTC *
                       </p>
-                      <p className="font-medium">
-                        {selectedCandidate.current_salary ? formatSalaryINR(selectedCandidate.current_salary) : <span className="text-amber-600">Unknown</span>}
-                      </p>
+                      {isEditingProfile ? (
+                        <div>
+                          <Input
+                            type="number"
+                            value={editProfileForm.current_salary}
+                            onChange={(e) => setEditProfileForm({ ...editProfileForm, current_salary: e.target.value })}
+                            placeholder="Annual salary in INR"
+                          />
+                          {editProfileForm.current_salary && (
+                            <p className="text-xs text-slate-500 mt-1">{formatSalaryINR(parseInt(editProfileForm.current_salary))}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="font-medium">
+                          {selectedCandidate.current_salary ? formatSalaryINR(selectedCandidate.current_salary) : <span className="text-amber-600">Unknown</span>}
+                        </p>
+                      )}
                     </div>
 
                     {/* Current Location */}
@@ -732,7 +782,15 @@ export default function CandidateDataBankPage() {
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <MapPin className="w-3 h-3" /> Current Location *
                       </p>
-                      <p className="font-medium">{selectedCandidate.location || <span className="text-amber-600">Unknown</span>}</p>
+                      {isEditingProfile ? (
+                        <Input
+                          value={editProfileForm.location}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, location: e.target.value })}
+                          placeholder="City, State"
+                        />
+                      ) : (
+                        <p className="font-medium">{selectedCandidate.location || <span className="text-amber-600">Unknown</span>}</p>
+                      )}
                     </div>
 
                     {/* Notice Period */}
@@ -740,7 +798,20 @@ export default function CandidateDataBankPage() {
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" /> Notice Period *
                       </p>
-                      <p className="font-medium">{selectedCandidate.notice_period || <span className="text-amber-600">Unknown</span>}</p>
+                      {isEditingProfile ? (
+                        <Select value={editProfileForm.notice_period} onValueChange={(v) => setEditProfileForm({ ...editProfileForm, notice_period: v })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {NOTICE_PERIODS.map(np => (
+                              <SelectItem key={np} value={np}>{np}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="font-medium">{selectedCandidate.notice_period || <span className="text-amber-600">Unknown</span>}</p>
+                      )}
                     </div>
 
                     {/* Current Employer */}
@@ -748,7 +819,15 @@ export default function CandidateDataBankPage() {
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <Building2 className="w-3 h-3" /> Current Employer *
                       </p>
-                      <p className="font-medium">{selectedCandidate.current_employer || <span className="text-amber-600">Unknown</span>}</p>
+                      {isEditingProfile ? (
+                        <Input
+                          value={editProfileForm.current_employer}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, current_employer: e.target.value })}
+                          placeholder="Company name"
+                        />
+                      ) : (
+                        <p className="font-medium">{selectedCandidate.current_employer || <span className="text-amber-600">Unknown</span>}</p>
+                      )}
                     </div>
 
                     {/* Designation */}
@@ -756,7 +835,15 @@ export default function CandidateDataBankPage() {
                       <p className="text-xs text-slate-500 flex items-center gap-1">
                         <Briefcase className="w-3 h-3" /> Current Designation *
                       </p>
-                      <p className="font-medium">{selectedCandidate.designation || selectedCandidate.headline || <span className="text-amber-600">Unknown</span>}</p>
+                      {isEditingProfile ? (
+                        <Input
+                          value={editProfileForm.designation}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, designation: e.target.value })}
+                          placeholder="Job title"
+                        />
+                      ) : (
+                        <p className="font-medium">{selectedCandidate.designation || selectedCandidate.headline || <span className="text-amber-600">Unknown</span>}</p>
+                      )}
                     </div>
 
                     {/* Industry */}
