@@ -195,14 +195,14 @@ export default function PipelinePage() {
 
       {/* Candidate Detail Dialog */}
       <Dialog open={!!selectedApp} onOpenChange={() => setSelectedApp(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading">Candidate Details</DialogTitle>
           </DialogHeader>
           {selectedApp && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full bg-[#DCFCE7] flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
                   <span className="text-[#7CB342] font-bold text-xl">
                     {selectedApp.candidate_name?.charAt(0).toUpperCase()}
                   </span>
@@ -212,10 +212,72 @@ export default function PipelinePage() {
                   <p className="text-sm text-slate-500">{selectedApp.job_title}</p>
                 </div>
               </div>
-              <div className="space-y-2 text-sm">
-                <p className="flex items-center gap-2 text-slate-600">
-                  <Mail className="w-4 h-4" /> {selectedApp.candidate_email}
-                </p>
+              
+              {/* All Mandatory Fields Grid */}
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg text-sm">
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <Mail className="w-3 h-3" /> Email
+                  </p>
+                  <p className="font-medium truncate">{selectedApp.candidate_email || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <User className="w-3 h-3" /> Phone
+                  </p>
+                  <p className="font-medium">{selectedApp.candidate_phone || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <ClipboardList className="w-3 h-3" /> Experience
+                  </p>
+                  <p className="font-medium">{selectedApp.experience_years || 0} years</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> CTC
+                  </p>
+                  <p className="font-medium">{selectedApp.current_salary ? `₹${(selectedApp.current_salary / 100000).toFixed(1)}L` : '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <User className="w-3 h-3" /> Location
+                  </p>
+                  <p className="font-medium">{selectedApp.location || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <ClipboardList className="w-3 h-3" /> Notice
+                  </p>
+                  <p className="font-medium">{selectedApp.notice_period || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <User className="w-3 h-3" /> Employer
+                  </p>
+                  <p className="font-medium truncate">{selectedApp.current_employer || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <User className="w-3 h-3" /> Designation
+                  </p>
+                  <p className="font-medium truncate">{selectedApp.designation || selectedApp.headline || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <User className="w-3 h-3" /> Industry
+                  </p>
+                  <p className="font-medium">{selectedApp.industry || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> Education
+                  </p>
+                  <p className="font-medium truncate">{selectedApp.ug_course || selectedApp.education?.[0]?.degree || '-'}</p>
+                </div>
+              </div>
+
+              <div className="text-sm">
                 <p className="flex items-center gap-2 text-slate-600">
                   <ClipboardList className="w-4 h-4" /> Stage: <span className="capitalize font-medium">{selectedApp.stage}</span>
                 </p>
