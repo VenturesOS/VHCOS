@@ -271,6 +271,82 @@ export default function CandidateDataBankPage() {
     }
   };
 
+  // Start editing profile - initialize form with current values
+  const startEditingProfile = () => {
+    if (!selectedCandidate) return;
+    setEditProfileForm({
+      name: selectedCandidate.name || '',
+      phone: selectedCandidate.phone || '',
+      location: selectedCandidate.location || '',
+      experience_years: selectedCandidate.experience_years?.toString() || '0',
+      current_salary: selectedCandidate.current_salary?.toString() || '',
+      notice_period: selectedCandidate.notice_period || '',
+      current_employer: selectedCandidate.current_employer || '',
+      designation: selectedCandidate.designation || selectedCandidate.headline || '',
+      industry: selectedCandidate.industry || ''
+    });
+    setIsEditingProfile(true);
+  };
+
+  // Cancel editing
+  const cancelEditingProfile = () => {
+    setIsEditingProfile(false);
+    setEditProfileForm({
+      name: '',
+      phone: '',
+      location: '',
+      experience_years: '',
+      current_salary: '',
+      notice_period: '',
+      current_employer: '',
+      designation: '',
+      industry: ''
+    });
+  };
+
+  // Save profile changes
+  const saveProfileChanges = async () => {
+    if (!selectedCandidate) return;
+    setSavingProfile(true);
+    try {
+      // Update salary/notice/location/experience via the dedicated endpoint
+      await candidateBankAPI.updateSalaryNotice(
+        selectedCandidate.id,
+        editProfileForm.current_salary ? parseInt(editProfileForm.current_salary) : null,
+        editProfileForm.notice_period,
+        editProfileForm.location,
+        editProfileForm.experience_years ? parseInt(editProfileForm.experience_years) : 0
+      );
+      
+      // Update other fields via the general update endpoint
+      await candidateBankAPI.update(selectedCandidate.id, {
+        name: editProfileForm.name,
+        phone: editProfileForm.phone,
+        headline: editProfileForm.designation,
+        current_employer: editProfileForm.current_employer,
+        designation: editProfileForm.designation,
+        industry: editProfileForm.industry
+      });
+      
+      toast.success('Profile updated successfully');
+      setIsEditingProfile(false);
+      
+      // Refresh the candidate data
+      loadCandidates();
+      // Update the selected candidate with new values
+      setSelectedCandidate(prev => ({
+        ...prev,
+        ...editProfileForm,
+        experience_years: parseInt(editProfileForm.experience_years) || 0,
+        current_salary: parseInt(editProfileForm.current_salary) || null
+      }));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update profile');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   return (
     <div className="space-y-6" data-testid="candidate-bank-page">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
