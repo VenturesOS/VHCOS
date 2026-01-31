@@ -590,7 +590,7 @@ export default function CandidateDataBankPage() {
                         </div>
                       </div>
                     </div>
-                  )
+                  )}
 
                   {/* Data Governance: Profile Freshness Metadata */}
                   {(selectedCandidate.last_profile_updated_at || selectedCandidate.last_application_date) && (
