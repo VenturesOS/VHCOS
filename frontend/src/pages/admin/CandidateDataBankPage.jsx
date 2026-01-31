@@ -902,93 +902,95 @@ export default function CandidateDataBankPage() {
                 </Select>
               </div>
 
-              {/* Salary - Editable */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">
-                  <DollarSign className="w-4 h-4" />
-                  Current Salary (INR) *
-                </Label>
-                <Input
-                  type="number"
-                  value={editSalary}
-                  onChange={(e) => setEditSalary(e.target.value)}
-                  placeholder="e.g., 1500000"
-                  className={!editSalary ? 'border-amber-400' : ''}
-                  data-testid="salary-input"
-                />
-                {editSalary && parseInt(editSalary) > 0 && (
-                  <p className="text-xs text-slate-500">{formatSalaryINR(parseInt(editSalary))}</p>
-                )}
-              </div>
+              {/* Two-column grid for form fields */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Salary - Editable */}
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-1 text-sm font-medium">
+                    <DollarSign className="w-4 h-4" />
+                    Current Salary (INR) *
+                  </Label>
+                  <Input
+                    type="number"
+                    value={editSalary}
+                    onChange={(e) => setEditSalary(e.target.value)}
+                    placeholder="e.g., 1500000"
+                    className={!editSalary ? 'border-amber-400' : ''}
+                    data-testid="salary-input"
+                  />
+                  {editSalary && parseInt(editSalary) > 0 && (
+                    <p className="text-xs text-slate-500">{formatSalaryINR(parseInt(editSalary))}</p>
+                  )}
+                </div>
 
-              {/* Notice Period - Editable */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  Notice Period *
-                </Label>
-                <Select value={editNotice} onValueChange={setEditNotice}>
-                  <SelectTrigger 
-                    className={!editNotice ? 'border-amber-400' : ''}
-                    data-testid="notice-select"
-                  >
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {NOTICE_PERIODS.map(np => (
-                      <SelectItem key={np} value={np}>{np}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Notice Period - Editable */}
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-1 text-sm font-medium">
+                    <Clock className="w-4 h-4" />
+                    Notice Period *
+                  </Label>
+                  <Select value={editNotice} onValueChange={setEditNotice}>
+                    <SelectTrigger 
+                      className={!editNotice ? 'border-amber-400' : ''}
+                      data-testid="notice-select"
+                    >
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {NOTICE_PERIODS.map(np => (
+                        <SelectItem key={np} value={np}>{np}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Data Governance: Location - Mandatory */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  Location *
-                </Label>
-                <Input
-                  type="text"
-                  value={editLocation}
-                  onChange={(e) => setEditLocation(e.target.value)}
-                  placeholder="e.g., Mumbai, Delhi, Bangalore"
-                  className={!editLocation ? 'border-amber-400' : ''}
-                  data-testid="location-input"
-                />
-              </div>
+                {/* Data Governance: Location - Mandatory */}
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-1 text-sm font-medium">
+                    <MapPin className="w-4 h-4" />
+                    Location *
+                  </Label>
+                  <Input
+                    type="text"
+                    value={editLocation}
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    placeholder="e.g., Mumbai"
+                    className={!editLocation ? 'border-amber-400' : ''}
+                    data-testid="location-input"
+                  />
+                </div>
 
-              {/* Data Governance: Experience Years - Mandatory */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">
-                  <Briefcase className="w-4 h-4" />
-                  Experience (years) *
-                </Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editExperience}
-                  onChange={(e) => setEditExperience(e.target.value)}
-                  placeholder="e.g., 5"
-                  className={editExperience === '' ? 'border-amber-400' : ''}
-                  data-testid="experience-input"
-                />
-                <p className="text-xs text-slate-500">Enter 0 for freshers</p>
+                {/* Data Governance: Experience Years - Mandatory */}
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-1 text-sm font-medium">
+                    <Briefcase className="w-4 h-4" />
+                    Experience (years) *
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editExperience}
+                    onChange={(e) => setEditExperience(e.target.value)}
+                    placeholder="e.g., 5"
+                    className={editExperience === '' ? 'border-amber-400' : ''}
+                    data-testid="experience-input"
+                  />
+                </div>
               </div>
 
               {/* Warning if fields missing */}
               {(!editSalary || !editNotice || !editLocation || editExperience === '') && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                  <p className="text-sm text-amber-700">
-                    All fields (salary, notice period, location, experience) are mandatory before adding as applicant.
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700">
+                    All mandatory fields must be filled before adding as applicant.
                   </p>
                 </div>
               )}
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowAddApplicant(false)}>
               Cancel
             </Button>
