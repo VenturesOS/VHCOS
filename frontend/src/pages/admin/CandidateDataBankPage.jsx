@@ -524,18 +524,73 @@ export default function CandidateDataBankPage() {
                       </div>
                     </div>
                     {/* Download Resume Button in Profile Dialog */}
-                    {selectedCandidate.resume_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadResume(selectedCandidate)}
-                        className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
-                        data-testid="download-resume-profile-btn"
-                      >
-                        <Download className="w-4 h-4 mr-2" /> Download Resume
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {selectedCandidate.resume_url ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadResume(selectedCandidate)}
+                          className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
+                          data-testid="download-resume-profile-btn"
+                        >
+                          <Download className="w-4 h-4 mr-2" /> Download Resume
+                        </Button>
+                      ) : selectedCandidate.source === 'bulk_import' && selectedCandidate.cv_attached === false ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openAttachCVDialog(selectedCandidate)}
+                          className="text-amber-600 border-amber-400 hover:bg-amber-50"
+                          data-testid="attach-cv-profile-btn"
+                        >
+                          <Paperclip className="w-4 h-4 mr-2" /> Attach CV
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
+
+                  {/* Bulk Import Info Banner */}
+                  {selectedCandidate.source === 'bulk_import' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-medium text-amber-800 text-sm">Bulk Import Candidate</p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                            <Badge variant="outline" className="border-amber-300">
+                              Type: {selectedCandidate.bulk_import_type || 'N/A'}
+                            </Badge>
+                            <Badge variant="outline" className={selectedCandidate.cv_attached ? 'border-green-300 text-green-700' : 'border-red-300 text-red-700'}>
+                              CV: {selectedCandidate.cv_attached ? 'Attached' : 'Not attached'}
+                            </Badge>
+                            {selectedCandidate.bulk_import_restricted && (
+                              <Badge variant="outline" className="border-amber-500 text-amber-700">
+                                Admin Only
+                              </Badge>
+                            )}
+                            {selectedCandidate.industry && (
+                              <Badge variant="outline" className="border-slate-300">
+                                {selectedCandidate.industry_source === 'ai_detected' && (
+                                  <Sparkles className="w-3 h-3 mr-1 text-green-500" />
+                                )}
+                                {selectedCandidate.industry}
+                              </Badge>
+                            )}
+                          </div>
+                          {selectedCandidate.discovered_by?.length > 0 && (
+                            <div className="mt-2 text-xs text-amber-700">
+                              <p className="font-medium">Discovered by:</p>
+                              <ul className="list-disc list-inside">
+                                {selectedCandidate.discovered_by.slice(0, 3).map((d, i) => (
+                                  <li key={i}>{d.user_name} ({d.user_role}) - {d.job_title}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
 
                   {/* Data Governance: Profile Freshness Metadata */}
                   {(selectedCandidate.last_profile_updated_at || selectedCandidate.last_application_date) && (
