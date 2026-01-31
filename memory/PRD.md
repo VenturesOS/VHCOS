@@ -58,70 +58,88 @@ Any future change must:
 **Test Report:** `/app/test_reports/iteration_37.json`
 
 ### Feature Description
-Admin-only tool for controlled production-grade candidate data seeding. Upload Excel + ZIP of resumes → Parse & Preview → Confirm & Save to Candidate Bank.
+Admin-only tool for controlled production-grade candidate data seeding with two independent import modes, AI industry detection, smart deduplication, and strict governance rules.
+
+### Two Import Modes
+
+#### Mode A: Excel-Only Import
+- Upload Excel with candidate data (no CV required)
+- Profiles created with `cv_attached: false`
+- CVs can be attached later using "Attach CV" feature
+- **AI Industry Detection**: If Industry column is empty, GPT detects industry from employer name
+- Endpoint: `POST /api/admin/bulk-import/excel`
+
+#### Mode B: CV/ZIP-Only Import
+- Upload ZIP containing resume files (PDF, DOC, DOCX)
+- Optional Excel files for additional metadata
+- CVs parsed using AI to extract candidate data
+- Profiles created with `cv_attached: true`
+- Endpoint: `POST /api/admin/bulk-import/cv-zip`
+
+### Smart Deduplication Rules
+When duplicates are found (by email or phone):
+- **Salary/Notice Period**: Use the HIGHER value
+- **Job History**: Merge and sort chronologically (latest first)
+- **Location**: Use from most recent job
+- **Skills**: Merge and deduplicate
+
+### Strict Governance
+- All imported profiles have `bulk_import_restricted: true`
+- **Admin-only view** by default
+- Profiles visible to Employers/Recruiters ONLY via **AI Screening results**
+- **Permanent visibility** granted only after "Add as Applicant" action
+- Tracked via `discovered_by` array
 
 ### Endpoints
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/admin/bulk-import/template` | GET | Download Excel template |
-| `/api/admin/bulk-import/parse` | POST | Parse Excel + ZIP, return merged data |
-| `/api/admin/bulk-import/save` | POST | Save reviewed candidates to Candidate Bank |
-| `/api/admin/bulk-import/batches` | GET | List all import batches for audit |
+| `/api/admin/bulk-import/excel` | POST | Parse Excel (Mode A) |
+| `/api/admin/bulk-import/cv-zip` | POST | Parse ZIP (Mode B) |
+| `/api/admin/bulk-import/save` | POST | Save candidates with deduplication |
+| `/api/admin/bulk-import/attach-cv/{id}` | PUT | Attach CV to existing candidate |
+| `/api/admin/bulk-import/batches` | GET | List all import batches |
+| `/api/admin/bulk-import/restricted-candidates` | GET | Get Admin-only candidates |
 
-### Data Flow
-1. Admin downloads Excel template
-2. Admin fills template with candidate metadata
-3. Admin creates ZIP with resume files (PDF/DOC/DOCX)
-4. Admin uploads both files and clicks **Parse & Preview**
-5. System parses Excel, extracts resumes from ZIP, uploads to R2
-6. System parses resumes with AI for enrichment
-7. System merges data (Excel takes priority)
-8. Admin reviews merged data, selects candidates to import
-9. Admin clicks **Confirm & Save**
-10. System saves to Candidate Bank with `source='bulk_import'` and `import_batch_id`
-
-### Excel Template Columns
+### Excel Template Columns (Mode A)
 | Column | Required | Description |
 |--------|----------|-------------|
-| full_name | Yes | Candidate's full name |
-| email | Yes* | Email address |
-| phone | Yes* | Phone number |
-| current_location | No | City/Location |
-| experience_years | No | Years of experience |
-| skills | No | Comma-separated skills |
-| current_salary | No | Current CTC in INR |
-| notice_period | No | Notice period (e.g., "30 days") |
-| resume_filename | Yes | Must match a file in ZIP |
+| Candidate Name* | Yes | Full name |
+| Contact No.* | Yes | Phone number |
+| Email* | Yes | Email address |
+| Work Exp* | Yes | e.g., "5Y 0 M" |
+| Annual Salary* | Yes | e.g., "12.0 L" |
+| Current Location* | Yes | City |
+| Current Employer* | Yes | Company name |
+| Designation* | Yes | Job title |
+| U.G. Course* | Yes | Education |
+| Industry* | Yes | AI-detected if empty |
+| Age/Date of Birth* | Yes | DOB or age |
 
-*At least one of email or phone is required.
-
-### Data Merge Rules
-- **Excel data = Primary truth**
-- **Resume parsed data = Enrichment only**
-- **Email/Phone**: Excel ALWAYS overrides
-- **Skills**: Merge (deduplicated)
-- **Missing Excel fields**: May be filled from resume
-
-### Validation Rules
-- ❌ Error: Missing name
-- ❌ Error: Missing both email AND phone
-- ❌ Error: Resume file not found in ZIP
-- ⚠️ Warning: Missing location, salary, notice period
-
-### Traceability
-Every imported candidate includes:
+### Database Schema Updates
 ```json
+// candidate_bank collection additions:
 {
-  "source": "bulk_import",
-  "import_batch_id": "uuid",
-  "uploaded_by_role": "admin"
+  "bulk_import_type": "excel" | "cv_zip",
+  "bulk_import_restricted": true,
+  "cv_attached": false,  // true for cv_zip mode
+  "industry": "Information Technology",
+  "industry_source": "excel" | "ai_detected",
+  "current_employer": "Company Name",
+  "designation": "Job Title",
+  "ug_course": "B.Tech",
+  "date_of_birth": "1995-05-15",
+  "discovered_by": [
+    {"user_id": "...", "user_role": "employer", "added_at": "ISO-8601"}
+  ],
+  "import_batch_id": "uuid"
 }
 ```
 
-### Files Created
-- `/app/backend/routes/bulk_import.py` - Backend endpoints
-- `/app/frontend/src/pages/admin/BulkImportPage.jsx` - Frontend UI
-- Navigation link in sidebar under "Bulk Import"
+### Files Created/Modified
+- `/app/backend/routes/bulk_import.py` - Complete rewrite with two modes
+- `/app/frontend/src/pages/admin/BulkImportPage.jsx` - New UI with tabs
+- `/app/backend/models/candidate_bank.py` - Added bulk import fields
 
 ---
 
