@@ -38,6 +38,7 @@
 **DELETE Capabilities for Core Entities: COMPLETE & TESTED (January 30, 2026)**
 **Enhanced Bulk Candidate Import Tool: COMPLETE & TESTED (January 31, 2026)**
 **Bulk Import Features Enhancement: COMPLETE & TESTED (January 31, 2026)**
+**UI Fix - Candidate Profile Dialog & Add as Applicant Dialog: COMPLETE & TESTED (January 31, 2026)**
 
 ---
 
@@ -49,6 +50,51 @@ Any future change must:
 - Preserve all existing features
 - Be additive only
 - Never regress signed-off functionality
+
+---
+
+## UI Fix - Candidate Profile Dialog & Add as Applicant Dialog (January 31, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 100% frontend UI verified
+**Test Report:** `/app/test_reports/iteration_39.json`
+
+### Issues Fixed
+
+#### 1. Add as Applicant Dialog Distortion
+- Fixed dialog width with `max-w-lg` to prevent overflow
+- Added candidate info card showing phone, location, experience, salary
+- Two-column grid layout for form fields (Salary/Notice Period, Location/Experience)
+- Warning message for missing mandatory fields
+
+#### 2. Candidate Profile Dialog Missing Fields
+Updated profile dialog to show ALL mandatory fields:
+
+| Field | Description |
+|-------|-------------|
+| Contact No.* | Phone number |
+| Email* | Email address |
+| Work Experience* | Years of experience |
+| Current CTC* | Salary in INR |
+| Current Location* | City |
+| Notice Period* | Notice period |
+| Current Employer* | Company name |
+| Current Designation* | Job title |
+| Industry | Sector (with AI detected badge) |
+| Date of Birth / Age | DOB or age |
+| Skills | List of skills |
+| Summary | Professional summary |
+
+### New Dialog Tabs
+- **Profile**: All mandatory fields in grid layout
+- **Experience**: Work history with title, company, duration
+- **Education**: Education details including UG Course
+- **Activity**: Application history with stats
+- **Audit Log**: Profile change history
+
+### Files Modified
+- `/app/frontend/src/pages/admin/CandidateDataBankPage.jsx`
+- `/app/frontend/src/components/shared/CandidateProfileDialog.jsx` (new reusable component)
 
 ---
 
