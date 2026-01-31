@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -30,12 +31,15 @@ import {
   MapPin,
   DollarSign,
   Phone,
-  Mail
+  Mail,
+  History
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function BulkImportPage() {
+  const navigate = useNavigate();
+  
   // Mode state
   const [activeMode, setActiveMode] = useState('excel');
   
