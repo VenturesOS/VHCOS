@@ -56,6 +56,21 @@ export default function CandidateDataBankPage() {
   const [attachingCV, setAttachingCV] = useState(false);
   const cvFileInputRef = useRef(null);
 
+  // Inline editing state for candidate profile
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState({
+    name: '',
+    phone: '',
+    location: '',
+    experience_years: '',
+    current_salary: '',
+    notice_period: '',
+    current_employer: '',
+    designation: '',
+    industry: ''
+  });
+
   useEffect(() => {
     loadCandidates();
   }, []);
