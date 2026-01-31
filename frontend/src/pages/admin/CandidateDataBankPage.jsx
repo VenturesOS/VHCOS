@@ -833,37 +833,56 @@ export default function CandidateDataBankPage() {
 
       {/* Add as Applicant Dialog */}
       <Dialog open={showAddApplicant} onOpenChange={setShowAddApplicant}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading flex items-center gap-2">
               <Briefcase className="w-5 h-5 text-[#7CB342]" />
               Add as Applicant
             </DialogTitle>
             <DialogDescription>
-              Add this candidate to a job as an applicant. All fields (salary, notice period, location, experience) are required.
+              Add this candidate to a job pipeline. All mandatory fields must be filled.
             </DialogDescription>
           </DialogHeader>
 
           {applicantCandidate && (
-            <div className="space-y-4 py-4">
-              {/* Candidate Info */}
+            <div className="space-y-4 py-2">
+              {/* Candidate Info Card */}
               <div className="bg-slate-50 rounded-lg p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-                    <span className="text-[#7CB342] font-semibold">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
+                    <span className="text-[#7CB342] font-semibold text-lg">
                       {applicantCandidate.name?.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-900">{applicantCandidate.name}</p>
-                    <p className="text-sm text-slate-500">{applicantCandidate.email}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 truncate">{applicantCandidate.name}</p>
+                    <p className="text-sm text-slate-500 truncate">{applicantCandidate.email}</p>
+                  </div>
+                </div>
+                {/* Show existing profile info */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center gap-1 text-slate-600">
+                    <Phone className="w-3 h-3" />
+                    <span className="truncate">{applicantCandidate.phone || 'No phone'}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-slate-600">
+                    <MapPin className="w-3 h-3" />
+                    <span className="truncate">{applicantCandidate.location || 'No location'}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-slate-600">
+                    <Briefcase className="w-3 h-3" />
+                    <span className="truncate">{applicantCandidate.experience_years || 0} yrs exp</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-slate-600">
+                    <DollarSign className="w-3 h-3" />
+                    <span className="truncate">{applicantCandidate.current_salary ? formatSalaryINR(applicantCandidate.current_salary) : 'No salary'}</span>
                   </div>
                 </div>
               </div>
 
               {/* Job Selection */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-1">
+                <Label className="flex items-center gap-1 text-sm font-medium">
                   <Briefcase className="w-4 h-4" />
                   Select Job / Mandate *
                 </Label>
