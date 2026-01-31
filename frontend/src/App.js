@@ -102,6 +102,7 @@ function App() {
             <Route path="pipeline" element={<AdminPipelinePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="bulk-import" element={<BulkImportPage />} />
+            <Route path="import-history" element={<ImportHistoryPage />} />
           </Route>
 
           {/* Recruiter Routes */}
