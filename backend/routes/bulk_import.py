@@ -380,7 +380,7 @@ async def parse_excel_only(
         'current_location': ['current_location', 'location', 'city'],
         'current_employer': ['current_employer', 'employer', 'company', 'current_company'],
         'designation': ['designation', 'title', 'job_title', 'position', 'role'],
-        'ug_course': ['ug_course', 'u_g_course', 'education', 'degree', 'qualification'],
+        'ug_course': ['ug_course', 'u_g_course', 'u_g__course', 'education', 'degree', 'qualification'],
         'industry': ['industry', 'sector', 'domain'],
         'age_dob': ['age/date_of_birth', 'age_date_of_birth', 'dob', 'date_of_birth', 'age', 'birth_date']
     }
