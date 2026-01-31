@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import { Checkbox } from '../../components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { Progress } from '../../components/ui/progress';
 import { toast } from 'sonner';
@@ -20,12 +20,25 @@ import {
   Loader2,
   Users,
   FileText,
-  Info
+  Info,
+  Sparkles,
+  ShieldAlert,
+  Paperclip,
+  Building2,
+  Briefcase,
+  GraduationCap,
+  MapPin,
+  DollarSign,
+  Phone,
+  Mail
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function BulkImportPage() {
+  // Mode state
+  const [activeMode, setActiveMode] = useState('excel');
+  
   // File states
   const [excelFile, setExcelFile] = useState(null);
   const [zipFile, setZipFile] = useState(null);
@@ -40,8 +53,8 @@ export default function BulkImportPage() {
   const [batchId, setBatchId] = useState(null);
   const [parsedCandidates, setParsedCandidates] = useState([]);
   const [selectedCandidates, setSelectedCandidates] = useState(new Set());
-  const [globalErrors, setGlobalErrors] = useState([]);
-  const [globalWarnings, setGlobalWarnings] = useState([]);
+  const [columnsFound, setColumnsFound] = useState([]);
+  const [aiIndustryCount, setAiIndustryCount] = useState(0);
   const [saveResults, setSaveResults] = useState(null);
   
   // Dialog states
@@ -55,9 +68,7 @@ export default function BulkImportPage() {
   const handleDownloadTemplate = async () => {
     try {
       const response = await fetch(`${API_URL}/api/admin/bulk-import/template`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
+        headers: { 'Authorization': `Bearer ${getToken()}` }
       });
       
       if (!response.ok) throw new Error('Failed to download template');
@@ -69,6 +80,7 @@ export default function BulkImportPage() {
       a.download = 'bulk_import_template.xlsx';
       a.click();
       window.URL.revokeObjectURL(url);
+      toast.success('Template downloaded!');
     } catch (error) {
       toast.error('Failed to download template');
     }
@@ -78,21 +90,13 @@ export default function BulkImportPage() {
   const handleExcelChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const validTypes = [
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/csv'
-      ];
       const ext = file.name.split('.').pop().toLowerCase();
       if (!['xlsx', 'xls', 'csv'].includes(ext)) {
         toast.error('Please upload an Excel file (.xlsx, .xls) or CSV file');
         return;
       }
       setExcelFile(file);
-      // Reset parsed data
-      setParsedCandidates([]);
-      setSelectedCandidates(new Set());
-      setBatchId(null);
+      resetResults();
     }
   };
 
@@ -105,17 +109,24 @@ export default function BulkImportPage() {
         return;
       }
       setZipFile(file);
-      // Reset parsed data
-      setParsedCandidates([]);
-      setSelectedCandidates(new Set());
-      setBatchId(null);
+      resetResults();
     }
   };
 
-  // Parse files
-  const handleParse = async () => {
-    if (!excelFile || !zipFile) {
-      toast.error('Please upload both Excel file and ZIP of resumes');
+  // Reset results
+  const resetResults = () => {
+    setParsedCandidates([]);
+    setSelectedCandidates(new Set());
+    setBatchId(null);
+    setColumnsFound([]);
+    setAiIndustryCount(0);
+    setSaveResults(null);
+  };
+
+  // Parse Excel (Mode A)
+  const handleParseExcel = async () => {
+    if (!excelFile) {
+      toast.error('Please upload an Excel file');
       return;
     }
 
@@ -125,15 +136,12 @@ export default function BulkImportPage() {
     try {
       const formData = new FormData();
       formData.append('excel_file', excelFile);
-      formData.append('resume_zip', zipFile);
       
       setParseProgress(30);
       
-      const response = await fetch(`${API_URL}/api/admin/bulk-import/parse`, {
+      const response = await fetch(`${API_URL}/api/admin/bulk-import/excel`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        },
+        headers: { 'Authorization': `Bearer ${getToken()}` },
         body: formData
       });
       
@@ -141,15 +149,15 @@ export default function BulkImportPage() {
       
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to parse files');
+        throw new Error(error.detail || 'Failed to parse Excel');
       }
       
       const data = await response.json();
       
       setBatchId(data.batch_id);
       setParsedCandidates(data.candidates);
-      setGlobalErrors(data.global_errors || []);
-      setGlobalWarnings(data.global_warnings || []);
+      setColumnsFound(data.columns_found || []);
+      setAiIndustryCount(data.ai_industry_detected || 0);
       
       // Auto-select valid candidates
       const validIds = new Set();
@@ -160,6 +168,66 @@ export default function BulkImportPage() {
       
       setParseProgress(100);
       toast.success(`Parsed ${data.total_rows} candidates. ${data.valid_rows} valid, ${data.invalid_rows} with errors.`);
+      
+      if (data.ai_industry_detected > 0) {
+        toast.info(`AI detected industry for ${data.ai_industry_detected} candidates`);
+      }
+      
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsParsing(false);
+      setParseProgress(0);
+    }
+  };
+
+  // Parse CV/ZIP (Mode B)
+  const handleParseCVZip = async () => {
+    if (!zipFile) {
+      toast.error('Please upload a ZIP file');
+      return;
+    }
+
+    setIsParsing(true);
+    setParseProgress(10);
+    
+    try {
+      const formData = new FormData();
+      formData.append('zip_file', zipFile);
+      
+      setParseProgress(30);
+      
+      const response = await fetch(`${API_URL}/api/admin/bulk-import/cv-zip`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        body: formData
+      });
+      
+      setParseProgress(80);
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to parse CV/ZIP');
+      }
+      
+      const data = await response.json();
+      
+      setBatchId(data.batch_id);
+      setParsedCandidates(data.candidates);
+      
+      // Auto-select valid candidates
+      const validIds = new Set();
+      data.candidates.forEach((c, idx) => {
+        if (c.is_valid) validIds.add(idx);
+      });
+      setSelectedCandidates(validIds);
+      
+      setParseProgress(100);
+      toast.success(`Parsed ${data.total_files} CVs. ${data.valid_files} valid, ${data.invalid_files} with errors.`);
+      
+      if (data.excel_files_found > 0) {
+        toast.info(`Found ${data.excel_files_found} Excel files with additional metadata`);
+      }
       
     } catch (error) {
       toast.error(error.message);
@@ -214,25 +282,7 @@ export default function BulkImportPage() {
       selectedCandidates.forEach(idx => {
         const c = parsedCandidates[idx];
         if (c && c.is_valid) {
-          candidatesToSave.push({
-            row_index: c.row_index,
-            final_name: c.final_name,
-            final_email: c.final_email,
-            final_phone: c.final_phone,
-            final_location: c.final_location,
-            final_experience_years: c.final_experience_years,
-            final_skills: c.final_skills,
-            final_current_salary: c.final_current_salary,
-            final_notice_period: c.final_notice_period,
-            final_headline: c.final_headline,
-            final_summary: c.final_summary,
-            final_experience: c.final_experience,
-            final_education: c.final_education,
-            resume_file_id: c.resume_file_id,
-            resume_fingerprint: c.resume_fingerprint,
-            r2_metadata: c.r2_metadata,
-            resume_filename: c.resume_filename
-          });
+          candidatesToSave.push(c);
         }
       });
       
@@ -246,6 +296,7 @@ export default function BulkImportPage() {
         },
         body: JSON.stringify({
           batch_id: batchId,
+          mode: activeMode,
           candidates: candidatesToSave
         })
       });
@@ -261,7 +312,7 @@ export default function BulkImportPage() {
       setSaveResults(data);
       setSaveProgress(100);
       
-      toast.success(`Import complete! ${data.successful} saved, ${data.failed} failed.`);
+      toast.success(`Import complete! ${data.successful} saved, ${data.duplicates_merged} merged, ${data.failed} failed.`);
       
     } catch (error) {
       toast.error(error.message);
@@ -275,12 +326,7 @@ export default function BulkImportPage() {
   const handleReset = () => {
     setExcelFile(null);
     setZipFile(null);
-    setParsedCandidates([]);
-    setSelectedCandidates(new Set());
-    setBatchId(null);
-    setGlobalErrors([]);
-    setGlobalWarnings([]);
-    setSaveResults(null);
+    resetResults();
   };
 
   // Stats
@@ -293,191 +339,237 @@ export default function BulkImportPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Bulk Candidate Import</h1>
+          <h1 className="font-heading text-3xl font-bold text-slate-900">Enhanced Bulk Import</h1>
           <p className="text-slate-500 mt-1">
-            Upload Excel + ZIP of resumes for controlled production-grade data seeding
+            Two modes: Excel-Only (no CV) or CV/ZIP (with resumes)
           </p>
         </div>
-        <Button variant="outline" onClick={handleDownloadTemplate}>
+        <Button variant="outline" onClick={handleDownloadTemplate} data-testid="download-template-btn">
           <Download className="w-4 h-4 mr-2" />
           Download Template
         </Button>
       </div>
 
-      {/* Instructions Card */}
-      <Card className="border-blue-200 bg-blue-50">
+      {/* Governance Notice */}
+      <Card className="border-amber-200 bg-amber-50">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div className="text-sm text-blue-800">
-              <p className="font-medium mb-2">How to use:</p>
-              <ol className="list-decimal list-inside space-y-1 text-blue-700">
-                <li>Download the Excel template and fill in candidate details</li>
-                <li>Create a ZIP file containing all resume files (PDF, DOC, DOCX)</li>
-                <li>Upload both files below and click &quot;Parse & Preview&quot;</li>
-                <li>Review the merged data, then click &quot;Confirm & Save&quot;</li>
-              </ol>
+            <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5" />
+            <div className="text-sm text-amber-800">
+              <p className="font-medium mb-1">Strict Governance Rules</p>
+              <ul className="list-disc list-inside space-y-1 text-amber-700">
+                <li>All imported profiles are <strong>Admin-only</strong> by default</li>
+                <li>Employers/Recruiters can only see them via <strong>AI Screening results</strong></li>
+                <li>Permanent visibility granted only after <strong>&quot;Add as Applicant&quot;</strong> action</li>
+              </ul>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Upload Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Excel Upload */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-green-600" />
-              Excel/CSV File
-            </CardTitle>
-            <CardDescription>
-              Contains candidate metadata (name, email, skills, etc.)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-green-300 transition-colors">
-                <input
-                  type="file"
-                  id="excel-upload"
-                  className="hidden"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleExcelChange}
-                  data-testid="excel-file-input"
-                />
-                <label htmlFor="excel-upload" className="cursor-pointer">
-                  {excelFile ? (
-                    <div className="flex items-center justify-center gap-2 text-green-600">
-                      <CheckCircle2 className="w-5 h-5" />
-                      <span className="font-medium">{excelFile.name}</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Upload className="w-8 h-8 text-slate-400 mx-auto" />
-                      <p className="text-slate-600">
-                        <span className="text-green-600 font-medium">Click to upload</span> Excel/CSV
-                      </p>
-                      <p className="text-xs text-slate-400">Supports .xlsx, .xls, .csv</p>
-                    </div>
-                  )}
-                </label>
-              </div>
-              {excelFile && (
-                <Button variant="ghost" size="sm" onClick={() => setExcelFile(null)}>
-                  Remove file
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Mode Selection Tabs */}
+      <Tabs value={activeMode} onValueChange={(v) => { setActiveMode(v); handleReset(); }} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="excel" data-testid="mode-excel-tab">
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Mode A: Excel-Only
+          </TabsTrigger>
+          <TabsTrigger value="cv_zip" data-testid="mode-cvzip-tab">
+            <FolderArchive className="w-4 h-4 mr-2" />
+            Mode B: CV/ZIP
+          </TabsTrigger>
+        </TabsList>
 
-        {/* ZIP Upload */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FolderArchive className="w-5 h-5 text-purple-600" />
-              Resume ZIP File
-            </CardTitle>
-            <CardDescription>
-              Contains resume files matching resume_filename column
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-purple-300 transition-colors">
-                <input
-                  type="file"
-                  id="zip-upload"
-                  className="hidden"
-                  accept=".zip"
-                  onChange={handleZipChange}
-                  data-testid="zip-file-input"
-                />
-                <label htmlFor="zip-upload" className="cursor-pointer">
-                  {zipFile ? (
-                    <div className="flex items-center justify-center gap-2 text-purple-600">
-                      <CheckCircle2 className="w-5 h-5" />
-                      <span className="font-medium">{zipFile.name}</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Upload className="w-8 h-8 text-slate-400 mx-auto" />
-                      <p className="text-slate-600">
-                        <span className="text-purple-600 font-medium">Click to upload</span> ZIP
-                      </p>
-                      <p className="text-xs text-slate-400">PDF, DOC, DOCX files in ZIP</p>
-                    </div>
-                  )}
-                </label>
+        {/* Excel-Only Mode */}
+        <TabsContent value="excel" className="space-y-6">
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-2">Excel-Only Mode</p>
+                  <ul className="list-disc list-inside space-y-1 text-blue-700">
+                    <li>Upload Excel with candidate data (no CV required)</li>
+                    <li>Profiles created with <code className="bg-blue-100 px-1 rounded">cv_attached: false</code></li>
+                    <li>CVs can be attached later using the &quot;Attach CV&quot; feature</li>
+                    <li>If <strong>Industry</strong> column is empty, AI will detect it from employer name</li>
+                  </ul>
+                </div>
               </div>
-              {zipFile && (
-                <Button variant="ghost" size="sm" onClick={() => setZipFile(null)}>
-                  Remove file
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      {/* Parse Button */}
-      {!parsedCandidates.length && (
-        <div className="flex justify-center">
-          <Button
-            size="lg"
-            onClick={handleParse}
-            disabled={!excelFile || !zipFile || isParsing}
-            className="bg-[#7CB342] hover:bg-[#689F38]"
-            data-testid="parse-btn"
-          >
-            {isParsing ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Parsing... {parseProgress}%
-              </>
-            ) : (
-              <>
-                <Eye className="w-4 h-4 mr-2" />
-                Parse &amp; Preview
-              </>
-            )}
-          </Button>
-        </div>
-      )}
+          {/* Excel Upload */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-green-600" />
+                Upload Excel File
+              </CardTitle>
+              <CardDescription>
+                Required columns: Name*, Contact*, Email*, Work Exp*, Salary*, Location*, Employer*, Designation*, Education*, Industry*, DOB*
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-green-300 transition-colors">
+                  <input
+                    type="file"
+                    id="excel-upload"
+                    className="hidden"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleExcelChange}
+                    data-testid="excel-file-input"
+                  />
+                  <label htmlFor="excel-upload" className="cursor-pointer">
+                    {excelFile ? (
+                      <div className="flex items-center justify-center gap-2 text-green-600">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-medium">{excelFile.name}</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Upload className="w-8 h-8 text-slate-400 mx-auto" />
+                        <p className="text-slate-600">
+                          <span className="text-green-600 font-medium">Click to upload</span> Excel/CSV
+                        </p>
+                        <p className="text-xs text-slate-400">Supports .xlsx, .xls, .csv</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+                {excelFile && (
+                  <div className="flex justify-between items-center">
+                    <Button variant="ghost" size="sm" onClick={() => setExcelFile(null)}>
+                      Remove file
+                    </Button>
+                    <Button
+                      onClick={handleParseExcel}
+                      disabled={isParsing}
+                      className="bg-[#7CB342] hover:bg-[#689F38]"
+                      data-testid="parse-excel-btn"
+                    >
+                      {isParsing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Parsing... {parseProgress}%
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-4 h-4 mr-2" />
+                          Parse &amp; Preview
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* CV/ZIP Mode */}
+        <TabsContent value="cv_zip" className="space-y-6">
+          <Card className="border-purple-200 bg-purple-50">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-purple-600 mt-0.5" />
+                <div className="text-sm text-purple-800">
+                  <p className="font-medium mb-2">CV/ZIP Mode</p>
+                  <ul className="list-disc list-inside space-y-1 text-purple-700">
+                    <li>Upload ZIP containing resume files (PDF, DOC, DOCX)</li>
+                    <li>Optionally include Excel files for additional metadata</li>
+                    <li>CVs are parsed using AI to extract candidate data</li>
+                    <li>Profiles created with <code className="bg-purple-100 px-1 rounded">cv_attached: true</code></li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ZIP Upload */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FolderArchive className="w-5 h-5 text-purple-600" />
+                Upload ZIP File
+              </CardTitle>
+              <CardDescription>
+                ZIP containing resume files (PDF, DOC, DOCX) and optional Excel files
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-purple-300 transition-colors">
+                  <input
+                    type="file"
+                    id="zip-upload"
+                    className="hidden"
+                    accept=".zip"
+                    onChange={handleZipChange}
+                    data-testid="zip-file-input"
+                  />
+                  <label htmlFor="zip-upload" className="cursor-pointer">
+                    {zipFile ? (
+                      <div className="flex items-center justify-center gap-2 text-purple-600">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-medium">{zipFile.name}</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Upload className="w-8 h-8 text-slate-400 mx-auto" />
+                        <p className="text-slate-600">
+                          <span className="text-purple-600 font-medium">Click to upload</span> ZIP
+                        </p>
+                        <p className="text-xs text-slate-400">PDF, DOC, DOCX files + optional Excel</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+                {zipFile && (
+                  <div className="flex justify-between items-center">
+                    <Button variant="ghost" size="sm" onClick={() => setZipFile(null)}>
+                      Remove file
+                    </Button>
+                    <Button
+                      onClick={handleParseCVZip}
+                      disabled={isParsing}
+                      className="bg-purple-600 hover:bg-purple-700"
+                      data-testid="parse-cvzip-btn"
+                    >
+                      {isParsing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Parsing CVs... {parseProgress}%
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-4 h-4 mr-2" />
+                          Parse &amp; Preview
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {isParsing && (
         <Progress value={parseProgress} className="h-2" />
       )}
 
-      {/* Global Warnings/Errors */}
-      {globalWarnings.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50">
+      {/* AI Industry Detection Notice */}
+      {aiIndustryCount > 0 && (
+        <Card className="border-green-200 bg-green-50">
           <CardContent className="p-4">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-amber-800">Warnings:</p>
-                <ul className="text-sm text-amber-700 list-disc list-inside">
-                  {globalWarnings.map((w, i) => <li key={i}>{w}</li>)}
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {globalErrors.length > 0 && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-2">
-              <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-red-800">Errors:</p>
-                <ul className="text-sm text-red-700 list-disc list-inside">
-                  {globalErrors.map((e, i) => <li key={i}>{e}</li>)}
-                </ul>
-              </div>
+            <div className="flex items-center gap-2 text-green-800">
+              <Sparkles className="w-5 h-5 text-green-600" />
+              <span className="font-medium">
+                AI detected industry for {aiIndustryCount} candidate(s) based on employer name
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -528,7 +620,10 @@ export default function BulkImportPage() {
             <CardHeader>
               <CardTitle>Preview Candidates</CardTitle>
               <CardDescription>
-                Review the merged data before saving. Excel data takes priority.
+                {activeMode === 'excel' 
+                  ? 'Review parsed data. Missing mandatory fields will be marked as "Unknown".'
+                  : 'Review AI-parsed data from CVs. Excel metadata will be merged if found.'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -545,10 +640,19 @@ export default function BulkImportPage() {
                       <th className="p-2 text-left">Name</th>
                       <th className="p-2 text-left">Email</th>
                       <th className="p-2 text-left">Phone</th>
-                      <th className="p-2 text-left">Location</th>
-                      <th className="p-2 text-left">Exp</th>
-                      <th className="p-2 text-left">Skills</th>
-                      <th className="p-2 text-left">Resume</th>
+                      {activeMode === 'excel' ? (
+                        <>
+                          <th className="p-2 text-left">Employer</th>
+                          <th className="p-2 text-left">Industry</th>
+                          <th className="p-2 text-left">Salary</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="p-2 text-left">Skills</th>
+                          <th className="p-2 text-left">Exp</th>
+                          <th className="p-2 text-left">CV</th>
+                        </>
+                      )}
                       <th className="p-2 text-left">Status</th>
                       <th className="p-2 text-left">Actions</th>
                     </tr>
@@ -567,39 +671,72 @@ export default function BulkImportPage() {
                             data-testid={`select-candidate-${idx}`}
                           />
                         </td>
-                        <td className="p-2 font-medium">{candidate.final_name}</td>
-                        <td className="p-2">{candidate.final_email || '-'}</td>
-                        <td className="p-2">{candidate.final_phone || '-'}</td>
-                        <td className="p-2">{candidate.final_location || '-'}</td>
-                        <td className="p-2">{candidate.final_experience_years || 0}y</td>
-                        <td className="p-2">
-                          <div className="flex flex-wrap gap-1 max-w-xs">
-                            {candidate.final_skills?.slice(0, 3).map((s, i) => (
-                              <Badge key={i} variant="secondary" className="text-xs">
-                                {s}
-                              </Badge>
-                            ))}
-                            {(candidate.final_skills?.length || 0) > 3 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{candidate.final_skills.length - 3}
-                              </Badge>
-                            )}
-                          </div>
+                        <td className="p-2 font-medium">
+                          {activeMode === 'excel' ? candidate.candidate_name : candidate.name || 'Unknown'}
                         </td>
+                        <td className="p-2">{candidate.email || '-'}</td>
                         <td className="p-2">
-                          {candidate.resume_file_id ? (
-                            <Badge variant="secondary" className="bg-green-100 text-green-700">
-                              <FileText className="w-3 h-3 mr-1" /> Uploaded
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="bg-red-100 text-red-700">
-                              Missing
-                            </Badge>
-                          )}
+                          {activeMode === 'excel' ? candidate.contact_no : candidate.phone || '-'}
                         </td>
+                        
+                        {activeMode === 'excel' ? (
+                          <>
+                            <td className="p-2 text-sm">{candidate.current_employer || '-'}</td>
+                            <td className="p-2">
+                              {candidate.industry ? (
+                                <div className="flex items-center gap-1">
+                                  <span>{candidate.industry}</span>
+                                  {candidate.industry_source === 'ai_detected' && (
+                                    <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs">
+                                      <Sparkles className="w-3 h-3 mr-1" /> AI
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : '-'}
+                            </td>
+                            <td className="p-2">{candidate.annual_salary || '-'}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="p-2">
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {candidate.skills?.slice(0, 3).map((s, i) => (
+                                  <Badge key={i} variant="secondary" className="text-xs">
+                                    {s}
+                                  </Badge>
+                                ))}
+                                {(candidate.skills?.length || 0) > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{candidate.skills.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-2">{candidate.experience_years || 0}y</td>
+                            <td className="p-2">
+                              {candidate.resume_file_id ? (
+                                <Badge variant="secondary" className="bg-green-100 text-green-700">
+                                  <FileText className="w-3 h-3 mr-1" /> OK
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="bg-red-100 text-red-700">
+                                  Error
+                                </Badge>
+                              )}
+                            </td>
+                          </>
+                        )}
+                        
                         <td className="p-2">
                           {candidate.is_valid ? (
-                            <Badge className="bg-green-100 text-green-700">Valid</Badge>
+                            candidate.missing_mandatory?.length > 0 ? (
+                              <Badge className="bg-amber-100 text-amber-700">
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                                Warnings
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-green-100 text-green-700">Valid</Badge>
+                            )
                           ) : (
                             <Badge variant="destructive">Invalid</Badge>
                           )}
@@ -609,6 +746,7 @@ export default function BulkImportPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setPreviewCandidate(candidate)}
+                            data-testid={`preview-candidate-${idx}`}
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
@@ -661,7 +799,7 @@ export default function BulkImportPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div className="p-4 bg-white rounded-lg text-center">
                   <p className="text-3xl font-bold text-slate-900">{saveResults.total_attempted}</p>
                   <p className="text-sm text-slate-500">Total Attempted</p>
@@ -671,9 +809,20 @@ export default function BulkImportPage() {
                   <p className="text-sm text-slate-500">Successful</p>
                 </div>
                 <div className="p-4 bg-white rounded-lg text-center">
+                  <p className="text-3xl font-bold text-blue-600">{saveResults.duplicates_merged}</p>
+                  <p className="text-sm text-slate-500">Merged</p>
+                </div>
+                <div className="p-4 bg-white rounded-lg text-center">
                   <p className="text-3xl font-bold text-red-600">{saveResults.failed}</p>
                   <p className="text-sm text-slate-500">Failed</p>
                 </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800 font-medium">
+                  <ShieldAlert className="w-4 h-4 inline mr-1" />
+                  Reminder: All imported profiles are restricted to Admin view only until discovered via AI Screening.
+                </p>
               </div>
 
               <div className="mt-4">
@@ -690,11 +839,15 @@ export default function BulkImportPage() {
                     </thead>
                     <tbody>
                       {saveResults.results.map((r, i) => (
-                        <tr key={i} className={`border-b ${r.status === 'failed' ? 'bg-red-50' : ''}`}>
+                        <tr key={i} className={`border-b ${r.status === 'failed' ? 'bg-red-50' : r.status === 'merged' ? 'bg-blue-50' : ''}`}>
                           <td className="p-2">{r.name}</td>
                           <td className="p-2">{r.email || '-'}</td>
                           <td className="p-2">
-                            <Badge className={r.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}>
+                            <Badge className={
+                              r.status === 'failed' ? 'bg-red-100 text-red-700' : 
+                              r.status === 'merged' ? 'bg-blue-100 text-blue-700' : 
+                              'bg-green-100 text-green-700'
+                            }>
                               {r.status}
                             </Badge>
                           </td>
@@ -707,7 +860,7 @@ export default function BulkImportPage() {
               </div>
 
               <div className="flex justify-center gap-4 mt-4">
-                <Button onClick={handleReset}>
+                <Button onClick={handleReset} data-testid="new-import-btn">
                   Start New Import
                 </Button>
                 <Button variant="outline" onClick={() => window.location.href = '/admin/candidate-bank'}>
@@ -735,9 +888,10 @@ export default function BulkImportPage() {
               </p>
               <ul className="text-sm text-amber-700 list-disc list-inside mt-2">
                 <li>Save {selectedValidCount} candidate(s) to the Candidate Bank</li>
-                <li>Upload resumes to Cloudflare R2 storage</li>
+                {activeMode === 'cv_zip' && <li>Upload CVs to Cloudflare R2 storage</li>}
                 <li>Tag all records with batch ID: {batchId?.slice(0, 8)}...</li>
-                <li>Enable AI Screening for imported candidates</li>
+                <li>Mark profiles as <strong>Admin-only</strong> (restricted)</li>
+                <li>Smart deduplication: merge existing candidates by email/phone</li>
               </ul>
             </div>
           </div>
@@ -764,7 +918,7 @@ export default function BulkImportPage() {
           </DialogHeader>
           {previewCandidate && (
             <div className="space-y-4">
-              {/* Validation Status */}
+              {/* Validation Errors */}
               {!previewCandidate.is_valid && previewCandidate.validation_errors?.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="font-medium text-red-800 mb-1">Validation Errors:</p>
@@ -774,6 +928,7 @@ export default function BulkImportPage() {
                 </div>
               )}
               
+              {/* Warnings */}
               {previewCandidate.warnings?.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                   <p className="font-medium text-amber-800 mb-1">Warnings:</p>
@@ -783,50 +938,162 @@ export default function BulkImportPage() {
                 </div>
               )}
 
-              {/* Data Comparison */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="border rounded-lg p-3">
-                  <p className="font-medium text-blue-800 mb-2">From Excel</p>
-                  <dl className="text-sm space-y-1">
-                    <div><dt className="text-slate-500 inline">Name:</dt> <dd className="inline">{previewCandidate.excel_name}</dd></div>
-                    <div><dt className="text-slate-500 inline">Email:</dt> <dd className="inline">{previewCandidate.excel_email || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Phone:</dt> <dd className="inline">{previewCandidate.excel_phone || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Location:</dt> <dd className="inline">{previewCandidate.excel_location || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Exp:</dt> <dd className="inline">{previewCandidate.excel_experience_years ?? '-'} years</dd></div>
-                    <div><dt className="text-slate-500 inline">Salary:</dt> <dd className="inline">{previewCandidate.excel_current_salary || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Notice:</dt> <dd className="inline">{previewCandidate.excel_notice_period || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Skills:</dt> <dd className="inline">{previewCandidate.excel_skills?.join(', ') || '-'}</dd></div>
-                  </dl>
+              {/* Missing Mandatory Fields */}
+              {previewCandidate.missing_mandatory?.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="font-medium text-blue-800 mb-1">Missing Mandatory (will be &quot;Unknown&quot;):</p>
+                  <div className="flex flex-wrap gap-1">
+                    {previewCandidate.missing_mandatory.map((f, i) => (
+                      <Badge key={i} variant="secondary" className="bg-blue-100 text-blue-700">{f}</Badge>
+                    ))}
+                  </div>
                 </div>
-                <div className="border rounded-lg p-3">
-                  <p className="font-medium text-purple-800 mb-2">From Resume</p>
-                  <dl className="text-sm space-y-1">
-                    <div><dt className="text-slate-500 inline">Name:</dt> <dd className="inline">{previewCandidate.parsed_name || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Email:</dt> <dd className="inline">{previewCandidate.parsed_email || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Phone:</dt> <dd className="inline">{previewCandidate.parsed_phone || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Location:</dt> <dd className="inline">{previewCandidate.parsed_location || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Exp:</dt> <dd className="inline">{previewCandidate.parsed_experience_years ?? '-'} years</dd></div>
-                    <div><dt className="text-slate-500 inline">Headline:</dt> <dd className="inline">{previewCandidate.parsed_headline || '-'}</dd></div>
-                    <div><dt className="text-slate-500 inline">Skills:</dt> <dd className="inline">{previewCandidate.parsed_skills?.join(', ') || '-'}</dd></div>
-                  </dl>
-                </div>
-              </div>
+              )}
 
-              {/* Final Merged Data */}
-              <div className="border border-green-200 rounded-lg p-3 bg-green-50">
-                <p className="font-medium text-green-800 mb-2">Final Merged Data (To Be Saved)</p>
-                <dl className="text-sm space-y-1">
-                  <div><dt className="text-slate-600 inline font-medium">Name:</dt> <dd className="inline">{previewCandidate.final_name}</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Email:</dt> <dd className="inline">{previewCandidate.final_email || '-'}</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Phone:</dt> <dd className="inline">{previewCandidate.final_phone || '-'}</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Location:</dt> <dd className="inline">{previewCandidate.final_location || '-'}</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Experience:</dt> <dd className="inline">{previewCandidate.final_experience_years} years</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Salary:</dt> <dd className="inline">{previewCandidate.final_current_salary || '-'}</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Notice:</dt> <dd className="inline">{previewCandidate.final_notice_period || '-'}</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Skills:</dt> <dd className="inline">{previewCandidate.final_skills?.join(', ') || '-'}</dd></div>
-                  <div><dt className="text-slate-600 inline font-medium">Resume:</dt> <dd className="inline">{previewCandidate.resume_filename} {previewCandidate.resume_file_id ? '✓' : '✗'}</dd></div>
-                </dl>
-              </div>
+              {/* Candidate Data */}
+              {activeMode === 'excel' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Name:</span>
+                      <span className="font-medium">{previewCandidate.candidate_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Email:</span>
+                      <span>{previewCandidate.email || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Phone:</span>
+                      <span>{previewCandidate.contact_no || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Location:</span>
+                      <span>{previewCandidate.current_location || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Salary:</span>
+                      <span>{previewCandidate.annual_salary || '-'}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Employer:</span>
+                      <span>{previewCandidate.current_employer || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Designation:</span>
+                      <span>{previewCandidate.designation || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Industry:</span>
+                      <span>{previewCandidate.industry || '-'}</span>
+                      {previewCandidate.industry_source === 'ai_detected' && (
+                        <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs">AI</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Education:</span>
+                      <span>{previewCandidate.ug_course || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-500">Experience:</span>
+                      <span>{previewCandidate.work_exp || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">Name:</span>
+                        <span className="font-medium">{previewCandidate.name || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">Email:</span>
+                        <span>{previewCandidate.email || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">Phone:</span>
+                        <span>{previewCandidate.phone || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">Location:</span>
+                        <span>{previewCandidate.location || '-'}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">Experience:</span>
+                        <span>{previewCandidate.experience_years || 0} years</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">CV File:</span>
+                        <span>{previewCandidate.filename || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">Headline:</span>
+                        <span>{previewCandidate.headline || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {previewCandidate.skills?.length > 0 && (
+                    <div>
+                      <p className="text-sm text-slate-500 mb-2">Skills:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {previewCandidate.skills.map((s, i) => (
+                          <Badge key={i} variant="secondary">{s}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {previewCandidate.summary && (
+                    <div>
+                      <p className="text-sm text-slate-500 mb-1">Summary:</p>
+                      <p className="text-sm bg-slate-50 p-2 rounded">{previewCandidate.summary}</p>
+                    </div>
+                  )}
+                  
+                  {previewCandidate.excel_data && (
+                    <div className="border-t pt-4">
+                      <p className="font-medium text-purple-800 mb-2">Additional Data from Excel:</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {previewCandidate.excel_data.employer && (
+                          <div><span className="text-slate-500">Employer:</span> {previewCandidate.excel_data.employer}</div>
+                        )}
+                        {previewCandidate.excel_data.designation && (
+                          <div><span className="text-slate-500">Designation:</span> {previewCandidate.excel_data.designation}</div>
+                        )}
+                        {previewCandidate.excel_data.salary && (
+                          <div><span className="text-slate-500">Salary:</span> ₹{previewCandidate.excel_data.salary?.toLocaleString()}</div>
+                        )}
+                        {previewCandidate.excel_data.location && (
+                          <div><span className="text-slate-500">Location:</span> {previewCandidate.excel_data.location}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
