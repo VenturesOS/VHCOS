@@ -1,12 +1,15 @@
 """
-VHC Talent OS - Bulk Import Routes
+VHC Talent OS - Enhanced Bulk Import Routes
 Admin-only tool for controlled production-grade candidate data seeding.
 
-STRICT RULES:
-- NO direct MongoDB writes
-- Uses existing candidate-bank batch save logic
-- All imports are traceable via import_batch_id
-- Soft validation with detailed error reporting
+TWO IMPORT MODES:
+1. EXCEL-ONLY: Upload Excel → Create profiles without CV → Attach CV later
+2. CV/ZIP-ONLY: Upload ZIP of resumes (+ optional Excel) → Parse CVs → Create profiles
+
+FEATURES:
+- AI Industry Detection: If Industry column is empty, GPT detects from employer name
+- Smart Deduplication: Higher salary/notice, merged job history, deduplicated skills
+- Strict Governance: All imports are Admin-only until discovered via AI Screening
 """
 import uuid
 import logging
@@ -14,16 +17,18 @@ import zipfile
 import tempfile
 import os
 import io
+import json
+import re
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
-import aiofiles
 
 # Import configuration
-from config import db, UPLOAD_DIR
+from config import db
 
 # Import utilities
 from utils import require_role
@@ -32,88 +37,223 @@ from utils import require_role
 from services.r2_storage import generate_r2_key, upload_to_r2
 from services.matching_engine import parse_resume_with_ai, generate_resume_fingerprint
 
+# Import Emergent LLM for industry detection
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+
 # Create router
 bulk_import_router = APIRouter(prefix="/api/admin/bulk-import", tags=["Bulk Import"])
 
 logger = logging.getLogger(__name__)
 
+# Get Emergent LLM Key
+EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
+
 
 # ============== PYDANTIC MODELS ==============
 
-class BulkImportCandidate(BaseModel):
-    """Single candidate from bulk import - for review stage"""
+class ExcelCandidate(BaseModel):
+    """Candidate parsed from Excel for review"""
     row_index: int
-    # From Excel
-    excel_name: str
-    excel_email: Optional[str] = None
-    excel_phone: Optional[str] = None
-    excel_location: Optional[str] = None
-    excel_experience_years: Optional[int] = None
-    excel_skills: List[str] = []
-    excel_current_salary: Optional[int] = None
-    excel_notice_period: Optional[str] = None
-    resume_filename: Optional[str] = None
-    # From Resume Parsing
-    parsed_name: Optional[str] = None
-    parsed_email: Optional[str] = None
-    parsed_phone: Optional[str] = None
-    parsed_location: Optional[str] = None
-    parsed_experience_years: Optional[int] = None
-    parsed_skills: List[str] = []
-    parsed_headline: Optional[str] = None
-    parsed_summary: Optional[str] = None
-    parsed_experience: List[dict] = []
-    parsed_education: List[dict] = []
-    # Merged/Final data (Excel takes priority)
-    final_name: str
-    final_email: Optional[str] = None
-    final_phone: Optional[str] = None
-    final_location: Optional[str] = None
-    final_experience_years: int = 0
-    final_skills: List[str] = []
-    final_current_salary: Optional[int] = None
-    final_notice_period: Optional[str] = None
-    final_headline: Optional[str] = None
-    final_summary: Optional[str] = None
-    final_experience: List[dict] = []
-    final_education: List[dict] = []
-    # Metadata
+    # Raw Excel data
+    candidate_name: str
+    contact_no: Optional[str] = None
+    email: Optional[str] = None
+    work_exp: Optional[str] = None
+    annual_salary: Optional[str] = None
+    current_location: Optional[str] = None
+    current_employer: Optional[str] = None
+    designation: Optional[str] = None
+    ug_course: Optional[str] = None
+    industry: Optional[str] = None
+    industry_source: Optional[str] = None  # "excel" or "ai_detected"
+    age_dob: Optional[str] = None
+    # Parsed/normalized values
+    experience_years: int = 0
+    salary_inr: Optional[int] = None
+    phone_normalized: Optional[str] = None
+    # Validation
+    is_valid: bool = True
+    validation_errors: List[str] = []
+    warnings: List[str] = []
+    missing_mandatory: List[str] = []
+
+
+class CVCandidate(BaseModel):
+    """Candidate parsed from CV/ZIP"""
+    row_index: int
+    filename: str
+    # Parsed from CV
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    experience_years: int = 0
+    skills: List[str] = []
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    experience: List[dict] = []
+    education: List[dict] = []
+    # From Excel if provided
+    excel_data: Optional[Dict] = None
+    # R2 Storage
     resume_file_id: Optional[str] = None
-    resume_fingerprint: Optional[str] = None
     r2_metadata: Optional[dict] = None
+    resume_fingerprint: Optional[str] = None
     # Validation
     is_valid: bool = True
     validation_errors: List[str] = []
     warnings: List[str] = []
 
 
-class BulkImportParseResponse(BaseModel):
-    """Response from parsing bulk import files"""
+class ExcelParseResponse(BaseModel):
+    """Response from Excel-only parsing"""
     batch_id: str
+    mode: str = "excel"
     total_rows: int
     valid_rows: int
     invalid_rows: int
-    candidates: List[BulkImportCandidate]
-    global_errors: List[str] = []
-    global_warnings: List[str] = []
+    candidates: List[ExcelCandidate]
+    columns_found: List[str]
+    ai_industry_detected: int
 
 
-class BulkImportSaveRequest(BaseModel):
-    """Request to save reviewed candidates"""
+class CVZipParseResponse(BaseModel):
+    """Response from CV/ZIP parsing"""
     batch_id: str
-    candidates: List[dict]  # Selected candidates with final data
+    mode: str = "cv_zip"
+    total_files: int
+    valid_files: int
+    invalid_files: int
+    candidates: List[CVCandidate]
+    excel_files_found: int
 
 
-class BulkImportSaveResponse(BaseModel):
+class BulkSaveRequest(BaseModel):
+    """Request to save bulk import candidates"""
+    batch_id: str
+    mode: str  # "excel" or "cv_zip"
+    candidates: List[dict]
+
+
+class BulkSaveResponse(BaseModel):
     """Response from saving bulk import"""
     batch_id: str
     total_attempted: int
     successful: int
     failed: int
+    duplicates_merged: int
     results: List[dict]
 
 
+class AttachCVRequest(BaseModel):
+    """Request to attach CV to existing candidate"""
+    candidate_id: str
+
+
 # ============== HELPER FUNCTIONS ==============
+
+def get_ai_chat_client(system_msg: str):
+    """Get Emergent Chat client for GPT"""
+    return LlmChat(
+        api_key=EMERGENT_KEY,
+        session_id=str(uuid.uuid4()),
+        system_message=system_msg
+    )
+
+
+async def detect_industry_from_employer(employer_name: str) -> Optional[str]:
+    """Use GPT to detect industry from employer/company name"""
+    if not employer_name or not EMERGENT_KEY:
+        return None
+    
+    try:
+        chat = get_ai_chat_client(
+            "You are an expert at identifying company industries. "
+            "Given a company name, determine its primary industry sector. "
+            "Return ONLY the industry name, nothing else. Keep it concise (1-3 words)."
+        )
+        
+        prompt = f"""What industry does this company operate in? Company name: "{employer_name}"
+
+Return ONLY the industry name (1-3 words), for example:
+- Information Technology
+- Automobile Manufacturing
+- FMCG
+- Banking & Finance
+- Healthcare
+- Consulting
+- Retail
+- Pharmaceutical
+- Logistics
+- Energy
+
+Industry:"""
+        
+        response = await chat.send_message(UserMessage(text=prompt))
+        
+        if response:
+            industry = response.strip().strip('"').strip("'")
+            # Clean up any extra text
+            if len(industry) > 50:  # Too long, likely contains explanation
+                industry = industry.split('\n')[0].strip()
+            logger.info(f"[AI INDUSTRY] Detected '{industry}' for employer '{employer_name}'")
+            return industry
+        return None
+        
+    except Exception as e:
+        logger.error(f"[AI INDUSTRY] Error detecting industry for '{employer_name}': {e}")
+        return None
+
+
+def parse_experience_string(exp_str: str) -> int:
+    """Parse experience string like '10Y 0 M' or '4Y 0 M' to years"""
+    if not exp_str:
+        return 0
+    try:
+        exp_str = str(exp_str).upper().strip()
+        # Match patterns like "10Y 0 M", "4Y", "10 Years", etc.
+        year_match = re.search(r'(\d+)\s*Y', exp_str)
+        if year_match:
+            return int(year_match.group(1))
+        # Try just number
+        num_match = re.search(r'(\d+)', exp_str)
+        if num_match:
+            return int(num_match.group(1))
+        return 0
+    except Exception:
+        return 0
+
+
+def parse_salary_string(salary_str: str) -> Optional[int]:
+    """Parse salary string like '10.0 L' or '15.5 L' to INR"""
+    if not salary_str:
+        return None
+    try:
+        salary_str = str(salary_str).upper().strip()
+        # Match patterns like "10.0 L", "15.5L", "10 Lakh", etc.
+        match = re.search(r'(\d+\.?\d*)\s*L', salary_str)
+        if match:
+            lakhs = float(match.group(1))
+            return int(lakhs * 100000)
+        # Try just number (assume in lakhs)
+        num_match = re.search(r'(\d+\.?\d*)', salary_str)
+        if num_match:
+            val = float(num_match.group(1))
+            if val < 100:  # Likely in lakhs
+                return int(val * 100000)
+            return int(val)
+        return None
+    except Exception:
+        return None
+
+
+def normalize_phone(phone: str) -> Optional[str]:
+    """Normalize phone number to last 10 digits"""
+    if not phone:
+        return None
+    digits = "".join(filter(str.isdigit, str(phone)))
+    return digits[-10:] if len(digits) >= 10 else digits if digits else None
+
 
 def extract_text_from_file(file_content: bytes, filename: str) -> str:
     """Extract text from PDF, DOC, or DOCX files"""
@@ -135,11 +275,8 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
             return "\n".join([para.text for para in doc.paragraphs])
         
         elif ext == '.doc':
-            # For .doc files, try to extract as binary text
-            # This is a fallback - .doc parsing is limited
             try:
                 text = file_content.decode('utf-8', errors='ignore')
-                # Filter out binary garbage
                 text = ''.join(c for c in text if c.isprintable() or c in '\n\r\t')
                 return text
             except Exception:
@@ -151,155 +288,292 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         return ""
 
 
-def parse_excel_skills(skills_value) -> List[str]:
-    """Parse skills from Excel cell (comma-separated string or list)"""
-    if not skills_value:
-        return []
-    if isinstance(skills_value, list):
-        return [s.strip() for s in skills_value if s and str(s).strip()]
-    if isinstance(skills_value, str):
-        return [s.strip() for s in skills_value.split(',') if s.strip()]
-    return []
-
-
-def merge_skills(excel_skills: List[str], parsed_skills: List[str]) -> List[str]:
-    """Merge skills from Excel and parsed resume, deduplicated"""
-    all_skills = set()
-    for s in excel_skills:
-        if s and s.strip():
-            all_skills.add(s.strip().lower())
-    for s in parsed_skills:
-        if s and s.strip():
-            all_skills.add(s.strip().lower())
-    # Return with original casing from Excel first, then parsed
-    result = []
+def merge_skills(existing: List[str], new: List[str]) -> List[str]:
+    """Merge and deduplicate skills"""
     seen_lower = set()
-    for s in excel_skills + parsed_skills:
+    result = []
+    for s in existing + new:
         if s and s.strip().lower() not in seen_lower:
             result.append(s.strip())
             seen_lower.add(s.strip().lower())
     return result
 
 
-def validate_candidate(candidate: BulkImportCandidate) -> BulkImportCandidate:
-    """Validate candidate data and set validation status"""
-    errors = []
-    warnings = []
+def merge_experience(existing: List[dict], new: List[dict]) -> List[dict]:
+    """Merge job history and sort chronologically by latest date"""
+    all_exp = existing + new
+    # Sort by duration/date (descending - newest first)
+    # Try to extract year from duration for sorting
+    def get_sort_key(exp):
+        duration = exp.get('duration', '') or ''
+        # Try to find year numbers
+        years = re.findall(r'20\d{2}', duration)
+        if years:
+            return max(int(y) for y in years)
+        return 0
     
-    # Required: At least email OR phone
-    if not candidate.final_email and not candidate.final_phone:
-        errors.append("Either email or phone is required")
-    
-    # Required: Name
-    if not candidate.final_name or not candidate.final_name.strip():
-        errors.append("Name is required")
-    
-    # Required: Resume
-    if not candidate.resume_file_id:
-        errors.append(f"Resume file not found for: {candidate.resume_filename}")
-    
-    # Warnings for missing optional but important fields
-    if not candidate.final_location:
-        warnings.append("Location is missing - will need to be added later")
-    
-    if not candidate.final_current_salary:
-        warnings.append("Current salary is missing - will need to be added later")
-    
-    if not candidate.final_notice_period:
-        warnings.append("Notice period is missing - will need to be added later")
-    
-    if candidate.final_experience_years == 0 and not candidate.final_experience:
-        warnings.append("Experience years is 0 and no experience details found")
-    
-    candidate.validation_errors = errors
-    candidate.warnings = warnings
-    candidate.is_valid = len(errors) == 0
-    
-    return candidate
+    return sorted(all_exp, key=get_sort_key, reverse=True)
 
 
-# ============== ENDPOINTS ==============
+# ============== EXCEL-ONLY MODE ENDPOINTS ==============
 
-@bulk_import_router.post("/parse", response_model=BulkImportParseResponse)
-async def parse_bulk_import(
-    excel_file: UploadFile = File(..., description="Excel/CSV file with candidate metadata"),
-    resume_zip: UploadFile = File(..., description="ZIP file containing resume files"),
+@bulk_import_router.post("/excel", response_model=ExcelParseResponse)
+async def parse_excel_only(
+    excel_file: UploadFile = File(..., description="Excel/CSV file with candidate data"),
     current_user: dict = Depends(require_role(["admin"]))
 ):
     """
-    Parse bulk import files (Excel + ZIP of resumes).
+    MODE A: Excel-Only Import
     
-    ADMIN ONLY. Does NOT save to database.
-    Returns parsed data for review before confirmation.
+    Parse Excel file and create candidate profiles WITHOUT CV.
+    AI will detect industry from employer name if Industry column is empty.
     
-    Excel Required Columns:
-    - full_name
-    - email OR phone (at least one)
-    - resume_filename (must match a file in ZIP)
-    
-    Optional Columns:
-    - current_location
-    - experience_years
-    - skills (comma-separated)
-    - current_salary
-    - notice_period
+    Required columns (marked with *):
+    - Candidate Name*
+    - Contact No.*
+    - Email*
+    - Work Exp*
+    - Annual Salary*
+    - Current Location*
+    - Current Employer*
+    - Designation*
+    - U.G. Course*
+    - Industry* (AI-detected if empty)
+    - Age/Date of Birth*
     """
     batch_id = str(uuid.uuid4())
-    global_errors = []
-    global_warnings = []
     candidates = []
+    columns_found = []
+    ai_industry_count = 0
     
-    # Validate file types
-    excel_ext = Path(excel_file.filename).suffix.lower()
-    if excel_ext not in ['.xlsx', '.xls', '.csv']:
-        raise HTTPException(status_code=400, detail="Excel file must be .xlsx, .xls, or .csv")
+    # Validate file type
+    ext = Path(excel_file.filename).suffix.lower()
+    if ext not in ['.xlsx', '.xls', '.csv']:
+        raise HTTPException(status_code=400, detail="File must be .xlsx, .xls, or .csv")
     
-    if not resume_zip.filename.lower().endswith('.zip'):
-        raise HTTPException(status_code=400, detail="Resume file must be a .zip archive")
-    
-    # Read Excel file
+    # Read Excel
     try:
-        excel_content = await excel_file.read()
-        if excel_ext == '.csv':
-            df = pd.read_csv(io.BytesIO(excel_content))
+        content = await excel_file.read()
+        if ext == '.csv':
+            df = pd.read_csv(io.BytesIO(content))
         else:
-            df = pd.read_excel(io.BytesIO(excel_content))
+            df = pd.read_excel(io.BytesIO(content))
         
-        # Normalize column names
-        df.columns = [col.lower().strip().replace(' ', '_') for col in df.columns]
+        # Normalize column names (remove * and whitespace)
+        original_cols = list(df.columns)
+        df.columns = [col.strip().rstrip('*').strip().lower().replace(' ', '_').replace('.', '_') for col in df.columns]
+        columns_found = original_cols
         
-        # Check required columns
-        required_cols = ['full_name', 'resume_filename']
-        missing_cols = [col for col in required_cols if col not in df.columns]
+        logger.info(f"[EXCEL PARSE] Columns: {list(df.columns)}")
         
-        if missing_cols:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Missing required columns: {', '.join(missing_cols)}"
-            )
-        
-        # Check for email or phone
-        has_email = 'email' in df.columns
-        has_phone = 'phone' in df.columns
-        if not has_email and not has_phone:
-            raise HTTPException(
-                status_code=400,
-                detail="Excel must have either 'email' or 'phone' column"
-            )
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Excel parsing error: {e}")
-        raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
+        logger.error(f"[EXCEL PARSE] Error reading file: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
     
-    # Extract ZIP file
+    # Column mapping
+    col_map = {
+        'candidate_name': ['candidate_name', 'name', 'full_name', 'candidate'],
+        'contact_no': ['contact_no', 'contact', 'phone', 'mobile', 'phone_number'],
+        'email': ['email', 'email_id', 'e-mail', 'mail'],
+        'work_exp': ['work_exp', 'experience', 'exp', 'work_experience', 'total_exp'],
+        'annual_salary': ['annual_salary', 'salary', 'ctc', 'current_salary', 'current_ctc'],
+        'current_location': ['current_location', 'location', 'city'],
+        'current_employer': ['current_employer', 'employer', 'company', 'current_company'],
+        'designation': ['designation', 'title', 'job_title', 'position', 'role'],
+        'ug_course': ['ug_course', 'u_g_course', 'education', 'degree', 'qualification'],
+        'industry': ['industry', 'sector', 'domain'],
+        'age_dob': ['age/date_of_birth', 'age_date_of_birth', 'dob', 'date_of_birth', 'age', 'birth_date']
+    }
+    
+    def find_column(df, key):
+        for possible in col_map.get(key, [key]):
+            if possible in df.columns:
+                return possible
+        return None
+    
+    # Mandatory fields
+    mandatory_fields = ['candidate_name', 'contact_no', 'email', 'work_exp', 'annual_salary', 
+                       'current_location', 'current_employer', 'designation', 'ug_course', 
+                       'industry', 'age_dob']
+    
+    # Process each row
+    for idx, row in df.iterrows():
+        try:
+            candidate = ExcelCandidate(row_index=idx, candidate_name="Unknown")
+            missing_mandatory = []
+            
+            # Extract each field
+            def get_val(key):
+                col = find_column(df, key)
+                if col and pd.notna(row.get(col)):
+                    return str(row[col]).strip()
+                return None
+            
+            # Name
+            name = get_val('candidate_name')
+            if not name:
+                missing_mandatory.append('Candidate Name')
+                name = "Unknown"
+            candidate.candidate_name = name
+            
+            # Contact
+            contact = get_val('contact_no')
+            if not contact:
+                missing_mandatory.append('Contact No.')
+            candidate.contact_no = contact
+            candidate.phone_normalized = normalize_phone(contact)
+            
+            # Email
+            email = get_val('email')
+            if not email:
+                missing_mandatory.append('Email')
+            candidate.email = email
+            
+            # Work Experience
+            work_exp = get_val('work_exp')
+            if not work_exp:
+                missing_mandatory.append('Work Exp')
+            candidate.work_exp = work_exp
+            candidate.experience_years = parse_experience_string(work_exp)
+            
+            # Salary
+            salary = get_val('annual_salary')
+            if not salary:
+                missing_mandatory.append('Annual Salary')
+            candidate.annual_salary = salary
+            candidate.salary_inr = parse_salary_string(salary)
+            
+            # Location
+            location = get_val('current_location')
+            if not location:
+                missing_mandatory.append('Current Location')
+            candidate.current_location = location
+            
+            # Employer
+            employer = get_val('current_employer')
+            if not employer:
+                missing_mandatory.append('Current Employer')
+            candidate.current_employer = employer
+            
+            # Designation
+            designation = get_val('designation')
+            if not designation:
+                missing_mandatory.append('Designation')
+            candidate.designation = designation
+            
+            # Education
+            ug_course = get_val('ug_course')
+            if not ug_course:
+                missing_mandatory.append('U.G. Course')
+            candidate.ug_course = ug_course
+            
+            # Industry (AI-detect if empty)
+            industry = get_val('industry')
+            if industry:
+                candidate.industry = industry
+                candidate.industry_source = "excel"
+            elif employer:
+                # AI detect from employer
+                detected = await detect_industry_from_employer(employer)
+                if detected:
+                    candidate.industry = detected
+                    candidate.industry_source = "ai_detected"
+                    ai_industry_count += 1
+                else:
+                    missing_mandatory.append('Industry')
+            else:
+                missing_mandatory.append('Industry')
+            
+            # Age/DOB
+            age_dob = get_val('age_dob')
+            if not age_dob:
+                missing_mandatory.append('Age/Date of Birth')
+            candidate.age_dob = age_dob
+            
+            # Set validation status
+            candidate.missing_mandatory = missing_mandatory
+            if missing_mandatory:
+                candidate.warnings.append(f"Missing mandatory fields will be marked as 'Unknown': {', '.join(missing_mandatory)}")
+            
+            # Validation: at least email or phone required
+            if not candidate.email and not candidate.phone_normalized:
+                candidate.validation_errors.append("Either email or phone is required")
+                candidate.is_valid = False
+            
+            candidates.append(candidate)
+            
+        except Exception as e:
+            logger.error(f"[EXCEL PARSE] Error on row {idx}: {e}")
+            candidates.append(ExcelCandidate(
+                row_index=idx,
+                candidate_name=f"Row {idx} Error",
+                is_valid=False,
+                validation_errors=[str(e)]
+            ))
+    
+    valid_count = sum(1 for c in candidates if c.is_valid)
+    
+    # Store batch metadata
+    now = datetime.now(timezone.utc).isoformat()
+    batch_doc = {
+        "id": batch_id,
+        "mode": "excel",
+        "created_at": now,
+        "created_by": current_user["id"],
+        "created_by_name": current_user["name"],
+        "total_rows": len(candidates),
+        "valid_rows": valid_count,
+        "invalid_rows": len(candidates) - valid_count,
+        "ai_industry_detected": ai_industry_count,
+        "status": "pending_review",
+        "candidates_preview": [c.dict() for c in candidates]
+    }
+    await db.bulk_import_batches.insert_one(batch_doc)
+    
+    return ExcelParseResponse(
+        batch_id=batch_id,
+        total_rows=len(candidates),
+        valid_rows=valid_count,
+        invalid_rows=len(candidates) - valid_count,
+        candidates=candidates,
+        columns_found=columns_found,
+        ai_industry_detected=ai_industry_count
+    )
+
+
+# ============== CV/ZIP MODE ENDPOINTS ==============
+
+@bulk_import_router.post("/cv-zip", response_model=CVZipParseResponse)
+async def parse_cv_zip(
+    zip_file: UploadFile = File(..., description="ZIP file containing CVs and optional Excel"),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    MODE B: CV/ZIP-Only Import
+    
+    Parse ZIP file containing:
+    - Resume files (PDF, DOC, DOCX)
+    - Optional Excel files with additional metadata
+    
+    CVs are parsed using AI and profiles created with cv_attached=true.
+    """
+    batch_id = str(uuid.uuid4())
+    candidates = []
+    excel_files_found = 0
+    excel_data_map = {}  # Map by email/phone for matching
+    
+    # Validate file type
+    if not zip_file.filename.lower().endswith('.zip'):
+        raise HTTPException(status_code=400, detail="File must be a .zip archive")
+    
+    # Extract ZIP
     try:
-        zip_content = await resume_zip.read()
-        resume_files = {}  # filename -> content
+        zip_content = await zip_file.read()
+        resume_files = []  # List of (filename, content)
+        excel_files = []  # List of (filename, content)
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            zip_path = os.path.join(temp_dir, "resumes.zip")
+            zip_path = os.path.join(temp_dir, "upload.zip")
             with open(zip_path, 'wb') as f:
                 f.write(zip_content)
             
@@ -311,233 +585,189 @@ async def parse_bulk_import(
                     filename = os.path.basename(file_info.filename)
                     ext = Path(filename).suffix.lower()
                     
+                    with zip_ref.open(file_info) as f:
+                        content = f.read()
+                    
                     if ext in ['.pdf', '.doc', '.docx']:
-                        with zip_ref.open(file_info) as f:
-                            resume_files[filename.lower()] = {
-                                'content': f.read(),
-                                'original_filename': filename
-                            }
+                        resume_files.append((filename, content))
+                    elif ext in ['.xlsx', '.xls', '.csv']:
+                        excel_files.append((filename, content))
+                        excel_files_found += 1
         
         if not resume_files:
-            raise HTTPException(
-                status_code=400,
-                detail="No valid resume files (PDF, DOC, DOCX) found in ZIP"
-            )
+            raise HTTPException(status_code=400, detail="No resume files (PDF, DOC, DOCX) found in ZIP")
         
-        global_warnings.append(f"Found {len(resume_files)} resume files in ZIP")
+        logger.info(f"[CV ZIP] Found {len(resume_files)} resumes, {excel_files_found} Excel files")
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"ZIP extraction error: {e}")
-        raise HTTPException(status_code=400, detail=f"Failed to extract ZIP file: {str(e)}")
+        logger.error(f"[CV ZIP] Error extracting ZIP: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to extract ZIP: {str(e)}")
     
-    # Process each row
+    # Parse Excel files for additional metadata
+    for excel_name, excel_content in excel_files:
+        try:
+            ext = Path(excel_name).suffix.lower()
+            if ext == '.csv':
+                df = pd.read_csv(io.BytesIO(excel_content))
+            else:
+                df = pd.read_excel(io.BytesIO(excel_content))
+            
+            df.columns = [col.strip().rstrip('*').strip().lower().replace(' ', '_').replace('.', '_') for col in df.columns]
+            
+            for _, row in df.iterrows():
+                email = str(row.get('email', '')).strip().lower() if pd.notna(row.get('email')) else None
+                phone = normalize_phone(str(row.get('contact_no', row.get('phone', '')))) if pd.notna(row.get('contact_no', row.get('phone'))) else None
+                
+                data = {
+                    'name': str(row.get('candidate_name', row.get('name', ''))).strip() if pd.notna(row.get('candidate_name', row.get('name'))) else None,
+                    'email': email,
+                    'phone': phone,
+                    'location': str(row.get('current_location', row.get('location', ''))).strip() if pd.notna(row.get('current_location', row.get('location'))) else None,
+                    'salary': parse_salary_string(str(row.get('annual_salary', row.get('salary', '')))),
+                    'employer': str(row.get('current_employer', '')).strip() if pd.notna(row.get('current_employer')) else None,
+                    'designation': str(row.get('designation', '')).strip() if pd.notna(row.get('designation')) else None,
+                }
+                
+                if email:
+                    excel_data_map[email] = data
+                if phone:
+                    excel_data_map[phone] = data
+                    
+        except Exception as e:
+            logger.warning(f"[CV ZIP] Error parsing Excel {excel_name}: {e}")
+    
+    # Process each resume
     now = datetime.now(timezone.utc).isoformat()
     
-    for idx, row in df.iterrows():
+    for idx, (filename, content) in enumerate(resume_files):
         try:
-            # Extract Excel data
-            excel_name = str(row.get('full_name', '')).strip()
-            excel_email = str(row.get('email', '')).strip() if pd.notna(row.get('email')) else None
-            excel_phone = str(row.get('phone', '')).strip() if pd.notna(row.get('phone')) else None
-            excel_location = str(row.get('current_location', '')).strip() if pd.notna(row.get('current_location')) else None
-            excel_skills = parse_excel_skills(row.get('skills'))
-            resume_filename = str(row.get('resume_filename', '')).strip()
+            candidate = CVCandidate(row_index=idx, filename=filename)
             
-            # Parse experience_years safely
-            excel_exp = row.get('experience_years')
-            excel_experience_years = None
-            if pd.notna(excel_exp):
-                try:
-                    excel_experience_years = int(float(excel_exp))
-                except (ValueError, TypeError):
-                    pass
+            # Upload to R2
+            file_id = str(uuid.uuid4())
+            r2_key = generate_r2_key("bulk-import-cv", filename)
             
-            # Parse salary safely
-            excel_salary = row.get('current_salary')
-            excel_current_salary = None
-            if pd.notna(excel_salary):
-                try:
-                    excel_current_salary = int(float(excel_salary))
-                except (ValueError, TypeError):
-                    pass
+            ext = Path(filename).suffix.lower()
+            content_type_map = {
+                '.pdf': 'application/pdf',
+                '.doc': 'application/msword',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            }
+            content_type = content_type_map.get(ext, 'application/octet-stream')
             
-            excel_notice_period = str(row.get('notice_period', '')).strip() if pd.notna(row.get('notice_period')) else None
+            r2_result = await upload_to_r2(content, r2_key, content_type)
+            candidate.resume_file_id = file_id
+            candidate.r2_metadata = r2_result
             
-            # Find matching resume file
-            resume_filename_lower = resume_filename.lower()
-            resume_data = resume_files.get(resume_filename_lower)
+            # Extract text and parse with AI
+            resume_text = extract_text_from_file(content, filename)
             
-            candidate = BulkImportCandidate(
-                row_index=idx,
-                excel_name=excel_name,
-                excel_email=excel_email,
-                excel_phone=excel_phone,
-                excel_location=excel_location,
-                excel_experience_years=excel_experience_years,
-                excel_skills=excel_skills,
-                excel_current_salary=excel_current_salary,
-                excel_notice_period=excel_notice_period,
-                resume_filename=resume_filename,
-                final_name=excel_name,
-                final_email=excel_email,
-                final_phone=excel_phone,
-                final_location=excel_location,
-                final_experience_years=excel_experience_years or 0,
-                final_skills=excel_skills,
-                final_current_salary=excel_current_salary,
-                final_notice_period=excel_notice_period
-            )
+            if resume_text:
+                # Generate fingerprint
+                candidate.resume_fingerprint = generate_resume_fingerprint(resume_text)
+                
+                # Parse with AI
+                if len(resume_text) > 100:
+                    parsed = await parse_resume_with_ai(resume_text[:8000])
+                    
+                    if parsed.get('success') and parsed.get('data'):
+                        data = parsed['data']
+                        candidate.name = data.get('name')
+                        candidate.email = data.get('email')
+                        candidate.phone = data.get('phone')
+                        candidate.location = data.get('location')
+                        candidate.experience_years = data.get('experience_years', 0) or 0
+                        candidate.skills = data.get('skills', [])
+                        candidate.headline = data.get('headline')
+                        candidate.summary = data.get('summary')
+                        candidate.experience = data.get('experience', [])
+                        candidate.education = data.get('education', [])
+                    else:
+                        candidate.warnings.append(f"AI parsing failed: {parsed.get('error', 'Unknown error')}")
+            else:
+                candidate.warnings.append("Could not extract text from file")
             
-            if resume_data:
-                # Upload resume to R2
-                file_id = str(uuid.uuid4())
-                original_filename = resume_data['original_filename']
-                file_content = resume_data['content']
-                
-                # Generate R2 key
-                r2_key = generate_r2_key("bulk-import", original_filename)
-                
-                # Determine content type
-                ext = Path(original_filename).suffix.lower()
-                content_type_map = {
-                    '.pdf': 'application/pdf',
-                    '.doc': 'application/msword',
-                    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                }
-                content_type = content_type_map.get(ext, 'application/octet-stream')
-                
-                # Upload to R2
-                r2_result = await upload_to_r2(file_content, r2_key, content_type)
-                
-                candidate.resume_file_id = file_id
-                candidate.r2_metadata = r2_result
-                
-                # Parse resume for enrichment
-                resume_text = extract_text_from_file(file_content, original_filename)
-                
-                # Generate fingerprint from extracted text (not raw bytes)
-                if resume_text:
-                    fingerprint = generate_resume_fingerprint(resume_text)
-                    candidate.resume_fingerprint = fingerprint
-                else:
-                    # Fallback: use hash of file content
-                    import hashlib
-                    candidate.resume_fingerprint = hashlib.sha256(file_content).hexdigest()[:32]
-                
-                if resume_text and len(resume_text) > 100:
-                    try:
-                        parsed = await parse_resume_with_ai(resume_text[:8000])
-                        
-                        candidate.parsed_name = parsed.get('name')
-                        candidate.parsed_email = parsed.get('email')
-                        candidate.parsed_phone = parsed.get('phone')
-                        candidate.parsed_location = parsed.get('location')
-                        candidate.parsed_experience_years = parsed.get('experience_years')
-                        candidate.parsed_skills = parsed.get('skills', [])
-                        candidate.parsed_headline = parsed.get('headline')
-                        candidate.parsed_summary = parsed.get('summary')
-                        candidate.parsed_experience = parsed.get('experience', [])
-                        candidate.parsed_education = parsed.get('education', [])
-                        
-                        # MERGE LOGIC: Excel takes priority, parsed fills gaps
-                        # Email/Phone: Excel ALWAYS overrides
-                        # Skills: Merge (deduplicated)
-                        # Missing Excel fields: Fill from parsed
-                        
-                        if not candidate.final_email and candidate.parsed_email:
-                            candidate.final_email = candidate.parsed_email
-                        
-                        if not candidate.final_phone and candidate.parsed_phone:
-                            candidate.final_phone = candidate.parsed_phone
-                        
-                        if not candidate.final_location and candidate.parsed_location:
-                            candidate.final_location = candidate.parsed_location
-                        
-                        if candidate.final_experience_years == 0 and candidate.parsed_experience_years:
-                            candidate.final_experience_years = candidate.parsed_experience_years
-                        
-                        # Merge skills
-                        candidate.final_skills = merge_skills(
-                            candidate.excel_skills, 
-                            candidate.parsed_skills
-                        )
-                        
-                        candidate.final_headline = candidate.parsed_headline
-                        candidate.final_summary = candidate.parsed_summary
-                        candidate.final_experience = candidate.parsed_experience
-                        candidate.final_education = candidate.parsed_education
-                        
-                    except Exception as e:
-                        logger.warning(f"Resume parsing failed for {resume_filename}: {e}")
-                        candidate.warnings.append(f"Resume parsing failed: {str(e)}")
+            # Try to match with Excel data
+            if candidate.email and candidate.email.lower() in excel_data_map:
+                candidate.excel_data = excel_data_map[candidate.email.lower()]
+            elif candidate.phone:
+                phone_norm = normalize_phone(candidate.phone)
+                if phone_norm and phone_norm in excel_data_map:
+                    candidate.excel_data = excel_data_map[phone_norm]
             
-            # Validate candidate
-            candidate = validate_candidate(candidate)
+            # Validate
+            if not candidate.name and not (candidate.excel_data and candidate.excel_data.get('name')):
+                candidate.validation_errors.append("Could not extract name from CV")
+            
+            if not candidate.email and not candidate.phone:
+                candidate.validation_errors.append("No email or phone found in CV")
+                candidate.is_valid = False
+            
             candidates.append(candidate)
             
         except Exception as e:
-            logger.error(f"Error processing row {idx}: {e}")
-            # Create error candidate
-            error_candidate = BulkImportCandidate(
+            logger.error(f"[CV ZIP] Error processing {filename}: {e}")
+            candidates.append(CVCandidate(
                 row_index=idx,
-                excel_name=str(row.get('full_name', f'Row {idx}')),
-                final_name=str(row.get('full_name', f'Row {idx}')),
-                resume_filename=str(row.get('resume_filename', '')),
+                filename=filename,
                 is_valid=False,
-                validation_errors=[f"Processing error: {str(e)}"]
-            )
-            candidates.append(error_candidate)
+                validation_errors=[str(e)]
+            ))
     
     valid_count = sum(1 for c in candidates if c.is_valid)
-    invalid_count = len(candidates) - valid_count
     
-    # Store batch metadata temporarily (for later save)
-    batch_meta = {
+    # Store batch metadata
+    batch_doc = {
         "id": batch_id,
+        "mode": "cv_zip",
         "created_at": now,
         "created_by": current_user["id"],
         "created_by_name": current_user["name"],
-        "total_rows": len(candidates),
-        "valid_rows": valid_count,
-        "invalid_rows": invalid_count,
+        "total_files": len(candidates),
+        "valid_files": valid_count,
+        "invalid_files": len(candidates) - valid_count,
+        "excel_files_found": excel_files_found,
         "status": "pending_review",
         "candidates_preview": [c.dict() for c in candidates]
     }
+    await db.bulk_import_batches.insert_one(batch_doc)
     
-    await db.bulk_import_batches.insert_one(batch_meta)
-    
-    return BulkImportParseResponse(
+    return CVZipParseResponse(
         batch_id=batch_id,
-        total_rows=len(candidates),
-        valid_rows=valid_count,
-        invalid_rows=invalid_count,
+        total_files=len(candidates),
+        valid_files=valid_count,
+        invalid_files=len(candidates) - valid_count,
         candidates=candidates,
-        global_errors=global_errors,
-        global_warnings=global_warnings
+        excel_files_found=excel_files_found
     )
 
 
-@bulk_import_router.post("/save", response_model=BulkImportSaveResponse)
+# ============== SAVE ENDPOINT (Both Modes) ==============
+
+@bulk_import_router.post("/save", response_model=BulkSaveResponse)
 async def save_bulk_import(
-    request: BulkImportSaveRequest,
+    request: BulkSaveRequest,
     current_user: dict = Depends(require_role(["admin"]))
 ):
     """
     Save reviewed candidates to Candidate Bank.
     
-    ADMIN ONLY. Requires prior parsing and review.
+    SMART DEDUPLICATION:
+    - Finds duplicates by email or phone
+    - Salary/Notice: Uses HIGHER value
+    - Job History: Merges and sorts by latest date
+    - Location: Uses location from most recent job
+    - Skills: Merges and deduplicates
     
-    Each record is saved with:
-    - source = "bulk_import"
-    - import_batch_id = batch_id
-    - uploaded_by_role = "admin"
-    - resume_storage = storage type from R2
-    
-    Partial success: Successful records are saved even if some fail.
+    GOVERNANCE:
+    - All records marked with bulk_import_restricted=true
+    - Only Admin can view until discovered via AI Screening
+    - Permanent visibility granted after "Add as Applicant"
     """
     batch_id = request.batch_id
+    mode = request.mode
     candidates = request.candidates
     
     if not candidates:
@@ -546,91 +776,79 @@ async def save_bulk_import(
     # Verify batch exists
     batch = await db.bulk_import_batches.find_one({"id": batch_id}, {"_id": 0})
     if not batch:
-        raise HTTPException(status_code=404, detail="Import batch not found. Please re-parse files.")
+        raise HTTPException(status_code=404, detail="Import batch not found")
     
     now = datetime.now(timezone.utc).isoformat()
     results = []
     successful = 0
     failed = 0
+    duplicates_merged = 0
     
     for candidate_data in candidates:
         try:
-            # Check for existing candidate (deduplication)
-            email = candidate_data.get('final_email')
-            phone = candidate_data.get('final_phone')
-            fingerprint = candidate_data.get('resume_fingerprint')
+            # Extract identifiers
+            if mode == "excel":
+                email = candidate_data.get('email')
+                phone = candidate_data.get('phone_normalized') or normalize_phone(candidate_data.get('contact_no'))
+                name = candidate_data.get('candidate_name', 'Unknown')
+            else:  # cv_zip
+                email = candidate_data.get('email')
+                phone = normalize_phone(candidate_data.get('phone'))
+                name = candidate_data.get('name') or (candidate_data.get('excel_data') or {}).get('name') or 'Unknown'
             
+            # Check for existing candidate (deduplication)
             existing = None
             if email:
                 existing = await db.candidate_bank.find_one({"email": email.lower()}, {"_id": 0})
             if not existing and phone:
-                phone_normalized = "".join(filter(str.isdigit, phone))[-10:]
-                if phone_normalized:
-                    existing = await db.candidate_bank.find_one({"phone_normalized": phone_normalized}, {"_id": 0})
-            
-            # Build candidate document
-            candidate_id = existing["id"] if existing else str(uuid.uuid4())
-            
-            # Build resume version
-            resume_version = {
-                "id": candidate_data.get('resume_file_id'),
-                "fingerprint": fingerprint,
-                "uploaded_at": now,
-                "uploaded_by": current_user["id"],
-                "is_active": True,
-                "r2_metadata": candidate_data.get('r2_metadata'),
-                "original_filename": candidate_data.get('resume_filename')
-            }
+                existing = await db.candidate_bank.find_one({"phone_normalized": phone}, {"_id": 0})
             
             if existing:
-                # Update existing candidate
+                # MERGE with existing record
                 update_fields = {
                     "updated_at": now,
                     "last_updated_by": current_user["id"],
-                    "active_resume_id": candidate_data.get('resume_file_id'),
                 }
                 
-                # Add new resume version
-                existing_versions = existing.get("resume_versions", [])
-                existing_versions.append(resume_version)
-                update_fields["resume_versions"] = existing_versions
+                # Salary: Use higher value
+                new_salary = candidate_data.get('salary_inr') or candidate_data.get('current_salary')
+                if new_salary and (not existing.get('current_salary') or new_salary > existing.get('current_salary')):
+                    update_fields["current_salary"] = new_salary
                 
-                # Add fingerprint if not exists
-                existing_fingerprints = existing.get("resume_fingerprints", [])
-                if fingerprint and fingerprint not in existing_fingerprints:
-                    existing_fingerprints.append(fingerprint)
-                    update_fields["resume_fingerprints"] = existing_fingerprints
+                # Skills: Merge
+                existing_skills = existing.get('skills', [])
+                new_skills = candidate_data.get('skills', [])
+                if new_skills:
+                    update_fields["skills"] = merge_skills(existing_skills, new_skills)
                 
-                # Update fields that are provided
-                if candidate_data.get('final_skills'):
-                    existing_skills = set(existing.get("skills", []))
-                    new_skills = set(candidate_data.get('final_skills', []))
-                    update_fields["skills"] = list(existing_skills.union(new_skills))
+                # Experience: Merge
+                existing_exp = existing.get('experience', [])
+                new_exp = candidate_data.get('experience', [])
+                if new_exp:
+                    merged_exp = merge_experience(existing_exp, new_exp)
+                    update_fields["experience"] = merged_exp
+                    # Location from most recent job
+                    if merged_exp and merged_exp[0].get('location'):
+                        update_fields["location"] = merged_exp[0].get('location')
                 
-                if candidate_data.get('final_current_salary'):
-                    update_fields["current_salary"] = candidate_data['final_current_salary']
+                # Add resume version if CV mode
+                if mode == "cv_zip" and candidate_data.get('resume_file_id'):
+                    resume_version = {
+                        "id": candidate_data.get('resume_file_id'),
+                        "fingerprint": candidate_data.get('resume_fingerprint'),
+                        "uploaded_at": now,
+                        "uploaded_by": current_user["id"],
+                        "is_active": True,
+                        "r2_metadata": candidate_data.get('r2_metadata'),
+                        "original_filename": candidate_data.get('filename')
+                    }
+                    existing_versions = existing.get("resume_versions", [])
+                    existing_versions.append(resume_version)
+                    update_fields["resume_versions"] = existing_versions
+                    update_fields["active_resume_id"] = candidate_data.get('resume_file_id')
+                    update_fields["cv_attached"] = True
                 
-                if candidate_data.get('final_notice_period'):
-                    update_fields["notice_period"] = candidate_data['final_notice_period']
-                
-                if candidate_data.get('final_location'):
-                    update_fields["location"] = candidate_data['final_location']
-                
-                if candidate_data.get('final_experience_years') is not None:
-                    update_fields["experience_years"] = candidate_data['final_experience_years']
-                
-                if candidate_data.get('final_experience'):
-                    update_fields["experience"] = candidate_data['final_experience']
-                
-                if candidate_data.get('final_education'):
-                    update_fields["education"] = candidate_data['final_education']
-                
-                if candidate_data.get('final_headline'):
-                    update_fields["headline"] = candidate_data['final_headline']
-                
-                if candidate_data.get('final_summary'):
-                    update_fields["summary"] = candidate_data['final_summary']
-                
+                # Update
                 await db.candidate_bank.update_one(
                     {"id": existing["id"]},
                     {"$set": update_fields}
@@ -638,66 +856,143 @@ async def save_bulk_import(
                 
                 results.append({
                     "row_index": candidate_data.get('row_index'),
-                    "name": candidate_data.get('final_name'),
+                    "name": name,
                     "email": email,
-                    "status": "updated",
+                    "status": "merged",
                     "candidate_id": existing["id"],
-                    "message": "Existing candidate updated"
+                    "message": "Merged with existing candidate"
                 })
                 successful += 1
+                duplicates_merged += 1
                 
             else:
-                # Create new candidate
-                candidate_doc = {
-                    "id": candidate_id,
-                    "email": email.lower() if email else None,
-                    "name": candidate_data.get('final_name'),
-                    "phone": phone,
-                    "phone_normalized": "".join(filter(str.isdigit, phone or ""))[-10:] or None,
-                    "headline": candidate_data.get('final_headline'),
-                    "summary": candidate_data.get('final_summary'),
-                    "skills": candidate_data.get('final_skills', []),
-                    "experience_years": candidate_data.get('final_experience_years', 0),
-                    "experience": candidate_data.get('final_experience', []),
-                    "education": candidate_data.get('final_education', []),
-                    "location": candidate_data.get('final_location'),
-                    "certifications": [],
-                    "active_resume_id": candidate_data.get('resume_file_id'),
-                    "resume_versions": [resume_version],
-                    "resume_fingerprints": [fingerprint] if fingerprint else [],
-                    "resume_url": None,  # R2 storage used
-                    "current_salary": candidate_data.get('final_current_salary'),
-                    "notice_period": candidate_data.get('final_notice_period'),
-                    "source": "bulk_import",
-                    "import_batch_id": batch_id,
-                    "linked_user_id": None,
-                    "visibility": {
-                        "admin_ids": [current_user["id"]],
-                        "employer_ids": [],
-                        "recruiter_ids": []
-                    },
-                    "match_cache": [],
-                    "created_at": now,
-                    "updated_at": now,
-                    "created_by": current_user["id"],
-                    "last_updated_by": current_user["id"],
-                    "uploaded_by_role": "admin",
-                    "application_history": [],
-                    "profile_update_audit": [{
-                        "action": "bulk_import_created",
-                        "by_id": current_user["id"],
-                        "by_name": current_user["name"],
-                        "by_role": "admin",
-                        "timestamp": now,
-                        "batch_id": batch_id
-                    }]
-                }
+                # CREATE new candidate
+                candidate_id = str(uuid.uuid4())
+                
+                if mode == "excel":
+                    candidate_doc = {
+                        "id": candidate_id,
+                        "email": email.lower() if email else None,
+                        "name": name,
+                        "phone": candidate_data.get('contact_no'),
+                        "phone_normalized": phone,
+                        "headline": candidate_data.get('designation'),
+                        "summary": None,
+                        "skills": [],
+                        "experience_years": candidate_data.get('experience_years', 0),
+                        "experience": [],
+                        "education": [{"degree": candidate_data.get('ug_course')}] if candidate_data.get('ug_course') else [],
+                        "location": candidate_data.get('current_location'),
+                        "certifications": [],
+                        "active_resume_id": None,
+                        "resume_versions": [],
+                        "resume_fingerprints": [],
+                        "resume_url": None,
+                        "current_salary": candidate_data.get('salary_inr'),
+                        "notice_period": None,
+                        # Bulk import specific fields
+                        "source": "bulk_import",
+                        "bulk_import_type": "excel",
+                        "bulk_import_restricted": True,  # Admin only until discovered
+                        "cv_attached": False,  # No CV yet for Excel imports
+                        "industry": candidate_data.get('industry'),
+                        "industry_source": candidate_data.get('industry_source'),
+                        "current_employer": candidate_data.get('current_employer'),
+                        "designation": candidate_data.get('designation'),
+                        "ug_course": candidate_data.get('ug_course'),
+                        "date_of_birth": candidate_data.get('age_dob'),
+                        "import_batch_id": batch_id,
+                        "discovered_by": [],
+                        # Standard fields
+                        "linked_user_id": None,
+                        "visibility": {"admin_ids": [current_user["id"]], "employer_ids": [], "recruiter_ids": []},
+                        "match_cache": [],
+                        "created_at": now,
+                        "updated_at": now,
+                        "created_by": current_user["id"],
+                        "last_updated_by": current_user["id"],
+                        "uploaded_by_role": "admin",
+                        "application_history": [],
+                        "profile_update_audit": [{
+                            "action": "bulk_import_created",
+                            "mode": "excel",
+                            "by_id": current_user["id"],
+                            "by_name": current_user["name"],
+                            "by_role": "admin",
+                            "timestamp": now,
+                            "batch_id": batch_id
+                        }]
+                    }
+                else:  # cv_zip
+                    excel_data = candidate_data.get('excel_data') or {}
+                    
+                    candidate_doc = {
+                        "id": candidate_id,
+                        "email": email.lower() if email else None,
+                        "name": name,
+                        "phone": candidate_data.get('phone'),
+                        "phone_normalized": phone,
+                        "headline": candidate_data.get('headline') or excel_data.get('designation'),
+                        "summary": candidate_data.get('summary'),
+                        "skills": candidate_data.get('skills', []),
+                        "experience_years": candidate_data.get('experience_years', 0),
+                        "experience": candidate_data.get('experience', []),
+                        "education": candidate_data.get('education', []),
+                        "location": candidate_data.get('location') or excel_data.get('location'),
+                        "certifications": [],
+                        "active_resume_id": candidate_data.get('resume_file_id'),
+                        "resume_versions": [{
+                            "id": candidate_data.get('resume_file_id'),
+                            "fingerprint": candidate_data.get('resume_fingerprint'),
+                            "uploaded_at": now,
+                            "uploaded_by": current_user["id"],
+                            "is_active": True,
+                            "r2_metadata": candidate_data.get('r2_metadata'),
+                            "original_filename": candidate_data.get('filename')
+                        }] if candidate_data.get('resume_file_id') else [],
+                        "resume_fingerprints": [candidate_data.get('resume_fingerprint')] if candidate_data.get('resume_fingerprint') else [],
+                        "resume_url": None,
+                        "current_salary": excel_data.get('salary'),
+                        "notice_period": None,
+                        # Bulk import specific fields
+                        "source": "bulk_import",
+                        "bulk_import_type": "cv_zip",
+                        "bulk_import_restricted": True,  # Admin only until discovered
+                        "cv_attached": True,  # Has CV
+                        "industry": None,
+                        "industry_source": None,
+                        "current_employer": excel_data.get('employer'),
+                        "designation": excel_data.get('designation'),
+                        "ug_course": None,
+                        "date_of_birth": None,
+                        "import_batch_id": batch_id,
+                        "discovered_by": [],
+                        # Standard fields
+                        "linked_user_id": None,
+                        "visibility": {"admin_ids": [current_user["id"]], "employer_ids": [], "recruiter_ids": []},
+                        "match_cache": [],
+                        "created_at": now,
+                        "updated_at": now,
+                        "created_by": current_user["id"],
+                        "last_updated_by": current_user["id"],
+                        "uploaded_by_role": "admin",
+                        "application_history": [],
+                        "profile_update_audit": [{
+                            "action": "bulk_import_created",
+                            "mode": "cv_zip",
+                            "by_id": current_user["id"],
+                            "by_name": current_user["name"],
+                            "by_role": "admin",
+                            "timestamp": now,
+                            "batch_id": batch_id
+                        }]
+                    }
                 
                 await db.candidate_bank.insert_one(candidate_doc)
                 
                 results.append({
                     "row_index": candidate_data.get('row_index'),
-                    "name": candidate_data.get('final_name'),
+                    "name": name,
                     "email": email,
                     "status": "created",
                     "candidate_id": candidate_id,
@@ -706,11 +1001,11 @@ async def save_bulk_import(
                 successful += 1
                 
         except Exception as e:
-            logger.error(f"Error saving candidate: {e}")
+            logger.error(f"[BULK SAVE] Error: {e}")
             results.append({
                 "row_index": candidate_data.get('row_index'),
-                "name": candidate_data.get('final_name', 'Unknown'),
-                "email": candidate_data.get('final_email'),
+                "name": candidate_data.get('candidate_name') or candidate_data.get('name', 'Unknown'),
+                "email": candidate_data.get('email'),
                 "status": "failed",
                 "candidate_id": None,
                 "message": str(e)
@@ -726,19 +1021,113 @@ async def save_bulk_import(
             "results": {
                 "successful": successful,
                 "failed": failed,
+                "duplicates_merged": duplicates_merged,
                 "details": results
             }
         }}
     )
     
-    return BulkImportSaveResponse(
+    return BulkSaveResponse(
         batch_id=batch_id,
         total_attempted=len(candidates),
         successful=successful,
         failed=failed,
+        duplicates_merged=duplicates_merged,
         results=results
     )
 
+
+# ============== ATTACH CV ENDPOINT ==============
+
+@bulk_import_router.put("/attach-cv/{candidate_id}")
+async def attach_cv_to_candidate(
+    candidate_id: str,
+    cv_file: UploadFile = File(..., description="CV file to attach (PDF, DOC, DOCX)"),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Attach CV to a candidate that was imported via Excel (no CV initially).
+    
+    Only works for candidates with cv_attached=false.
+    """
+    # Find candidate
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    # Validate file type
+    ext = Path(cv_file.filename).suffix.lower()
+    if ext not in ['.pdf', '.doc', '.docx']:
+        raise HTTPException(status_code=400, detail="CV must be PDF, DOC, or DOCX")
+    
+    # Upload to R2
+    content = await cv_file.read()
+    file_id = str(uuid.uuid4())
+    r2_key = generate_r2_key("bulk-import-cv", cv_file.filename)
+    
+    content_type_map = {
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+    content_type = content_type_map.get(ext, 'application/octet-stream')
+    
+    r2_result = await upload_to_r2(content, r2_key, content_type)
+    
+    # Generate fingerprint
+    resume_text = extract_text_from_file(content, cv_file.filename)
+    fingerprint = generate_resume_fingerprint(resume_text) if resume_text else None
+    
+    # Update candidate
+    now = datetime.now(timezone.utc).isoformat()
+    
+    resume_version = {
+        "id": file_id,
+        "fingerprint": fingerprint,
+        "uploaded_at": now,
+        "uploaded_by": current_user["id"],
+        "is_active": True,
+        "r2_metadata": r2_result,
+        "original_filename": cv_file.filename
+    }
+    
+    existing_versions = candidate.get("resume_versions", [])
+    existing_versions.append(resume_version)
+    
+    existing_fingerprints = candidate.get("resume_fingerprints", [])
+    if fingerprint and fingerprint not in existing_fingerprints:
+        existing_fingerprints.append(fingerprint)
+    
+    await db.candidate_bank.update_one(
+        {"id": candidate_id},
+        {"$set": {
+            "cv_attached": True,
+            "active_resume_id": file_id,
+            "resume_versions": existing_versions,
+            "resume_fingerprints": existing_fingerprints,
+            "updated_at": now,
+            "last_updated_by": current_user["id"]
+        }, "$push": {
+            "profile_update_audit": {
+                "action": "cv_attached",
+                "by_id": current_user["id"],
+                "by_name": current_user["name"],
+                "by_role": "admin",
+                "timestamp": now,
+                "filename": cv_file.filename
+            }
+        }}
+    )
+    
+    return {
+        "success": True,
+        "message": "CV attached successfully",
+        "candidate_id": candidate_id,
+        "resume_file_id": file_id
+    }
+
+
+# ============== UTILITY ENDPOINTS ==============
 
 @bulk_import_router.get("/batches")
 async def get_import_batches(
@@ -747,7 +1136,7 @@ async def get_import_batches(
     """Get list of all bulk import batches for audit"""
     batches = await db.bulk_import_batches.find(
         {},
-        {"_id": 0, "candidates_preview": 0}  # Exclude large preview data
+        {"_id": 0, "candidates_preview": 0}
     ).sort("created_at", -1).to_list(100)
     
     return {"batches": batches}
@@ -770,30 +1159,44 @@ async def get_batch_details(
 async def download_template(
     current_user: dict = Depends(require_role(["admin"]))
 ):
-    """Download Excel template for bulk import"""
-    # Create template DataFrame
+    """Download Excel template for bulk import (Excel-only mode)"""
     template_df = pd.DataFrame({
-        'full_name': ['John Doe', 'Jane Smith'],
-        'email': ['john.doe@example.com', 'jane.smith@example.com'],
-        'phone': ['+919876543210', '+919876543211'],
-        'current_location': ['Bangalore', 'Mumbai'],
-        'experience_years': [5, 3],
-        'skills': ['Python, JavaScript, React', 'Java, Spring Boot, AWS'],
-        'current_salary': [1200000, 1500000],
-        'notice_period': ['30 days', '60 days'],
-        'resume_filename': ['john_doe_resume.pdf', 'jane_smith_resume.pdf']
+        'Candidate Name*': ['John Doe', 'Jane Smith'],
+        'Contact No.*': ['9876543210', '9876543211'],
+        'Email*': ['john.doe@example.com', 'jane.smith@example.com'],
+        'Work Exp*': ['5Y 0 M', '3Y 6 M'],
+        'Annual Salary*': ['12.0 L', '15.5 L'],
+        'Current Location*': ['Bangalore', 'Mumbai'],
+        'Current Employer*': ['Infosys Ltd', 'Tata Consultancy Services'],
+        'Designation*': ['Senior Software Engineer', 'Business Analyst'],
+        'U.G. Course*': ['B.Tech/B.E.', 'BBA'],
+        'Industry*': ['Information Technology', ''],  # Empty = AI will detect
+        'Age/Date of Birth*': ['28', '1995-05-15']
     })
     
-    # Create in-memory Excel file
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         template_df.to_excel(writer, index=False, sheet_name='Candidates')
     output.seek(0)
-    
-    from fastapi.responses import StreamingResponse
     
     return StreamingResponse(
         io.BytesIO(output.getvalue()),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.document",
         headers={"Content-Disposition": "attachment; filename=bulk_import_template.xlsx"}
     )
+
+
+@bulk_import_router.get("/restricted-candidates")
+async def get_restricted_candidates(
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Get all bulk-imported candidates that are still restricted (admin-only)"""
+    candidates = await db.candidate_bank.find(
+        {"bulk_import_restricted": True},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    return {
+        "count": len(candidates),
+        "candidates": candidates
+    }
