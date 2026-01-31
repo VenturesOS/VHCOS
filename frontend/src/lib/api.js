@@ -306,6 +306,56 @@ export const candidateBankAPI = {
     job_id: jobId,
     expected_salary: expectedSalary
   }),
+  // Attach CV to bulk-imported candidate (no CV initially)
+  attachCV: (candidateId, file) => {
+    const formData = new FormData();
+    formData.append('cv_file', file);
+    return api.put(`/admin/bulk-import/attach-cv/${candidateId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
+// Bulk Import APIs (Admin only)
+export const bulkImportAPI = {
+  // Download template
+  downloadTemplate: () => api.get('/admin/bulk-import/template', { responseType: 'blob' }),
+  // Parse Excel (Mode A)
+  parseExcel: (file) => {
+    const formData = new FormData();
+    formData.append('excel_file', file);
+    return api.post('/admin/bulk-import/excel', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  // Parse CV/ZIP (Mode B)
+  parseCVZip: (file) => {
+    const formData = new FormData();
+    formData.append('zip_file', file);
+    return api.post('/admin/bulk-import/cv-zip', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  // Save candidates
+  save: (batchId, mode, candidates) => api.post('/admin/bulk-import/save', {
+    batch_id: batchId,
+    mode,
+    candidates
+  }),
+  // Get all batches
+  getBatches: () => api.get('/admin/bulk-import/batches'),
+  // Get batch details
+  getBatchDetails: (batchId) => api.get(`/admin/bulk-import/batches/${batchId}`),
+  // Get restricted candidates
+  getRestrictedCandidates: () => api.get('/admin/bulk-import/restricted-candidates'),
+  // Attach CV to candidate
+  attachCV: (candidateId, file) => {
+    const formData = new FormData();
+    formData.append('cv_file', file);
+    return api.put(`/admin/bulk-import/attach-cv/${candidateId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export default api;
