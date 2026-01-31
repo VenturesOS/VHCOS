@@ -929,6 +929,98 @@ export default function CandidateDataBankPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Attach CV Dialog (for bulk-imported candidates without CV) */}
+      <Dialog open={showAttachCV} onOpenChange={setShowAttachCV}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <Paperclip className="w-5 h-5 text-amber-600" />
+              Attach CV
+            </DialogTitle>
+            <DialogDescription>
+              Upload a CV for this bulk-imported candidate.
+            </DialogDescription>
+          </DialogHeader>
+
+          {attachCVCandidate && (
+            <div className="space-y-4 py-4">
+              {/* Candidate Info */}
+              <div className="bg-slate-50 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#DCFCE7] flex items-center justify-center">
+                    <span className="text-[#7CB342] font-semibold">
+                      {attachCVCandidate.name?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900">{attachCVCandidate.name}</p>
+                    <p className="text-sm text-slate-500">{attachCVCandidate.email}</p>
+                  </div>
+                </div>
+                {/* Show bulk import info */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    <Building2 className="w-3 h-3 mr-1" />
+                    {attachCVCandidate.current_employer || 'Unknown employer'}
+                  </Badge>
+                  {attachCVCandidate.industry && (
+                    <Badge variant="outline" className="text-xs">
+                      {attachCVCandidate.industry_source === 'ai_detected' && (
+                        <Sparkles className="w-3 h-3 mr-1 text-green-500" />
+                      )}
+                      {attachCVCandidate.industry}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div className="border-2 border-dashed border-amber-200 rounded-lg p-6 text-center hover:border-amber-400 transition-colors">
+                <input
+                  type="file"
+                  ref={cvFileInputRef}
+                  onChange={(e) => handleAttachCV(e.target.files?.[0])}
+                  accept=".pdf,.doc,.docx"
+                  className="hidden"
+                  data-testid="attach-cv-file-input"
+                />
+                <Paperclip className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                <p className="text-sm text-slate-600 mb-2">
+                  <span className="text-amber-600 font-medium">Click to upload</span> CV file
+                </p>
+                <p className="text-xs text-slate-400 mb-4">Supports PDF, DOC, DOCX</p>
+                <Button
+                  variant="outline"
+                  onClick={() => cvFileInputRef.current?.click()}
+                  disabled={attachingCV}
+                  className="border-amber-400 text-amber-600 hover:bg-amber-50"
+                >
+                  {attachingCV ? 'Uploading...' : 'Choose File'}
+                </Button>
+              </div>
+
+              {/* Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                <p>
+                  Attaching a CV will:
+                </p>
+                <ul className="list-disc list-inside mt-1 text-xs">
+                  <li>Upload the file to secure storage</li>
+                  <li>Update <code className="bg-blue-100 px-1 rounded">cv_attached</code> status to true</li>
+                  <li>Enable the Download Resume button</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAttachCV(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
