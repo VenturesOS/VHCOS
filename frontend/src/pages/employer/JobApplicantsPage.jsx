@@ -561,6 +561,37 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage, onR
             </div>
           </div>
 
+          {/* Additional Mandatory Details */}
+          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg">
+            <div>
+              <p className="text-xs text-slate-500 flex items-center gap-1">
+                <Briefcase className="w-3 h-3" /> Current Employer
+              </p>
+              <p className="font-medium">{applicant.current_employer || <span className="text-amber-600">Not provided</span>}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 flex items-center gap-1">
+                <Briefcase className="w-3 h-3" /> Designation
+              </p>
+              <p className="font-medium">{applicant.designation || applicant.headline || <span className="text-amber-600">Not provided</span>}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 flex items-center gap-1">
+                <Briefcase className="w-3 h-3" /> Industry
+                {applicant.industry_source === 'ai_detected' && (
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs ml-1">AI</Badge>
+                )}
+              </p>
+              <p className="font-medium">{applicant.industry || '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 flex items-center gap-1">
+                <FileText className="w-3 h-3" /> Education
+              </p>
+              <p className="font-medium">{applicant.ug_course || applicant.education?.[0]?.degree || '-'}</p>
+            </div>
+          </div>
+
           {/* Must-Have Requirements */}
           {applicant.must_haves_met && applicant.must_haves_met.length > 0 && (
             <div>
