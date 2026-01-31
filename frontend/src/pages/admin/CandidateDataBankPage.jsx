@@ -171,6 +171,40 @@ export default function CandidateDataBankPage() {
     document.body.removeChild(link);
   };
 
+  // Open Attach CV dialog (for bulk-imported candidates without CV)
+  const openAttachCVDialog = (candidate) => {
+    setAttachCVCandidate(candidate);
+    setShowAttachCV(true);
+  };
+
+  // Handle Attach CV upload
+  const handleAttachCV = async (file) => {
+    if (!file || !attachCVCandidate) return;
+    
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'doc', 'docx'].includes(ext)) {
+      toast.error('Please upload a PDF, DOC, or DOCX file');
+      return;
+    }
+    
+    setAttachingCV(true);
+    try {
+      const res = await bulkImportAPI.attachCV(attachCVCandidate.id, file);
+      toast.success(res.data.message || 'CV attached successfully');
+      setShowAttachCV(false);
+      setAttachCVCandidate(null);
+      loadCandidates(); // Refresh to show updated cv_attached status
+      // Also refresh selected candidate details if viewing
+      if (selectedCandidate?.id === attachCVCandidate.id) {
+        loadCandidateDetails({ ...selectedCandidate, cv_attached: true });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to attach CV');
+    } finally {
+      setAttachingCV(false);
+    }
+  };
+
   const loadCandidates = async () => {
     setLoading(true);
     try {
