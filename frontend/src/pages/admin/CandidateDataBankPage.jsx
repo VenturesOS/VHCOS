@@ -50,6 +50,12 @@ export default function CandidateDataBankPage() {
   const [editExperience, setEditExperience] = useState('');  // Data Governance: mandatory field
   const [linking, setLinking] = useState(false);
 
+  // Attach CV state (for bulk-imported candidates without CV)
+  const [showAttachCV, setShowAttachCV] = useState(false);
+  const [attachCVCandidate, setAttachCVCandidate] = useState(null);
+  const [attachingCV, setAttachingCV] = useState(false);
+  const cvFileInputRef = useRef(null);
+
   useEffect(() => {
     loadCandidates();
   }, []);
