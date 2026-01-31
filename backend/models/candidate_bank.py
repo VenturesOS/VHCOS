@@ -77,6 +77,10 @@ class CandidateBankUpdate(BaseModel):
     certifications: Optional[List[str]] = None
     current_salary: Optional[int] = None  # INR
     notice_period: Optional[str] = None
+    # Additional profile fields for inline editing
+    current_employer: Optional[str] = None
+    designation: Optional[str] = None
+    industry: Optional[str] = None
 
 
 class CandidateBankAuditLogEntry(BaseModel):
