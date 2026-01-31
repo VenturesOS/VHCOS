@@ -856,7 +856,15 @@ export default function CandidateDataBankPage() {
                           </Badge>
                         )}
                       </p>
-                      <p className="font-medium">{selectedCandidate.industry || '-'}</p>
+                      {isEditingProfile ? (
+                        <Input
+                          value={editProfileForm.industry}
+                          onChange={(e) => setEditProfileForm({ ...editProfileForm, industry: e.target.value })}
+                          placeholder="Industry/Sector"
+                        />
+                      ) : (
+                        <p className="font-medium">{selectedCandidate.industry || '-'}</p>
+                      )}
                     </div>
 
                     {/* Date of Birth */}
