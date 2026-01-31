@@ -494,40 +494,264 @@ export default function CandidateDataBankPage() {
 
       {/* Candidate Detail Dialog */}
       <Dialog open={!!selectedCandidate} onOpenChange={() => setSelectedCandidate(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-heading">Candidate Profile</DialogTitle>
+            <DialogTitle className="font-heading flex items-center justify-between">
+              <span>Candidate Profile</span>
+              <div className="flex items-center gap-2">
+                {selectedCandidate?.resume_url && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadResume(selectedCandidate)}
+                    className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
+                  >
+                    <Download className="w-4 h-4 mr-1" /> Download CV
+                  </Button>
+                )}
+                {selectedCandidate?.source === 'bulk_import' && selectedCandidate?.cv_attached === false && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openAttachCVDialog(selectedCandidate)}
+                    className="text-amber-600 border-amber-400 hover:bg-amber-50"
+                  >
+                    <Paperclip className="w-4 h-4 mr-1" /> Attach CV
+                  </Button>
+                )}
+              </div>
+            </DialogTitle>
           </DialogHeader>
           {selectedCandidate && (
             <Tabs defaultValue="profile" className="w-full">
               <TabsList className="mb-4">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
-                <TabsTrigger value="activity" data-testid="activity-history-tab">
-                  <Activity className="w-4 h-4 mr-1" /> Activity History
-                </TabsTrigger>
-                <TabsTrigger value="resumes">Resume History</TabsTrigger>
+                <TabsTrigger value="experience">Experience</TabsTrigger>
+                <TabsTrigger value="education">Education</TabsTrigger>
+                <TabsTrigger value="activity" data-testid="activity-history-tab">Activity</TabsTrigger>
                 <TabsTrigger value="audit">Audit Log</TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-                        <span className="text-[#7CB342] font-bold text-2xl">
-                          {selectedCandidate.name?.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-xl">{selectedCandidate.name}</h3>
-                        <p className="text-slate-500">{selectedCandidate.headline}</p>
+                  {/* Bulk Import Banner */}
+                  {selectedCandidate.source === 'bulk_import' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-medium text-amber-800 text-sm">Bulk Import Candidate</p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                            <Badge variant="outline" className="border-amber-300">
+                              Type: {selectedCandidate.bulk_import_type || 'N/A'}
+                            </Badge>
+                            <Badge variant="outline" className={selectedCandidate.cv_attached ? 'border-green-300 text-green-700' : 'border-red-300 text-red-700'}>
+                              CV: {selectedCandidate.cv_attached ? 'Attached' : 'Not attached'}
+                            </Badge>
+                            {selectedCandidate.bulk_import_restricted && (
+                              <Badge variant="outline" className="border-amber-500 text-amber-700">Admin Only</Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    {/* Download Resume Button in Profile Dialog */}
-                    <div className="flex items-center gap-2">
-                      {selectedCandidate.resume_url ? (
-                        <Button
-                          variant="outline"
+                  )}
+
+                  {/* Header with Avatar */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
+                      <span className="text-[#7CB342] font-bold text-2xl">
+                        {selectedCandidate.name?.charAt(0).toUpperCase() || '?'}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-xl">{selectedCandidate.name || 'Unknown'}</h3>
+                      <p className="text-slate-500">{selectedCandidate.designation || selectedCandidate.headline || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* All Mandatory Fields in Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg">
+                    {/* Contact No */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> Contact No. *
+                      </p>
+                      <p className="font-medium">{selectedCandidate.phone || <span className="text-amber-600">Unknown</span>}</p>
+                    </div>
+
+                    {/* Email */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Mail className="w-3 h-3" /> Email *
+                      </p>
+                      <p className="font-medium">{selectedCandidate.email || <span className="text-amber-600">Unknown</span>}</p>
+                    </div>
+
+                    {/* Work Experience */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Work Experience *
+                      </p>
+                      <p className="font-medium">{selectedCandidate.experience_years || 0} years</p>
+                    </div>
+
+                    {/* Current CTC */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <DollarSign className="w-3 h-3" /> Current CTC *
+                      </p>
+                      <p className="font-medium">
+                        {selectedCandidate.current_salary ? formatSalaryINR(selectedCandidate.current_salary) : <span className="text-amber-600">Unknown</span>}
+                      </p>
+                    </div>
+
+                    {/* Current Location */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" /> Current Location *
+                      </p>
+                      <p className="font-medium">{selectedCandidate.location || <span className="text-amber-600">Unknown</span>}</p>
+                    </div>
+
+                    {/* Notice Period */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Notice Period *
+                      </p>
+                      <p className="font-medium">{selectedCandidate.notice_period || <span className="text-amber-600">Unknown</span>}</p>
+                    </div>
+
+                    {/* Current Employer */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Building2 className="w-3 h-3" /> Current Employer *
+                      </p>
+                      <p className="font-medium">{selectedCandidate.current_employer || <span className="text-amber-600">Unknown</span>}</p>
+                    </div>
+
+                    {/* Designation */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Briefcase className="w-3 h-3" /> Current Designation *
+                      </p>
+                      <p className="font-medium">{selectedCandidate.designation || selectedCandidate.headline || <span className="text-amber-600">Unknown</span>}</p>
+                    </div>
+
+                    {/* Industry */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Building2 className="w-3 h-3" /> Industry
+                        {selectedCandidate.industry_source === 'ai_detected' && (
+                          <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs ml-1">
+                            <Sparkles className="w-2 h-2 mr-0.5" /> AI
+                          </Badge>
+                        )}
+                      </p>
+                      <p className="font-medium">{selectedCandidate.industry || '-'}</p>
+                    </div>
+
+                    {/* Date of Birth */}
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3" /> Date of Birth / Age
+                      </p>
+                      <p className="font-medium">{selectedCandidate.date_of_birth || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Profile Freshness */}
+                  <div className="flex items-center gap-4 text-xs text-slate-500 border-t pt-3">
+                    {selectedCandidate.last_profile_updated_at && (
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3" />
+                        Profile Updated: {new Date(selectedCandidate.last_profile_updated_at).toLocaleDateString()}
+                      </span>
+                    )}
+                    {selectedCandidate.last_application_date && (
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        Last Applied: {new Date(selectedCandidate.last_application_date).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Skills */}
+                  {selectedCandidate.skills?.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2 text-sm text-slate-700">Skills</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedCandidate.skills.map((skill, i) => (
+                          <Badge key={i} variant="secondary" className="bg-[#DCFCE7] text-[#7CB342]">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary */}
+                  {selectedCandidate.summary && (
+                    <div>
+                      <h4 className="font-medium mb-2 text-sm text-slate-700">Summary</h4>
+                      <p className="text-sm text-slate-600 bg-white p-3 rounded-lg border">{selectedCandidate.summary}</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Experience Tab */}
+              <TabsContent value="experience">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">Work Experience</h3>
+                  {selectedCandidate.experience?.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedCandidate.experience.map((exp, i) => (
+                        <div key={i} className="p-4 bg-slate-50 rounded-lg border-l-4 border-[#7CB342]">
+                          <p className="font-semibold text-slate-900">{exp.title || 'Position'}</p>
+                          <p className="text-sm text-slate-600">{exp.company || 'Company'}</p>
+                          <p className="text-xs text-slate-400 mt-1">{exp.duration || 'Duration'}</p>
+                          {exp.location && <p className="text-xs text-slate-400">{exp.location}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-center py-8">No experience data available</p>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Education Tab */}
+              <TabsContent value="education">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">Education</h3>
+                  
+                  {/* UG Course from bulk import */}
+                  {selectedCandidate.ug_course && (
+                    <div className="p-4 bg-slate-50 rounded-lg border-l-4 border-blue-500">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <span className="font-semibold text-slate-900">Undergraduate Course</span>
+                      </div>
+                      <p className="text-sm text-slate-600">{selectedCandidate.ug_course}</p>
+                    </div>
+                  )}
+                  
+                  {selectedCandidate.education?.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedCandidate.education.map((edu, i) => (
+                        <div key={i} className="p-4 bg-slate-50 rounded-lg border-l-4 border-blue-500">
+                          <p className="font-semibold text-slate-900">{edu.degree || 'Degree'}</p>
+                          <p className="text-sm text-slate-600">{edu.institution || edu.school || ''}</p>
+                          {edu.year && <p className="text-xs text-slate-400 mt-1">{edu.year}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : !selectedCandidate.ug_course && (
+                    <p className="text-slate-500 text-center py-8">No education data available</p>
+                  )}
+                </div>
+              </TabsContent>
                           size="sm"
                           onClick={() => downloadResume(selectedCandidate)}
                           className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
