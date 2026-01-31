@@ -37,6 +37,7 @@
 **Team Creation Auto-Attach Companies: COMPLETE & TESTED (January 30, 2026)**
 **DELETE Capabilities for Core Entities: COMPLETE & TESTED (January 30, 2026)**
 **Enhanced Bulk Candidate Import Tool: COMPLETE & TESTED (January 31, 2026)**
+**Bulk Import Features Enhancement: COMPLETE & TESTED (January 31, 2026)**
 
 ---
 
