@@ -1,0 +1,116 @@
+{
+  "summary": "Bulk Import Features Testing Complete - All 17 backend tests passed (100%). Frontend UI fully functional with Import History Dashboard, Attach CV dialog, bulk import badges, and candidate profile bulk import info section.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ GET /api/admin/bulk-import/batches - requires authentication (401/403)",
+    "✅ GET /api/admin/bulk-import/batches - returns batch list with stats",
+    "✅ GET /api/admin/bulk-import/batches - completed batches have results (successful, failed, duplicates_merged)",
+    "✅ GET /api/admin/bulk-import/batches/{batch_id} - requires authentication",
+    "✅ GET /api/admin/bulk-import/batches/{batch_id} - returns 404 for invalid ID",
+    "✅ GET /api/admin/bulk-import/batches/{batch_id} - returns batch details",
+    "✅ PUT /api/admin/bulk-import/attach-cv/{candidate_id} - requires authentication",
+    "✅ PUT /api/admin/bulk-import/attach-cv/{candidate_id} - returns 404 for invalid ID",
+    "✅ PUT /api/admin/bulk-import/attach-cv/{candidate_id} - rejects invalid file types",
+    "✅ PUT /api/admin/bulk-import/attach-cv/{candidate_id} - attaches CV successfully",
+    "✅ discovered_by array populated when linking bulk-imported candidate to job",
+    "✅ Bulk-imported candidates have source='bulk_import'",
+    "✅ Bulk-imported candidates have bulk_import_restricted=true",
+    "✅ Bulk-imported candidates have cv_attached field",
+    "✅ Candidate Bank API returns bulk import fields",
+    "✅ GET /api/admin/bulk-import/restricted-candidates - requires authentication",
+    "✅ GET /api/admin/bulk-import/restricted-candidates - returns restricted candidates",
+    "✅ FRONTEND: Import History page loads with data-testid",
+    "✅ FRONTEND: Import History shows statistics cards (Total Batches, Completed, Total Imported, Duplicates Merged)",
+    "✅ FRONTEND: Import History shows batch list with status badges",
+    "✅ FRONTEND: Batch details dialog opens with full information",
+    "✅ FRONTEND: Batch details shows results table (Name, Email, Status, Message)",
+    "✅ FRONTEND: Candidate Bank shows 'Bulk Import' badges",
+    "✅ FRONTEND: Candidate Bank shows 'Admin Only' badges",
+    "✅ FRONTEND: Candidate Bank shows 'Attach CV' buttons for bulk-imported candidates without CV",
+    "✅ FRONTEND: Attach CV dialog opens with upload area",
+    "✅ FRONTEND: Bulk Import page has 'Import History' button",
+    "✅ FRONTEND: Sidebar has 'Import History' link",
+    "✅ FRONTEND: Candidate profile dialog shows bulk import info section"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_bulk_import_features.py",
+    "/app/test_reports/pytest/pytest_bulk_import_features.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Import History Dashboard correctly displays batch statistics and details",
+    "Attach CV feature properly updates cv_attached status and enables resume download",
+    "discovered_by tracking correctly grants permanent visibility to users who link candidates",
+    "Bulk import badges (Bulk Import, Admin Only) correctly displayed in Candidate Bank",
+    "Candidate profile dialog shows comprehensive bulk import info section",
+    "All data-testid attributes present for testing",
+    "Governance reminder shown in batch details dialog"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_bulk_import_features.py (new test file)"
+  ],
+
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all UI flows verified)"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [],
+    "note": "All APIs are real - no mocking"
+  },
+
+  "seed_data_creation": "166 bulk-imported candidates with bulk_import_restricted=true exist in database. Test candidate 3073ecee-58f0-417d-b266-49fc71559b2b has discovered_by populated.",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Three bulk import features fully tested and working: 1) Import History Dashboard at /admin/import-history shows all batches with stats and details dialog. 2) Attach CV feature in Candidate Bank allows uploading CV for bulk-imported candidates without CV. 3) discovered_by tracking populates when linking bulk-imported candidates to jobs via /api/applications/link-candidate. Sidebar has Import History link. Bulk Import page has Import History button. Candidate profile dialog shows bulk import info section with Type, CV status, Admin Only badge, and AI-detected industry.",
+
+  "feature_summary": {
+    "feature_name": "Bulk Import Features Enhancement",
+    "description": "Three new features for VHC Talent OS bulk import system",
+    "key_components": [
+      "Import History Dashboard: View past import batches with statistics and detailed results",
+      "Attach CV UI: Upload CV for bulk-imported candidates without CV (cv_attached=false)",
+      "discovered_by Tracking: Grants permanent visibility when Employer/Recruiter links candidate to job"
+    ],
+    "endpoints_tested": [
+      "GET /api/admin/bulk-import/batches - List all import batches",
+      "GET /api/admin/bulk-import/batches/{batch_id} - Get batch details",
+      "PUT /api/admin/bulk-import/attach-cv/{candidate_id} - Attach CV to candidate",
+      "GET /api/admin/bulk-import/restricted-candidates - Get Admin-only candidates",
+      "POST /api/applications/link-candidate - Link candidate to job (updates discovered_by)"
+    ],
+    "ui_components_tested": [
+      "Import History page with statistics cards and batch list",
+      "Batch details dialog with results table",
+      "Candidate Bank with Bulk Import and Admin Only badges",
+      "Attach CV button and dialog",
+      "Candidate profile dialog with bulk import info section",
+      "Sidebar Import History link",
+      "Bulk Import page Import History button"
+    ]
+  }
+}
