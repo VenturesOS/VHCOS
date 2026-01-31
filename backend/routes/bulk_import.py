@@ -391,11 +391,6 @@ async def parse_excel_only(
                 return possible
         return None
     
-    # Mandatory fields
-    mandatory_fields = ['candidate_name', 'contact_no', 'email', 'work_exp', 'annual_salary', 
-                       'current_location', 'current_employer', 'designation', 'ug_course', 
-                       'industry', 'age_dob']
-    
     # Process each row
     for idx, row in df.iterrows():
         try:
