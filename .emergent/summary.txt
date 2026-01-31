@@ -1,75 +1,88 @@
 <analysis>**original_problem_statement:**
-The user is continuing the development of a production-ready recruitment portal. The initial phase focused on a major backend refactor and performance hardening. The project has now moved into a phase of fixing functional bugs and implementing key features requested by the user.
+The user wants to build an Enhanced Bulk Candidate Import Tool for the existing VHC Talent OS recruitment portal. This task involves a complete overhaul of a previously implemented basic version.
 
-The most recent set of tasks addressed the following issues:
-1.  **P0 Dashboard Failure:** Admin, Employer, and Recruiter dashboards were failing to load stats due to non-existent API endpoints.
-2.  **P0 Data Integrity Issues:** Admin pipeline drill-downs were broken, and several admin modules were not loading data due to incorrect data relationships and missing API endpoints.
-3.  **P1 Feature Gaps:** The application was missing an employer-facing pipeline view, a clear link between commercials/companies/jobs, and the ability to set an applicant's expected salary.
-4.  **UX Bugs:** Candidate names were appearing as Unknown in the pipeline, and the employer dashboard was showing misleading zero-value stats.
+**PRODUCT REQUIREMENTS:**
+
+The tool must support two independent import modes:
+1.  **Excel/CSV Only:** Admin can upload an Excel file with candidate data to create profiles directly. These profiles will initially not have a CV attached, but there must be a feature to add one later.
+2.  **CV/ZIP Only:** Admin can upload a ZIP file containing resumes (PDF/DOC/DOCX) and/or Excel files. The system should parse the content of these files to create candidate profiles.
+
+**Key Features & Rules:**
+*   **AI Data Enrichment:** If the  column in an Excel file is empty, the system must use an AI model (like GPT) to determine the industry based on the .
+*   **Smart Deduplication:** When duplicates are found (based on email/phone), the system must apply specific conflict resolution rules:
+    *   **Salary/Notice Period:** Use the higher value.
+    *   **Job History:** Merge and sort chronologically by the latest date.
+    *   **Location:** Use the location from the most recent job.
+    *   **Skills:** Merge and deduplicate the skills list.
+*   **Strict Governance & Visibility:**
+    *   All bulk-imported profiles must be restricted to **Admin view only** by default.
+    *   These profiles will only become visible to Employers/Recruiters when they appear in **AI Screening results**.
+    *   Visibility is **session-only** for screening.
+    *   A profile becomes **permanently visible** to a specific user only after they **Add as Applicant**.
+*   The user has provided an Excel template () defining the required data structure.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack recruitment portal with a React frontend, a FastAPI backend, and a MongoDB database.
-
-The agent has successfully completed a series of critical fixes and feature implementations:
--   **Performance Hardening:** Optimized all dashboard and AI screening endpoints by replacing N+1 queries with efficient MongoDB aggregations.
--   **Dashboard Fixes:** Created the missing  endpoints, resolving the Failed to load errors for all user roles. The employer dashboard stats queries were also fixed to be more robust.
--   **Data Relationship Fixes:** Repaired the admin pipeline drill-down logic and implemented the missing admin-facing endpoints () to allow management of companies.
--   **Feature Implementation:**
-    -   Built a full-featured, drag-and-drop **Employer Pipeline View**.
-    -   Established the **Commercial ↔ Company ↔ Job** relationship in the data models and UI.
-    -   Added an **Expected CTC** field to the applicant workflow.
--   **Bug Fixes:** Resolved the Unknown candidate name issue by correcting the data mapping and redesigned the employer dashboard for clarity.
+The application is a full-stack recruitment portal with a React frontend, FastAPI backend, and MongoDB. The agent has just completed a series of features and fixes, including:
+-   Standardizing the  token key to .
+-   Implementing Mandate Shareable Links for jobs not on the public career page.
+-   Simplifying the Admin Team Creation flow to auto-associate companies based on the selected employer.
+-   Adding DELETE capabilities for Companies and Applications (removing candidates from a pipeline).
+-   A basic, now-obsolete version of the Bulk Import tool was created but must be completely refactored to meet the new, detailed requirements.
 
 **Last working item**:
--   **Last item agent was working:** Fixing the employer dashboard, which was showing incorrect zero-value stats, and redesigning the UI to be clearer and more functional. The agent fixed the backend query for  and redesigned the  component.
--   **Status:** USER VERIFICATION PENDING
--   **Agent Testing Done:** Y
--   **Which testing method agent to use?** testing_agent_v3_fork. The agent has already run the testing agent and received a passing report (). Further testing is only needed if the user reports a regression.
--   **User Testing Done:** N
+The agent and user were finalizing the detailed plan for the Enhanced Bulk Candidate Import Tool. The agent has just presented a final summary of the new requirements, incorporating all user feedback, including AI-based industry detection and advanced deduplication logic. The user has provided the necessary Excel template file ().
+-   **Last item agent was working:** Finalizing the plan for the **Enhanced Bulk Candidate Import Tool**.
+-   **Status:** NOT STARTED (Implementation of the new, enhanced version is pending).
+-   **Agent Testing Done:** N/A
+-   **Which testing method agent to use?** both. Given the complexity, involving file uploads, backend processing, AI integration, and frontend UI changes, the  should be used after implementation to test both frontend and backend functionality comprehensively.
+-   **User Testing Done:** N/A
 
 **All Pending/In progress Issue list**:
-There are no active in-progress issues. The agent has addressed all tasks from the user's recent messages.
+There are no pending issues. The focus is on the new feature development.
 
 **In progress Task List**:
-None.
+-   **Task 1: Implement the Enhanced Bulk Candidate Import Tool (P0)**
+    -   **Where to resume:** Start by downloading and analyzing the user-provided artifact  to understand the required schema. Then, begin refactoring the backend () and frontend () to implement the new, two-mode workflow.
+    -   **What will be achieved:** A production-grade tool for bulk data seeding that adheres to strict governance, deduplication, and AI enrichment rules.
+    -   **Status:** NOT STARTED
+    -   **Should Test frontend/backend/both after fix?** Both
+    -   **Blocked on something:** No. All requirements are clear, and the necessary data template has been provided.
 
 **Upcoming and Future Tasks**
--   **Upcoming Tasks:**
-    -   **P1: Frontend Tech Debt:** Standardize the  key used for the auth token. Currently, the codebase inconsistently uses both  and . (This was deferred from the initial handoff).
--   **Future Tasks (User Deferred):**
-    -   Extract remaining business logic from  (Team Management, Referrals, etc.).
-    -   WhatsApp & Email Campaign Automation.
-    -   CRM Synchronization & Stripe Integration.
-    -   Cloudflare R2 lifecycle management.
+
+**Upcoming Tasks:**
+1.  **P0: Implement Mode A: Excel-Only Import:**
+    *   Refactor the backend to handle Excel uploads.
+    *   Integrate AI for industry detection from the employer's name.
+    *   Implement the smart deduplication logic.
+    *   Update the  model with new fields (, , etc.).
+    *   Build the frontend UI for Excel upload and review.
+2.  **P0: Implement Mode B: CV/ZIP-Only Import:**
+    *   Refactor the backend to handle ZIP files containing both resumes and Excel sheets.
+    *   Reuse existing resume parsing logic.
+3.  **P0: Implement Governance and Visibility Rules:**
+    *   Modify all backend queries for the Candidate Bank to enforce the admin-only visibility rule by default.
+    *   Implement the  logic to grant permanent visibility upon Add as Applicant.
+4.  **P1: Implement Attach CV Feature:**
+    *   Create the backend endpoint and frontend UI for attaching a CV to a profile created via Excel import.
+
+**Future Tasks:**
+*   Extract remaining business logic from  (Team Management, Referrals).
+*   WhatsApp & Email Campaign Automation.
+*   CRM Synchronization & Stripe Integration.
+*   Cloudflare R2 lifecycle management.
 
 **Completed work in this session**
--   **P0 Performance Hardening (FIXED):** Optimized dashboard analytics and AI matching endpoints in  and .
--   **P0 Dashboard Functional Failure (FIXED):** Created missing  endpoints in , making all dashboards functional again.
--   **P0 Data Relationship & Admin Module Fixes (FIXED):**
-    -   Repaired admin pipeline drill-down logic in .
-    -   Added admin endpoints for company management in .
-    -   Extended the Company model with HR/POC fields in .
--   **Employer Pipeline View (IMPLEMENTED):**
-    -   Created backend endpoint  in .
-    -   Created frontend page .
--   **Commercial ↔ Company ↔ Job Relationship (IMPLEMENTED):**
-    -   Enhanced  to require company selection.
-    -   Enhanced  to display linked commercial terms.
--   **Candidate Name & Expected CTC (FIXED & IMPLEMENTED):**
-    -   Fixed Unknown name bug in .
-    -   Added Expected CTC feature in  and corresponding backend models and routes.
--   **Employer Dashboard Fix & Redesign (FIXED & IMPLEMENTED):**
-    -   Corrected the stats query in .
-    -   Redesigned  for accuracy and better UX.
+-   **Tech Debt: Standardized  key** to  in the frontend (FIXED).
+-   **Feature: Mandate Shareable Links** for non-public jobs (IMPLEMENTED).
+-   **UX Fix: Simplified Team Creation Flow** by auto-attaching companies based on the selected employer and making the company list read-only (FIXED & REFINED).
+-   **Feature: Added DELETE Capabilities** for Companies and for removing Candidates from a pipeline (IMPLEMENTED).
+-   **Feature: Built Initial Bulk Import Tool** (This is now considered a prototype and will be completely replaced by the upcoming task).
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: Inconsistent  Key**
-    -   **Debug checklist:** Globally search the  directory for  and  calls using  and standardize them to .
-    -   **Why to solve this issue and what will be achieved with this?** Improves code consistency and maintainability, reducing the risk of future authentication bugs.
-    -   **Should Test frontend/backend/both after fix:** Frontend
-    -   **Is recurring issue?** Y
+-   None.
 
 **Known issue recurrence from previous fork**
 -   None.
@@ -78,70 +91,73 @@ None.
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, MongoDB (Motor), Pydantic.
--   **Frontend**: React, Shadcn UI, .
--   **Performance Tuning**: MongoDB aggregation pipelines to avoid N+1 queries.
--   **Architecture**: Modular backend with business logic separated by domain into .
+-   **Backend**: FastAPI, MongoDB (Motor), Pydantic
+-   **Frontend**: React, Shadcn UI
+-   **File Handling**: , , ,  for processing uploads.
+-   **AI Integration**: Planned use of an LLM for data enrichment (industry detection).
+-   **Data Governance**: Complex query modifications to enforce role-based data visibility.
 
 **key DB schema**
--   ****: Added  for storing HR contact details.
--   ****: Added  and ensured  is correctly populated upon creation.
-
-**changes in tech stack**
--   None.
+-   ****: Added , .
+-   ** (Proposed Additions):**
+    -   
+    -   
+    -   
+    -   
+    -   
 
 **All files of reference**
--   **/app/backend/routes/admin.py**: Heavily modified to add stats endpoints, company management, and fix pipeline logic.
--   **/app/backend/server.py**: Modified to add the employer pipeline endpoint.
--   **/app/backend/models/application.py**: Updated to include .
--   **/app/backend/models/company.py**: Updated to include .
--   **/app/frontend/src/pages/employer/EmployerDashboard.jsx**: Redesigned to fix stats and UI.
--   **/app/frontend/src/pages/employer/EmployerPipelinePage.jsx**: New page for employer pipeline view.
--   **/app/frontend/src/pages/employer/CreateJobPage.jsx**: Updated to enforce company selection.
--   **/app/frontend/src/pages/recruiter/RecruiterCandidateBankPage.jsx**: Updated to fix the candidate name bug and add the Expected CTC feature.
--   **/app/memory/PRD.md**: Contains the full history of product requirements and implemented features.
+-   **/app/backend/routes/bulk_import.py**: Needs complete refactoring.
+-   **/app/frontend/src/pages/admin/BulkImportPage.jsx**: Needs complete refactoring.
+-   **/app/frontend/src/pages/admin/TeamsPage.jsx**: Refactored to simplify the team creation UI.
+-   **/app/backend/routes/admin.py**: Added DELETE endpoint for companies.
+-   **/app/backend/routes/applications.py**: Added DELETE endpoint for applications.
+-   **/app/backend/models/candidate_bank.py**: Will require significant updates.
 
 **Areas that need refactoring**:
--   The  key inconsistency ( vs ) across the frontend should be standardized.
--    still contains business logic that could be moved to more appropriate router files.
+-   The entire Bulk Import feature ( and ) needs to be rewritten according to the new, detailed requirements.
 
 **key api endpoints**
--   : Provides dashboard stats for admin, employer, and recruiter roles.
--   : Admin pipeline with drill-down filters.
--   : Aggregated pipeline view for employers.
--   : Admin endpoints for listing and creating companies.
--   : Updated to accept .
+-   **Existing Endpoints to be replaced/refactored:**
+    -   
+    -   
+-   **New Endpoints to be created:**
+    -   
+    -   
+    -   
+    -    (updated version)
 
 **Critical Info for New Agent**
--   All major P0 blockers reported by the user have been resolved. The application is in a much more stable state.
--   The backend is no longer considered frozen for bug fixes, but new features or major refactors should be confirmed with the user first.
--   The next logical task is to address the  tech debt of standardizing the  key in the frontend, as all higher-priority items are complete.
+-   You are starting a major new feature: the **Enhanced Bulk Candidate Import Tool**. Do not refer to the previous implementation; it is obsolete.
+-   Your source of truth for this task is the **Final Task Summary (v2)** provided in the last agent message.
+-   Your first step is to download and inspect the user-provided artifact  to define the data schema for the Excel import.
+-   This task is complex and requires careful implementation of backend logic for file processing, AI enrichment, deduplication, and strict data governance, alongside a new frontend UI. Break it down into the sub-tasks outlined in the Upcoming Tasks section.
 
 **documents and test reports created in this job**
--   
--   
--   
--   
--   
--   
--   
+-   /app/memory/PRD.md
+-   /app/test_reports/iteration_33.json
+-   /app/test_reports/iteration_34.json
+-   /app/test_reports/iteration_35.json
+-   /app/test_reports/iteration_36.json
+-   User-uploaded artifact:  (URL in history)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests a fix for the employer dashboard stats (showing zero), a redesign of the dashboard UI to remove misleading numbers, and the addition of a dedicated Pipeline tab. (Completed)
-2.  **User:** Reports that candidate names are Unknown in the recruiter pipeline and requests a feature to add Expected CTC when adding an applicant. (Completed)
-3.  **User:** Defines a task to establish the  relationship to enable revenue calculation. (Completed)
-4.  **User:** Defines a task to implement a full Employer Pipeline View with stage control. (Completed)
-5.  **User:** Reports several major P0 data integrity and feature-gap issues, including a broken admin pipeline, failing admin modules, and missing employer/recruiter features. (Completed)
-6.  **User:** Escalates the dashboard loading issue to a P0 functional failure, stating dashboards are still failing to load stats. (Completed)
-7.  **User:** Approves the initial performance hardening fixes and signs off on them. (Completed)
-8.  **User:** Provides confirmation to proceed with the agent's plan. (Completed)
+1.  **User:** Asks to start the task with an updated summary.
+2.  **User:** Attaches the  template and adds a new requirement: use ChatGPT to detect the industry from the employer name if the industry column is empty. Asks for a final summary.
+3.  **User:** Confirms the summary is correct. Provides new conflict resolution rules for duplicates (higher salary/notice, latest job date). Defines AI screening discovery rules (permanent visibility only after Add as Applicant).
+4.  **User:** Asks for a task summary based on new context.
+5.  **User:** Provides major feedback on the bulk import tool. It must have two separate modes (Excel-only, CV/ZIP-only). Uploads should be visible to Admin only by default and discoverable by other roles via AI screening.
+6.  **User:** Requests a summary of completed work and next steps after the agent finishes the DELETE feature.
+7.  **User:** Defines requirements for adding DELETE capabilities across core entities (Users, Companies, Jobs, etc.).
+8.  **User:** Provides feedback on the team creation flow, clarifying that the Assign Companies section should be removed entirely from the team creation/edit dialog, as company assignment is handled elsewhere.
+9.  **User:** Confirms the employer dashboard is working and instructs the agent to continue with previously assigned tasks.
 
 **Project Health Check:**
--   **Broken**: None. All major reported issues have been fixed.
+-   **Broken**: None.
 -   **Mocked**: , .
 
 **3rd Party Integrations**
--   **OpenAI GPT-4/5.2**: Used for resume/JD parsing (via Emergent LLM Key).
+-   **OpenAI GPT-4/5.2**: Used for resume/JD parsing. Will also be used for industry detection. (Uses Emergent LLM Key).
 -   **MongoDB Atlas**: Primary database backend.
 -   **Cloudflare R2**: Primary object storage.
 -   **Cloudflare Turnstile**: Bot protection.
@@ -152,7 +168,7 @@ None.
 -   **Testing agent used after significant changes**: YES
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
--   **Known regressions**: None. All fixes have been regression tested.
+-   **Known regressions**: None.
 
 **Credentials to test flow:**
 -   **Admin:**  / 
@@ -160,4 +176,4 @@ None.
 -   **Recruiter:**  / 
 
 **What agent forgot to execute**
--   The agent has successfully addressed all user requests and priorities from the session. No tasks were forgotten.</analysis>
+-   The agent has been responsive to user requests and has not forgotten any explicitly assigned tasks. The current task is to start the implementation of the new feature based on the finalized plan.</analysis>
