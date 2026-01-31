@@ -380,6 +380,40 @@ export default function EmployerPipelinePage() {
                 </div>
               </div>
 
+              {/* Additional Mandatory Fields */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg">
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <Building2 className="w-3 h-3" /> Location
+                  </p>
+                  <p className="font-medium">{selectedApp.location || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <Building2 className="w-3 h-3" /> Current Employer
+                  </p>
+                  <p className="font-medium truncate">{selectedApp.current_employer || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <Briefcase className="w-3 h-3" /> Designation
+                  </p>
+                  <p className="font-medium truncate">{selectedApp.designation || selectedApp.headline || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <Building2 className="w-3 h-3" /> Industry
+                  </p>
+                  <p className="font-medium">{selectedApp.industry || '-'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <FileText className="w-3 h-3" /> Education
+                  </p>
+                  <p className="font-medium">{selectedApp.ug_course || selectedApp.education?.[0]?.degree || '-'}</p>
+                </div>
+              </div>
+
               {/* Resume Download */}
               {selectedApp.resume_url && (
                 <div>
