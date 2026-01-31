@@ -1480,6 +1480,23 @@ async def link_candidate_to_job(
         {"$inc": {"applicant_count": 1}}
     )
     
+    # GOVERNANCE: Track discovered_by for bulk-imported restricted candidates
+    # This grants permanent visibility to the user who added them as applicant
+    if candidate.get("bulk_import_restricted"):
+        discovered_entry = {
+            "user_id": current_user["id"],
+            "user_role": current_user["role"],
+            "user_name": current_user.get("name", "Unknown"),
+            "added_at": now,
+            "job_id": request.job_id,
+            "job_title": job.get("title")
+        }
+        await db.candidate_bank.update_one(
+            {"id": request.candidate_id},
+            {"$push": {"discovered_by": discovered_entry}}
+        )
+        logging.info(f"[GOVERNANCE] Candidate {candidate.get('name')} discovered by {current_user['name']} ({current_user['role']}) - permanent visibility granted")
+    
     # Update candidate's application history
     await db.candidate_bank.update_one(
         {"id": request.candidate_id},
