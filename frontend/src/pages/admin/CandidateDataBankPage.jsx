@@ -610,6 +610,36 @@ export default function CandidateDataBankPage() {
                     <Paperclip className="w-4 h-4 mr-1" /> Attach CV
                   </Button>
                 )}
+                {/* Edit/Save/Cancel buttons */}
+                {!isEditingProfile ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={startEditingProfile}
+                    data-testid="edit-profile-btn"
+                  >
+                    <Activity className="w-4 h-4 mr-1" /> Edit
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelEditingProfile}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={saveProfileChanges}
+                      disabled={savingProfile}
+                      className="bg-[#7CB342] hover:bg-[#689F38]"
+                      data-testid="save-profile-btn"
+                    >
+                      {savingProfile ? 'Saving...' : 'Save'}
+                    </Button>
+                  </>
+                )}
               </div>
             </DialogTitle>
           </DialogHeader>
