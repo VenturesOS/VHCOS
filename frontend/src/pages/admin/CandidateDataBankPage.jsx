@@ -584,7 +584,7 @@ export default function CandidateDataBankPage() {
       </Dialog>
 
       {/* Candidate Detail Dialog */}
-      <Dialog open={!!selectedCandidate} onOpenChange={() => setSelectedCandidate(null)}>
+      <Dialog open={!!selectedCandidate} onOpenChange={() => { setSelectedCandidate(null); cancelEditingProfile(); }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading flex items-center justify-between">
