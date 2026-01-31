@@ -362,13 +362,37 @@ export default function CandidateDataBankPage() {
                         candidate.source === 'job_application' ? 'bg-blue-50 text-blue-600' :
                         candidate.source === 'recruiter_upload' ? 'bg-purple-50 text-purple-600' :
                         candidate.source === 'candidate_registration' ? 'bg-green-50 text-green-600' :
+                        candidate.source === 'bulk_import' ? 'bg-amber-50 text-amber-600' :
                         'bg-slate-100 text-slate-600'
                       }`}>
                         {candidate.source === 'job_application' ? 'Applied' :
                          candidate.source === 'recruiter_upload' ? 'Recruiter Upload' :
                          candidate.source === 'candidate_registration' ? 'Registered' :
+                         candidate.source === 'bulk_import' ? 'Bulk Import' :
                          'Direct Upload'}
                       </span>
+                      {/* Bulk Import Restricted Badge */}
+                      {candidate.bulk_import_restricted && (
+                        <Badge variant="outline" className="border-amber-300 text-amber-600 text-xs">
+                          <ShieldAlert className="w-3 h-3 mr-1" />
+                          Admin Only
+                        </Badge>
+                      )}
+                      {/* No CV Badge + Attach CV Button (for bulk import) */}
+                      {candidate.source === 'bulk_import' && candidate.cv_attached === false && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAttachCVDialog(candidate);
+                          }}
+                          className="text-amber-600 border-amber-400 hover:bg-amber-50"
+                          data-testid={`attach-cv-btn-${candidate.id}`}
+                        >
+                          <Paperclip className="w-4 h-4 mr-1" /> Attach CV
+                        </Button>
+                      )}
                       {/* Status */}
                       {candidate.is_active !== false && (
                         <span className="w-2 h-2 bg-green-500 rounded-full" title="Active"></span>
