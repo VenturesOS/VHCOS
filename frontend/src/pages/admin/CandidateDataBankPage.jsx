@@ -54,6 +54,16 @@ export default function CandidateDataBankPage() {
   const fileInputRef = useRef(null);
   const [uploadForm, setUploadForm] = useState({ email: '', name: '' });
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCandidates, setTotalCandidates] = useState(0);
+  const [pageSize] = useState(50); // Items per page
+  
+  // Debounced search values (300ms delay)
+  const debouncedSearch = useDebounce(search, 300);
+  const debouncedSkills = useDebounce(skills, 300);
+  
   // Task 2: Add as Applicant state
   const [showAddApplicant, setShowAddApplicant] = useState(false);
   const [applicantCandidate, setApplicantCandidate] = useState(null);
