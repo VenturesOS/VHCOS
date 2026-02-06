@@ -201,6 +201,86 @@ Created and executed MongoDB indexes to optimize database query performance.
 
 ---
 
+## MongoDB Atlas Migration (February 6, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** All API endpoints verified working with Atlas connection
+
+### Migration Details
+- Migrated from local MongoDB (`localhost:27017`) to MongoDB Atlas cluster
+- Connection: `mongodb+srv://vhc_admin:***@cluster0.vuhdiod.mongodb.net/`
+- Database: `vhc_talent_os`
+- Documents migrated: 2,057
+- Collections migrated: 17
+- All indexes preserved
+
+### Files Modified
+- `/app/backend/.env` - Updated MONGO_URL to Atlas connection string
+
+---
+
+## Two-Stage AI Matching Optimization (February 6, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** API response times verified - Quick Match: 2.85s, Full AI: 84s
+
+### Problem
+AI Matching/Screening page was extremely slow (timing out) because:
+- Fetching all 1700+ candidates from database
+- Making individual LLM calls for each candidate to calculate match scores
+- Network latency to MongoDB Atlas compounded the issue
+
+### Solution: Two-Stage Matching Architecture
+
+#### Stage 1: Fast Database Pre-Filtering
+- Uses MongoDB aggregation pipeline with indexes
+- Filters by: experience range, location, skill keywords
+- Computes `skill_match_count` using set intersection
+- Returns top 100 candidates sorted by relevance
+- **Time: ~1-2 seconds**
+
+#### Stage 2: Scoring (Two Modes)
+
+| Mode | Time | Description |
+|------|------|-------------|
+| **Quick Match** | ~3 seconds | Database-only scoring using skill overlap percentage |
+| **AI Deep Match** | ~60-90 seconds | Full LLM-based scoring with detailed analysis |
+
+### Quick Match Scoring Formula
+```
+total_score = (skill_score * 0.5) + (exp_score * 0.3) + 20
+```
+- `skill_score`: % of job skills found in candidate skills
+- `exp_score`: Based on proximity to required experience
+- Base score: 20 points
+
+### API Changes
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| quick_match | bool | false | Skip LLM calls, use database scoring |
+| limit | int | 50 | Max candidates to return |
+
+### Performance Results
+
+| Mode | Candidates Processed | Time | LLM Calls |
+|------|---------------------|------|-----------|
+| Quick Match | 100 (pre-filtered) | 2.85s | 0 |
+| AI Deep Match | 100 (pre-filtered) | 84s | ~23 |
+| Previous (all) | 1700+ | Timeout | 1000+ |
+
+### Files Modified
+- `/app/backend/routes/applications.py` - Two-stage matching implementation
+- `/app/backend/models/matching.py` - Added `quick_match` and `limit` parameters
+- `/app/frontend/src/pages/employer/FindCandidatesPage.jsx` - Search mode toggle UI
+
+### UI Enhancement
+- Added "Quick Match" vs "AI Deep Match" toggle
+- Shows estimated time for each mode
+- Default: Quick Match (for speed)
+
+---
+
 ## Enhanced Bulk Candidate Import Tool (January 31, 2026)
 
 ### Overview ✅ VERIFIED
