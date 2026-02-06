@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="29" time="216.583" timestamp="2026-02-06T12:28:05.467789+00:00" hostname="agent-env-3da6202a-3c79-4842-a2b5-766995705636"><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAuthentication" name="test_admin_login" time="0.567" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAuthentication" name="test_employer_login" time="0.496" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAuthentication" name="test_recruiter_login" time="0.499" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAuthentication" name="test_invalid_login" time="0.309" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAuthentication" name="test_auth_me_endpoint" time="0.772" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCandidateDataBank" name="test_get_candidate_bank_list" time="1.472" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCandidateDataBank" name="test_candidate_bank_pagination" time="2.249" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCandidateDataBank" name="test_candidate_bank_search_atlas" time="1.537" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCandidateDataBank" name="test_candidate_bank_search_fuzzy" time="1.470" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCandidateDataBank" name="test_candidate_bank_filter_experience" time="1.231" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCandidateDataBank" name="test_get_single_candidate" time="1.767" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestJobs" name="test_get_jobs_list" time="1.227" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestJobs" name="test_get_single_job" time="1.740" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestJobs" name="test_create_job" time="0.778"><failure message="AssertionError: Create job failed: {&quot;detail&quot;:[{&quot;type&quot;:&quot;missing&quot;,&quot;loc&quot;:[&quot;body&quot;,&quot;job_type&quot;],&quot;msg&quot;:&quot;Field required&quot;,&quot;input&quot;:{&quot;title&quot;:&quot;TEST_Software Engineer&quot;,&quot;description&quot;:&quot;Test job description for diagnostic testing&quot;,&quot;location&quot;:&quot;Mumbai&quot;,&quot;employment_type&quot;:&quot;full_time&quot;,&quot;experience_min&quot;:2,&quot;experience_max&quot;:5,&quot;salary_min&quot;:800000,&quot;salary_max&quot;:1500000,&quot;skills_required&quot;:[&quot;Python&quot;,&quot;FastAPI&quot;,&quot;MongoDB&quot;],&quot;status&quot;:&quot;active&quot;},&quot;url&quot;:&quot;https://errors.pydantic.dev/2.12/v/missing&quot;}]}&#10;assert 422 in [200, 201]&#10; +  where 422 = &lt;Response [422]&gt;.status_code">backend/tests/test_comprehensive_diagnostic.py:236: in test_create_job
+    assert response.status_code in [200, 201], f"Create job failed: {response.text}"
+E   AssertionError: Create job failed: {"detail":[{"type":"missing","loc":["body","job_type"],"msg":"Field required","input":{"title":"TEST_Software Engineer","description":"Test job description for diagnostic testing","location":"Mumbai","employment_type":"full_time","experience_min":2,"experience_max":5,"salary_min":800000,"salary_max":1500000,"skills_required":["Python","FastAPI","MongoDB"],"status":"active"},"url":"https://errors.pydantic.dev/2.12/v/missing"}]}
+E   assert 422 in [200, 201]
+E    +  where 422 = &lt;Response [422]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAIMatching" name="test_quick_match" time="4.615" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAIMatching" name="test_ai_deep_match" time="121.378"><failure message="requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='fast-match-db.preview.emergentagent.com', port=443): Read timed out. (read timeout=120)">/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:534: in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:571: in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:1395: in getresponse
+    response.begin()
+/usr/local/lib/python3.11/http/client.py:325: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:286: in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/socket.py:718: in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1314: in recv_into
+    return self.read(nbytes, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1166: in read
+    return self._sslobj.read(len, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TimeoutError: The read operation timed out
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:644: in send
+    resp = conn.urlopen(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+/root/.venv/lib/python3.11/site-packages/urllib3/util/retry.py:474: in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/util/util.py:39: in reraise
+    raise value
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:536: in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:367: in _raise_timeout
+    raise ReadTimeoutError(
+E   urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='fast-match-db.preview.emergentagent.com', port=443): Read timed out. (read timeout=120)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_comprehensive_diagnostic.py:281: in test_ai_deep_match
+    response = requests.post(
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:690: in send
+    raise ReadTimeout(e, request=request)
+E   requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='fast-match-db.preview.emergentagent.com', port=443): Read timed out. (read timeout=120)</failure></testcase><testcase classname="backend.tests.test_comprehensive_diagnostic.TestApplications" name="test_get_applications_list" time="44.072" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestApplications" name="test_get_job_applicants" time="8.925" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestApplications" name="test_pipeline_stage_change" time="2.453" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCacheAndBackgroundJobs" name="test_cache_stats" time="0.760" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCacheAndBackgroundJobs" name="test_embeddings_stats" time="1.226" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestCacheAndBackgroundJobs" name="test_background_jobs_list" time="0.994" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestDataGovernance" name="test_employer_candidate_visibility" time="2.408" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestDataGovernance" name="test_recruiter_candidate_visibility" time="1.919" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestDataGovernance" name="test_admin_full_visibility" time="1.453" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAdminDashboard" name="test_admin_users_endpoint" time="1.011" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAdminDashboard" name="test_admin_companies_endpoint" time="2.840" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestAdminDashboard" name="test_admin_hierarchy_endpoint" time="5.625" /><testcase classname="backend.tests.test_comprehensive_diagnostic.TestBulkImport" name="test_bulk_import_status_endpoint" time="0.569" /></testsuite></testsuites>
