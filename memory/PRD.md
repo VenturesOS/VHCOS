@@ -100,6 +100,49 @@ Updated profile dialog to show ALL mandatory fields:
 
 ---
 
+## Database Performance Optimization (February 4, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** API response times verified via curl (sub-100ms queries)
+**Script:** `/app/backend/scripts/create_indexes.py`
+
+### Problem
+User reported slow search performance on the AI Matching/Screening page with 1700+ candidates in the database.
+
+### Solution
+Created and executed MongoDB indexes to optimize database query performance.
+
+### Indexes Created
+
+| Collection | Index Name | Fields | Purpose |
+|------------|------------|--------|---------|
+| candidate_bank | text_search_idx | name, email, skills (text) | Full-text search |
+| candidate_bank | email_idx | email | Unique lookups |
+| candidate_bank | phone_idx | phone_normalized | Duplicate detection |
+| candidate_bank | skills_idx | skills | AI matching |
+| candidate_bank | exp_years_idx | experience_years | Filtering |
+| candidate_bank | location_idx | location | Filtering |
+| candidate_bank | salary_idx | current_salary | Filtering/sorting |
+| candidate_bank | bulk_restricted_idx | bulk_import_restricted | Governance queries |
+| candidate_bank | matching_compound_idx | experience_years, current_salary, location | AI matching |
+| candidate_bank | created_at_idx | created_at (desc) | Recent candidates |
+| jobs | status_idx, company_idx, job_text_idx | Various | Job queries |
+| applications | app_job_idx, app_candidate_idx, app_stage_idx | Various | Application queries |
+| users | user_email_idx (unique), user_role_idx | email, role | User lookups |
+| companies | company_name_idx, company_employer_idx | name, employer_id | Company queries |
+
+### Performance Results
+| Query Type | Before | After |
+|------------|--------|-------|
+| Candidate Bank fetch (500 records) | Slow | 104ms |
+| Search with text filter | Slow | 50-54ms |
+| Skills-based search | Slow | 50ms |
+
+### Files Created
+- `/app/backend/scripts/create_indexes.py` - Index creation script
+
+---
+
 ## Enhanced Bulk Candidate Import Tool (January 31, 2026)
 
 ### Overview ✅ VERIFIED
