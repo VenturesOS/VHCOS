@@ -466,10 +466,17 @@ export default function CandidateDataBankPage() {
       {/* Candidates List */}
       <Card className="border-slate-200">
         <CardHeader className="border-b border-slate-100 bg-slate-50/50">
-          <CardTitle className="font-heading text-lg flex items-center gap-2">
-            <Database className="w-5 h-5 text-[#7CB342]" />
-            Candidates ({candidates.length})
-          </CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="font-heading text-lg flex items-center gap-2">
+              <Database className="w-5 h-5 text-[#7CB342]" />
+              Candidates ({totalCandidates})
+            </CardTitle>
+            {totalPages > 1 && (
+              <div className="text-sm text-slate-500">
+                Page {currentPage} of {totalPages}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
