@@ -332,6 +332,63 @@ New query parameter: `use_atlas_search` (default: `true`)
 
 ---
 
+## Phase 2 Prep: Redis Caching & Background Jobs (February 6, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** All API endpoints verified, Redis cache active
+
+### Components Implemented
+
+#### 1. Redis Caching (Upstash)
+- **Provider:** Upstash Redis (Serverless)
+- **Purpose:** Cache search results, reduce database load
+- **TTL Settings:**
+  - Search results: 5 minutes
+  - Job parsing: 1 hour  
+  - Match scores: 30 minutes
+  - Dashboard stats: 1 minute
+
+#### 2. Background Job Queue
+- **Pattern:** Async job processing with MongoDB persistence
+- **Job Types:** CV parsing, batch embedding generation
+- **Status Tracking:** Pending → Processing → Completed/Failed
+- **Progress Updates:** Real-time progress percentage and messages
+
+#### 3. Vector Embeddings Service (Prepared)
+- **Model:** text-embedding-3-small (1536 dimensions)
+- **Status:** Service ready, pending API support from Emergent
+- **When Active:** Enables semantic matching ("Python developer" ↔ "Django engineer")
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/cache/stats` | GET | Redis cache status |
+| `/api/cache/clear` | POST | Clear cache entries |
+| `/api/embeddings/stats` | GET | Embedding coverage stats |
+| `/api/embeddings/generate-batch` | POST | Start batch embedding job |
+| `/api/background-jobs` | GET | List user's jobs |
+| `/api/background-jobs/{id}` | GET | Get job status |
+
+### Files Created
+- `/app/backend/services/cache.py` - Redis caching service
+- `/app/backend/services/embeddings.py` - Vector embeddings service
+- `/app/backend/services/job_queue.py` - Background job queue
+- `/app/backend/routes/background_jobs.py` - API endpoints
+
+### Environment Variables Added
+```
+UPSTASH_REDIS_REST_URL=https://quality-gopher-48093.upstash.io
+UPSTASH_REDIS_REST_TOKEN=***
+```
+
+### Performance Impact
+- Search caching reduces repeated queries
+- Background jobs prevent request blocking for heavy operations
+- Foundation ready for semantic search when embeddings enabled
+
+---
+
 ## Enhanced Bulk Candidate Import Tool (January 31, 2026)
 
 ### Overview ✅ VERIFIED
