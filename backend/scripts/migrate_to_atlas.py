@@ -5,11 +5,12 @@ Exports all collections from local MongoDB and imports to MongoDB Atlas
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
+import certifi
 import sys
 
 # Configuration
 LOCAL_MONGO_URL = "mongodb://localhost:27017"
-ATLAS_MONGO_URL = "mongodb+srv://vhc_app_user:9VcZcHYTtIdGeVY@cluster0.vuhdiod.mongodb.net/?appName=Cluster0"
+ATLAS_MONGO_URL = "mongodb+srv://vhc_app_user:9VcZcHYTtIdGeVY@cluster0.vuhdiod.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority"
 DB_NAME = "vhc_talent_os"
 
 # Collections to migrate
