@@ -13,6 +13,8 @@ class MatchRequest(BaseModel):
     must_have_skills: Optional[List[str]] = None
     min_experience: Optional[int] = None
     max_experience: Optional[int] = None
+    quick_match: bool = False  # If True, skip LLM calls and use fast database scoring
+    limit: int = 50  # Max candidates to return
 
 
 class MatchResult(BaseModel):
