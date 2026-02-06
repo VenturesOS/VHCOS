@@ -937,8 +937,7 @@ async def find_matching_candidates(
     
     # Add text search score if skills available (uses text_search_idx)
     if all_skills:
-        # Create search text from skills
-        search_text = " ".join(all_skills[:10])  # Limit to top 10 skills
+        # Create regex pattern from skills for matching
         pipeline.append({
             "$match": {
                 "$or": [
