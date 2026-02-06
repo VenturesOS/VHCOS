@@ -1062,6 +1062,56 @@ async def find_matching_candidates(
     
     logger.info(f"[AI SCREENING] Stage 2: {len(filtered_candidates)} candidates for AI scoring (excluded {len(pre_filtered_results)} by must-have filters)")
     
+    # ============== QUICK MATCH MODE: Fast database-only scoring ==============
+    if match_req.quick_match:
+        # Skip LLM calls entirely - use database-computed skill match scores
+        quick_results = []
+        for candidate in filtered_candidates:
+            skill_match_count = candidate.get("skill_match_count", 0)
+            candidate_skills = [s.lower() for s in (candidate.get("skills") or [])]
+            job_skills = [s.lower() for s in all_skills] if all_skills else []
+            
+            # Calculate quick score based on skill overlap
+            matched_skills = list(set(candidate_skills) & set(job_skills))
+            missing_skills = list(set(job_skills) - set(candidate_skills))[:5]  # Top 5 missing
+            
+            # Score: 40% skill match + 30% experience match + 30% base
+            skill_score = min(100, (len(matched_skills) / max(len(job_skills), 1)) * 100) if job_skills else 50
+            exp_score = 70  # Default experience score
+            if min_exp is not None and candidate.get("experience_years"):
+                exp_diff = abs(candidate.get("experience_years", 0) - min_exp)
+                exp_score = max(0, 100 - exp_diff * 10)
+            
+            total_score = int(skill_score * 0.5 + exp_score * 0.3 + 30)  # 30% base score
+            
+            quick_results.append(MatchResult(
+                candidate_id=candidate["id"],
+                candidate_name=candidate["name"],
+                candidate_email=candidate["email"],
+                score=total_score,
+                skill_match_score=int(skill_score),
+                experience_match_score=int(exp_score),
+                matched_skills=matched_skills[:10],  # Top 10
+                missing_skills=missing_skills,
+                explanation=f"Quick match: {len(matched_skills)} skills matched, {candidate.get('experience_years', 'N/A')} years experience",
+                source=candidate.get("source", "unknown"),
+                source_role=creator_roles.get(candidate.get("created_by"))
+            ))
+        
+        # Combine with pre-filtered results
+        results = quick_results + pre_filtered_results
+        results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
+        
+        # Apply limit
+        results = results[:match_req.limit]
+        
+        stage2_time = time.time() - stage2_start
+        total_time = time.time() - start_time
+        logger.info(f"[AI SCREENING] QUICK MATCH completed: Stage1={stage1_time:.2f}s, Stage2={stage2_time:.2f}s, Total={total_time:.2f}s")
+        
+        return results
+    
+    # ============== FULL AI SCORING MODE ==============
     # OPTIMIZATION: Use concurrent AI matching with controlled parallelism
     MAX_CONCURRENT_LLM_CALLS = 10  # Increased since we have fewer candidates now
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
