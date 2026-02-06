@@ -1067,7 +1067,6 @@ async def find_matching_candidates(
         # Skip LLM calls entirely - use database-computed skill match scores
         quick_results = []
         for candidate in filtered_candidates:
-            skill_match_count = candidate.get("skill_match_count", 0)
             candidate_skills = [s.lower() for s in (candidate.get("skills") or [])]
             job_skills = [s.lower() for s in all_skills] if all_skills else []
             
@@ -1075,14 +1074,14 @@ async def find_matching_candidates(
             matched_skills = list(set(candidate_skills) & set(job_skills))
             missing_skills = list(set(job_skills) - set(candidate_skills))[:5]  # Top 5 missing
             
-            # Score: 40% skill match + 30% experience match + 30% base
+            # Score: 50% skill match + 30% experience match + 20% base
             skill_score = min(100, (len(matched_skills) / max(len(job_skills), 1)) * 100) if job_skills else 50
             exp_score = 70  # Default experience score
             if min_exp is not None and candidate.get("experience_years"):
                 exp_diff = abs(candidate.get("experience_years", 0) - min_exp)
                 exp_score = max(0, 100 - exp_diff * 10)
             
-            total_score = int(skill_score * 0.5 + exp_score * 0.3 + 30)  # 30% base score
+            total_score = int(skill_score * 0.5 + exp_score * 0.3 + 20)  # 20% base score
             
             quick_results.append(MatchResult(
                 candidate_id=candidate["id"],
