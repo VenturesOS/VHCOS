@@ -131,7 +131,7 @@ class JobQueueService:
         error: str = None
     ):
         """Update job status."""
-        if not self.db:
+        if self.db is None:
             return
         
         update = {"status": status}
