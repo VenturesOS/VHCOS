@@ -754,13 +754,27 @@ async def get_candidate_bank(
     # Fetch paginated results with sorting by created_at descending
     candidates = await db.candidate_bank.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     
-    return CandidateBankResponse(
+    response = CandidateBankResponse(
         candidates=[CandidateBankRecord(**c) for c in candidates],
         total=total,
         page=page,
         limit=limit,
         total_pages=total_pages
     )
+    
+    # Cache the result for admin users with search queries
+    if current_user.get("role") == "admin" and search:
+        cache_filters = {
+            "search": search or "",
+            "skills": skills or "",
+            "location": location or "",
+            "min_exp": min_experience,
+            "max_exp": max_experience,
+            "atlas": use_atlas_search
+        }
+        cache.set_search_results(search, cache_filters, page, limit, response.model_dump())
+    
+    return response
 
 
 @candidates_router.get("/candidate-bank/{candidate_id}")
