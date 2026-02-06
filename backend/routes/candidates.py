@@ -29,6 +29,9 @@ from utils.governance import create_profile_audit_entry
 # Import matching engine helpers for deduplication
 from services.matching_engine import find_similar_candidate, generate_resume_fingerprint
 
+# Import cache service
+from services.cache import cache
+
 # Import R2 storage helpers
 from services.r2_storage import generate_r2_key, upload_to_r2, get_r2_signed_url
 
