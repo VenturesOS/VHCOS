@@ -899,7 +899,7 @@ async def find_matching_candidates(
     logger.info(f"[AI SCREENING] Job parsed in {time.time() - start_time:.2f}s")
     
     # ============== STAGE 1: FAST DATABASE PRE-FILTERING ==============
-    # Build database query using indexes for fast filtering
+    # Use Atlas Search for fast, relevance-based pre-filtering
     
     stage1_start = time.time()
     
@@ -912,92 +912,176 @@ async def find_matching_candidates(
     max_exp = job_data.get("max_experience") or match_req.max_experience
     location = match_req.must_have_location or job_data.get("location")
     
-    # Build MongoDB aggregation pipeline for smart pre-filtering
-    pipeline = []
+    MAX_CANDIDATES_FOR_AI = 100
+    pre_filtered_candidates = []
     
-    # Match stage - basic filters using indexes
-    match_conditions = {}
-    
-    # Experience filter (uses exp_years_idx index)
-    if min_exp is not None or max_exp is not None:
-        exp_filter = {}
-        if min_exp is not None:
-            exp_filter["$gte"] = min_exp
-        if max_exp is not None:
-            exp_filter["$lte"] = max_exp + 2  # Allow some flexibility
-        if exp_filter:
-            match_conditions["experience_years"] = exp_filter
-    
-    # Location filter (uses location_idx index) - partial match
-    if location and match_req.must_have_location:
-        match_conditions["location"] = {"$regex": location, "$options": "i"}
-    
-    if match_conditions:
-        pipeline.append({"$match": match_conditions})
-    
-    # Add text search score if skills available (uses text_search_idx)
+    # Try Atlas Search first (much faster for large datasets)
     if all_skills:
-        # Create regex pattern from skills for matching
-        pipeline.append({
-            "$match": {
-                "$or": [
-                    {"skills": {"$regex": "|".join(all_skills[:5]), "$options": "i"}},
-                    {"summary": {"$regex": "|".join(all_skills[:3]), "$options": "i"}}
-                ]
-            }
-        })
+        try:
+            search_query = " ".join(all_skills[:10])  # Top 10 skills for search
+            
+            atlas_pipeline = [
+                {
+                    "$search": {
+                        "index": "candidate_search",
+                        "compound": {
+                            "should": [
+                                {
+                                    "text": {
+                                        "query": search_query,
+                                        "path": "skills",
+                                        "fuzzy": {"maxEdits": 1},
+                                        "score": {"boost": {"value": 3}}
+                                    }
+                                },
+                                {
+                                    "text": {
+                                        "query": search_query,
+                                        "path": "summary",
+                                        "fuzzy": {"maxEdits": 2},
+                                        "score": {"boost": {"value": 1.5}}
+                                    }
+                                },
+                                {
+                                    "text": {
+                                        "query": search_query,
+                                        "path": ["designation", "current_employer"],
+                                        "fuzzy": {"maxEdits": 1}
+                                    }
+                                }
+                            ],
+                            "minimumShouldMatch": 1
+                        }
+                    }
+                },
+                {
+                    "$addFields": {
+                        "search_score": {"$meta": "searchScore"}
+                    }
+                }
+            ]
+            
+            # Add experience filter if specified
+            exp_match = {}
+            if min_exp is not None:
+                exp_match["experience_years"] = {"$gte": min_exp}
+            if max_exp is not None:
+                if "experience_years" in exp_match:
+                    exp_match["experience_years"]["$lte"] = max_exp + 2
+                else:
+                    exp_match["experience_years"] = {"$lte": max_exp + 2}
+            
+            if exp_match:
+                atlas_pipeline.append({"$match": exp_match})
+            
+            # Add location filter if required
+            if location and match_req.must_have_location:
+                atlas_pipeline.append({
+                    "$match": {"location": {"$regex": location, "$options": "i"}}
+                })
+            
+            # Sort by search relevance and limit
+            atlas_pipeline.extend([
+                {"$sort": {"search_score": -1}},
+                {"$limit": MAX_CANDIDATES_FOR_AI},
+                {
+                    "$project": {
+                        "_id": 0,
+                        "id": 1, "name": 1, "email": 1, "skills": 1,
+                        "experience_years": 1, "education": 1, "location": 1,
+                        "summary": 1, "source": 1, "created_by": 1,
+                        "search_score": 1
+                    }
+                }
+            ])
+            
+            pre_filtered_candidates = await db.candidate_bank.aggregate(atlas_pipeline).to_list(MAX_CANDIDATES_FOR_AI)
+            logger.info(f"[AI SCREENING] Atlas Search returned {len(pre_filtered_candidates)} candidates in {time.time() - stage1_start:.2f}s")
+            
+        except Exception as e:
+            logger.warning(f"[AI SCREENING] Atlas Search failed, using fallback: {e}")
+            pre_filtered_candidates = []
     
-    # Add computed relevance score
-    pipeline.append({
-        "$addFields": {
-            "skill_match_count": {
-                "$size": {
-                    "$ifNull": [
-                        {"$setIntersection": [
-                            {"$map": {"input": {"$ifNull": ["$skills", []]}, "as": "s", "in": {"$toLower": "$$s"}}},
-                            [s.lower() for s in all_skills] if all_skills else []
-                        ]},
-                        []
+    # Fallback: Regular aggregation if Atlas Search fails or no skills
+    if not pre_filtered_candidates:
+        # Build MongoDB aggregation pipeline for smart pre-filtering
+        pipeline = []
+        
+        # Match stage - basic filters using indexes
+        match_conditions = {}
+        
+        # Experience filter (uses exp_years_idx index)
+        if min_exp is not None or max_exp is not None:
+            exp_filter = {}
+            if min_exp is not None:
+                exp_filter["$gte"] = min_exp
+            if max_exp is not None:
+                exp_filter["$lte"] = max_exp + 2  # Allow some flexibility
+            if exp_filter:
+                match_conditions["experience_years"] = exp_filter
+        
+        # Location filter (uses location_idx index) - partial match
+        if location and match_req.must_have_location:
+            match_conditions["location"] = {"$regex": location, "$options": "i"}
+        
+        if match_conditions:
+            pipeline.append({"$match": match_conditions})
+        
+        # Add text search score if skills available
+        if all_skills:
+            pipeline.append({
+                "$match": {
+                    "$or": [
+                        {"skills": {"$regex": "|".join(all_skills[:5]), "$options": "i"}},
+                        {"summary": {"$regex": "|".join(all_skills[:3]), "$options": "i"}}
                     ]
                 }
+            })
+        
+        # Add computed relevance score
+        pipeline.append({
+            "$addFields": {
+                "skill_match_count": {
+                    "$size": {
+                        "$ifNull": [
+                            {"$setIntersection": [
+                                {"$map": {"input": {"$ifNull": ["$skills", []]}, "as": "s", "in": {"$toLower": "$$s"}}},
+                                [s.lower() for s in all_skills] if all_skills else []
+                            ]},
+                            []
+                        ]
+                    }
+                }
             }
-        }
-    })
-    
-    # Sort by skill match count and experience relevance
-    pipeline.append({"$sort": {"skill_match_count": -1, "experience_years": -1}})
-    
-    # Limit to top candidates for AI scoring (Stage 2)
-    MAX_CANDIDATES_FOR_AI = 100
-    pipeline.append({"$limit": MAX_CANDIDATES_FOR_AI})
-    
-    # Project only needed fields
-    pipeline.append({
-        "$project": {
-            "_id": 0,
-            "id": 1,
-            "name": 1,
-            "email": 1,
-            "skills": 1,
-            "experience_years": 1,
-            "education": 1,
-            "location": 1,
-            "summary": 1,
-            "source": 1,
-            "created_by": 1,
-            "skill_match_count": 1
-        }
-    })
-    
-    # Execute Stage 1 query
-    try:
-        pre_filtered_candidates = await db.candidate_bank.aggregate(pipeline).to_list(MAX_CANDIDATES_FOR_AI)
-    except Exception as e:
-        logger.warning(f"[AI SCREENING] Aggregation failed, falling back to simple query: {e}")
-        # Fallback to simple query if aggregation fails
-        simple_query = {}
-        if min_exp is not None:
-            simple_query["experience_years"] = {"$gte": min_exp}
+        })
+        
+        # Sort by skill match count and experience relevance
+        pipeline.append({"$sort": {"skill_match_count": -1, "experience_years": -1}})
+        pipeline.append({"$limit": MAX_CANDIDATES_FOR_AI})
+        
+        # Project only needed fields
+        pipeline.append({
+            "$project": {
+                "_id": 0,
+                "id": 1, "name": 1, "email": 1, "skills": 1,
+                "experience_years": 1, "education": 1, "location": 1,
+                "summary": 1, "source": 1, "created_by": 1,
+                "skill_match_count": 1
+            }
+        })
+        
+        try:
+            pre_filtered_candidates = await db.candidate_bank.aggregate(pipeline).to_list(MAX_CANDIDATES_FOR_AI)
+        except Exception as e:
+            logger.warning(f"[AI SCREENING] Aggregation failed, falling back to simple query: {e}")
+            simple_query = {}
+            if min_exp is not None:
+                simple_query["experience_years"] = {"$gte": min_exp}
+            pre_filtered_candidates = await db.candidate_bank.find(
+                simple_query,
+                {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1, "experience_years": 1, 
+                 "education": 1, "location": 1, "summary": 1, "source": 1, "created_by": 1}
+            ).sort("experience_years", -1).limit(MAX_CANDIDATES_FOR_AI).to_list(MAX_CANDIDATES_FOR_AI)
         pre_filtered_candidates = await db.candidate_bank.find(
             simple_query,
             {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1, "experience_years": 1, 
