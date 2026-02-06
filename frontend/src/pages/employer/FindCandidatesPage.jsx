@@ -224,7 +224,38 @@ export default function FindCandidatesPage() {
             )}
           </div>
 
-          <div className="mt-6 flex justify-end">
+          {/* Search Mode Toggle & Search Button */}
+          <div className="mt-6 flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <Label className="text-sm text-slate-600">Search Mode:</Label>
+              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setUseQuickMatch(true)}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    useQuickMatch 
+                      ? 'bg-white text-[#7CB342] font-medium shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  ⚡ Quick Match
+                </button>
+                <button
+                  onClick={() => setUseQuickMatch(false)}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    !useQuickMatch 
+                      ? 'bg-white text-[#7CB342] font-medium shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  <Sparkles className="w-3 h-3 inline mr-1" />
+                  AI Deep Match
+                </button>
+              </div>
+              <span className="text-xs text-slate-400">
+                {useQuickMatch ? '~3 seconds' : '~60 seconds'}
+              </span>
+            </div>
+            
             <Button
               onClick={handleSearch}
               disabled={loading}
