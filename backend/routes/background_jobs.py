@@ -14,7 +14,7 @@ from services.embeddings import embedding_service, batch_generate_embeddings
 
 logger = logging.getLogger(__name__)
 
-jobs_router = APIRouter(tags=["Background Jobs"])
+jobs_router = APIRouter(prefix="/api", tags=["Background Jobs"])
 
 
 # ============== Job Queue Endpoints ==============
