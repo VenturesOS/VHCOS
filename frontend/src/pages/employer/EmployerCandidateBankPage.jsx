@@ -158,7 +158,15 @@ export default function EmployerCandidateBankPage() {
       if (search) params.search = search;
       if (skills) params.skills = skills;
       const res = await candidateBankAPI.getAll(params);
-      setCandidates(res.data);
+      // Handle paginated response - API returns { candidates: [], total, page, limit, total_pages }
+      const data = res.data;
+      if (data && Array.isArray(data.candidates)) {
+        setCandidates(data.candidates);
+      } else if (Array.isArray(data)) {
+        setCandidates(data);
+      } else {
+        setCandidates([]);
+      }
     } catch (error) {
       toast.error('Failed to load candidates');
     } finally {
