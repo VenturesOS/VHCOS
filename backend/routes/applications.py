@@ -857,17 +857,20 @@ async def find_matching_candidates(
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
     """
-    Find candidates matching job requirements with AI scoring.
+    Find candidates matching job requirements with TWO-STAGE MATCHING.
     
-    CRITICAL: AI Screening searches ENTIRE candidate database.
-    This is a SYSTEM-LEVEL INTELLIGENCE function, not UI-level visibility filter.
-    DATA VISIBILITY ≠ AI SEARCH SCOPE
-    Results are READ-ONLY, CONTEXTUAL VISIBILITY - no edit/ownership rights granted.
+    STAGE 1: Fast database pre-filtering using indexes
+    - Skills matching (text search)
+    - Experience range filtering
+    - Location filtering (if specified)
+    - Returns top 100 candidates sorted by relevance
     
-    OPTIMIZED: 
-    - Batch lookup for creator roles (eliminates N+1 queries)
-    - Concurrent AI matching with semaphore to control parallelism
-    - Pre-filters candidates with must-have criteria before AI scoring
+    STAGE 2: AI scoring on pre-filtered candidates only
+    - LLM-based detailed matching
+    - Skill gap analysis
+    - Experience evaluation
+    
+    This optimization reduces LLM calls from 1000+ to ~100 max.
     """
     import time
     import asyncio
@@ -876,6 +879,7 @@ async def find_matching_candidates(
     
     # Get job requirements
     job_data = None
+    job = None
     if match_req.job_id:
         job = await db.jobs.find_one({"id": match_req.job_id}, {"_id": 0})
         if not job:
@@ -894,7 +898,125 @@ async def find_matching_candidates(
     
     logger.info(f"[AI SCREENING] Job parsed in {time.time() - start_time:.2f}s")
     
-    # Build must-have filters
+    # ============== STAGE 1: FAST DATABASE PRE-FILTERING ==============
+    # Build database query using indexes for fast filtering
+    
+    stage1_start = time.time()
+    
+    # Extract key matching criteria from parsed job
+    required_skills = job_data.get("required_skills", []) or []
+    preferred_skills = job_data.get("preferred_skills", []) or []
+    all_skills = required_skills + preferred_skills
+    
+    min_exp = job_data.get("min_experience") or match_req.min_experience
+    max_exp = job_data.get("max_experience") or match_req.max_experience
+    location = match_req.must_have_location or job_data.get("location")
+    
+    # Build MongoDB aggregation pipeline for smart pre-filtering
+    pipeline = []
+    
+    # Match stage - basic filters using indexes
+    match_conditions = {}
+    
+    # Experience filter (uses exp_years_idx index)
+    if min_exp is not None or max_exp is not None:
+        exp_filter = {}
+        if min_exp is not None:
+            exp_filter["$gte"] = min_exp
+        if max_exp is not None:
+            exp_filter["$lte"] = max_exp + 2  # Allow some flexibility
+        if exp_filter:
+            match_conditions["experience_years"] = exp_filter
+    
+    # Location filter (uses location_idx index) - partial match
+    if location and match_req.must_have_location:
+        match_conditions["location"] = {"$regex": location, "$options": "i"}
+    
+    if match_conditions:
+        pipeline.append({"$match": match_conditions})
+    
+    # Add text search score if skills available (uses text_search_idx)
+    if all_skills:
+        # Create search text from skills
+        search_text = " ".join(all_skills[:10])  # Limit to top 10 skills
+        pipeline.append({
+            "$match": {
+                "$or": [
+                    {"skills": {"$regex": "|".join(all_skills[:5]), "$options": "i"}},
+                    {"summary": {"$regex": "|".join(all_skills[:3]), "$options": "i"}}
+                ]
+            }
+        })
+    
+    # Add computed relevance score
+    pipeline.append({
+        "$addFields": {
+            "skill_match_count": {
+                "$size": {
+                    "$ifNull": [
+                        {"$setIntersection": [
+                            {"$map": {"input": {"$ifNull": ["$skills", []]}, "as": "s", "in": {"$toLower": "$$s"}}},
+                            [s.lower() for s in all_skills] if all_skills else []
+                        ]},
+                        []
+                    ]
+                }
+            }
+        }
+    })
+    
+    # Sort by skill match count and experience relevance
+    pipeline.append({"$sort": {"skill_match_count": -1, "experience_years": -1}})
+    
+    # Limit to top candidates for AI scoring (Stage 2)
+    MAX_CANDIDATES_FOR_AI = 100
+    pipeline.append({"$limit": MAX_CANDIDATES_FOR_AI})
+    
+    # Project only needed fields
+    pipeline.append({
+        "$project": {
+            "_id": 0,
+            "id": 1,
+            "name": 1,
+            "email": 1,
+            "skills": 1,
+            "experience_years": 1,
+            "education": 1,
+            "location": 1,
+            "summary": 1,
+            "source": 1,
+            "created_by": 1,
+            "skill_match_count": 1
+        }
+    })
+    
+    # Execute Stage 1 query
+    try:
+        pre_filtered_candidates = await db.candidate_bank.aggregate(pipeline).to_list(MAX_CANDIDATES_FOR_AI)
+    except Exception as e:
+        logger.warning(f"[AI SCREENING] Aggregation failed, falling back to simple query: {e}")
+        # Fallback to simple query if aggregation fails
+        simple_query = {}
+        if min_exp is not None:
+            simple_query["experience_years"] = {"$gte": min_exp}
+        pre_filtered_candidates = await db.candidate_bank.find(
+            simple_query,
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1, "experience_years": 1, 
+             "education": 1, "location": 1, "summary": 1, "source": 1, "created_by": 1}
+        ).sort("experience_years", -1).limit(MAX_CANDIDATES_FOR_AI).to_list(MAX_CANDIDATES_FOR_AI)
+    
+    stage1_time = time.time() - stage1_start
+    logger.info(f"[AI SCREENING] Stage 1: Pre-filtered to {len(pre_filtered_candidates)} candidates in {stage1_time:.2f}s")
+    
+    if not pre_filtered_candidates:
+        logger.info("[AI SCREENING] No candidates found matching basic criteria")
+        return []
+    
+    # ============== STAGE 2: AI SCORING ON PRE-FILTERED CANDIDATES ==============
+    
+    stage2_start = time.time()
+    
+    # Build must-have filters for final validation
     must_have = {}
     if match_req.must_have_location:
         must_have["location"] = match_req.must_have_location
@@ -907,30 +1029,8 @@ async def find_matching_candidates(
     if match_req.max_experience is not None:
         must_have["max_experience"] = match_req.max_experience
     
-    # CRITICAL: AI Screening searches ENTIRE candidate database
-    # No role-based filtering for AI screening input
-    # Optimization: Only fetch fields needed for matching
-    candidates = await db.candidate_bank.find(
-        {},
-        {
-            "_id": 0,
-            "id": 1,
-            "name": 1,
-            "email": 1,
-            "skills": 1,
-            "experience_years": 1,
-            "education": 1,
-            "location": 1,
-            "summary": 1,
-            "source": 1,
-            "created_by": 1
-        }
-    ).to_list(1000)
-    
-    logger.info(f"[AI SCREENING] Loaded {len(candidates)} candidates in {time.time() - start_time:.2f}s")
-    
-    # OPTIMIZATION: Batch fetch all creator user roles at once (eliminates N+1)
-    creator_ids = list(set(c.get("created_by") for c in candidates if c.get("created_by")))
+    # OPTIMIZATION: Batch fetch all creator user roles at once
+    creator_ids = list(set(c.get("created_by") for c in pre_filtered_candidates if c.get("created_by")))
     creator_roles = {}
     if creator_ids:
         creators = await db.users.find(
@@ -939,18 +1039,14 @@ async def find_matching_candidates(
         ).to_list(len(creator_ids))
         creator_roles = {c["id"]: c.get("role") for c in creators}
     
-    logger.info(f"[AI SCREENING] Creator roles fetched in {time.time() - start_time:.2f}s")
-    
-    # OPTIMIZATION: Pre-filter candidates with must-have criteria BEFORE AI scoring
-    # This avoids expensive LLM calls for candidates that will be filtered anyway
+    # Apply must-have filters and separate candidates
     filtered_candidates = []
     pre_filtered_results = []
     
-    for candidate in candidates:
+    for candidate in pre_filtered_candidates:
         if must_have:
             filter_result = apply_must_have_filters(candidate, must_have)
             if not filter_result["passed"]:
-                # Add to results as filtered out (no AI call needed)
                 pre_filtered_results.append(MatchResult(
                     candidate_id=candidate["id"],
                     candidate_name=candidate["name"],
@@ -965,37 +1061,51 @@ async def find_matching_candidates(
                 continue
         filtered_candidates.append(candidate)
     
-    logger.info(f"[AI SCREENING] Pre-filtered to {len(filtered_candidates)} candidates (excluded {len(pre_filtered_results)}) in {time.time() - start_time:.2f}s")
+    logger.info(f"[AI SCREENING] Stage 2: {len(filtered_candidates)} candidates for AI scoring (excluded {len(pre_filtered_results)} by must-have filters)")
     
     # OPTIMIZATION: Use concurrent AI matching with controlled parallelism
-    # Semaphore limits concurrent LLM calls to avoid overwhelming the API
-    MAX_CONCURRENT_LLM_CALLS = 5
+    MAX_CONCURRENT_LLM_CALLS = 10  # Increased since we have fewer candidates now
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
     
     async def match_candidate(candidate: dict) -> MatchResult:
         async with semaphore:
-            match_result = await calculate_candidate_job_match(candidate, job_data, None)  # must_have already applied
-            
-            return MatchResult(
-                candidate_id=candidate["id"],
-                candidate_name=candidate["name"],
-                candidate_email=candidate["email"],
-                score=match_result.get("score", 0),
-                skill_match_score=match_result.get("skill_match_score"),
-                experience_match_score=match_result.get("experience_match_score"),
-                matched_skills=match_result.get("matched_skills", []),
-                missing_skills=match_result.get("missing_skills", []),
-                strengths=match_result.get("strengths", []),
-                gaps=match_result.get("gaps", []),
-                explanation=match_result.get("explanation", ""),
-                filtered_out=match_result.get("filtered_out", False),
-                filter_reason=match_result.get("filter_reason"),
-                source=candidate.get("source", "unknown"),
-                source_role=creator_roles.get(candidate.get("created_by"))
-            )
+            try:
+                match_result = await calculate_candidate_job_match(candidate, job_data, None)
+                
+                return MatchResult(
+                    candidate_id=candidate["id"],
+                    candidate_name=candidate["name"],
+                    candidate_email=candidate["email"],
+                    score=match_result.get("score", 0),
+                    skill_match_score=match_result.get("skill_match_score"),
+                    experience_match_score=match_result.get("experience_match_score"),
+                    matched_skills=match_result.get("matched_skills", []),
+                    missing_skills=match_result.get("missing_skills", []),
+                    strengths=match_result.get("strengths", []),
+                    gaps=match_result.get("gaps", []),
+                    explanation=match_result.get("explanation", ""),
+                    filtered_out=match_result.get("filtered_out", False),
+                    filter_reason=match_result.get("filter_reason"),
+                    source=candidate.get("source", "unknown"),
+                    source_role=creator_roles.get(candidate.get("created_by"))
+                )
+            except Exception as e:
+                logger.error(f"[AI SCREENING] Error matching candidate {candidate.get('id')}: {e}")
+                # Return a basic result on error
+                return MatchResult(
+                    candidate_id=candidate["id"],
+                    candidate_name=candidate["name"],
+                    candidate_email=candidate["email"],
+                    score=candidate.get("skill_match_count", 0) * 10,  # Use pre-computed score
+                    explanation="Quick match based on skill overlap",
+                    source=candidate.get("source", "unknown"),
+                    source_role=creator_roles.get(candidate.get("created_by"))
+                )
     
-    # Run AI matching concurrently
+    # Run AI matching concurrently on pre-filtered candidates only
     ai_results = await asyncio.gather(*[match_candidate(c) for c in filtered_candidates])
+    
+    stage2_time = time.time() - stage2_start
     
     # Combine pre-filtered results with AI results
     results = list(ai_results) + pre_filtered_results
@@ -1003,8 +1113,8 @@ async def find_matching_candidates(
     # Sort by score descending, filtered_out last
     results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
     
-    elapsed = time.time() - start_time
-    logger.info(f"[AI SCREENING] Completed {len(results)} matches in {elapsed:.2f}s ({len(filtered_candidates)} AI calls)")
+    total_time = time.time() - start_time
+    logger.info(f"[AI SCREENING] Completed: Stage1={stage1_time:.2f}s, Stage2={stage2_time:.2f}s, Total={total_time:.2f}s, AI calls={len(filtered_candidates)}")
     
     # Store match results for analytics
     if match_req.job_id:
@@ -1013,10 +1123,14 @@ async def find_matching_candidates(
             "job_id": match_req.job_id,
             "searched_by": current_user["id"],
             "searched_by_role": current_user["role"],
-            "total_candidates": len(candidates),
+            "total_candidates_in_db": await db.candidate_bank.count_documents({}),
+            "pre_filtered_count": len(pre_filtered_candidates),
+            "ai_scored_count": len(filtered_candidates),
             "matched_count": len([r for r in results if r.score >= 50 and not r.filtered_out]),
             "filters_applied": must_have,
-            "processing_time_seconds": round(elapsed, 2),
+            "stage1_time_seconds": round(stage1_time, 2),
+            "stage2_time_seconds": round(stage2_time, 2),
+            "total_time_seconds": round(total_time, 2),
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
     
