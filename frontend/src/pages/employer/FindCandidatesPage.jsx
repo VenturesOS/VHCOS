@@ -21,6 +21,7 @@ export default function FindCandidatesPage() {
   const [results, setResults] = useState([]);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [useQuickMatch, setUseQuickMatch] = useState(true); // Default to quick match for speed
   const fileInputRef = useRef(null);
   
   // Must-have filters
@@ -55,7 +56,10 @@ export default function FindCandidatesPage() {
     setResults([]);
 
     try {
-      const params = {};
+      const params = {
+        quick_match: useQuickMatch,
+        limit: 100
+      };
       
       if (selectedJobId) {
         params.job_id = selectedJobId;
