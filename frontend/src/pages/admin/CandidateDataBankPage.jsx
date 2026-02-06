@@ -239,7 +239,7 @@ export default function CandidateDataBankPage() {
       toast.success(res.data.message || 'CV attached successfully');
       setShowAttachCV(false);
       setAttachCVCandidate(null);
-      loadCandidates(); // Refresh to show updated cv_attached status
+      loadCandidates(currentPage); // Refresh to show updated cv_attached status
       // Also refresh selected candidate details if viewing
       if (selectedCandidate?.id === attachCVCandidate.id) {
         loadCandidateDetails({ ...selectedCandidate, cv_attached: true });
