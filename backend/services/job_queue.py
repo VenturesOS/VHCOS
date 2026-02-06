@@ -85,7 +85,7 @@ class JobQueueService:
         )
         
         # Store in database
-        if self.db:
+        if self.db is not None:
             await self.db.background_jobs.insert_one(job.model_dump())
         
         logger.info(f"Created job: {job.id} ({job_type})")
