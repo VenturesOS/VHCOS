@@ -119,6 +119,9 @@ app.include_router(applications_router)
 # Include settings & alerts routes (extracted to routes/settings.py)
 app.include_router(settings_router)
 
+# Include background jobs & embeddings routes
+app.include_router(background_jobs_router)
+
 # Include bulk import routes (Admin only - for controlled data seeding)
 app.include_router(bulk_import_router)
 
