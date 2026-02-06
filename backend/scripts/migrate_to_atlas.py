@@ -54,7 +54,11 @@ def migrate_sync():
     # Connect to Atlas
     print("\n📡 Connecting to MongoDB Atlas...")
     try:
-        atlas_client = MongoClient(ATLAS_MONGO_URL, serverSelectionTimeoutMS=10000)
+        atlas_client = MongoClient(
+            ATLAS_MONGO_URL, 
+            serverSelectionTimeoutMS=10000,
+            tlsCAFile=certifi.where()
+        )
         atlas_client.admin.command('ping')
         atlas_db = atlas_client[DB_NAME]
         print("✅ Connected to MongoDB Atlas")
