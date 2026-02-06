@@ -1082,11 +1082,6 @@ async def find_matching_candidates(
                 {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1, "experience_years": 1, 
                  "education": 1, "location": 1, "summary": 1, "source": 1, "created_by": 1}
             ).sort("experience_years", -1).limit(MAX_CANDIDATES_FOR_AI).to_list(MAX_CANDIDATES_FOR_AI)
-        pre_filtered_candidates = await db.candidate_bank.find(
-            simple_query,
-            {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1, "experience_years": 1, 
-             "education": 1, "location": 1, "summary": 1, "source": 1, "created_by": 1}
-        ).sort("experience_years", -1).limit(MAX_CANDIDATES_FOR_AI).to_list(MAX_CANDIDATES_FOR_AI)
     
     stage1_time = time.time() - stage1_start
     logger.info(f"[AI SCREENING] Stage 1: Pre-filtered to {len(pre_filtered_candidates)} candidates in {stage1_time:.2f}s")
