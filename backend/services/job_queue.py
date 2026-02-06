@@ -93,7 +93,7 @@ class JobQueueService:
     
     async def get_job(self, job_id: str) -> Optional[BackgroundJob]:
         """Get job by ID."""
-        if not self.db:
+        if self.db is None:
             return None
         
         job_data = await self.db.background_jobs.find_one({"id": job_id}, {"_id": 0})
