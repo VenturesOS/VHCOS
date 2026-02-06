@@ -393,7 +393,7 @@ export default function CandidateDataBankPage() {
       setIsEditingProfile(false);
       
       // Refresh the candidate data
-      loadCandidates();
+      loadCandidates(currentPage);
       // Update the selected candidate with new values
       setSelectedCandidate(prev => ({
         ...prev,
