@@ -509,14 +509,25 @@ async def download_candidate_bank_resume(
 
 # ============== CANDIDATE BANK CRUD ==============
 
-@candidates_router.get("/candidate-bank", response_model=List[CandidateBankRecord])
+class CandidateBankResponse(BaseModel):
+    """Paginated response for candidate bank"""
+    candidates: List[CandidateBankRecord]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+
+@candidates_router.get("/candidate-bank", response_model=CandidateBankResponse)
 async def get_candidate_bank(
     search: Optional[str] = None,
     skills: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Get candidates from data bank based on STRICT role visibility.
+    Get candidates from data bank with pagination based on STRICT role visibility.
     
     Access Control (Data Governance):
     - Admin: Full access to all candidates from all sources
@@ -524,14 +535,23 @@ async def get_candidate_bank(
                 or applied via job postings under employer's mandates
     - Recruiter: Only candidates parsed by self, or applied via jobs of their assigned mandates
     - Candidate: NO access (returns empty list)
+    
+    Pagination:
+    - page: Page number (default 1)
+    - limit: Items per page (default 50, max 100)
     """
+    
+    # Enforce limit bounds
+    limit = min(max(1, limit), 100)
+    page = max(1, page)
+    skip = (page - 1) * limit
     
     # Use unified helper for candidate visibility
     accessible_ids = await get_accessible_candidate_ids(current_user)
     
     # Candidate has ZERO access to internal Candidate Data Bank
     if accessible_ids is not None and len(accessible_ids) == 0:
-        return []
+        return CandidateBankResponse(candidates=[], total=0, page=page, limit=limit, total_pages=0)
     
     query = {}
     
@@ -562,8 +582,20 @@ async def get_candidate_bank(
         else:
             query["skills"] = {"$in": skill_list}
     
-    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(500)
-    return [CandidateBankRecord(**c) for c in candidates]
+    # Get total count for pagination
+    total = await db.candidate_bank.count_documents(query)
+    total_pages = (total + limit - 1) // limit  # Ceiling division
+    
+    # Fetch paginated results with sorting by created_at descending
+    candidates = await db.candidate_bank.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    
+    return CandidateBankResponse(
+        candidates=[CandidateBankRecord(**c) for c in candidates],
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages
+    )
 
 
 @candidates_router.get("/candidate-bank/{candidate_id}")
