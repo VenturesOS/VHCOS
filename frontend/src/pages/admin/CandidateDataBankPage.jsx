@@ -308,7 +308,8 @@ export default function CandidateDataBankPage() {
       toast.success(res.data.message);
       setShowUpload(false);
       setUploadForm({ email: '', name: '' });
-      loadCandidates();
+      setCurrentPage(1);
+      loadCandidates(1);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Upload failed');
     } finally {
