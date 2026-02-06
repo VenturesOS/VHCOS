@@ -105,7 +105,6 @@ export default function CandidateDataBankPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, debouncedSkills]);
-  }, []);
 
   // Load jobs for the Add as Applicant dialog
   const loadJobs = async () => {
