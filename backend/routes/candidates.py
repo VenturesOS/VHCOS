@@ -522,12 +522,21 @@ class CandidateBankResponse(BaseModel):
 async def get_candidate_bank(
     search: Optional[str] = None,
     skills: Optional[str] = None,
+    location: Optional[str] = None,
+    min_experience: Optional[int] = None,
+    max_experience: Optional[int] = None,
     page: int = 1,
     limit: int = 50,
+    use_atlas_search: bool = True,  # Use Atlas Search by default
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Get candidates from data bank with pagination based on STRICT role visibility.
+    Get candidates from data bank with pagination and Atlas Search.
+    
+    Atlas Search Features:
+    - Fuzzy matching (typo tolerance)
+    - Relevance scoring
+    - Much faster than regex on large datasets
     
     Access Control (Data Governance):
     - Admin: Full access to all candidates from all sources
@@ -535,10 +544,6 @@ async def get_candidate_bank(
                 or applied via job postings under employer's mandates
     - Recruiter: Only candidates parsed by self, or applied via jobs of their assigned mandates
     - Candidate: NO access (returns empty list)
-    
-    Pagination:
-    - page: Page number (default 1)
-    - limit: Items per page (default 50, max 100)
     """
     
     # Enforce limit bounds
@@ -553,13 +558,128 @@ async def get_candidate_bank(
     if accessible_ids is not None and len(accessible_ids) == 0:
         return CandidateBankResponse(candidates=[], total=0, page=page, limit=limit, total_pages=0)
     
+    # Try Atlas Search if search query provided and enabled
+    if search and use_atlas_search:
+        try:
+            # Build Atlas Search aggregation pipeline
+            pipeline = []
+            
+            # Stage 1: Atlas Search with fuzzy matching
+            search_stage = {
+                "$search": {
+                    "index": "candidate_search",
+                    "compound": {
+                        "should": [
+                            {
+                                "text": {
+                                    "query": search,
+                                    "path": "name",
+                                    "fuzzy": {"maxEdits": 1},
+                                    "score": {"boost": {"value": 3}}
+                                }
+                            },
+                            {
+                                "text": {
+                                    "query": search,
+                                    "path": "email",
+                                    "score": {"boost": {"value": 2}}
+                                }
+                            },
+                            {
+                                "text": {
+                                    "query": search,
+                                    "path": "skills",
+                                    "fuzzy": {"maxEdits": 1},
+                                    "score": {"boost": {"value": 2.5}}
+                                }
+                            },
+                            {
+                                "text": {
+                                    "query": search,
+                                    "path": "summary",
+                                    "fuzzy": {"maxEdits": 2}
+                                }
+                            },
+                            {
+                                "text": {
+                                    "query": search,
+                                    "path": ["current_employer", "designation", "industry"],
+                                    "fuzzy": {"maxEdits": 1}
+                                }
+                            }
+                        ],
+                        "minimumShouldMatch": 1
+                    }
+                }
+            }
+            pipeline.append(search_stage)
+            
+            # Stage 2: Add search score
+            pipeline.append({
+                "$addFields": {
+                    "search_score": {"$meta": "searchScore"}
+                }
+            })
+            
+            # Stage 3: Apply visibility filter
+            if accessible_ids is not None:
+                pipeline.append({"$match": {"id": {"$in": accessible_ids}}})
+            
+            # Stage 4: Apply additional filters
+            match_filters = {}
+            if location:
+                match_filters["location"] = {"$regex": location, "$options": "i"}
+            if min_experience is not None:
+                match_filters["experience_years"] = {"$gte": min_experience}
+            if max_experience is not None:
+                if "experience_years" in match_filters:
+                    match_filters["experience_years"]["$lte"] = max_experience
+                else:
+                    match_filters["experience_years"] = {"$lte": max_experience}
+            
+            if match_filters:
+                pipeline.append({"$match": match_filters})
+            
+            # Stage 5: Facet for count and paginated results
+            pipeline.append({
+                "$facet": {
+                    "metadata": [{"$count": "total"}],
+                    "candidates": [
+                        {"$sort": {"search_score": -1}},
+                        {"$skip": skip},
+                        {"$limit": limit},
+                        {"$project": {"_id": 0, "search_score": 0}}
+                    ]
+                }
+            })
+            
+            # Execute pipeline
+            result = await db.candidate_bank.aggregate(pipeline).to_list(1)
+            
+            if result:
+                total = result[0]["metadata"][0]["total"] if result[0]["metadata"] else 0
+                candidates = result[0]["candidates"]
+                total_pages = (total + limit - 1) // limit
+                
+                return CandidateBankResponse(
+                    candidates=[CandidateBankRecord(**c) for c in candidates],
+                    total=total,
+                    page=page,
+                    limit=limit,
+                    total_pages=total_pages
+                )
+        except Exception as e:
+            # Fall back to regex search if Atlas Search fails
+            logger.warning(f"Atlas Search failed, falling back to regex: {e}")
+    
+    # Fallback: Regular MongoDB query (used when no search or Atlas Search fails)
     query = {}
     
     # Apply visibility filter (None means full access for admin)
     if accessible_ids is not None:
         query["id"] = {"$in": accessible_ids}
     
-    # Search filter
+    # Search filter (regex fallback)
     if search:
         search_condition = {
             "$or": [
@@ -573,12 +693,39 @@ async def get_candidate_bank(
         else:
             query.update(search_condition)
     
+    # Location filter
+    if location:
+        loc_condition = {"location": {"$regex": location, "$options": "i"}}
+        if "$and" in query:
+            query["$and"].append(loc_condition)
+        elif query:
+            query = {"$and": [query, loc_condition]}
+        else:
+            query = loc_condition
+    
+    # Experience filter
+    if min_experience is not None or max_experience is not None:
+        exp_condition = {}
+        if min_experience is not None:
+            exp_condition["$gte"] = min_experience
+        if max_experience is not None:
+            exp_condition["$lte"] = max_experience
+        exp_filter = {"experience_years": exp_condition}
+        if "$and" in query:
+            query["$and"].append(exp_filter)
+        elif query:
+            query = {"$and": [query, exp_filter]}
+        else:
+            query = exp_filter
+    
     # Skills filter
     if skills:
         skill_list = [s.strip() for s in skills.split(",")]
         skill_condition = {"skills": {"$in": skill_list}}
         if "$and" in query:
             query["$and"].append(skill_condition)
+        elif query:
+            query = {"$and": [query, skill_condition]}
         else:
             query["skills"] = {"$in": skill_list}
     
