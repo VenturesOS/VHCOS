@@ -179,7 +179,7 @@ export default function CandidateDataBankPage() {
       const res = await candidateBankAPI.linkToJob(applicantCandidate.id, selectedJobId);
       toast.success(res.data.message);
       setShowAddApplicant(false);
-      loadCandidates(); // Refresh to show updated data
+      loadCandidates(currentPage); // Refresh to show updated data
     } catch (error) {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'object' && detail.message) {
