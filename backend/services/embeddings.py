@@ -1,11 +1,12 @@
 """
 Vector Embeddings Service for Semantic Search
 Generates and stores embeddings for candidates and jobs.
-Uses OpenAI embeddings via Emergent LLM Key.
+Uses OpenAI embeddings via direct API call.
 """
 import os
 import logging
 import asyncio
+import httpx
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
@@ -14,30 +15,27 @@ logger = logging.getLogger(__name__)
 # Embedding model configuration
 EMBEDDING_MODEL = "text-embedding-3-small"  # OpenAI's efficient embedding model
 EMBEDDING_DIMENSIONS = 1536  # Output dimensions
+OPENAI_API_URL = "https://emergentintegrations-api.onrender.com/v1/embeddings"
 
 
 class EmbeddingService:
     """Service for generating and managing vector embeddings."""
     
     def __init__(self):
-        self.client = None
+        self.api_key = None
         self._initialized = False
     
     async def initialize(self):
-        """Initialize the OpenAI client."""
+        """Initialize the embedding service."""
         if self._initialized:
             return
         
-        try:
-            from emergentintegrations.llm.openai import OpenAIConfig, get_openai_client
-            
-            config = OpenAIConfig(emergent_api_key=os.environ.get("EMERGENT_LLM_KEY"))
-            self.client = get_openai_client(config)
+        self.api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if self.api_key:
             self._initialized = True
             logger.info("✅ Embedding service initialized")
-        except Exception as e:
-            logger.warning(f"⚠️ Embedding service initialization failed: {e}")
-            self._initialized = False
+        else:
+            logger.warning("⚠️ EMERGENT_LLM_KEY not set, embeddings disabled")
     
     def _prepare_candidate_text(self, candidate: Dict[str, Any]) -> str:
         """Prepare candidate data as text for embedding."""
@@ -114,20 +112,34 @@ class EmbeddingService:
         return " | ".join(parts)
     
     async def generate_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding vector for text."""
+        """Generate embedding vector for text using OpenAI API."""
         if not self._initialized:
             await self.initialize()
         
-        if not self.client:
+        if not self.api_key:
             return None
         
         try:
-            response = self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=text,
-                dimensions=EMBEDDING_DIMENSIONS
-            )
-            return response.data[0].embedding
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    OPENAI_API_URL,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": EMBEDDING_MODEL,
+                        "input": text,
+                        "dimensions": EMBEDDING_DIMENSIONS
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data["data"][0]["embedding"]
+                else:
+                    logger.error(f"Embedding API error: {response.status_code} - {response.text}")
+                    return None
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             return None
