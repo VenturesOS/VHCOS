@@ -144,6 +144,61 @@ Created and executed MongoDB indexes to optimize database query performance.
 
 ---
 
+## Server-side Pagination & Search Debouncing (February 6, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 14/14 backend tests passed (100%), Frontend fully verified
+**Test Report:** `/app/test_reports/pytest/pytest_pagination_debounce.xml`
+
+### Features Implemented
+
+#### 1. Server-side Pagination
+- **Backend**: Updated `/api/candidate-bank` endpoint to return paginated response
+- **Response format**: `{candidates, total, page, limit, total_pages}`
+- **Default**: 50 items per page, max 100
+- **Sorting**: Results sorted by `created_at` descending (newest first)
+
+#### 2. Search Debouncing
+- **Frontend**: Added 300ms debounce delay on search inputs
+- Automatically triggers search after user stops typing
+- Reduces unnecessary API calls during rapid typing
+- Page resets to 1 when search filters change
+
+### API Changes
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| page | int | 1 | Page number (1-indexed) |
+| limit | int | 50 | Items per page (max 100) |
+| search | str | null | Search by name, email, or skills |
+| skills | str | null | Filter by skills (comma-separated) |
+
+### Response Format
+```json
+{
+  "candidates": [...],
+  "total": 1701,
+  "page": 1,
+  "limit": 50,
+  "total_pages": 35
+}
+```
+
+### UI Components
+- First/Previous/Next/Last page navigation buttons
+- Page number buttons (up to 5 visible with smart pagination)
+- "Showing X - Y of Z candidates" info display
+- Pagination controls only visible when total_pages > 1
+
+### Files Modified
+- `/app/backend/routes/candidates.py` - Added CandidateBankResponse model, pagination logic
+- `/app/frontend/src/pages/admin/CandidateDataBankPage.jsx` - Added useDebounce hook, pagination state & UI
+
+### Test File
+- `/app/backend/tests/test_pagination_debounce.py` - 14 comprehensive tests
+
+---
+
 ## Enhanced Bulk Candidate Import Tool (January 31, 2026)
 
 ### Overview ✅ VERIFIED
