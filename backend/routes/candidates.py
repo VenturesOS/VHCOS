@@ -534,12 +534,12 @@ async def get_candidate_bank(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Get candidates from data bank with pagination and Atlas Search.
+    Get candidates from data bank with pagination, Atlas Search, and caching.
     
-    Atlas Search Features:
-    - Fuzzy matching (typo tolerance)
-    - Relevance scoring
-    - Much faster than regex on large datasets
+    Features:
+    - Redis caching (5 min TTL) for repeated searches
+    - Atlas Search with fuzzy matching
+    - Relevance-based scoring
     
     Access Control (Data Governance):
     - Admin: Full access to all candidates from all sources
@@ -548,6 +548,21 @@ async def get_candidate_bank(
     - Recruiter: Only candidates parsed by self, or applied via jobs of their assigned mandates
     - Candidate: NO access (returns empty list)
     """
+    
+    # Build cache key from parameters (only for admin - others have visibility filters)
+    if current_user.get("role") == "admin" and search:
+        cache_filters = {
+            "search": search or "",
+            "skills": skills or "",
+            "location": location or "",
+            "min_exp": min_experience,
+            "max_exp": max_experience,
+            "atlas": use_atlas_search
+        }
+        cached_result = cache.get_search_results(search, cache_filters, page, limit)
+        if cached_result:
+            logger.debug(f"Cache HIT for search: {search}")
+            return CandidateBankResponse(**cached_result)
     
     # Enforce limit bounds
     limit = min(max(1, limit), 100)
