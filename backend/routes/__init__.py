@@ -9,3 +9,4 @@ from .jobs import jobs_router
 from .candidates import candidates_router
 from .applications import applications_router
 from .settings import settings_router
+from .background_jobs import jobs_router as background_jobs_router
