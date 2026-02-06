@@ -96,8 +96,15 @@ export default function CandidateDataBankPage() {
     industry: ''
   });
 
+  // Load candidates when debounced search/skills or page changes
   useEffect(() => {
-    loadCandidates();
+    loadCandidates(currentPage);
+  }, [debouncedSearch, debouncedSkills, currentPage]);
+
+  // Reset to page 1 when search filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, debouncedSkills]);
   }, []);
 
   // Load jobs for the Add as Applicant dialog
