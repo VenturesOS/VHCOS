@@ -108,7 +108,7 @@ class JobQueueService:
         limit: int = 20
     ) -> List[BackgroundJob]:
         """Get jobs created by a user."""
-        if not self.db:
+        if self.db is None:
             return []
         
         query = {"created_by": user_id}
