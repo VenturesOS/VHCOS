@@ -73,3 +73,17 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Also check parent uploads directory (for backward compatibility)
 PARENT_UPLOAD_DIR = ROOT_DIR.parent / "uploads"
 PARENT_UPLOAD_DIR.mkdir(exist_ok=True)
+
+# ============== SERVICES INITIALIZATION ==============
+# Initialize services that need DB connection
+def init_services():
+    """Initialize services that require DB connection."""
+    try:
+        from services.job_queue import job_queue
+        job_queue.set_db(db)
+        logging.info("✅ Job queue service initialized with DB")
+    except Exception as e:
+        logging.warning(f"⚠️ Job queue service initialization failed: {e}")
+
+# Call initialization
+init_services()
