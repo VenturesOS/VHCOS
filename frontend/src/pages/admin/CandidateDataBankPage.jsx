@@ -252,14 +252,29 @@ export default function CandidateDataBankPage() {
     }
   };
 
-  const loadCandidates = async () => {
+  const loadCandidates = async (page = 1) => {
     setLoading(true);
     try {
-      const params = {};
-      if (search) params.search = search;
-      if (skills) params.skills = skills;
+      const params = {
+        page,
+        limit: pageSize
+      };
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (debouncedSkills) params.skills = debouncedSkills;
       const res = await candidateBankAPI.getAll(params);
-      setCandidates(res.data);
+      
+      // Handle new paginated response format
+      if (res.data.candidates) {
+        setCandidates(res.data.candidates);
+        setTotalCandidates(res.data.total);
+        setTotalPages(res.data.total_pages);
+        setCurrentPage(res.data.page);
+      } else {
+        // Fallback for old response format (array)
+        setCandidates(res.data);
+        setTotalCandidates(res.data.length);
+        setTotalPages(1);
+      }
     } catch (error) {
       toast.error('Failed to load candidates');
     } finally {
@@ -267,9 +282,23 @@ export default function CandidateDataBankPage() {
     }
   };
 
+  // Remove manual search handler - debouncing handles it automatically
   const handleSearch = () => {
-    loadCandidates();
+    setCurrentPage(1);
+    loadCandidates(1);
   };
+
+  // Pagination handlers
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const goToFirstPage = () => goToPage(1);
+  const goToLastPage = () => goToPage(totalPages);
+  const goToPrevPage = () => goToPage(currentPage - 1);
+  const goToNextPage = () => goToPage(currentPage + 1);
 
   const handleUpload = async (file) => {
     if (!file) return;
