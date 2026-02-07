@@ -1175,8 +1175,8 @@ async def find_matching_candidates(
         # Fire-and-forget background task
         asyncio.create_task(_run_full_ai_matching())
 
+        _MATCH_SEMAPHORE.release()
         # Return immediate response with job_id in a header-like field
-        # We return empty results list + include a special entry for the frontend
         return [MatchResult(
             candidate_id="__background_job__",
             candidate_name="Background AI Match Started",
