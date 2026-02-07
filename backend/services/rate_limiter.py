@@ -170,7 +170,7 @@ class RateLimiter:
                     "X-RateLimit-Remaining": str(remaining),
                     "X-RateLimit-Reset": str(config["window"])
                 }
-            except:
+            except Exception:
                 pass
         
         return {
