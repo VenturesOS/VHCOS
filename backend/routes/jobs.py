@@ -687,7 +687,16 @@ async def get_career_page_jobs():
     """
     Public endpoint: Get all jobs that are live on the career page.
     Used by the public career page to display available positions.
+    Results are cached for 5 minutes.
     """
+    cache_key = "career_page_jobs"
+    
+    # Try cache first
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        logging.debug("Cache HIT for career page jobs")
+        return cached_result
+    
     jobs = await db.jobs.find(
         {
             "career_page_status": "live",
@@ -718,6 +727,9 @@ async def get_career_page_jobs():
     # Use public company alias if available, otherwise company name
     for job in jobs:
         job["display_company"] = job.get("public_company_alias") or job.get("company_name") or "Confidential"
+    
+    # Cache results for 5 minutes
+    cache.set(cache_key, jobs, ttl=300)
     
     return jobs
 
