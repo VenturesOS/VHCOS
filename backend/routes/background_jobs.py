@@ -98,6 +98,22 @@ class EmbeddingStatsResponse(BaseModel):
     coverage_percent: float
 
 
+class EmbeddingHealthResponse(BaseModel):
+    status: str
+    model: str = None
+    dimensions: int = None
+    reason: str = None
+
+
+@jobs_router.get("/embeddings/health", response_model=EmbeddingHealthResponse)
+async def check_embedding_health(
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Check if the embedding service is working."""
+    result = await embedding_service.check_health()
+    return EmbeddingHealthResponse(**result)
+
+
 @jobs_router.get("/embeddings/stats", response_model=EmbeddingStatsResponse)
 async def get_embedding_stats(
     current_user: dict = Depends(require_role(["admin"]))
