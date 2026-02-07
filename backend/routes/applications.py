@@ -1083,12 +1083,13 @@ async def find_matching_candidates(
     if match_req.max_experience is not None:
         must_have["max_experience"] = match_req.max_experience
 
-    # Batch fetch creator roles
-    creator_ids = list({c.get("created_by") for c in pre_filtered if c.get("created_by")})
+    # Batch fetch creator roles (skip for quick match to minimize DB hits)
     creator_roles = {}
-    if creator_ids:
-        creators = await db.users.find({"id": {"$in": creator_ids}}, {"_id": 0, "id": 1, "role": 1}).to_list(len(creator_ids))
-        creator_roles = {c["id"]: c.get("role") for c in creators}
+    if not use_quick:
+        creator_ids = list({c.get("created_by") for c in pre_filtered if c.get("created_by")})
+        if creator_ids:
+            creators = await db.users.find({"id": {"$in": creator_ids}}, {"_id": 0, "id": 1, "role": 1}).to_list(len(creator_ids))
+            creator_roles = {c["id"]: c.get("role") for c in creators}
 
     filtered_candidates = []
     filtered_out_results = []
