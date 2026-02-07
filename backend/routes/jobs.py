@@ -304,7 +304,17 @@ async def get_jobs(status: Optional[str] = None, current_user: dict = Depends(ge
 
 @jobs_router.get("/jobs/browse", response_model=List[JobResponse])
 async def browse_jobs(search: Optional[str] = None, location: Optional[str] = None, job_type: Optional[str] = None):
-    """Public job browsing - only shows ACTIVE jobs with masked company names"""
+    """Public job browsing - only shows ACTIVE jobs with masked company names (cached)"""
+    
+    # Build cache key from filters
+    cache_key = f"jobs_browse:{search or ''}:{location or ''}:{job_type or ''}"
+    
+    # Try cache first
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        logging.debug(f"Cache HIT for job browse: {cache_key}")
+        return [JobResponse(**j) for j in cached_result]
+    
     query = {"status": "active"}
     
     if search:
@@ -318,6 +328,10 @@ async def browse_jobs(search: Optional[str] = None, location: Optional[str] = No
         query["job_type"] = job_type
     
     jobs = await db.jobs.find(query, {"_id": 0}).to_list(100)
+    
+    # Cache results for 3 minutes
+    cache.set(cache_key, jobs, ttl=180)
+    
     return [JobResponse(**j) for j in jobs]
 
 
