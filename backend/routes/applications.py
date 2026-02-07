@@ -1222,6 +1222,8 @@ async def find_matching_candidates(
         asyncio.create_task(_run_full_ai_matching())
 
         _MATCH_SEMAPHORE.release()
+        if lock.locked():
+            lock.release()
         # Return immediate response with job_id in a header-like field
         return [MatchResult(
             candidate_id="__background_job__",
