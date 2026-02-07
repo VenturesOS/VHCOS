@@ -1,0 +1,22 @@
+{
+  "test_type": "load_test",
+  "endpoint": "/api/matching/find-candidates",
+  "mode": "quick_match",
+  "concurrent_users": 50,
+  "total_requests": 75,
+  "total_duration_s": 50.4,
+  "throughput_rps": 1.5,
+  "successes": 0,
+  "failures": 75,
+  "timeouts": 23,
+  "rate_limited": 52,
+  "error_rate_pct": 100.0,
+  "pass": false,
+  "response_times": {
+    "min": null,
+    "max": null,
+    "mean": null,
+    "median": null,
+    "p95": null
+  }
+}
