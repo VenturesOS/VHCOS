@@ -869,13 +869,13 @@ async def find_matching_candidates(
     - Location filtering (if specified)
     - Returns top 100 candidates sorted by relevance
     
-    STAGE 2: AI scoring on pre-filtered candidates only
-    - LLM-based detailed matching (with timeout protection)
-    - Skill gap analysis
-    - Experience evaluation
+    STAGE 2: Scoring on pre-filtered candidates
+    - Quick mode (default): Fast database + semantic scoring (recommended)
+    - Full AI mode: LLM-based matching with timeout protection
     
-    This optimization reduces LLM calls from 1000+ to ~100 max.
     Rate limited: 10 requests per minute per user.
+    
+    NOTE: For best performance with 50+ concurrent users, use quick_match=true
     """
     # Rate limit AI matching
     from services.rate_limiter import rate_limiter
@@ -883,6 +883,10 @@ async def find_matching_candidates(
     
     import time
     import asyncio
+    
+    # Default to quick_match for better performance under load
+    if match_req.quick_match is None:
+        match_req.quick_match = True  # Default to quick mode
     
     start_time = time.time()
     
