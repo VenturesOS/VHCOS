@@ -4,17 +4,23 @@ Generates and stores embeddings for candidates and jobs.
 Uses OpenAI text-embedding-3-small model.
 """
 import os
+import hashlib
 import logging
 import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from openai import AsyncOpenAI
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
 # Embedding model configuration
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 1536
+
+# In-memory cache for job embeddings (key: hash of text, value: embedding)
+_embedding_cache: Dict[str, List[float]] = {}
+_CACHE_MAX = 200
 
 
 class EmbeddingService:
