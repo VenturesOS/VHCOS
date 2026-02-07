@@ -73,12 +73,25 @@ export default function BulkImportPage() {
   // Get auth token
   const getToken = () => localStorage.getItem('vhc_token');
 
-  // Chunked upload helper function
+  // Format time remaining
+  const formatTimeRemaining = (seconds) => {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return `${mins}m ${secs}s`;
+  };
+
+  // Chunked upload helper function with progress notifications
   const uploadFileInChunks = async (file) => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    let startTime = Date.now();
+    let chunkTimes = [];
     
     // Step 1: Initialize the upload
     setUploadPhase('chunking');
+    toast.info(`Starting upload of ${fileSizeMB}MB file (${totalChunks} chunks)...`);
+    
     const initResponse = await fetch(`${API_URL}/api/admin/bulk-import/chunk/init`, {
       method: 'POST',
       headers: {
@@ -99,8 +112,9 @@ export default function BulkImportPage() {
     
     const { upload_id } = await initResponse.json();
     
-    // Step 2: Upload each chunk
+    // Step 2: Upload each chunk with progress tracking
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const chunkStartTime = Date.now();
       const start = chunkIndex * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = file.slice(start, end);
@@ -121,12 +135,36 @@ export default function BulkImportPage() {
         throw new Error(error.detail || `Failed to upload chunk ${chunkIndex + 1}`);
       }
       
-      // Update progress (chunking phase: 0-60%)
+      // Track chunk upload time for estimation
+      const chunkTime = (Date.now() - chunkStartTime) / 1000;
+      chunkTimes.push(chunkTime);
+      
+      // Calculate progress and ETA
       const chunkProgress = Math.round(((chunkIndex + 1) / totalChunks) * 60);
       setParseProgress(chunkProgress);
+      
+      // Show progress toast every 10 chunks or at certain milestones
+      if ((chunkIndex + 1) % 10 === 0 || chunkIndex === totalChunks - 1) {
+        const avgChunkTime = chunkTimes.reduce((a, b) => a + b, 0) / chunkTimes.length;
+        const remainingChunks = totalChunks - (chunkIndex + 1);
+        const uploadETA = remainingChunks * avgChunkTime;
+        const processingETA = totalChunks * 2; // ~2 seconds per CV for AI parsing
+        const totalETA = uploadETA + processingETA;
+        
+        const progressPercent = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+        
+        if (chunkIndex < totalChunks - 1) {
+          toast.info(`Upload progress: ${progressPercent}% • ETA: ~${formatTimeRemaining(totalETA)}`, {
+            id: 'upload-progress',
+            duration: 3000
+          });
+        }
+      }
     }
     
     // Step 3: Complete the upload
+    toast.success('Upload complete! Now processing CVs...', { id: 'upload-progress' });
+    
     const completeResponse = await fetch(`${API_URL}/api/admin/bulk-import/chunk/complete?upload_id=${upload_id}`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${getToken()}` }
