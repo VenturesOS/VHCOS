@@ -461,6 +461,66 @@ Redis caching expanded to additional public endpoints.
 
 ---
 
+## Vector Embeddings Service (February 7, 2026)
+
+### Overview ✅ VERIFIED
+**Status:** Healthy - Generating embeddings for 1700+ candidates
+
+### Configuration
+| Setting | Value |
+|---------|-------|
+| Model | `text-embedding-3-small` |
+| Dimensions | 1536 |
+| Provider | OpenAI |
+| Batch Size | 20 candidates |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/embeddings/health` | GET | Check service health |
+| `/api/embeddings/stats` | GET | Get embedding coverage stats |
+| `/api/embeddings/generate-batch` | POST | Start batch embedding generation |
+
+### Features
+- **Semantic Search Ready**: Embeddings enable "Python developer" to match "Django engineer"
+- **Batch Processing**: Processes 20 candidates per API call for efficiency
+- **Progress Tracking**: Background job tracks progress and completion
+- **Cosine Similarity**: Built-in similarity scoring for ranking matches
+
+### Files Modified
+- `/app/backend/services/embeddings.py` - Updated to use direct OpenAI API
+- `/app/backend/routes/background_jobs.py` - Added health check endpoint
+
+### Environment Variables Added
+```
+OPENAI_API_KEY=sk-proj-xxx...
+```
+
+---
+
+## Upload Progress Notifications with ETA (February 7, 2026)
+
+### Overview ✅ VERIFIED
+Enhanced the bulk CV import UI with detailed progress notifications.
+
+### Features
+- **Progress Toast Messages**: Shows upload percentage during chunked uploads
+- **Estimated Time Remaining**: Calculates ETA based on average chunk upload speed
+- **Phase Indicators**: Shows "Uploading...", "Processing CVs..." phases
+- **Completion Summary**: Shows total processing time and results
+
+### Example Notifications
+- `Starting upload of 25.3MB file (50 chunks)...`
+- `Upload progress: 60% • ETA: ~2m 30s`
+- `Upload complete! Now processing CVs...`
+- `✅ Processed 47 CVs in 45.2s • 45 valid, 2 with errors`
+
+### Files Modified
+- `/app/frontend/src/pages/admin/BulkImportPage.jsx` - Added progress tracking and notifications
+
+---
+
 ## Enhanced Bulk Candidate Import Tool (January 31, 2026)
 
 ### Overview ✅ VERIFIED
