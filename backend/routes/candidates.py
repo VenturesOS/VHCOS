@@ -1351,6 +1351,13 @@ async def batch_save_candidates(
                 
                 await db.candidate_bank.insert_one(candidate_doc)
                 
+                # Auto-generate embedding (non-blocking)
+                try:
+                    import asyncio
+                    asyncio.create_task(_auto_embed_candidate(candidate_id, candidate_doc))
+                except Exception as e:
+                    logger.warning(f"Failed to schedule auto-embedding: {e}")
+                
                 saved.append({
                     "temp_id": candidate.temp_id,
                     "action": "created",
