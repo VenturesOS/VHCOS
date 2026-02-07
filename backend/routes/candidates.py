@@ -35,6 +35,9 @@ from services.cache import cache
 # Import R2 storage helpers
 from services.r2_storage import generate_r2_key, upload_to_r2, get_r2_signed_url
 
+# Import embeddings service for auto-embed
+from services.embeddings import embedding_service
+
 # Create router for candidate bank endpoints
 candidates_router = APIRouter(prefix="/api", tags=["Candidate Bank"])
 
