@@ -92,7 +92,10 @@ async def register(user_data: UserCreate, request: Request):
 
 
 @auth_router.post("/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request):
+    # Rate limit login attempts
+    rate_limiter.check_rate_limit(request, "auth")
+    
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     if not user or not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
