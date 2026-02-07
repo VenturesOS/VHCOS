@@ -900,7 +900,15 @@ async def find_matching_candidates(
 
     import time
 
-    # Limit concurrent matching operations to prevent resource exhaustion
+    # Check cache for quick match mode
+    cache_key = _match_cache_key(match_req)
+    if cache_key in _match_cache:
+        cached_results, cached_at = _match_cache[cache_key]
+        if time.time() - cached_at < _MATCH_CACHE_TTL:
+            logger.info(f"[MATCH] Cache HIT for key {cache_key[:8]}")
+            return cached_results
+
+    # Limit concurrent matching operations to prevent DB connection storms
     try:
         await asyncio.wait_for(_MATCH_SEMAPHORE.acquire(), timeout=15.0)
     except asyncio.TimeoutError:
