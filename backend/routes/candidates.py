@@ -526,6 +526,7 @@ class CandidateBankResponse(BaseModel):
 
 @candidates_router.get("/candidate-bank", response_model=CandidateBankResponse)
 async def get_candidate_bank(
+    request: Request,
     search: Optional[str] = None,
     skills: Optional[str] = None,
     location: Optional[str] = None,
@@ -540,7 +541,8 @@ async def get_candidate_bank(
     Get candidates from data bank with pagination, Atlas Search, and caching.
     
     Features:
-    - Redis caching (5 min TTL) for repeated searches
+    - Rate limiting (60 req/min)
+    - Redis caching (10 min TTL) for repeated searches
     - Atlas Search with fuzzy matching
     - Relevance-based scoring
     
@@ -551,6 +553,9 @@ async def get_candidate_bank(
     - Recruiter: Only candidates parsed by self, or applied via jobs of their assigned mandates
     - Candidate: NO access (returns empty list)
     """
+    # Rate limit search requests
+    from services.rate_limiter import rate_limiter
+    rate_limiter.check_rate_limit(request, "search")
     
     # Build cache key from parameters (only for admin - others have visibility filters)
     if current_user.get("role") == "admin" and search:
