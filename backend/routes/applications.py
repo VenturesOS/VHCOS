@@ -857,6 +857,7 @@ async def ai_parse_job_description(
 @applications_router.post("/matching/find-candidates", response_model=List[MatchResult])
 async def find_matching_candidates(
     match_req: MatchRequest,
+    request: Request,
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
     """
@@ -869,12 +870,17 @@ async def find_matching_candidates(
     - Returns top 100 candidates sorted by relevance
     
     STAGE 2: AI scoring on pre-filtered candidates only
-    - LLM-based detailed matching
+    - LLM-based detailed matching (with timeout protection)
     - Skill gap analysis
     - Experience evaluation
     
     This optimization reduces LLM calls from 1000+ to ~100 max.
+    Rate limited: 10 requests per minute per user.
     """
+    # Rate limit AI matching
+    from services.rate_limiter import rate_limiter
+    rate_limiter.check_rate_limit(request, "ai_match")
+    
     import time
     import asyncio
     
