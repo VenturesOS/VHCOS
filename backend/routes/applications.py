@@ -1324,7 +1324,7 @@ async def find_matching_candidates(
             timeout=TOTAL_AI_TIMEOUT
         )
     except asyncio.TimeoutError:
-        logger.warning(f"[AI SCREENING] Global timeout reached, using quick scores for remaining")
+        logger.warning("[AI SCREENING] Global timeout reached, using quick scores for remaining")
         # Fallback: score all remaining candidates with quick method
         ai_results = [_quick_score_candidate(c, all_skills, min_exp, job_embedding, creator_roles) for c in filtered_candidates]
     
