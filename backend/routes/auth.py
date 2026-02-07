@@ -4,7 +4,7 @@ Handles user registration, login, and password management.
 """
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 
 # Import configuration
 from config import db
@@ -19,13 +19,19 @@ from utils import (
     hash_password, verify_password, create_access_token, get_current_user
 )
 
+# Import rate limiter
+from services.rate_limiter import rate_limiter
+
 
 # Create router for auth endpoints
 auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 @auth_router.post("/register", response_model=TokenResponse)
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate, request: Request):
+    # Rate limit registration
+    rate_limiter.check_rate_limit(request, "auth")
+    
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
