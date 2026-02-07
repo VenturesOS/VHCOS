@@ -16,7 +16,26 @@ from pydantic import BaseModel, ConfigDict
 import aiofiles
 
 # Concurrency limiter for matching endpoint
-_MATCH_SEMAPHORE = asyncio.Semaphore(20)  # Max 20 concurrent match operations
+_MATCH_SEMAPHORE = asyncio.Semaphore(15)  # Max 15 concurrent match operations
+
+# In-memory cache for quick match results (key -> (results, timestamp))
+_match_cache: dict = {}
+_MATCH_CACHE_TTL = 120  # 2 minutes cache for identical queries
+
+def _match_cache_key(match_req) -> str:
+    """Generate a cache key from match request params."""
+    import hashlib, json
+    key_data = json.dumps({
+        "job_id": match_req.job_id,
+        "jd_text": (match_req.jd_text or "")[:200],
+        "mode": match_req.match_mode or "quick",
+        "location": match_req.must_have_location,
+        "skills": match_req.must_have_skills,
+        "min_exp": match_req.min_experience,
+        "max_exp": match_req.max_experience,
+        "limit": match_req.limit,
+    }, sort_keys=True)
+    return hashlib.md5(key_data.encode()).hexdigest()
 
 # Import configuration
 from config import db, UPLOAD_DIR
