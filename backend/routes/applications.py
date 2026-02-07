@@ -1258,6 +1258,10 @@ async def find_matching_candidates(
         })
 
     _MATCH_SEMAPHORE.release()
+    # Cache quick match results
+    if len(_match_cache) > 100:
+        _match_cache.clear()
+    _match_cache[cache_key] = (results, time.time())
     return results
 
 
