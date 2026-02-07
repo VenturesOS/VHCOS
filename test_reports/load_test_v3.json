@@ -1,0 +1,17 @@
+{
+  "concurrent": 15,
+  "total": 30,
+  "successes": 27,
+  "failures": 3,
+  "error_rate": 10.0,
+  "grade": "B",
+  "timeouts": 3,
+  "rate_limited": 0,
+  "server_busy": 0,
+  "response_times": {
+    "min": 1.843,
+    "mean": 10.857,
+    "max": 21.226,
+    "p50": 8.928
+  }
+}
