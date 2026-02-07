@@ -48,12 +48,14 @@ def generate_cache_key(prefix: str, *args, **kwargs) -> str:
 class CacheService:
     """High-level caching service with typed methods."""
     
-    # Cache TTL settings (in seconds)
-    TTL_SEARCH_RESULTS = 300  # 5 minutes - search results change frequently
-    TTL_JOB_PARSING = 3600    # 1 hour - job descriptions rarely change
-    TTL_MATCH_SCORES = 1800   # 30 minutes - match scores for job-candidate pairs
+    # Cache TTL settings (in seconds) - OPTIMIZED FOR PERFORMANCE
+    TTL_SEARCH_RESULTS = 600   # 10 minutes - increased for better cache hit rate
+    TTL_JOB_PARSING = 3600     # 1 hour - job descriptions rarely change
+    TTL_MATCH_SCORES = 1800    # 30 minutes - match scores for job-candidate pairs
     TTL_CANDIDATE_EMBEDDINGS = 86400  # 24 hours - embeddings are stable
-    TTL_STATS = 60            # 1 minute - dashboard stats
+    TTL_STATS = 120            # 2 minutes - dashboard stats (increased)
+    TTL_JOB_BROWSE = 600       # 10 minutes - job listing cache
+    TTL_CAREER_PAGE = 600      # 10 minutes - career page jobs
     
     def __init__(self):
         self.redis = get_redis_client()
