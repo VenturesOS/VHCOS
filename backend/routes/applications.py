@@ -1226,18 +1226,33 @@ async def find_matching_candidates(
             try:
                 match_result = await calculate_candidate_job_match(candidate, job_data, None)
                 
+                # Calculate semantic score if embeddings available
+                semantic_score = None
+                if job_embedding and candidate.get("embedding"):
+                    semantic_score = embedding_service.cosine_similarity(job_embedding, candidate["embedding"]) * 100
+                    # Boost AI score with semantic similarity
+                    ai_score = match_result.get("score", 0)
+                    combined_score = int(ai_score * 0.7 + semantic_score * 0.3)
+                else:
+                    combined_score = match_result.get("score", 0)
+                
+                explanation = match_result.get("explanation", "")
+                if semantic_score is not None:
+                    explanation += f" | Semantic match: {semantic_score:.0f}%"
+                
                 return MatchResult(
                     candidate_id=candidate["id"],
                     candidate_name=candidate["name"],
                     candidate_email=candidate["email"],
-                    score=match_result.get("score", 0),
+                    score=combined_score,
                     skill_match_score=match_result.get("skill_match_score"),
                     experience_match_score=match_result.get("experience_match_score"),
+                    semantic_score=round(semantic_score, 1) if semantic_score else None,
                     matched_skills=match_result.get("matched_skills", []),
                     missing_skills=match_result.get("missing_skills", []),
                     strengths=match_result.get("strengths", []),
                     gaps=match_result.get("gaps", []),
-                    explanation=match_result.get("explanation", ""),
+                    explanation=explanation,
                     filtered_out=match_result.get("filtered_out", False),
                     filter_reason=match_result.get("filter_reason"),
                     source=candidate.get("source", "unknown"),
