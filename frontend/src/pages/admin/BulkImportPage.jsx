@@ -661,7 +661,9 @@ export default function BulkImportPage() {
                       {isParsing ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Parsing CVs... {parseProgress}%
+                          {uploadPhase === 'chunking' ? `Uploading... ${parseProgress}%` :
+                           uploadPhase === 'processing' ? `Processing CVs... ${parseProgress}%` :
+                           `Parsing CVs... ${parseProgress}%`}
                         </>
                       ) : (
                         <>
