@@ -125,6 +125,11 @@ app.include_router(background_jobs_router)
 # Include bulk import routes (Admin only - for controlled data seeding)
 app.include_router(bulk_import_router)
 
+# Include extracted business-logic routes
+app.include_router(teams_router)
+app.include_router(referrals_router)
+app.include_router(commercials_router)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
