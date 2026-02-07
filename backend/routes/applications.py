@@ -1144,6 +1144,18 @@ async def find_matching_candidates(
     
     logger.info(f"[AI SCREENING] Stage 2: {len(filtered_candidates)} candidates for AI scoring (excluded {len(pre_filtered_results)} by must-have filters)")
     
+    # ============== SEMANTIC SEARCH ENHANCEMENT ==============
+    # Generate job embedding for semantic matching if enabled
+    job_embedding = None
+    if match_req.semantic_search:
+        try:
+            job_text = f"{job_data.get('title', '')} | Skills: {', '.join(all_skills[:15])} | {job_data.get('description', '')[:500]}"
+            job_embedding = await embedding_service.generate_embedding(job_text)
+            if job_embedding:
+                logger.info(f"[AI SCREENING] Generated job embedding for semantic search")
+        except Exception as e:
+            logger.warning(f"[AI SCREENING] Could not generate job embedding: {e}")
+    
     # ============== QUICK MATCH MODE: Fast database-only scoring ==============
     if match_req.quick_match:
         # Skip LLM calls entirely - use database-computed skill match scores
@@ -1163,7 +1175,18 @@ async def find_matching_candidates(
                 exp_diff = abs(candidate.get("experience_years", 0) - min_exp)
                 exp_score = max(0, 100 - exp_diff * 10)
             
-            total_score = int(skill_score * 0.5 + exp_score * 0.3 + 20)  # 20% base score
+            # Semantic score boost if embeddings available
+            semantic_score = None
+            if job_embedding and candidate.get("embedding"):
+                semantic_score = embedding_service.cosine_similarity(job_embedding, candidate["embedding"]) * 100
+                # Adjust total score: 40% skill + 25% exp + 25% semantic + 10% base
+                total_score = int(skill_score * 0.4 + exp_score * 0.25 + semantic_score * 0.25 + 10)
+            else:
+                total_score = int(skill_score * 0.5 + exp_score * 0.3 + 20)  # 20% base score
+            
+            explanation = f"Quick match: {len(matched_skills)} skills matched, {candidate.get('experience_years', 'N/A')} years experience"
+            if semantic_score is not None:
+                explanation += f", {semantic_score:.0f}% semantic similarity"
             
             quick_results.append(MatchResult(
                 candidate_id=candidate["id"],
@@ -1172,9 +1195,10 @@ async def find_matching_candidates(
                 score=total_score,
                 skill_match_score=int(skill_score),
                 experience_match_score=int(exp_score),
+                semantic_score=round(semantic_score, 1) if semantic_score else None,
                 matched_skills=matched_skills[:10],  # Top 10
                 missing_skills=missing_skills,
-                explanation=f"Quick match: {len(matched_skills)} skills matched, {candidate.get('experience_years', 'N/A')} years experience",
+                explanation=explanation,
                 source=candidate.get("source", "unknown"),
                 source_role=creator_roles.get(candidate.get("created_by"))
             ))
