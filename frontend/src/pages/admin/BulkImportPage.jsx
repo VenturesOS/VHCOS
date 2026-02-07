@@ -37,6 +37,10 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Chunked upload configuration
+const CHUNK_SIZE = 512 * 1024; // 512KB chunks (matches backend)
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB max
+
 export default function BulkImportPage() {
   const navigate = useNavigate();
   
