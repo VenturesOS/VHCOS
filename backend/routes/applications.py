@@ -6,6 +6,7 @@ AI screening, candidate-job matching, and audit history.
 import uuid
 import logging
 import re
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -13,6 +14,9 @@ from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, R
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 import aiofiles
+
+# Concurrency limiter for matching endpoint
+_MATCH_SEMAPHORE = asyncio.Semaphore(20)  # Max 20 concurrent match operations
 
 # Import configuration
 from config import db, UPLOAD_DIR
