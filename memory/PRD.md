@@ -574,7 +574,7 @@ Enhanced the bulk CV import UI with detailed progress notifications.
 
 ---
 
-## Backend Refactoring - Teams Route (February 7, 2026) [IN PROGRESS]
+## Backend Refactoring - Teams Route (February 7, 2026) ✅ COMPLETE
 
 ### Overview
 Created dedicated route file for Team Management to improve code organization.
@@ -582,9 +582,70 @@ Created dedicated route file for Team Management to improve code organization.
 ### Files Created
 - `/app/backend/routes/teams.py` - Team CRUD, member management, company assignments
 
-### Remaining Refactoring
-- `/app/backend/routes/referrals.py` - Referral management (from server.py)
-- `/app/backend/routes/commercials.py` - Commercial intelligence (from server.py)
+---
+
+## Backend Refactoring - Referrals Route (February 7, 2026) ✅ COMPLETE
+
+### Overview
+Created dedicated route file for Referral Management.
+
+### Files Created
+- `/app/backend/routes/referrals.py` - Referral lifecycle, linking to candidates, statistics
+
+### Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/referrals` | GET/POST | List/Create referrals |
+| `/api/referrals/{id}` | GET | Get referral details |
+| `/api/referrals/{id}/transition` | POST | Change referral status |
+| `/api/referrals/{id}/link-candidate` | POST | Link to candidate bank |
+| `/api/referrals/stats/by-job/{id}` | GET | Stats by job |
+| `/api/referrals/stats/by-referrer` | GET | Stats by referrer |
+
+---
+
+## Backend Refactoring - Commercials Route (February 7, 2026) ✅ COMPLETE
+
+### Overview
+Created dedicated route file for Commercial Intelligence & Revenue tracking.
+
+### Files Created
+- `/app/backend/routes/commercials.py` - Commercial configs, revenue calculation, reports
+
+### Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/commercials` | GET/POST | List/Create commercials |
+| `/api/commercials/{id}` | GET/PUT/DELETE | Commercial CRUD |
+| `/api/revenue/calculate` | POST | Calculate application revenue |
+| `/api/revenue/{id}/override` | PUT | Manual revenue override |
+| `/api/revenue/summary` | GET | Revenue summary |
+| `/api/revenue/by-company` | GET | Revenue by company |
+
+---
+
+## Background CV Parsing Service (February 7, 2026) ✅ COMPLETE
+
+### Overview
+Implemented async CV parsing using the job queue for large batch imports.
+
+### Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/admin/bulk-import/cv-zip-async` | POST | Start async CV parsing |
+| `/api/admin/bulk-import/batch/{id}/status` | GET | Get batch status |
+| `/api/admin/bulk-import/batch/{id}/candidates` | GET | Get batch candidates |
+
+### Flow
+1. Upload ZIP via chunked upload
+2. Call `/cv-zip-async` with upload_id
+3. Background job parses all CVs
+4. Poll `/background-jobs/{job_id}` for progress
+5. Each candidate auto-embedded after creation
+
+### Files Modified
+- `/app/backend/services/job_queue.py` - Added `handle_bulk_cv_parse_job` handler
+- `/app/backend/routes/bulk_import.py` - Added async endpoints
 
 ---
 
