@@ -1004,11 +1004,35 @@ async def add_to_candidate_bank(
     
     await db.candidate_bank.insert_one(candidate_doc)
     
+    # Auto-generate embedding for the new candidate (non-blocking)
+    try:
+        import asyncio
+        asyncio.create_task(_auto_embed_candidate(candidate_id, candidate_doc))
+    except Exception as e:
+        logger.warning(f"Failed to schedule auto-embedding for {candidate_id}: {e}")
+    
     return {
         "action": "created",
         "candidate_id": candidate_id,
         "message": "New candidate added to data bank"
     }
+
+
+async def _auto_embed_candidate(candidate_id: str, candidate_data: dict):
+    """Auto-generate embedding for a newly created candidate."""
+    try:
+        embedding = await embedding_service.generate_candidate_embedding(candidate_data)
+        if embedding:
+            await db.candidate_bank.update_one(
+                {"id": candidate_id},
+                {"$set": {
+                    "embedding": embedding,
+                    "embedding_updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            logger.info(f"Auto-embedded candidate: {candidate_id}")
+    except Exception as e:
+        logger.warning(f"Auto-embedding failed for {candidate_id}: {e}")
 
 
 # ============== BATCH CV UPLOAD ==============
