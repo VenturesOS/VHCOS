@@ -265,29 +265,66 @@ export default function BulkImportPage() {
       return;
     }
 
+    // Check file size
+    if (zipFile.size > MAX_FILE_SIZE) {
+      toast.error(`File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+      return;
+    }
+
     setIsParsing(true);
-    setParseProgress(10);
+    setParseProgress(5);
+    setUploadPhase('');
     
     try {
-      const formData = new FormData();
-      formData.append('zip_file', zipFile);
+      let data;
       
-      setParseProgress(30);
-      
-      const response = await fetch(`${API_URL}/api/admin/bulk-import/cv-zip`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getToken()}` },
-        body: formData
-      });
-      
-      setParseProgress(80);
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to parse CV/ZIP');
+      // Use chunked upload for files > 1MB (to bypass proxy limits)
+      if (zipFile.size > 1 * 1024 * 1024) {
+        toast.info(`Large file detected (${(zipFile.size / (1024 * 1024)).toFixed(1)}MB). Using chunked upload...`);
+        
+        // Upload file in chunks
+        const upload_id = await uploadFileInChunks(zipFile);
+        
+        // Process the uploaded file
+        setUploadPhase('processing');
+        setParseProgress(70);
+        
+        const response = await fetch(`${API_URL}/api/admin/bulk-import/cv-zip-chunked?upload_id=${upload_id}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        
+        setParseProgress(90);
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to process CV/ZIP');
+        }
+        
+        data = await response.json();
+        
+      } else {
+        // Standard upload for small files
+        const formData = new FormData();
+        formData.append('zip_file', zipFile);
+        
+        setParseProgress(30);
+        
+        const response = await fetch(`${API_URL}/api/admin/bulk-import/cv-zip`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+          body: formData
+        });
+        
+        setParseProgress(80);
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to parse CV/ZIP');
+        }
+        
+        data = await response.json();
       }
-      
-      const data = await response.json();
       
       setBatchId(data.batch_id);
       setParsedCandidates(data.candidates);
@@ -311,6 +348,7 @@ export default function BulkImportPage() {
     } finally {
       setIsParsing(false);
       setParseProgress(0);
+      setUploadPhase('');
     }
   };
 
