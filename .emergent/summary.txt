@@ -1,88 +1,77 @@
 <analysis>**original_problem_statement:**
-The user wants to build an Enhanced Bulk Candidate Import Tool for the existing VHC Talent OS recruitment portal. This task involves a complete overhaul of a previously implemented basic version.
-
-**PRODUCT REQUIREMENTS:**
-
-The tool must support two independent import modes:
-1.  **Excel/CSV Only:** Admin can upload an Excel file with candidate data to create profiles directly. These profiles will initially not have a CV attached, but there must be a feature to add one later.
-2.  **CV/ZIP Only:** Admin can upload a ZIP file containing resumes (PDF/DOC/DOCX) and/or Excel files. The system should parse the content of these files to create candidate profiles.
-
-**Key Features & Rules:**
-*   **AI Data Enrichment:** If the  column in an Excel file is empty, the system must use an AI model (like GPT) to determine the industry based on the .
-*   **Smart Deduplication:** When duplicates are found (based on email/phone), the system must apply specific conflict resolution rules:
-    *   **Salary/Notice Period:** Use the higher value.
-    *   **Job History:** Merge and sort chronologically by the latest date.
-    *   **Location:** Use the location from the most recent job.
-    *   **Skills:** Merge and deduplicate the skills list.
-*   **Strict Governance & Visibility:**
-    *   All bulk-imported profiles must be restricted to **Admin view only** by default.
-    *   These profiles will only become visible to Employers/Recruiters when they appear in **AI Screening results**.
-    *   Visibility is **session-only** for screening.
-    *   A profile becomes **permanently visible** to a specific user only after they **Add as Applicant**.
-*   The user has provided an Excel template () defining the required data structure.
+The user initially requested to build an Enhanced Bulk Candidate Import Tool with Excel/CV modes, AI enrichment, deduplication, and admin-only governance. The scope expanded to include UI fixes, inline profile editing, bug fixes for data parsing, and critical performance optimizations for search and AI matching. More recently, the user requested a migration to MongoDB Atlas, a phased scaling plan to handle millions of records, and a fix for large file uploads crashing the bulk import feature.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack recruitment portal with a React frontend, FastAPI backend, and MongoDB. The agent has just completed a series of features and fixes, including:
--   Standardizing the  token key to .
--   Implementing Mandate Shareable Links for jobs not on the public career page.
--   Simplifying the Admin Team Creation flow to auto-associate companies based on the selected employer.
--   Adding DELETE capabilities for Companies and Applications (removing candidates from a pipeline).
--   A basic, now-obsolete version of the Bulk Import tool was created but must be completely refactored to meet the new, detailed requirements.
+The application is a full-stack recruitment portal with a React frontend, a FastAPI backend, and a user-provided MongoDB Atlas database. All initial features, including the bulk import tool, AI enrichment, and various UI/UX improvements, are complete. Key performance and scalability features have been implemented:
+- **Database Migration:** The database was successfully migrated from a local instance to MongoDB Atlas.
+- **Phase 1 Scaling (Atlas Search):** MongoDB Atlas Search is integrated for fast, fuzzy-tolerant text search on candidates and jobs, significantly improving search performance.
+- **Phase 2 Prep (Caching & Background Jobs):** An Upstash Redis-powered caching layer is active on the main candidate search endpoint. A background job queue service has been created to handle long-running tasks asynchronously.
+- **Bug Fixes:** A critical pagination bug on the recruiter and employer pages was found by the testing agent and resolved.
+
+The agent was in the middle of implementing chunked uploads to fix an issue with large files.
 
 **Last working item**:
-The agent and user were finalizing the detailed plan for the Enhanced Bulk Candidate Import Tool. The agent has just presented a final summary of the new requirements, incorporating all user feedback, including AI-based industry detection and advanced deduplication logic. The user has provided the necessary Excel template file ().
--   **Last item agent was working:** Finalizing the plan for the **Enhanced Bulk Candidate Import Tool**.
--   **Status:** NOT STARTED (Implementation of the new, enhanced version is pending).
--   **Agent Testing Done:** N/A
--   **Which testing method agent to use?** both. Given the complexity, involving file uploads, backend processing, AI integration, and frontend UI changes, the  should be used after implementation to test both frontend and backend functionality comprehensively.
--   **User Testing Done:** N/A
+The user reported that the bulk CV import feature crashes when uploading large files. The agent identified the probable cause as a 1MB file size limit imposed by the environment's ingress proxy and received approval to implement chunked uploads as a robust solution.
+-   **Last item agent was working:** Implementing chunked file uploads. The agent created a new service file  and was about to add the corresponding API endpoints.
+-   **Status:** IN PROGRESS
+-   **Agent Testing Done:** N
+-   **Which testing method agent to use?** both. The backend needs testing via  to verify the chunking API (init, upload, complete). The frontend needs testing with the screenshot tool to confirm a large file (>10MB) can be uploaded successfully through the UI.
+-   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-There are no pending issues. The focus is on the new feature development.
+-   **Issue 1: Bulk CV import crashes on large file sizes (P0)**
+    -   **Attempted fixes:** A service file  has been created to handle the logic.
+    -   **Next debug checklist:**
+        1.  Add API endpoints to  for initializing, uploading, and finalizing chunked file uploads.
+        2.  Update the frontend at  to use these new chunked upload endpoints.
+        3.  Implement a progress indicator on the frontend for better user experience during large uploads.
+        4.  Test by uploading a ZIP file larger than 10MB to ensure it completes successfully.
+    -   **Why fix this issue?** This is a critical bug that makes the bulk CV import feature unusable for its primary purpose of handling large batches of resumes.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** Both.
 
 **In progress Task List**:
--   **Task 1: Implement the Enhanced Bulk Candidate Import Tool (P0)**
-    -   **Where to resume:** Start by downloading and analyzing the user-provided artifact  to understand the required schema. Then, begin refactoring the backend () and frontend () to implement the new, two-mode workflow.
-    -   **What will be achieved:** A production-grade tool for bulk data seeding that adheres to strict governance, deduplication, and AI enrichment rules.
-    -   **Status:** NOT STARTED
-    -   **Should Test frontend/backend/both after fix?** Both
-    -   **Blocked on something:** No. All requirements are clear, and the necessary data template has been provided.
+-   **Task 1: Complete Implementation of Chunked File Uploads (P0)**
+    -   **Where to resume:** Add the required API endpoints (, , ) to the  in .
+    -   **What will be achieved with this?** Users will be able to reliably upload large ZIP archives (e.g., up to 100MB) for bulk CV import, bypassing infrastructure file size limitations.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** Both.
+    -   **Blocked on something:** None.
 
 **Upcoming and Future Tasks**
 
 **Upcoming Tasks:**
-1.  **P0: Implement Mode A: Excel-Only Import:**
-    *   Refactor the backend to handle Excel uploads.
-    *   Integrate AI for industry detection from the employer's name.
-    *   Implement the smart deduplication logic.
-    *   Update the  model with new fields (, , etc.).
-    *   Build the frontend UI for Excel upload and review.
-2.  **P0: Implement Mode B: CV/ZIP-Only Import:**
-    *   Refactor the backend to handle ZIP files containing both resumes and Excel sheets.
-    *   Reuse existing resume parsing logic.
-3.  **P0: Implement Governance and Visibility Rules:**
-    *   Modify all backend queries for the Candidate Bank to enforce the admin-only visibility rule by default.
-    *   Implement the  logic to grant permanent visibility upon Add as Applicant.
-4.  **P1: Implement Attach CV Feature:**
-    *   Create the backend endpoint and frontend UI for attaching a CV to a profile created via Excel import.
+-   **P1: Enable Vector Embeddings for Semantic Search:** The service for this () is created but non-functional. The next step is to investigate a working method to generate embeddings, possibly by asking the user for their own OpenAI API key if the Emergent LLM key proves insufficient. This will unlock true semantic search capabilities.
+-   **P1: Implement Background CV Parsing:** Refactor the CV import process to use the newly created background job queue. This will offload the time-consuming parsing task, preventing request timeouts and providing a better user experience.
+-   **P2: Expand Redis Caching:** Apply the existing Redis caching service to other high-traffic, read-only endpoints (e.g., job listings, company details) to further enhance overall application speed.
 
 **Future Tasks:**
-*   Extract remaining business logic from  (Team Management, Referrals).
-*   WhatsApp & Email Campaign Automation.
-*   CRM Synchronization & Stripe Integration.
-*   Cloudflare R2 lifecycle management.
+-   Refactor remaining business logic (Team Management, Referrals) from  into dedicated route files.
+-   Implement mocked features: WhatsApp & Email Campaign Automation.
+-   Integrate Stripe for payments.
+-   Build out multi-tenancy architecture in preparation for the B2B SaaS phase.
 
 **Completed work in this session**
--   **Tech Debt: Standardized  key** to  in the frontend (FIXED).
--   **Feature: Mandate Shareable Links** for non-public jobs (IMPLEMENTED).
--   **UX Fix: Simplified Team Creation Flow** by auto-attaching companies based on the selected employer and making the company list read-only (FIXED & REFINED).
--   **Feature: Added DELETE Capabilities** for Companies and for removing Candidates from a pipeline (IMPLEMENTED).
--   **Feature: Built Initial Bulk Import Tool** (This is now considered a prototype and will be completely replaced by the upcoming task).
+-   **DB Migration to Atlas:** Successfully migrated the entire database from a local instance to the user's MongoDB Atlas cluster, including data and indexes.
+-   **AI Matching Optimization:** Implemented a high-performance, two-stage matching engine that uses a fast database pre-filter before applying intensive AI scoring, dramatically reducing response times. A quick match option was also added.
+-   **Phase 1 Scaling (Atlas Search):** Integrated MongoDB Atlas Search for fast, fuzzy, and scalable full-text search capabilities across the candidate bank.
+-   **Phase 2 Prep (Caching & Jobs):** Successfully integrated Upstash Redis for caching search results and created a background job queue service to handle asynchronous tasks.
+-   **Critical Bug Fix:** The testing agent found and fixed a critical bug on the  where the page crashed due to an unhandled paginated API response. A proactive fix was also applied to a similar page.
+-   **Performance Fix (DB Indexes):** Resolved initial slow search performance by adding necessary indexes to the  collection.
+-   **Server-Side Pagination & Debouncing:** Implemented on the main Candidate Data Bank page to improve performance and user experience.
 
 **Earlier issues found/mentioned but not fixed**
--   None.
+-   **Issue 1: Vector Embeddings Service is Non-Functional.**
+    -   **Debug checklist:**
+        1.  Use the  tool to confirm if  supports OpenAI embeddings.
+        2.  If not supported, devise a plan to ask the user for their own OpenAI API key to enable this feature.
+        3.  Modify  to use the confirmed working method.
+    -   **Why to solve this issue?** This is a blocker for implementing semantic search, a key requirement for the user's long-term vision of an advanced recruitment platform.
+    -   **Should Test frontend/backend/both after fix?** Backend.
+    -   **Is recurring issue?** N.
 
 **Known issue recurrence from previous fork**
 -   None.
@@ -91,83 +80,79 @@ There are no pending issues. The focus is on the new feature development.
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, MongoDB (Motor), Pydantic
+-   **Backend**: FastAPI, MongoDB Atlas, Pydantic
 -   **Frontend**: React, Shadcn UI
--   **File Handling**: , , ,  for processing uploads.
--   **AI Integration**: Planned use of an LLM for data enrichment (industry detection).
--   **Data Governance**: Complex query modifications to enforce role-based data visibility.
+-   **Scalability**: MongoDB Atlas Search, Redis Caching (Upstash), Background Job Queues (Redis), Chunked File Uploads.
+-   **Performance Tuning**: Database Indexing, Server-Side Pagination, Search Debouncing.
 
 **key DB schema**
--   ****: Added , .
--   ** (Proposed Additions):**
-    -   
-    -   
-    -   
-    -   
-    -   
+-   **:** Contains a dedicated  index for MongoDB Atlas Search, covering fields like , , , , and .
+-   **:** Contains a  index for MongoDB Atlas Search.
+
+**changes in tech stack**
+-   **Database:** Migrated from a local MongoDB instance to a user-provided MongoDB Atlas cluster.
+-   **Caching:** Introduced Upstash Redis as a caching and message broker service.
+-   **Search:** Integrated MongoDB Atlas Search for advanced full-text search.
 
 **All files of reference**
--   **/app/backend/routes/bulk_import.py**: Needs complete refactoring.
--   **/app/frontend/src/pages/admin/BulkImportPage.jsx**: Needs complete refactoring.
--   **/app/frontend/src/pages/admin/TeamsPage.jsx**: Refactored to simplify the team creation UI.
--   **/app/backend/routes/admin.py**: Added DELETE endpoint for companies.
--   **/app/backend/routes/applications.py**: Added DELETE endpoint for applications.
--   **/app/backend/models/candidate_bank.py**: Will require significant updates.
+-   **/app/backend/services/chunked_upload.py**: **New file.** Created to manage the logic for chunked uploads.
+-   **/app/backend/routes/bulk_import.py**: The target for the next modification to add the chunking API endpoints.
+-   **/app/frontend/src/pages/admin/BulkImportPage.jsx**: Will need to be updated to consume the new chunking API.
+-   **/app/backend/routes/candidates.py**: Updated to use Atlas Search and Redis caching.
+-   **/app/backend/routes/applications.py**: Updated to use a two-stage matching process with Atlas Search.
+-   **/app/backend/services/**: New directory containing services for caching, background jobs, and embeddings.
+-   **/app/memory/PRD.md**: Contains updated documentation on all new features and scaling architecture.
 
 **Areas that need refactoring**:
--   The entire Bulk Import feature ( and ) needs to be rewritten according to the new, detailed requirements.
+-   The  service needs a working implementation for generating vector embeddings.
+-   The main  file still contains some business logic that should be moved to dedicated route files for better organization.
 
 **key api endpoints**
--   **Existing Endpoints to be replaced/refactored:**
-    -   
-    -   
--   **New Endpoints to be created:**
-    -   
-    -   
-    -   
-    -    (updated version)
+-   : Now a highly optimized endpoint using Atlas Search, caching, and pagination.
+-   : Uses a fast, two-stage matching algorithm.
+-   : New endpoint for background jobs (partially functional).
+-   **To be created:** , , .
 
 **Critical Info for New Agent**
--   You are starting a major new feature: the **Enhanced Bulk Candidate Import Tool**. Do not refer to the previous implementation; it is obsolete.
--   Your source of truth for this task is the **Final Task Summary (v2)** provided in the last agent message.
--   Your first step is to download and inspect the user-provided artifact  to define the data schema for the Excel import.
--   This task is complex and requires careful implementation of backend logic for file processing, AI enrichment, deduplication, and strict data governance, alongside a new frontend UI. Break it down into the sub-tasks outlined in the Upcoming Tasks section.
+-   Your immediate task is to implement chunked file uploads to fix the bulk CV import feature. Start by adding the API endpoints in , then modify the frontend.
+-   The application is now live on MongoDB Atlas and uses Upstash Redis. All credentials are in .
+-   The vector embeddings feature () is a known issue and currently does not work. This is a blocker for future semantic search functionality and will require a proper fix, possibly by requesting an OpenAI key from the user.
+-   For any new long-running process (like parsing), use the background job service () to prevent API timeouts.
 
 **documents and test reports created in this job**
 -   /app/memory/PRD.md
--   /app/test_reports/iteration_33.json
--   /app/test_reports/iteration_34.json
--   /app/test_reports/iteration_35.json
--   /app/test_reports/iteration_36.json
--   User-uploaded artifact:  (URL in history)
+-   /app/test_reports/iteration_41.json
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Asks to start the task with an updated summary.
-2.  **User:** Attaches the  template and adds a new requirement: use ChatGPT to detect the industry from the employer name if the industry column is empty. Asks for a final summary.
-3.  **User:** Confirms the summary is correct. Provides new conflict resolution rules for duplicates (higher salary/notice, latest job date). Defines AI screening discovery rules (permanent visibility only after Add as Applicant).
-4.  **User:** Asks for a task summary based on new context.
-5.  **User:** Provides major feedback on the bulk import tool. It must have two separate modes (Excel-only, CV/ZIP-only). Uploads should be visible to Admin only by default and discoverable by other roles via AI screening.
-6.  **User:** Requests a summary of completed work and next steps after the agent finishes the DELETE feature.
-7.  **User:** Defines requirements for adding DELETE capabilities across core entities (Users, Companies, Jobs, etc.).
-8.  **User:** Provides feedback on the team creation flow, clarifying that the Assign Companies section should be removed entirely from the team creation/edit dialog, as company assignment is handled elsewhere.
-9.  **User:** Confirms the employer dashboard is working and instructs the agent to continue with previously assigned tasks.
+1.  **User (pending):**  - User gave final approval to implement chunked file uploads.
+2.  **User:**  - User reported the critical bug regarding file upload size limits.
+3.  **User:**  - User requested a comprehensive platform diagnostic, which led to the discovery and fix of a UI bug.
+4.  **User:**  - User approved the implementation of Redis caching and background job services.
+5.  **User:** Provided Upstash Redis credentials.
+6.  **User:**  - User approved the plan to integrate MongoDB Atlas Search.
+7.  **User:**  - User asked for a detailed discussion on scaling the platform.
+8.  **User:** Provided a detailed overview of the long-term vision and phased growth plan for the application.
+9.  **User:**  - User expressed concerns about scaling the platform to handle millions of records.
+10. **User:**  - User provided new credentials for MongoDB Atlas after authentication failures.
 
 **Project Health Check:**
--   **Broken**: None.
--   **Mocked**: , .
+-   **Broken**: The core Bulk CV Import feature is non-functional for large files.
+-   **Mocked**:  (email),  (WhatsApp), Vector Embeddings service.
 
 **3rd Party Integrations**
--   **OpenAI GPT-4/5.2**: Used for resume/JD parsing. Will also be used for industry detection. (Uses Emergent LLM Key).
--   **MongoDB Atlas**: Primary database backend.
+-   **OpenAI GPT-4/5.2**: Used for resume parsing and data enrichment (Uses Emergent LLM Key).
+-   **MongoDB Atlas**: Primary database backend (user-provided credentials).
+-   **MongoDB Atlas Search**: Integrated for advanced text search (configured via API).
+-   **Upstash Redis**: Used for caching and as a message broker (user-provided credentials).
 -   **Cloudflare R2**: Primary object storage.
 -   **Cloudflare Turnstile**: Bot protection.
 -   **Resend**: Mocked for email notifications.
 -   **Twilio**: Mocked for WhatsApp notifications.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES
+-   **Testing agent used after significant changes**: YES. The last run () identified and fixed a critical frontend bug related to pagination.
 -   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None.
+-   **Test files created**: 
 -   **Known regressions**: None.
 
 **Credentials to test flow:**
@@ -176,4 +161,4 @@ There are no pending issues. The focus is on the new feature development.
 -   **Recruiter:**  / 
 
 **What agent forgot to execute**
--   The agent has been responsive to user requests and has not forgotten any explicitly assigned tasks. The current task is to start the implementation of the new feature based on the finalized plan.</analysis>
+-   The agent started the implementation of chunked uploads by creating the service file () but has not yet created the necessary API endpoints in  or modified the corresponding frontend page. This is the immediate next step.</analysis>
