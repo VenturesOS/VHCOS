@@ -26,6 +26,9 @@ from models import (
 # Import utilities
 from utils import get_current_user, require_role
 
+# Import cache service
+from services.cache import cache
+
 
 # Create router for jobs endpoints
 jobs_router = APIRouter(prefix="/api", tags=["Jobs"])
