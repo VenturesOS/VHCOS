@@ -333,7 +333,7 @@ async def add_recruiter_to_team(
         {"$set": {"team_id": team_id, "updated_at": now}}
     )
     
-    return {"message": f"Recruiter added to team", "recruiter_id": recruiter_id}
+    return {"message": "Recruiter added to team", "recruiter_id": recruiter_id}
 
 
 @teams_router.delete("/teams/{team_id}/recruiters/{recruiter_id}")
@@ -371,7 +371,7 @@ async def remove_recruiter_from_team(
         {"$unset": {"team_id": ""}}
     )
     
-    return {"message": f"Recruiter removed from team", "recruiter_id": recruiter_id}
+    return {"message": "Recruiter removed from team", "recruiter_id": recruiter_id}
 
 
 # ============== TEAM COMPANIES ==============
@@ -412,7 +412,7 @@ async def add_company_to_team(
         {"$set": {"assigned_employer_id": team["employer_id"], "team_id": team_id, "updated_at": now}}
     )
     
-    return {"message": f"Company added to team", "company_id": company_id}
+    return {"message": "Company added to team", "company_id": company_id}
 
 
 @teams_router.delete("/teams/{team_id}/companies/{company_id}")
@@ -450,7 +450,7 @@ async def remove_company_from_team(
         {"$unset": {"team_id": ""}}
     )
     
-    return {"message": f"Company removed from team", "company_id": company_id}
+    return {"message": "Company removed from team", "company_id": company_id}
 
 
 # ============== TEAM STATISTICS ==============
