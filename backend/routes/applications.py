@@ -1232,9 +1232,8 @@ async def find_matching_candidates(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
-        return results
-    finally:
-        _MATCH_SEMAPHORE.release()
+    _MATCH_SEMAPHORE.release()
+    return results
 
 
 @applications_router.get("/matching/jobs/{match_job_id}/status")
