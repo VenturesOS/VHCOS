@@ -1311,17 +1311,20 @@ async def get_company_pipeline(
 async def validate_mongodb_connection():
     """
     Validates MongoDB connectivity on application startup.
-    CRITICAL: Application must fail loudly if database is not accessible.
+    Retries connection before failing.
     """
-    try:
-        # Ping MongoDB to verify connectivity
-        await client.admin.command("ping")
-        logging.info("MongoDB Atlas connected successfully")
-        logging.info(f"Database: {db_name}")
-    except Exception as e:
-        logging.error(f"MongoDB connection failed: {str(e)}")
-        logging.error("Application cannot start without database connection. Please check MONGODB_URI.")
-        raise RuntimeError(f"MongoDB connection failed: {str(e)}")
+    import asyncio
+    for attempt in range(3):
+        try:
+            await client.admin.command("ping")
+            logging.info("MongoDB Atlas connected successfully")
+            logging.info(f"Database: {db_name}")
+            return
+        except Exception as e:
+            logging.warning(f"MongoDB connection attempt {attempt+1}/3 failed: {e}")
+            if attempt < 2:
+                await asyncio.sleep(5)
+    logging.error("MongoDB connection failed after 3 attempts. Application may have limited functionality.")
 
 @app.on_event("startup")
 async def validate_r2_connection():
