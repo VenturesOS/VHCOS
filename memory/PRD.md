@@ -504,6 +504,51 @@ OPENAI_API_KEY=sk-proj-xxx...
 
 ---
 
+## Semantic Search Integration (February 7, 2026)
+
+### Overview ✅ VERIFIED
+Integrated vector embeddings into the AI matching engine for semantic search capabilities.
+
+### How It Works
+1. **Job Embedding**: When matching, a job embedding is generated from title + skills + description
+2. **Candidate Embeddings**: Stored in the candidate document (auto-generated on create)
+3. **Cosine Similarity**: Calculates semantic similarity (0-100%) between job and candidates
+4. **Score Blending**: 
+   - Quick Match: 40% skill + 25% experience + 25% semantic + 10% base
+   - Full AI Match: 70% AI score + 30% semantic score
+
+### Matching Request Options
+```json
+{
+  "job_id": "string",
+  "quick_match": true,      // Skip LLM, use fast scoring
+  "semantic_search": true,  // Enable vector similarity (default: true)
+  "limit": 50
+}
+```
+
+### Match Result Enhancement
+```json
+{
+  "candidate_id": "...",
+  "score": 84,
+  "skill_match_score": 75,
+  "experience_match_score": 70,
+  "semantic_score": 68.2,  // NEW: Vector similarity
+  "explanation": "Quick match: 5 skills matched, 6 years experience, 68% semantic similarity"
+}
+```
+
+### Auto-Embed New Candidates
+When a candidate is created (via API or bulk import), embeddings are automatically generated in the background without blocking the request.
+
+### Files Modified
+- `/app/backend/routes/applications.py` - Enhanced find_matching_candidates with semantic search
+- `/app/backend/routes/candidates.py` - Added auto-embed on candidate creation
+- `/app/backend/models/matching.py` - Added semantic_score field to MatchResult
+
+---
+
 ## Upload Progress Notifications with ETA (February 7, 2026)
 
 ### Overview ✅ VERIFIED
@@ -523,6 +568,20 @@ Enhanced the bulk CV import UI with detailed progress notifications.
 
 ### Files Modified
 - `/app/frontend/src/pages/admin/BulkImportPage.jsx` - Added progress tracking and notifications
+
+---
+
+## Backend Refactoring - Teams Route (February 7, 2026) [IN PROGRESS]
+
+### Overview
+Created dedicated route file for Team Management to improve code organization.
+
+### Files Created
+- `/app/backend/routes/teams.py` - Team CRUD, member management, company assignments
+
+### Remaining Refactoring
+- `/app/backend/routes/referrals.py` - Referral management (from server.py)
+- `/app/backend/routes/commercials.py` - Commercial intelligence (from server.py)
 
 ---
 
