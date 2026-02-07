@@ -863,253 +863,156 @@ async def find_matching_candidates(
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
     """
-    Find candidates matching job requirements with TWO-STAGE MATCHING.
-    
-    STAGE 1: Fast database pre-filtering using indexes
-    - Skills matching (text search)
-    - Experience range filtering
-    - Location filtering (if specified)
-    - Returns top 100 candidates sorted by relevance
-    
-    STAGE 2: Scoring on pre-filtered candidates
-    - Quick mode (default): Fast database + semantic scoring (recommended)
-    - Full AI mode: LLM-based matching with timeout protection
-    
+    Find candidates matching job requirements.
+
+    Two modes controlled by `match_mode` / `quick_match`:
+      * **quick** (default) — zero LLM calls; keyword + semantic scoring. ~1-3 s.
+      * **full_ai** — launches a background job that uses LLM per candidate.
+        Returns an empty list with a header `X-Match-Job-Id` for polling.
+
     Rate limited: 10 requests per minute per user.
-    
-    NOTE: For best performance with 50+ concurrent users, use quick_match=true
     """
-    # Rate limit AI matching
     from services.rate_limiter import rate_limiter
     rate_limiter.check_rate_limit(request, "ai_match")
-    
+
     import time
-    import asyncio
-    
-    # Default to quick_match for better performance under load
-    if match_req.quick_match is None:
-        match_req.quick_match = True  # Default to quick mode
-    
+
+    # Resolve mode: match_mode takes precedence over quick_match
+    if match_req.match_mode == "full_ai":
+        use_quick = False
+    elif match_req.match_mode == "quick":
+        use_quick = True
+    elif match_req.quick_match is not None:
+        use_quick = match_req.quick_match
+    else:
+        use_quick = True  # default to quick for performance
+
     start_time = time.time()
-    
-    # Get job requirements
-    job_data = None
+
+    # ---- Resolve job data (FAST — no LLM) ----
     job = None
     if match_req.job_id:
         job = await db.jobs.find_one({"id": match_req.job_id}, {"_id": 0})
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-        # Parse existing job description
-        jd_result = await parse_job_description_with_ai(job.get("description", "") + " " + job.get("requirements", ""))
-        if jd_result["success"]:
-            job_data = jd_result["data"]
-    elif match_req.jd_text:
-        jd_result = await parse_job_description_with_ai(match_req.jd_text)
-        if jd_result["success"]:
-            job_data = jd_result["data"]
-    
-    if not job_data:
-        raise HTTPException(status_code=400, detail="Could not parse job requirements")
-    
-    logger.info(f"[AI SCREENING] Job parsed in {time.time() - start_time:.2f}s")
-    
-    # ============== STAGE 1: FAST DATABASE PRE-FILTERING ==============
-    # Use Atlas Search for fast, relevance-based pre-filtering
-    
+
+    # Fast JD parsing — never calls LLM
+    job_data = parse_job_requirements_fast(
+        job_doc=job,
+        jd_text=match_req.jd_text,
+    )
+    if not job_data.get("required_skills") and not job_data.get("key_requirements_summary"):
+        raise HTTPException(status_code=400, detail="Could not extract job requirements. Provide a job_id or jd_text.")
+
+    logger.info(f"[MATCH] JD parsed (fast) in {time.time() - start_time:.2f}s — skills={len(job_data.get('required_skills', []))}")
+
+    # ---- STAGE 1: Database pre-filtering (same for both modes) ----
     stage1_start = time.time()
-    
-    # Extract key matching criteria from parsed job
-    required_skills = job_data.get("required_skills", []) or []
-    preferred_skills = job_data.get("preferred_skills", []) or []
+    required_skills = job_data.get("required_skills") or []
+    preferred_skills = job_data.get("preferred_skills") or []
     all_skills = required_skills + preferred_skills
-    
-    min_exp = job_data.get("min_experience") or match_req.min_experience
-    max_exp = job_data.get("max_experience") or match_req.max_experience
+
+    min_exp = job_data.get("experience_min") or match_req.min_experience
+    max_exp = job_data.get("experience_max") or match_req.max_experience
     location = match_req.must_have_location or job_data.get("location")
-    
-    MAX_CANDIDATES_FOR_AI = 100
-    pre_filtered_candidates = []
-    
-    # Try Atlas Search first (much faster for large datasets)
+
+    MAX_CANDIDATES = 100
+    pre_filtered = []
+
+    # Try Atlas Search first
     if all_skills:
         try:
-            search_query = " ".join(all_skills[:10])  # Top 10 skills for search
-            
+            search_query = " ".join(all_skills[:10])
             atlas_pipeline = [
-                {
-                    "$search": {
-                        "index": "candidate_search",
-                        "compound": {
-                            "should": [
-                                {
-                                    "text": {
-                                        "query": search_query,
-                                        "path": "skills",
-                                        "fuzzy": {"maxEdits": 1},
-                                        "score": {"boost": {"value": 3}}
-                                    }
-                                },
-                                {
-                                    "text": {
-                                        "query": search_query,
-                                        "path": "summary",
-                                        "fuzzy": {"maxEdits": 2},
-                                        "score": {"boost": {"value": 1.5}}
-                                    }
-                                },
-                                {
-                                    "text": {
-                                        "query": search_query,
-                                        "path": ["designation", "current_employer"],
-                                        "fuzzy": {"maxEdits": 1}
-                                    }
-                                }
-                            ],
-                            "minimumShouldMatch": 1
-                        }
-                    }
-                },
-                {
-                    "$addFields": {
-                        "search_score": {"$meta": "searchScore"}
-                    }
-                }
+                {"$search": {
+                    "index": "candidate_search",
+                    "compound": {
+                        "should": [
+                            {"text": {"query": search_query, "path": "skills", "fuzzy": {"maxEdits": 1}, "score": {"boost": {"value": 3}}}},
+                            {"text": {"query": search_query, "path": "summary", "fuzzy": {"maxEdits": 2}, "score": {"boost": {"value": 1.5}}}},
+                            {"text": {"query": search_query, "path": ["designation", "current_employer"], "fuzzy": {"maxEdits": 1}}},
+                        ],
+                        "minimumShouldMatch": 1,
+                    },
+                }},
+                {"$addFields": {"search_score": {"$meta": "searchScore"}}},
             ]
-            
-            # Add experience filter if specified
             exp_match = {}
             if min_exp is not None:
                 exp_match["experience_years"] = {"$gte": min_exp}
             if max_exp is not None:
-                if "experience_years" in exp_match:
-                    exp_match["experience_years"]["$lte"] = max_exp + 2
-                else:
-                    exp_match["experience_years"] = {"$lte": max_exp + 2}
-            
+                exp_match.setdefault("experience_years", {})["$lte"] = max_exp + 2
             if exp_match:
                 atlas_pipeline.append({"$match": exp_match})
-            
-            # Add location filter if required
             if location and match_req.must_have_location:
-                atlas_pipeline.append({
-                    "$match": {"location": {"$regex": location, "$options": "i"}}
-                })
-            
-            # Sort by search relevance and limit
-            atlas_pipeline.extend([
+                atlas_pipeline.append({"$match": {"location": {"$regex": location, "$options": "i"}}})
+            atlas_pipeline += [
                 {"$sort": {"search_score": -1}},
-                {"$limit": MAX_CANDIDATES_FOR_AI},
-                {
-                    "$project": {
-                        "_id": 0,
-                        "id": 1, "name": 1, "email": 1, "skills": 1,
-                        "experience_years": 1, "education": 1, "location": 1,
-                        "summary": 1, "source": 1, "created_by": 1,
-                        "search_score": 1, "embedding": 1
-                    }
-                }
-            ])
-            
-            pre_filtered_candidates = await db.candidate_bank.aggregate(atlas_pipeline).to_list(MAX_CANDIDATES_FOR_AI)
-            logger.info(f"[AI SCREENING] Atlas Search returned {len(pre_filtered_candidates)} candidates in {time.time() - stage1_start:.2f}s")
-            
+                {"$limit": MAX_CANDIDATES},
+                {"$project": {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1,
+                              "experience_years": 1, "education": 1, "location": 1,
+                              "summary": 1, "source": 1, "created_by": 1,
+                              "search_score": 1, "embedding": 1}},
+            ]
+            pre_filtered = await db.candidate_bank.aggregate(atlas_pipeline).to_list(MAX_CANDIDATES)
+            logger.info(f"[MATCH] Atlas Search: {len(pre_filtered)} candidates in {time.time() - stage1_start:.2f}s")
         except Exception as e:
-            logger.warning(f"[AI SCREENING] Atlas Search failed, using fallback: {e}")
-            pre_filtered_candidates = []
-    
-    # Fallback: Regular aggregation if Atlas Search fails or no skills
-    if not pre_filtered_candidates:
-        # Build MongoDB aggregation pipeline for smart pre-filtering
+            logger.warning(f"[MATCH] Atlas Search failed, using fallback: {e}")
+            pre_filtered = []
+
+    # Fallback: regex-based query
+    if not pre_filtered:
         pipeline = []
-        
-        # Match stage - basic filters using indexes
-        match_conditions = {}
-        
-        # Experience filter (uses exp_years_idx index)
+        match_cond = {}
         if min_exp is not None or max_exp is not None:
-            exp_filter = {}
+            ef = {}
             if min_exp is not None:
-                exp_filter["$gte"] = min_exp
+                ef["$gte"] = min_exp
             if max_exp is not None:
-                exp_filter["$lte"] = max_exp + 2  # Allow some flexibility
-            if exp_filter:
-                match_conditions["experience_years"] = exp_filter
-        
-        # Location filter (uses location_idx index) - partial match
+                ef["$lte"] = max_exp + 2
+            if ef:
+                match_cond["experience_years"] = ef
         if location and match_req.must_have_location:
-            match_conditions["location"] = {"$regex": location, "$options": "i"}
-        
-        if match_conditions:
-            pipeline.append({"$match": match_conditions})
-        
-        # Add text search score if skills available
+            match_cond["location"] = {"$regex": location, "$options": "i"}
+        if match_cond:
+            pipeline.append({"$match": match_cond})
         if all_skills:
-            pipeline.append({
-                "$match": {
-                    "$or": [
-                        {"skills": {"$regex": "|".join(all_skills[:5]), "$options": "i"}},
-                        {"summary": {"$regex": "|".join(all_skills[:3]), "$options": "i"}}
-                    ]
-                }
-            })
-        
-        # Add computed relevance score
-        pipeline.append({
-            "$addFields": {
-                "skill_match_count": {
-                    "$size": {
-                        "$ifNull": [
-                            {"$setIntersection": [
-                                {"$map": {"input": {"$ifNull": ["$skills", []]}, "as": "s", "in": {"$toLower": "$$s"}}},
-                                [s.lower() for s in all_skills] if all_skills else []
-                            ]},
-                            []
-                        ]
-                    }
-                }
-            }
-        })
-        
-        # Sort by skill match count and experience relevance
-        pipeline.append({"$sort": {"skill_match_count": -1, "experience_years": -1}})
-        pipeline.append({"$limit": MAX_CANDIDATES_FOR_AI})
-        
-        # Project only needed fields
-        pipeline.append({
-            "$project": {
-                "_id": 0,
-                "id": 1, "name": 1, "email": 1, "skills": 1,
-                "experience_years": 1, "education": 1, "location": 1,
-                "summary": 1, "source": 1, "created_by": 1,
-                "skill_match_count": 1, "embedding": 1
-            }
-        })
-        
+            pipeline.append({"$match": {"$or": [
+                {"skills": {"$regex": "|".join(all_skills[:5]), "$options": "i"}},
+                {"summary": {"$regex": "|".join(all_skills[:3]), "$options": "i"}},
+            ]}})
+        pipeline += [
+            {"$addFields": {"skill_match_count": {"$size": {"$ifNull": [{"$setIntersection": [
+                {"$map": {"input": {"$ifNull": ["$skills", []]}, "as": "s", "in": {"$toLower": "$$s"}}},
+                [s.lower() for s in all_skills] if all_skills else [],
+            ]}, []]}}}},
+            {"$sort": {"skill_match_count": -1, "experience_years": -1}},
+            {"$limit": MAX_CANDIDATES},
+            {"$project": {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1,
+                          "experience_years": 1, "education": 1, "location": 1,
+                          "summary": 1, "source": 1, "created_by": 1,
+                          "skill_match_count": 1, "embedding": 1}},
+        ]
         try:
-            pre_filtered_candidates = await db.candidate_bank.aggregate(pipeline).to_list(MAX_CANDIDATES_FOR_AI)
+            pre_filtered = await db.candidate_bank.aggregate(pipeline).to_list(MAX_CANDIDATES)
         except Exception as e:
-            logger.warning(f"[AI SCREENING] Aggregation failed, falling back to simple query: {e}")
-            simple_query = {}
+            logger.warning(f"[MATCH] Aggregation fallback failed: {e}")
+            simple_q = {}
             if min_exp is not None:
-                simple_query["experience_years"] = {"$gte": min_exp}
-            pre_filtered_candidates = await db.candidate_bank.find(
-                simple_query,
-                {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1, "experience_years": 1, 
-                 "education": 1, "location": 1, "summary": 1, "source": 1, "created_by": 1, "embedding": 1}
-            ).sort("experience_years", -1).limit(MAX_CANDIDATES_FOR_AI).to_list(MAX_CANDIDATES_FOR_AI)
-    
+                simple_q["experience_years"] = {"$gte": min_exp}
+            pre_filtered = await db.candidate_bank.find(
+                simple_q, {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1,
+                            "experience_years": 1, "education": 1, "location": 1,
+                            "summary": 1, "source": 1, "created_by": 1, "embedding": 1}
+            ).sort("experience_years", -1).limit(MAX_CANDIDATES).to_list(MAX_CANDIDATES)
+
     stage1_time = time.time() - stage1_start
-    logger.info(f"[AI SCREENING] Stage 1: Pre-filtered to {len(pre_filtered_candidates)} candidates in {stage1_time:.2f}s")
-    
-    if not pre_filtered_candidates:
-        logger.info("[AI SCREENING] No candidates found matching basic criteria")
+    logger.info(f"[MATCH] Stage 1 done: {len(pre_filtered)} candidates in {stage1_time:.2f}s")
+
+    if not pre_filtered:
         return []
-    
-    # ============== STAGE 2: AI SCORING ON PRE-FILTERED CANDIDATES ==============
-    
-    stage2_start = time.time()
-    
-    # Build must-have filters for final validation
+
+    # ---- Apply must-have hard filters ----
     must_have = {}
     if match_req.must_have_location:
         must_have["location"] = match_req.must_have_location
@@ -1121,231 +1024,188 @@ async def find_matching_candidates(
         must_have["min_experience"] = match_req.min_experience
     if match_req.max_experience is not None:
         must_have["max_experience"] = match_req.max_experience
-    
-    # OPTIMIZATION: Batch fetch all creator user roles at once
-    creator_ids = list(set(c.get("created_by") for c in pre_filtered_candidates if c.get("created_by")))
+
+    # Batch fetch creator roles
+    creator_ids = list({c.get("created_by") for c in pre_filtered if c.get("created_by")})
     creator_roles = {}
     if creator_ids:
-        creators = await db.users.find(
-            {"id": {"$in": creator_ids}},
-            {"_id": 0, "id": 1, "role": 1}
-        ).to_list(len(creator_ids))
+        creators = await db.users.find({"id": {"$in": creator_ids}}, {"_id": 0, "id": 1, "role": 1}).to_list(len(creator_ids))
         creator_roles = {c["id"]: c.get("role") for c in creators}
-    
-    # Apply must-have filters and separate candidates
+
     filtered_candidates = []
-    pre_filtered_results = []
-    
-    for candidate in pre_filtered_candidates:
+    filtered_out_results = []
+    for cand in pre_filtered:
         if must_have:
-            filter_result = apply_must_have_filters(candidate, must_have)
-            if not filter_result["passed"]:
-                pre_filtered_results.append(MatchResult(
-                    candidate_id=candidate["id"],
-                    candidate_name=candidate["name"],
-                    candidate_email=candidate["email"],
-                    score=0,
-                    filtered_out=True,
-                    filter_reason=filter_result["reason"],
-                    explanation=f"Candidate excluded: {filter_result['reason']}",
-                    source=candidate.get("source", "unknown"),
-                    source_role=creator_roles.get(candidate.get("created_by"))
+            fr = apply_must_have_filters(cand, must_have)
+            if not fr["passed"]:
+                filtered_out_results.append(MatchResult(
+                    candidate_id=cand["id"], candidate_name=cand["name"],
+                    candidate_email=cand["email"], score=0, filtered_out=True,
+                    filter_reason=fr["reason"], explanation=f"Excluded: {fr['reason']}",
+                    source=cand.get("source", "unknown"),
+                    source_role=creator_roles.get(cand.get("created_by")),
                 ))
                 continue
-        filtered_candidates.append(candidate)
-    
-    logger.info(f"[AI SCREENING] Stage 2: {len(filtered_candidates)} candidates for AI scoring (excluded {len(pre_filtered_results)} by must-have filters)")
-    
-    # ============== SEMANTIC SEARCH ENHANCEMENT ==============
-    # Generate job embedding for semantic matching if enabled
+        filtered_candidates.append(cand)
+
+    # ---- Generate job embedding for semantic search ----
     job_embedding = None
     if match_req.semantic_search:
         try:
-            job_text = f"{job_data.get('title', '')} | Skills: {', '.join(all_skills[:15])} | {job_data.get('description', '')[:500]}"
+            job_text = f"{job_data.get('title', '')} | Skills: {', '.join(all_skills[:15])}"
             job_embedding = await embedding_service.generate_embedding(job_text)
-            if job_embedding:
-                logger.info("[AI SCREENING] Generated job embedding for semantic search")
         except Exception as e:
-            logger.warning(f"[AI SCREENING] Could not generate job embedding: {e}")
-    
-    # ============== QUICK MATCH MODE: Fast database-only scoring ==============
-    if match_req.quick_match:
-        # Skip LLM calls entirely - use database-computed skill match scores
-        quick_results = []
-        for candidate in filtered_candidates:
-            candidate_skills = [s.lower() for s in (candidate.get("skills") or [])]
-            job_skills = [s.lower() for s in all_skills] if all_skills else []
-            
-            # Calculate quick score based on skill overlap
-            matched_skills = list(set(candidate_skills) & set(job_skills))
-            missing_skills = list(set(job_skills) - set(candidate_skills))[:5]  # Top 5 missing
-            
-            # Score: 50% skill match + 30% experience match + 20% base
-            skill_score = min(100, (len(matched_skills) / max(len(job_skills), 1)) * 100) if job_skills else 50
-            exp_score = 70  # Default experience score
-            if min_exp is not None and candidate.get("experience_years"):
-                exp_diff = abs(candidate.get("experience_years", 0) - min_exp)
-                exp_score = max(0, 100 - exp_diff * 10)
-            
-            # Semantic score boost if embeddings available
-            semantic_score = None
-            if job_embedding and candidate.get("embedding"):
-                semantic_score = embedding_service.cosine_similarity(job_embedding, candidate["embedding"]) * 100
-                # Adjust total score: 40% skill + 25% exp + 25% semantic + 10% base
-                total_score = int(skill_score * 0.4 + exp_score * 0.25 + semantic_score * 0.25 + 10)
-            else:
-                total_score = int(skill_score * 0.5 + exp_score * 0.3 + 20)  # 20% base score
-            
-            explanation = f"Quick match: {len(matched_skills)} skills matched, {candidate.get('experience_years', 'N/A')} years experience"
-            if semantic_score is not None:
-                explanation += f", {semantic_score:.0f}% semantic similarity"
-            
-            quick_results.append(MatchResult(
-                candidate_id=candidate["id"],
-                candidate_name=candidate["name"],
-                candidate_email=candidate["email"],
-                score=total_score,
-                skill_match_score=int(skill_score),
-                experience_match_score=int(exp_score),
-                semantic_score=round(semantic_score, 1) if semantic_score else None,
-                matched_skills=matched_skills[:10],  # Top 10
-                missing_skills=missing_skills,
-                explanation=explanation,
-                source=candidate.get("source", "unknown"),
-                source_role=creator_roles.get(candidate.get("created_by"))
-            ))
-        
-        # Combine with pre-filtered results
-        results = quick_results + pre_filtered_results
-        results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
-        
-        # Apply limit
-        results = results[:match_req.limit]
-        
-        stage2_time = time.time() - stage2_start
-        total_time = time.time() - start_time
-        logger.info(f"[AI SCREENING] QUICK MATCH completed: Stage1={stage1_time:.2f}s, Stage2={stage2_time:.2f}s, Total={total_time:.2f}s")
-        
-        return results
-    
-    # ============== FULL AI SCORING MODE ==============
-    # OPTIMIZATION: Use concurrent AI matching with controlled parallelism
-    # Added: Timeout protection with fallback to quick match
-    MAX_CONCURRENT_LLM_CALLS = 5  # Reduced for stability
-    AI_MATCH_TIMEOUT = 30  # 30 second timeout per candidate
-    TOTAL_AI_TIMEOUT = 120  # 2 minute total timeout
-    
-    semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
-    
-    async def match_candidate_with_timeout(candidate: dict) -> MatchResult:
-        """Match candidate with timeout protection."""
-        async with semaphore:
+            logger.warning(f"[MATCH] Job embedding failed: {e}")
+
+    # ============== FULL AI MODE — background job ==============
+    if not use_quick:
+        import asyncio
+
+        match_job_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Store pending job
+        await db.match_jobs.insert_one({
+            "id": match_job_id,
+            "status": "processing",
+            "progress": 0,
+            "total_candidates": len(filtered_candidates),
+            "scored_candidates": 0,
+            "searched_by": current_user["id"],
+            "job_id": match_req.job_id,
+            "results": None,
+            "error": None,
+            "created_at": now,
+        })
+
+        async def _run_full_ai_matching():
+            """Background coroutine — runs LLM scoring and stores results."""
             try:
-                # Use asyncio.wait_for for timeout
-                match_result = await asyncio.wait_for(
-                    calculate_candidate_job_match(candidate, job_data, None),
-                    timeout=AI_MATCH_TIMEOUT
+                # Parse JD with LLM for richer data
+                enriched_job_data = job_data
+                if match_req.job_id and job:
+                    jd_result = await parse_job_description_with_ai(
+                        (job.get("description", "") + " " + job.get("requirements", "")).strip()
+                    )
+                    if jd_result["success"]:
+                        enriched_job_data = jd_result["data"]
+                elif match_req.jd_text:
+                    jd_result = await parse_job_description_with_ai(match_req.jd_text)
+                    if jd_result["success"]:
+                        enriched_job_data = jd_result["data"]
+
+                MAX_CONCURRENT = 5
+                AI_TIMEOUT = 30
+                sem = asyncio.Semaphore(MAX_CONCURRENT)
+                scored = 0
+
+                async def _score_one(c):
+                    nonlocal scored
+                    async with sem:
+                        try:
+                            mr = await asyncio.wait_for(
+                                calculate_candidate_job_match(c, enriched_job_data, None),
+                                timeout=AI_TIMEOUT,
+                            )
+                        except Exception:
+                            mr = calculate_fast_match_score(c, enriched_job_data,
+                                                           job_embedding, c.get("embedding"))
+                        scored += 1
+                        # Update progress periodically
+                        if scored % 10 == 0 or scored == len(filtered_candidates):
+                            await db.match_jobs.update_one(
+                                {"id": match_job_id},
+                                {"$set": {"scored_candidates": scored,
+                                          "progress": int(scored / len(filtered_candidates) * 100)}},
+                            )
+                        sem_score = None
+                        if job_embedding and c.get("embedding"):
+                            sem_score = embedding_service.cosine_similarity(job_embedding, c["embedding"]) * 100
+                        ai_score = mr.get("score", 0)
+                        combined = int(ai_score * 0.7 + sem_score * 0.3) if sem_score else ai_score
+                        expl = mr.get("explanation", "")
+                        if sem_score:
+                            expl += f" | Semantic: {sem_score:.0f}%"
+                        return MatchResult(
+                            candidate_id=c["id"], candidate_name=c["name"],
+                            candidate_email=c["email"], score=combined,
+                            skill_match_score=mr.get("skill_match_score"),
+                            experience_match_score=mr.get("experience_match_score"),
+                            semantic_score=round(sem_score, 1) if sem_score else None,
+                            matched_skills=mr.get("matched_skills", []),
+                            missing_skills=mr.get("missing_skills", []),
+                            strengths=mr.get("strengths", []),
+                            gaps=mr.get("gaps", []),
+                            explanation=expl,
+                            source=c.get("source", "unknown"),
+                            source_role=creator_roles.get(c.get("created_by")),
+                        )
+
+                results = await asyncio.gather(*[_score_one(c) for c in filtered_candidates])
+                all_results = list(results) + filtered_out_results
+                all_results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
+
+                await db.match_jobs.update_one(
+                    {"id": match_job_id},
+                    {"$set": {
+                        "status": "completed",
+                        "progress": 100,
+                        "scored_candidates": len(filtered_candidates),
+                        "results": [r.model_dump() for r in all_results[:match_req.limit]],
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }},
                 )
-                
-                # Calculate semantic score if embeddings available
-                semantic_score = None
-                if job_embedding and candidate.get("embedding"):
-                    semantic_score = embedding_service.cosine_similarity(job_embedding, candidate["embedding"]) * 100
-                    # Boost AI score with semantic similarity
-                    ai_score = match_result.get("score", 0)
-                    combined_score = int(ai_score * 0.7 + semantic_score * 0.3)
-                else:
-                    combined_score = match_result.get("score", 0)
-                
-                explanation = match_result.get("explanation", "")
-                if semantic_score is not None:
-                    explanation += f" | Semantic match: {semantic_score:.0f}%"
-                
-                return MatchResult(
-                    candidate_id=candidate["id"],
-                    candidate_name=candidate["name"],
-                    candidate_email=candidate["email"],
-                    score=combined_score,
-                    skill_match_score=match_result.get("skill_match_score"),
-                    experience_match_score=match_result.get("experience_match_score"),
-                    semantic_score=round(semantic_score, 1) if semantic_score else None,
-                    matched_skills=match_result.get("matched_skills", []),
-                    missing_skills=match_result.get("missing_skills", []),
-                    strengths=match_result.get("strengths", []),
-                    gaps=match_result.get("gaps", []),
-                    explanation=explanation,
-                    filtered_out=match_result.get("filtered_out", False),
-                    filter_reason=match_result.get("filter_reason"),
-                    source=candidate.get("source", "unknown"),
-                    source_role=creator_roles.get(candidate.get("created_by"))
+            except Exception as exc:
+                logger.error(f"[MATCH BG] Full AI job {match_job_id} failed: {exc}")
+                await db.match_jobs.update_one(
+                    {"id": match_job_id},
+                    {"$set": {"status": "failed", "error": str(exc)}},
                 )
-            except asyncio.TimeoutError:
-                logger.warning(f"[AI SCREENING] Timeout for candidate {candidate.get('id')}, using quick score")
-                # Fallback to quick scoring on timeout
-                return _quick_score_candidate(candidate, all_skills, min_exp, job_embedding, creator_roles)
-            except Exception as e:
-                logger.error(f"[AI SCREENING] Error matching candidate {candidate.get('id')}: {e}")
-                return _quick_score_candidate(candidate, all_skills, min_exp, job_embedding, creator_roles)
-    
-    def _quick_score_candidate(candidate: dict, job_skills: list, min_exp: int, job_emb, roles: dict) -> MatchResult:
-        """Quick fallback scoring without LLM."""
-        candidate_skills = [s.lower() for s in (candidate.get("skills") or [])]
-        job_skills_lower = [s.lower() for s in job_skills] if job_skills else []
-        
-        matched_skills = list(set(candidate_skills) & set(job_skills_lower))
-        missing_skills = list(set(job_skills_lower) - set(candidate_skills))[:5]
-        
-        skill_score = min(100, (len(matched_skills) / max(len(job_skills_lower), 1)) * 100) if job_skills_lower else 50
-        exp_score = 70
-        if min_exp is not None and candidate.get("experience_years"):
-            exp_diff = abs(candidate.get("experience_years", 0) - min_exp)
-            exp_score = max(0, 100 - exp_diff * 10)
-        
-        semantic_score = None
-        if job_emb and candidate.get("embedding"):
-            semantic_score = embedding_service.cosine_similarity(job_emb, candidate["embedding"]) * 100
-            total_score = int(skill_score * 0.4 + exp_score * 0.25 + semantic_score * 0.25 + 10)
-        else:
-            total_score = int(skill_score * 0.5 + exp_score * 0.3 + 20)
-        
-        return MatchResult(
-            candidate_id=candidate["id"],
-            candidate_name=candidate["name"],
-            candidate_email=candidate["email"],
-            score=total_score,
-            skill_match_score=int(skill_score),
-            experience_match_score=int(exp_score),
-            semantic_score=round(semantic_score, 1) if semantic_score else None,
-            matched_skills=matched_skills[:10],
-            missing_skills=missing_skills,
-            explanation=f"Quick match (LLM timeout): {len(matched_skills)} skills matched",
-            source=candidate.get("source", "unknown"),
-            source_role=roles.get(candidate.get("created_by"))
+
+        # Fire-and-forget background task
+        asyncio.create_task(_run_full_ai_matching())
+
+        # Return immediate response with job_id in a header-like field
+        # We return empty results list + include a special entry for the frontend
+        return [MatchResult(
+            candidate_id="__background_job__",
+            candidate_name="Background AI Match Started",
+            candidate_email=match_job_id,
+            score=0,
+            explanation=f"Full AI matching started as background job. Poll GET /api/matching/jobs/{match_job_id}/status for results.",
+        )]
+
+    # ============== QUICK MATCH MODE — zero LLM calls ==============
+    stage2_start = time.time()
+    quick_results = []
+    for cand in filtered_candidates:
+        fs = calculate_fast_match_score(
+            cand, job_data,
+            job_embedding=job_embedding,
+            candidate_embedding=cand.get("embedding"),
         )
-    
-    # Run AI matching with global timeout protection
-    try:
-        ai_results = await asyncio.wait_for(
-            asyncio.gather(*[match_candidate_with_timeout(c) for c in filtered_candidates]),
-            timeout=TOTAL_AI_TIMEOUT
-        )
-    except asyncio.TimeoutError:
-        logger.warning("[AI SCREENING] Global timeout reached, using quick scores for remaining")
-        # Fallback: score all remaining candidates with quick method
-        ai_results = [_quick_score_candidate(c, all_skills, min_exp, job_embedding, creator_roles) for c in filtered_candidates]
-    
-    stage2_time = time.time() - stage2_start
-    
-    # Combine pre-filtered results with AI results
-    results = list(ai_results) + pre_filtered_results
-    
-    # Sort by score descending, filtered_out last
+        quick_results.append(MatchResult(
+            candidate_id=cand["id"], candidate_name=cand["name"],
+            candidate_email=cand["email"],
+            score=fs["score"],
+            skill_match_score=fs.get("skill_match_score"),
+            experience_match_score=fs.get("experience_match_score"),
+            semantic_score=fs.get("semantic_score"),
+            matched_skills=fs.get("matched_skills", []),
+            missing_skills=fs.get("missing_skills", []),
+            explanation=fs["explanation"],
+            source=cand.get("source", "unknown"),
+            source_role=creator_roles.get(cand.get("created_by")),
+        ))
+
+    results = quick_results + filtered_out_results
     results.sort(key=lambda x: (not x.filtered_out, x.score), reverse=True)
-    
+    results = results[:match_req.limit]
+
     total_time = time.time() - start_time
-    logger.info(f"[AI SCREENING] Completed: Stage1={stage1_time:.2f}s, Stage2={stage2_time:.2f}s, Total={total_time:.2f}s, AI calls={len(filtered_candidates)}")
-    
-    # Store match results for analytics
+    logger.info(f"[MATCH] Quick match done: {len(quick_results)} scored in {time.time() - stage2_start:.2f}s, total={total_time:.2f}s")
+
+    # Analytics
     if match_req.job_id:
         await db.match_results.insert_one({
             "id": str(uuid.uuid4()),
@@ -1353,17 +1213,42 @@ async def find_matching_candidates(
             "searched_by": current_user["id"],
             "searched_by_role": current_user["role"],
             "total_candidates_in_db": await db.candidate_bank.count_documents({}),
-            "pre_filtered_count": len(pre_filtered_candidates),
+            "pre_filtered_count": len(pre_filtered),
             "ai_scored_count": len(filtered_candidates),
             "matched_count": len([r for r in results if r.score >= 50 and not r.filtered_out]),
-            "filters_applied": must_have,
+            "mode": "quick",
             "stage1_time_seconds": round(stage1_time, 2),
-            "stage2_time_seconds": round(stage2_time, 2),
             "total_time_seconds": round(total_time, 2),
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-    
+
     return results
+
+
+@applications_router.get("/matching/jobs/{match_job_id}/status")
+async def get_match_job_status(
+    match_job_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Poll the status of a background Full AI matching job.
+    Returns progress, status, and results when completed.
+    """
+    job = await db.match_jobs.find_one({"id": match_job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Match job not found")
+
+    response = {
+        "job_id": job["id"],
+        "status": job.get("status", "pending"),
+        "progress": job.get("progress", 0),
+        "total_candidates": job.get("total_candidates", 0),
+        "scored_candidates": job.get("scored_candidates", 0),
+        "error": job.get("error"),
+    }
+    if job.get("status") == "completed" and job.get("results"):
+        response["results"] = job["results"]
+    return response
 
 
 @applications_router.get("/matching/jobs-for-candidate", response_model=List[JobMatchForCandidate])
