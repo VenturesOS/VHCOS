@@ -1,17 +1,17 @@
 {
   "concurrent": 50,
   "total": 75,
-  "successes": 29,
-  "failures": 46,
-  "error_rate": 61.33,
+  "successes": 8,
+  "failures": 67,
+  "error_rate": 89.33,
   "grade": "F",
-  "timeouts": 46,
+  "timeouts": 67,
   "rate_limited": 0,
   "server_busy": 0,
   "response_times": {
-    "min": 1.131,
-    "mean": 12.766,
-    "max": 24.557,
-    "p50": 13.13
+    "min": 19.588,
+    "mean": 22.636,
+    "max": 25.678,
+    "p50": 22.638
   }
 }
