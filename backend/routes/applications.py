@@ -16,11 +16,12 @@ from pydantic import BaseModel, ConfigDict
 import aiofiles
 
 # Concurrency limiter for matching endpoint
-_MATCH_SEMAPHORE = asyncio.Semaphore(15)  # Max 15 concurrent match operations
+_MATCH_SEMAPHORE = asyncio.Semaphore(10)  # Max 10 concurrent DB operations
 
 # In-memory cache for quick match results (key -> (results, timestamp))
 _match_cache: dict = {}
 _MATCH_CACHE_TTL = 120  # 2 minutes cache for identical queries
+_match_locks: dict = {}  # Per-key asyncio locks to prevent thundering herd
 
 def _match_cache_key(match_req) -> str:
     """Generate a cache key from match request params."""
