@@ -1152,7 +1152,7 @@ async def find_matching_candidates(
             job_text = f"{job_data.get('title', '')} | Skills: {', '.join(all_skills[:15])} | {job_data.get('description', '')[:500]}"
             job_embedding = await embedding_service.generate_embedding(job_text)
             if job_embedding:
-                logger.info(f"[AI SCREENING] Generated job embedding for semantic search")
+                logger.info("[AI SCREENING] Generated job embedding for semantic search")
         except Exception as e:
             logger.warning(f"[AI SCREENING] Could not generate job embedding: {e}")
     
