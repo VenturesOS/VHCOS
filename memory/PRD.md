@@ -50,6 +50,11 @@
 **Expanded Redis Caching (Jobs API): COMPLETE & TESTED (February 7, 2026)**
 **Vector Embeddings Service: COMPLETE & VERIFIED (February 7, 2026)**
 **Upload Progress Notifications with ETA: COMPLETE (February 7, 2026)**
+**Semantic Search Integration: COMPLETE & TESTED (February 7, 2026)**
+**Auto-Embed New Candidates: COMPLETE (February 7, 2026)**
+**Teams Route Refactoring: IN PROGRESS (February 7, 2026)**
+**Vector Embeddings Service: COMPLETE & VERIFIED (February 7, 2026)**
+**Upload Progress Notifications with ETA: COMPLETE (February 7, 2026)**
 
 ---
 
