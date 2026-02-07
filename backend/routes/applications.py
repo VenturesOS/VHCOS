@@ -1218,13 +1218,22 @@ async def find_matching_candidates(
     
     # ============== FULL AI SCORING MODE ==============
     # OPTIMIZATION: Use concurrent AI matching with controlled parallelism
-    MAX_CONCURRENT_LLM_CALLS = 10  # Increased since we have fewer candidates now
+    # Added: Timeout protection with fallback to quick match
+    MAX_CONCURRENT_LLM_CALLS = 5  # Reduced for stability
+    AI_MATCH_TIMEOUT = 30  # 30 second timeout per candidate
+    TOTAL_AI_TIMEOUT = 120  # 2 minute total timeout
+    
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
     
-    async def match_candidate(candidate: dict) -> MatchResult:
+    async def match_candidate_with_timeout(candidate: dict) -> MatchResult:
+        """Match candidate with timeout protection."""
         async with semaphore:
             try:
-                match_result = await calculate_candidate_job_match(candidate, job_data, None)
+                # Use asyncio.wait_for for timeout
+                match_result = await asyncio.wait_for(
+                    calculate_candidate_job_match(candidate, job_data, None),
+                    timeout=AI_MATCH_TIMEOUT
+                )
                 
                 # Calculate semantic score if embeddings available
                 semantic_score = None
@@ -1258,21 +1267,60 @@ async def find_matching_candidates(
                     source=candidate.get("source", "unknown"),
                     source_role=creator_roles.get(candidate.get("created_by"))
                 )
+            except asyncio.TimeoutError:
+                logger.warning(f"[AI SCREENING] Timeout for candidate {candidate.get('id')}, using quick score")
+                # Fallback to quick scoring on timeout
+                return _quick_score_candidate(candidate, all_skills, min_exp, job_embedding, creator_roles)
             except Exception as e:
                 logger.error(f"[AI SCREENING] Error matching candidate {candidate.get('id')}: {e}")
-                # Return a basic result on error
-                return MatchResult(
-                    candidate_id=candidate["id"],
-                    candidate_name=candidate["name"],
-                    candidate_email=candidate["email"],
-                    score=candidate.get("skill_match_count", 0) * 10,  # Use pre-computed score
-                    explanation="Quick match based on skill overlap",
-                    source=candidate.get("source", "unknown"),
-                    source_role=creator_roles.get(candidate.get("created_by"))
-                )
+                return _quick_score_candidate(candidate, all_skills, min_exp, job_embedding, creator_roles)
     
-    # Run AI matching concurrently on pre-filtered candidates only
-    ai_results = await asyncio.gather(*[match_candidate(c) for c in filtered_candidates])
+    def _quick_score_candidate(candidate: dict, job_skills: list, min_exp: int, job_emb, roles: dict) -> MatchResult:
+        """Quick fallback scoring without LLM."""
+        candidate_skills = [s.lower() for s in (candidate.get("skills") or [])]
+        job_skills_lower = [s.lower() for s in job_skills] if job_skills else []
+        
+        matched_skills = list(set(candidate_skills) & set(job_skills_lower))
+        missing_skills = list(set(job_skills_lower) - set(candidate_skills))[:5]
+        
+        skill_score = min(100, (len(matched_skills) / max(len(job_skills_lower), 1)) * 100) if job_skills_lower else 50
+        exp_score = 70
+        if min_exp is not None and candidate.get("experience_years"):
+            exp_diff = abs(candidate.get("experience_years", 0) - min_exp)
+            exp_score = max(0, 100 - exp_diff * 10)
+        
+        semantic_score = None
+        if job_emb and candidate.get("embedding"):
+            semantic_score = embedding_service.cosine_similarity(job_emb, candidate["embedding"]) * 100
+            total_score = int(skill_score * 0.4 + exp_score * 0.25 + semantic_score * 0.25 + 10)
+        else:
+            total_score = int(skill_score * 0.5 + exp_score * 0.3 + 20)
+        
+        return MatchResult(
+            candidate_id=candidate["id"],
+            candidate_name=candidate["name"],
+            candidate_email=candidate["email"],
+            score=total_score,
+            skill_match_score=int(skill_score),
+            experience_match_score=int(exp_score),
+            semantic_score=round(semantic_score, 1) if semantic_score else None,
+            matched_skills=matched_skills[:10],
+            missing_skills=missing_skills,
+            explanation=f"Quick match (LLM timeout): {len(matched_skills)} skills matched",
+            source=candidate.get("source", "unknown"),
+            source_role=roles.get(candidate.get("created_by"))
+        )
+    
+    # Run AI matching with global timeout protection
+    try:
+        ai_results = await asyncio.wait_for(
+            asyncio.gather(*[match_candidate_with_timeout(c) for c in filtered_candidates]),
+            timeout=TOTAL_AI_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"[AI SCREENING] Global timeout reached, using quick scores for remaining")
+        # Fallback: score all remaining candidates with quick method
+        ai_results = [_quick_score_candidate(c, all_skills, min_exp, job_embedding, creator_roles) for c in filtered_candidates]
     
     stage2_time = time.time() - stage2_start
     
