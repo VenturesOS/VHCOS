@@ -20,7 +20,19 @@ mongodb_uri = os.environ.get('MONGODB_URI') or os.environ.get('MONGO_URL')
 if not mongodb_uri:
     raise RuntimeError("MONGODB_URI environment variable is required. Application cannot start without database connection.")
 
-client = AsyncIOMotorClient(mongodb_uri)
+# OPTIMIZED: Connection pooling for high concurrency
+client = AsyncIOMotorClient(
+    mongodb_uri,
+    maxPoolSize=100,        # Max connections in pool
+    minPoolSize=10,         # Min connections to maintain
+    maxIdleTimeMS=45000,    # Close idle connections after 45s
+    waitQueueTimeoutMS=10000,  # Wait up to 10s for connection
+    serverSelectionTimeoutMS=10000,  # Server selection timeout
+    connectTimeoutMS=10000,  # Connection timeout
+    socketTimeoutMS=30000,  # Socket timeout
+    retryWrites=True,
+    retryReads=True
+)
 
 # Database name - MUST be vhc_talent_os (production database)
 db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
