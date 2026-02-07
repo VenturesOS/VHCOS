@@ -165,17 +165,18 @@ class TestChunkedUploadFeature:
         """Test uploading chunks successfully"""
         print("\n=== Test: Upload Chunks Success ===")
         
-        # Create test ZIP
-        test_data = self.create_test_zip(200)  # 200KB - will need multiple chunks
+        # Create test ZIP - make it larger to ensure multiple chunks
+        test_data = self.create_test_zip(600)  # 600KB - will need 2 chunks
         total_size = len(test_data)
         total_chunks = math.ceil(total_size / CHUNK_SIZE)
         
         print(f"Test file size: {total_size} bytes, {total_chunks} chunks")
         
-        # Initialize upload
-        init_response = self.session.post(
+        # Initialize upload - use a fresh session without Content-Type header
+        init_headers = {"Authorization": f"Bearer {self.get_admin_token()}", "Content-Type": "application/json"}
+        init_response = requests.post(
             f"{BASE_URL}/api/admin/bulk-import/chunk/init",
-            headers=self.get_auth_headers(),
+            headers=init_headers,
             json={
                 "filename": "test_resumes.zip",
                 "total_size": total_size,
@@ -187,21 +188,21 @@ class TestChunkedUploadFeature:
         upload_id = init_response.json()["upload_id"]
         print(f"Upload ID: {upload_id}")
         
-        # Upload each chunk
+        # Upload each chunk - use multipart form data (no Content-Type header)
         for i in range(total_chunks):
             start = i * CHUNK_SIZE
             end = min(start + CHUNK_SIZE, total_size)
             chunk_data = test_data[start:end]
             
-            # Use multipart form data for chunk upload
+            # Use multipart form data for chunk upload - only auth header
             files = {'chunk': ('chunk', io.BytesIO(chunk_data), 'application/octet-stream')}
-            data = {'upload_id': upload_id, 'chunk_index': i}
+            form_data = {'upload_id': upload_id, 'chunk_index': str(i)}
             
-            response = self.session.post(
+            response = requests.post(
                 f"{BASE_URL}/api/admin/bulk-import/chunk/upload",
                 headers={"Authorization": f"Bearer {self.get_admin_token()}"},
                 files=files,
-                data=data
+                data=form_data
             )
             
             print(f"Chunk {i+1}/{total_chunks}: Status {response.status_code}")
@@ -224,13 +225,13 @@ class TestChunkedUploadFeature:
         print("\n=== Test: Upload Chunk Invalid Upload ID ===")
         
         files = {'chunk': ('chunk', io.BytesIO(b'test data'), 'application/octet-stream')}
-        data = {'upload_id': 'invalid-uuid-12345', 'chunk_index': 0}
+        form_data = {'upload_id': 'invalid-uuid-12345', 'chunk_index': '0'}
         
-        response = self.session.post(
+        response = requests.post(
             f"{BASE_URL}/api/admin/bulk-import/chunk/upload",
             headers={"Authorization": f"Bearer {self.get_admin_token()}"},
             files=files,
-            data=data
+            data=form_data
         )
         
         print(f"Status: {response.status_code}")
@@ -313,9 +314,10 @@ class TestChunkedUploadFeature:
         total_chunks = math.ceil(total_size / CHUNK_SIZE)
         
         # Initialize
-        init_response = self.session.post(
+        init_headers = {"Authorization": f"Bearer {self.get_admin_token()}", "Content-Type": "application/json"}
+        init_response = requests.post(
             f"{BASE_URL}/api/admin/bulk-import/chunk/init",
-            headers=self.get_auth_headers(),
+            headers=init_headers,
             json={
                 "filename": "complete_test.zip",
                 "total_size": total_size,
@@ -333,20 +335,20 @@ class TestChunkedUploadFeature:
             chunk_data = test_data[start:end]
             
             files = {'chunk': ('chunk', io.BytesIO(chunk_data), 'application/octet-stream')}
-            data = {'upload_id': upload_id, 'chunk_index': i}
+            form_data = {'upload_id': upload_id, 'chunk_index': str(i)}
             
-            response = self.session.post(
+            response = requests.post(
                 f"{BASE_URL}/api/admin/bulk-import/chunk/upload",
                 headers={"Authorization": f"Bearer {self.get_admin_token()}"},
                 files=files,
-                data=data
+                data=form_data
             )
-            assert response.status_code == 200
+            assert response.status_code == 200, f"Chunk {i} upload failed: {response.text}"
         
         # Complete the upload
-        complete_response = self.session.post(
+        complete_response = requests.post(
             f"{BASE_URL}/api/admin/bulk-import/chunk/complete",
-            headers=self.get_auth_headers(),
+            headers=init_headers,
             params={"upload_id": upload_id}
         )
         
@@ -490,9 +492,10 @@ class TestChunkedUploadFeature:
         total_chunks = math.ceil(total_size / CHUNK_SIZE)
         
         # Initialize
-        init_response = self.session.post(
+        init_headers = {"Authorization": f"Bearer {self.get_admin_token()}", "Content-Type": "application/json"}
+        init_response = requests.post(
             f"{BASE_URL}/api/admin/bulk-import/chunk/init",
-            headers=self.get_auth_headers(),
+            headers=init_headers,
             json={
                 "filename": "process_test.zip",
                 "total_size": total_size,
@@ -510,29 +513,29 @@ class TestChunkedUploadFeature:
             chunk_data = test_data[start:end]
             
             files = {'chunk': ('chunk', io.BytesIO(chunk_data), 'application/octet-stream')}
-            data = {'upload_id': upload_id, 'chunk_index': i}
+            form_data = {'upload_id': upload_id, 'chunk_index': str(i)}
             
-            response = self.session.post(
+            response = requests.post(
                 f"{BASE_URL}/api/admin/bulk-import/chunk/upload",
                 headers={"Authorization": f"Bearer {self.get_admin_token()}"},
                 files=files,
-                data=data
+                data=form_data
             )
-            assert response.status_code == 200
+            assert response.status_code == 200, f"Chunk {i} upload failed: {response.text}"
         
         # Complete the upload
-        complete_response = self.session.post(
+        complete_response = requests.post(
             f"{BASE_URL}/api/admin/bulk-import/chunk/complete",
-            headers=self.get_auth_headers(),
+            headers=init_headers,
             params={"upload_id": upload_id}
         )
         
-        assert complete_response.status_code == 200
+        assert complete_response.status_code == 200, f"Complete failed: {complete_response.text}"
         
         # Process the ZIP
-        process_response = self.session.post(
+        process_response = requests.post(
             f"{BASE_URL}/api/admin/bulk-import/cv-zip-chunked",
-            headers=self.get_auth_headers(),
+            headers=init_headers,
             params={"upload_id": upload_id},
             timeout=120  # AI parsing can take time
         )
