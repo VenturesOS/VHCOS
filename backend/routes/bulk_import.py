@@ -1268,6 +1268,142 @@ async def attach_cv_to_candidate(
         }}
     )
     
+
+
+
+# ============== ASYNC/BACKGROUND CV PARSING ==============
+
+class AsyncCVParseRequest(BaseModel):
+    """Request for async CV parsing from chunked upload"""
+    upload_id: str
+    excel_data: Optional[Dict[str, Dict[str, Any]]] = None  # Pre-parsed Excel data map
+
+
+class AsyncCVParseResponse(BaseModel):
+    """Response from async CV parse initiation"""
+    job_id: str
+    batch_id: str
+    status_url: str
+    message: str
+
+
+@bulk_import_router.post("/cv-zip-async", response_model=AsyncCVParseResponse)
+async def parse_cv_zip_async(
+    request: AsyncCVParseRequest,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Start background CV parsing job for large ZIP uploads.
+    
+    Use this instead of /cv-zip-chunked when:
+    - ZIP contains 50+ resumes
+    - You don't want to wait for synchronous processing
+    - You need progress tracking
+    
+    Flow:
+    1. Client uploads ZIP via /chunk/init, /chunk/upload, /chunk/complete
+    2. Client calls this endpoint with upload_id
+    3. Background job parses all CVs and creates candidates
+    4. Client polls /background-jobs/{job_id} for status
+    """
+    # Validate upload exists and is complete
+    upload = chunked_upload_service.get_upload_status(request.upload_id)
+    
+    if not upload:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+    
+    if upload.status != "completed":
+        raise HTTPException(status_code=400, detail=f"Upload is not complete (status: {upload.status})")
+    
+    if not upload.filename.lower().endswith('.zip'):
+        raise HTTPException(status_code=400, detail="File must be a .zip archive")
+    
+    # Create batch record
+    batch_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    batch_doc = {
+        "id": batch_id,
+        "mode": "cv_zip_async",
+        "source": "background_job",
+        "upload_id": request.upload_id,
+        "created_at": now,
+        "created_by": current_user["id"],
+        "created_by_name": current_user["name"],
+        "status": "processing",
+        "excel_data_provided": bool(request.excel_data)
+    }
+    await db.bulk_import_batches.insert_one(batch_doc)
+    
+    # Create background job
+    job = await job_queue.enqueue_job(
+        job_type=JobType.BULK_IMPORT,
+        input_data={
+            "upload_id": request.upload_id,
+            "batch_id": batch_id,
+            "excel_data_map": request.excel_data or {}
+        },
+        created_by=current_user["id"]
+    )
+    
+    logger.info(f"[CV ZIP ASYNC] Started background job {job.id} for batch {batch_id}")
+    
+    return AsyncCVParseResponse(
+        job_id=job.id,
+        batch_id=batch_id,
+        status_url=f"/api/background-jobs/{job.id}",
+        message=f"Background CV parsing started. Poll status at /api/background-jobs/{job.id}"
+    )
+
+
+@bulk_import_router.get("/batch/{batch_id}/status")
+async def get_batch_status(
+    batch_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Get the status of a bulk import batch"""
+    batch = await db.bulk_import_batches.find_one({"id": batch_id}, {"_id": 0})
+    
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    
+    # Get candidate count for this batch
+    candidate_count = await db.candidate_bank.count_documents({"bulk_import_batch_id": batch_id})
+    
+    return {
+        **batch,
+        "candidates_created": candidate_count
+    }
+
+
+@bulk_import_router.get("/batch/{batch_id}/candidates")
+async def get_batch_candidates(
+    batch_id: str,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Get candidates created from a specific batch"""
+    batch = await db.bulk_import_batches.find_one({"id": batch_id}, {"_id": 0})
+    
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    
+    candidates = await db.candidate_bank.find(
+        {"bulk_import_batch_id": batch_id},
+        {"_id": 0, "embedding": 0}  # Exclude large fields
+    ).skip(skip).limit(limit).to_list(limit)
+    
+    total = await db.candidate_bank.count_documents({"bulk_import_batch_id": batch_id})
+    
+    return {
+        "batch_id": batch_id,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "candidates": candidates
+    }
+
     return {
         "success": True,
         "message": "CV attached successfully",
