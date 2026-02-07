@@ -24,7 +24,8 @@ _MATCH_CACHE_TTL = 120  # 2 minutes cache for identical queries
 
 def _match_cache_key(match_req) -> str:
     """Generate a cache key from match request params."""
-    import hashlib, json
+    import hashlib
+    import json
     key_data = json.dumps({
         "job_id": match_req.job_id,
         "jd_text": (match_req.jd_text or "")[:200],
