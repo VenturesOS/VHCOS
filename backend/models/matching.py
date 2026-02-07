@@ -14,6 +14,7 @@ class MatchRequest(BaseModel):
     min_experience: Optional[int] = None
     max_experience: Optional[int] = None
     quick_match: bool = False  # If True, skip LLM calls and use fast database scoring
+    semantic_search: bool = True  # If True, use vector embeddings for semantic matching
     limit: int = 50  # Max candidates to return
 
 
@@ -24,6 +25,7 @@ class MatchResult(BaseModel):
     score: int
     skill_match_score: Optional[int] = None
     experience_match_score: Optional[int] = None
+    semantic_score: Optional[float] = None  # Cosine similarity score (0-100)
     matched_skills: List[str] = []
     missing_skills: List[str] = []
     strengths: List[str] = []
@@ -31,6 +33,8 @@ class MatchResult(BaseModel):
     explanation: str
     filtered_out: bool = False
     filter_reason: Optional[str] = None
+    source: Optional[str] = None  # Added: candidate source
+    source_role: Optional[str] = None  # Added: role of who added candidate
 
 
 class JobMatchForCandidate(BaseModel):
