@@ -360,3 +360,159 @@ async def find_similar_candidate(
             return {"found": True, "candidate": existing, "match_type": "resume_fingerprint"}
     
     return {"found": False, "candidate": None, "match_type": None}
+
+
+# ============== FAST (NON-LLM) SCORING FUNCTIONS ==============
+
+def parse_job_requirements_fast(job_doc: Optional[Dict] = None, jd_text: Optional[str] = None) -> Dict:
+    """
+    Extract structured job requirements WITHOUT an LLM call.
+    Uses the existing job document fields or basic text extraction.
+    Returns a structure compatible with the LLM-parsed format.
+    """
+    result = {
+        "title": "",
+        "required_skills": [],
+        "preferred_skills": [],
+        "experience_min": None,
+        "experience_max": None,
+        "location": None,
+        "required_qualifications": [],
+        "key_requirements_summary": "",
+    }
+
+    # If we have a structured job document, use its fields directly
+    if job_doc:
+        result["title"] = job_doc.get("title", "")
+        result["location"] = job_doc.get("location")
+
+        # Extract skills from requirements/description fields
+        req_text = job_doc.get("requirements", "") or ""
+        desc_text = job_doc.get("description", "") or ""
+        combined = f"{req_text} {desc_text}".strip()
+
+        # Skills from comma-separated requirements field
+        if req_text:
+            result["required_skills"] = [s.strip() for s in req_text.split(",") if s.strip()]
+
+        # Experience from job fields
+        result["experience_min"] = job_doc.get("experience_min") or job_doc.get("min_experience")
+        result["experience_max"] = job_doc.get("experience_max") or job_doc.get("max_experience")
+        result["key_requirements_summary"] = combined[:300]
+
+    # If raw JD text provided, do basic keyword extraction
+    if jd_text and not result["required_skills"]:
+        text_lower = jd_text.lower()
+        result["key_requirements_summary"] = jd_text[:300]
+
+        # Extract experience requirements
+        exp_patterns = [
+            r'(\d+)\+?\s*(?:to|-)\s*(\d+)\s*years?',
+            r'(\d+)\+?\s*years?\s*(?:of)?\s*experience',
+            r'minimum\s*(\d+)\s*years?',
+        ]
+        for pat in exp_patterns:
+            m = re.search(pat, text_lower)
+            if m:
+                groups = m.groups()
+                result["experience_min"] = int(groups[0])
+                if len(groups) > 1 and groups[1]:
+                    result["experience_max"] = int(groups[1])
+                break
+
+        # Extract skills by looking for common tech/business keywords
+        _SKILL_KEYWORDS = {
+            "python", "java", "javascript", "typescript", "react", "angular", "vue",
+            "node", "nodejs", "django", "flask", "fastapi", "spring", "sql", "nosql",
+            "mongodb", "postgresql", "mysql", "redis", "docker", "kubernetes", "aws",
+            "azure", "gcp", "git", "ci/cd", "agile", "scrum", "machine learning",
+            "deep learning", "data science", "nlp", "computer vision", "tensorflow",
+            "pytorch", "pandas", "numpy", "excel", "powerpoint", "communication",
+            "leadership", "management", "sales", "marketing", "finance", "accounting",
+            "hr", "recruitment", "devops", "sre", "html", "css", "sass", "graphql",
+            "rest", "api", "microservices", "cloud", "linux", "c++", "c#", ".net",
+            "golang", "rust", "swift", "kotlin", "flutter", "react native", "figma",
+            "photoshop", "illustrator", "ui/ux", "product management", "jira",
+            "confluence", "slack", "tableau", "power bi", "spark", "hadoop",
+            "airflow", "kafka", "rabbitmq", "elasticsearch", "terraform", "ansible",
+        }
+
+        # Check for skills in text
+        found_skills = []
+        for skill in _SKILL_KEYWORDS:
+            if skill in text_lower:
+                found_skills.append(skill.title() if len(skill) > 3 else skill.upper())
+        result["required_skills"] = found_skills[:20]
+
+    return result
+
+
+def calculate_fast_match_score(
+    candidate_data: Dict,
+    job_data: Dict,
+    job_embedding: Optional[List[float]] = None,
+    candidate_embedding: Optional[List[float]] = None,
+) -> Dict:
+    """
+    Calculate a match score between candidate and job WITHOUT an LLM call.
+    Uses keyword overlap, experience matching, and optional semantic similarity.
+    """
+    candidate_skills = [s.lower() for s in (candidate_data.get("skills") or [])]
+    job_skills_required = [s.lower() for s in (job_data.get("required_skills") or [])]
+    job_skills_preferred = [s.lower() for s in (job_data.get("preferred_skills") or [])]
+    all_job_skills = list(set(job_skills_required + job_skills_preferred))
+
+    # --- Skill matching (fuzzy: substring check) ---
+    matched_skills = []
+    for js in all_job_skills:
+        for cs in candidate_skills:
+            if js in cs or cs in js:
+                matched_skills.append(js)
+                break
+    matched_skills = list(set(matched_skills))
+    missing_skills = [s for s in job_skills_required if s not in matched_skills][:5]
+
+    skill_score = (len(matched_skills) / max(len(all_job_skills), 1)) * 100 if all_job_skills else 50
+
+    # --- Experience matching ---
+    min_exp = job_data.get("experience_min")
+    max_exp = job_data.get("experience_max")
+    cand_exp = candidate_data.get("experience_years") or 0
+    exp_score = 70  # default
+    if min_exp is not None:
+        if cand_exp >= min_exp:
+            exp_score = 90
+            if max_exp is not None and cand_exp > max_exp + 3:
+                exp_score = 60  # over-experienced
+        else:
+            diff = min_exp - cand_exp
+            exp_score = max(0, 70 - diff * 15)
+
+    # --- Semantic score ---
+    semantic_score = None
+    if job_embedding and candidate_embedding:
+        try:
+            from services.embeddings import embedding_service
+            semantic_score = embedding_service.cosine_similarity(job_embedding, candidate_embedding) * 100
+        except Exception:
+            pass
+
+    # --- Weighted total ---
+    if semantic_score is not None:
+        total_score = int(skill_score * 0.40 + exp_score * 0.25 + semantic_score * 0.25 + 10)
+    else:
+        total_score = int(skill_score * 0.50 + exp_score * 0.30 + 20)
+
+    explanation = f"Quick match: {len(matched_skills)}/{len(all_job_skills)} skills matched, {cand_exp} yrs exp"
+    if semantic_score is not None:
+        explanation += f", {semantic_score:.0f}% semantic similarity"
+
+    return {
+        "score": min(total_score, 100),
+        "skill_match_score": int(min(skill_score, 100)),
+        "experience_match_score": int(min(exp_score, 100)),
+        "semantic_score": round(semantic_score, 1) if semantic_score else None,
+        "matched_skills": [s.title() if len(s) > 3 else s.upper() for s in matched_skills[:10]],
+        "missing_skills": [s.title() if len(s) > 3 else s.upper() for s in missing_skills],
+        "explanation": explanation,
+    }
