@@ -39,11 +39,13 @@
 │   ├── applications.py    # Applications & AI matching (1300+ lines)
 │   ├── auth.py            # Authentication (login, register, JWT)
 │   ├── background_jobs.py # Background tasks, embeddings
-│   ├── bulk_import.py     # Excel/CV bulk import (1200+ lines)
+│   ├── bulk_import.py     # Excel/CV bulk import (1400+ lines)
 │   ├── candidates.py      # Candidate bank operations (1400+ lines)
+│   ├── commercials.py     # Commercial intelligence & revenue (NEW)
 │   ├── files.py           # File serving & downloads
 │   ├── jobs.py            # Job CRUD, career page, mandates
 │   ├── public.py          # Public endpoints (career page)
+│   ├── referrals.py       # Referral management (NEW)
 │   ├── settings.py        # User settings, notifications
 │   └── teams.py           # Team management (NEW)
 ├── services/              # Business logic services
