@@ -13,7 +13,8 @@ class MatchRequest(BaseModel):
     must_have_skills: Optional[List[str]] = None
     min_experience: Optional[int] = None
     max_experience: Optional[int] = None
-    quick_match: bool = False  # If True, skip LLM calls and use fast database scoring
+    quick_match: Optional[bool] = None  # None = auto-decide, True = fast, False = full AI
+    match_mode: Optional[str] = None  # "quick" | "full_ai" — overrides quick_match if set
     semantic_search: bool = True  # If True, use vector embeddings for semantic matching
     limit: int = 50  # Max candidates to return
 
@@ -33,8 +34,19 @@ class MatchResult(BaseModel):
     explanation: str
     filtered_out: bool = False
     filter_reason: Optional[str] = None
-    source: Optional[str] = None  # Added: candidate source
-    source_role: Optional[str] = None  # Added: role of who added candidate
+    source: Optional[str] = None
+    source_role: Optional[str] = None
+
+
+class MatchJobStatus(BaseModel):
+    """Status of a background AI matching job."""
+    job_id: str
+    status: str  # "pending" | "processing" | "completed" | "failed"
+    progress: int = 0  # 0-100
+    total_candidates: int = 0
+    scored_candidates: int = 0
+    results: Optional[List[MatchResult]] = None
+    error: Optional[str] = None
 
 
 class JobMatchForCandidate(BaseModel):
