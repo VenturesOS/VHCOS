@@ -1404,13 +1404,6 @@ async def get_batch_candidates(
         "candidates": candidates
     }
 
-    return {
-        "success": True,
-        "message": "CV attached successfully",
-        "candidate_id": candidate_id,
-        "resume_file_id": file_id
-    }
-
 
 # ============== UTILITY ENDPOINTS ==============
 
