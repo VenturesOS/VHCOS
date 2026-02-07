@@ -100,7 +100,7 @@ class EmbeddingService:
         return " | ".join(parts)
     
     async def generate_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding vector for text."""
+        """Generate embedding vector for text. Uses in-memory cache."""
         if not self._initialized:
             success = await self.initialize()
             if not success:
@@ -110,13 +110,24 @@ class EmbeddingService:
             logger.warning("Embedding client not initialized")
             return None
         
+        # Check cache
+        cache_key = hashlib.md5(text.encode()).hexdigest()
+        if cache_key in _embedding_cache:
+            return _embedding_cache[cache_key]
+        
         try:
             response = await self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
                 input=text,
                 dimensions=EMBEDDING_DIMENSIONS
             )
-            return response.data[0].embedding
+            embedding = response.data[0].embedding
+            # Cache the result
+            if len(_embedding_cache) >= _CACHE_MAX:
+                # Remove oldest entry
+                _embedding_cache.pop(next(iter(_embedding_cache)), None)
+            _embedding_cache[cache_key] = embedding
+            return embedding
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             return None
