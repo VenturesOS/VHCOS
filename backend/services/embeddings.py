@@ -1,7 +1,7 @@
 """
 Vector Embeddings Service for Semantic Search
 Generates and stores embeddings for candidates and jobs.
-Uses OpenAI embeddings API with Emergent LLM Key.
+Uses OpenAI text-embedding-3-small model.
 """
 import os
 import logging
@@ -25,21 +25,21 @@ class EmbeddingService:
         self._initialized = False
     
     async def initialize(self):
-        """Initialize the OpenAI client with Emergent API."""
+        """Initialize the OpenAI client."""
         if self._initialized:
-            return
+            return True
         
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        # Try OpenAI API key first, then fall back to Emergent key
+        api_key = os.environ.get("OPENAI_API_KEY")
+        
         if api_key:
-            # Use Emergent's API endpoint
-            self.client = AsyncOpenAI(
-                api_key=api_key,
-                base_url="https://emergentintegrations-api.onrender.com/v1"
-            )
+            self.client = AsyncOpenAI(api_key=api_key)
             self._initialized = True
-            logger.info("✅ Embedding service initialized with Emergent API")
+            logger.info("✅ Embedding service initialized with OpenAI API")
+            return True
         else:
-            logger.warning("⚠️ EMERGENT_LLM_KEY not set, embeddings disabled")
+            logger.warning("⚠️ OPENAI_API_KEY not set, embeddings disabled")
+            return False
     
     def _prepare_candidate_text(self, candidate: Dict[str, Any]) -> str:
         """Prepare candidate data as text for embedding."""
@@ -96,7 +96,9 @@ class EmbeddingService:
     async def generate_embedding(self, text: str) -> Optional[List[float]]:
         """Generate embedding vector for text."""
         if not self._initialized:
-            await self.initialize()
+            success = await self.initialize()
+            if not success:
+                return None
         
         if not self.client:
             logger.warning("Embedding client not initialized")
@@ -113,14 +115,43 @@ class EmbeddingService:
             logger.error(f"Embedding generation failed: {e}")
             return None
     
+    async def generate_embeddings_batch(self, texts: List[str]) -> List[Optional[List[float]]]:
+        """Generate embeddings for multiple texts in a single API call."""
+        if not self._initialized:
+            success = await self.initialize()
+            if not success:
+                return [None] * len(texts)
+        
+        if not self.client:
+            return [None] * len(texts)
+        
+        try:
+            response = await self.client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=texts,
+                dimensions=EMBEDDING_DIMENSIONS
+            )
+            # Return embeddings in order
+            embeddings = [None] * len(texts)
+            for item in response.data:
+                embeddings[item.index] = item.embedding
+            return embeddings
+        except Exception as e:
+            logger.error(f"Batch embedding generation failed: {e}")
+            return [None] * len(texts)
+    
     async def generate_candidate_embedding(self, candidate: Dict[str, Any]) -> Optional[List[float]]:
         """Generate embedding for a candidate profile."""
         text = self._prepare_candidate_text(candidate)
+        if not text.strip():
+            return None
         return await self.generate_embedding(text)
     
     async def generate_job_embedding(self, job: Dict[str, Any]) -> Optional[List[float]]:
         """Generate embedding for a job posting."""
         text = self._prepare_job_text(job)
+        if not text.strip():
+            return None
         return await self.generate_embedding(text)
     
     def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
@@ -165,6 +196,27 @@ class EmbeddingService:
         
         results.sort(key=lambda x: x.get("semantic_score", 0), reverse=True)
         return results[:top_k]
+    
+    async def check_health(self) -> Dict[str, Any]:
+        """Check if embedding service is working."""
+        try:
+            if not self._initialized:
+                success = await self.initialize()
+                if not success:
+                    return {"status": "disabled", "reason": "OPENAI_API_KEY not configured"}
+            
+            # Test with a simple embedding
+            test_embedding = await self.generate_embedding("test")
+            if test_embedding and len(test_embedding) == EMBEDDING_DIMENSIONS:
+                return {
+                    "status": "healthy",
+                    "model": EMBEDDING_MODEL,
+                    "dimensions": EMBEDDING_DIMENSIONS
+                }
+            else:
+                return {"status": "error", "reason": "Failed to generate test embedding"}
+        except Exception as e:
+            return {"status": "error", "reason": str(e)}
 
 
 # Global instance
@@ -192,16 +244,45 @@ async def process_candidate_embedding(candidate_id: str, candidate_data: Dict[st
         return False
 
 
-async def batch_generate_embeddings(candidates: List[Dict[str, Any]], db, batch_size: int = 10) -> int:
-    """Generate embeddings for multiple candidates in batches."""
+async def batch_generate_embeddings(candidates: List[Dict[str, Any]], db, batch_size: int = 20) -> Dict[str, Any]:
+    """
+    Generate embeddings for multiple candidates in batches.
+    Uses batch API for efficiency.
+    Returns progress stats.
+    """
     processed = 0
+    failed = 0
     total = len(candidates)
     
     for i in range(0, total, batch_size):
         batch = candidates[i:i + batch_size]
-        tasks = [process_candidate_embedding(c["id"], c, db) for c in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        processed += sum(1 for r in results if r is True)
-        logger.info(f"Embedding progress: {min(i + batch_size, total)}/{total}")
+        
+        # Prepare texts for batch embedding
+        texts = [embedding_service._prepare_candidate_text(c) for c in batch]
+        
+        # Generate embeddings in batch
+        embeddings = await embedding_service.generate_embeddings_batch(texts)
+        
+        # Store embeddings
+        now = datetime.now(timezone.utc).isoformat()
+        for j, (candidate, embedding) in enumerate(zip(batch, embeddings)):
+            if embedding:
+                await db.candidate_bank.update_one(
+                    {"id": candidate["id"]},
+                    {"$set": {
+                        "embedding": embedding,
+                        "embedding_updated_at": now
+                    }}
+                )
+                processed += 1
+            else:
+                failed += 1
+        
+        logger.info(f"Embedding progress: {min(i + batch_size, total)}/{total} ({processed} success, {failed} failed)")
     
-    return processed
+    return {
+        "total": total,
+        "processed": processed,
+        "failed": failed,
+        "success_rate": round(processed / total * 100, 1) if total > 0 else 0
+    }
