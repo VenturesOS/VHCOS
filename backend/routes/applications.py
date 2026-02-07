@@ -1107,9 +1107,9 @@ async def find_matching_candidates(
                 continue
         filtered_candidates.append(cand)
 
-    # ---- Generate job embedding for semantic search ----
+    # ---- Generate job embedding for semantic search (skip in quick mode for speed) ----
     job_embedding = None
-    if match_req.semantic_search:
+    if match_req.semantic_search and not use_quick:
         try:
             job_text = f"{job_data.get('title', '')} | Skills: {', '.join(all_skills[:15])}"
             job_embedding = await embedding_service.generate_embedding(job_text)
