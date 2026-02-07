@@ -897,37 +897,33 @@ async def find_matching_candidates(
 
     Rate limited: 10 requests per minute per user.
     """
-    from services.rate_limiter import rate_limiter
-    rate_limiter.check_rate_limit(request, "ai_match")
-
     import time
+    from fastapi.responses import JSONResponse
 
-    # Check cache for quick match mode
+    # FAST PATH: Check cache BEFORE rate limiter (avoids external Redis call)
     cache_key = _match_cache_key(match_req)
     if cache_key in _match_cache:
         cached_results, cached_at = _match_cache[cache_key]
         if time.time() - cached_at < _MATCH_CACHE_TTL:
-            logger.info(f"[MATCH] Cache HIT for key {cache_key[:8]}")
-            return cached_results
+            return JSONResponse(content=cached_results)
 
-    # Thundering herd prevention: use per-key lock so only ONE request
-    # computes the result; others wait for the cached result.
+    # Thundering herd prevention: if another request is computing the same key, wait
     if cache_key not in _match_locks:
         _match_locks[cache_key] = asyncio.Lock()
     lock = _match_locks[cache_key]
 
-    # Try to acquire the lock without blocking first
     if lock.locked():
-        # Another request is computing this result. Wait for it.
         async with lock:
             if cache_key in _match_cache:
                 cached_results, cached_at = _match_cache[cache_key]
                 if time.time() - cached_at < _MATCH_CACHE_TTL:
-                    logger.info(f"[MATCH] Cache HIT after lock wait for {cache_key[:8]}")
-                    return cached_results
+                    return JSONResponse(content=cached_results)
 
-    # Acquire the lock and compute
     await lock.acquire()
+
+    # Rate limit only for actual computation (not cache hits)
+    from services.rate_limiter import rate_limiter
+    rate_limiter.check_rate_limit(request, "ai_match")
 
     # Limit concurrent matching operations to prevent DB connection storms
     try:
