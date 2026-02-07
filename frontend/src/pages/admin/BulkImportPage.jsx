@@ -56,6 +56,7 @@ export default function BulkImportPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [parseProgress, setParseProgress] = useState(0);
   const [saveProgress, setSaveProgress] = useState(0);
+  const [uploadPhase, setUploadPhase] = useState(''); // '', 'chunking', 'processing'
   
   // Result states
   const [batchId, setBatchId] = useState(null);
