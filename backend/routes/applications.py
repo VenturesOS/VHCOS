@@ -881,6 +881,12 @@ async def find_matching_candidates(
 
     import time
 
+    # Limit concurrent matching operations to prevent resource exhaustion
+    try:
+        await asyncio.wait_for(_MATCH_SEMAPHORE.acquire(), timeout=15.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=503, detail="Server busy. Please retry in a few seconds.")
+
     # Resolve mode: match_mode takes precedence over quick_match
     if match_req.match_mode == "full_ai":
         use_quick = False
