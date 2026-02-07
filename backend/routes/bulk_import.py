@@ -48,6 +48,372 @@ bulk_import_router = APIRouter(prefix="/api/admin/bulk-import", tags=["Bulk Impo
 
 logger = logging.getLogger(__name__)
 
+
+# ============== CHUNKED UPLOAD ENDPOINTS ==============
+
+class ChunkInitRequest(BaseModel):
+    """Request to initialize chunked upload"""
+    filename: str
+    total_size: int
+    total_chunks: int
+
+
+class ChunkInitResponse(BaseModel):
+    """Response from chunk initialization"""
+    upload_id: str
+    chunk_size: int = CHUNK_SIZE
+    max_file_size: int = MAX_FILE_SIZE
+
+
+@bulk_import_router.post("/chunk/init", response_model=ChunkInitResponse)
+async def init_chunked_upload(
+    request: ChunkInitRequest,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Initialize a chunked file upload session.
+    Returns upload_id to use for subsequent chunk uploads.
+    
+    Client should:
+    1. Call this endpoint with filename, total_size, total_chunks
+    2. Upload each chunk to /chunk/upload with the upload_id
+    3. Call /chunk/complete to assemble the file
+    4. Process the assembled file with /cv-zip-chunked
+    """
+    try:
+        upload = chunked_upload_service.initiate_upload(
+            filename=request.filename,
+            total_size=request.total_size,
+            total_chunks=request.total_chunks,
+            created_by=current_user["id"]
+        )
+        
+        logger.info(f"[CHUNK INIT] Upload {upload.upload_id} initiated for {request.filename}")
+        
+        return ChunkInitResponse(
+            upload_id=upload.upload_id,
+            chunk_size=CHUNK_SIZE,
+            max_file_size=MAX_FILE_SIZE
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"[CHUNK INIT] Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize upload")
+
+
+@bulk_import_router.post("/chunk/upload")
+async def upload_chunk(
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    chunk: UploadFile = File(...),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Upload a single chunk of the file.
+    
+    Returns progress information including:
+    - chunks_received: number of chunks uploaded so far
+    - total_chunks: total expected chunks
+    - progress: percentage complete
+    """
+    try:
+        chunk_data = await chunk.read()
+        
+        result = await chunked_upload_service.upload_chunk(
+            upload_id=upload_id,
+            chunk_index=chunk_index,
+            chunk_data=chunk_data
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"[CHUNK UPLOAD] Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload chunk")
+
+
+@bulk_import_router.post("/chunk/complete")
+async def complete_chunked_upload(
+    upload_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Complete the chunked upload by assembling all chunks.
+    Returns the path to the assembled file for processing.
+    """
+    try:
+        result = await chunked_upload_service.complete_upload(upload_id)
+        
+        logger.info(f"[CHUNK COMPLETE] Upload {upload_id} assembled: {result['filename']}")
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"[CHUNK COMPLETE] Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to complete upload")
+
+
+@bulk_import_router.get("/chunk/status/{upload_id}")
+async def get_chunk_status(
+    upload_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Get the status of an in-progress chunked upload."""
+    upload = chunked_upload_service.get_upload_status(upload_id)
+    
+    if not upload:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+    
+    return {
+        "upload_id": upload.upload_id,
+        "filename": upload.filename,
+        "total_size": upload.total_size,
+        "total_chunks": upload.total_chunks,
+        "chunks_received": upload.chunks_received,
+        "progress": round(upload.chunks_received / upload.total_chunks * 100, 1) if upload.total_chunks > 0 else 0,
+        "status": upload.status,
+        "created_at": upload.created_at
+    }
+
+
+@bulk_import_router.delete("/chunk/cancel/{upload_id}")
+async def cancel_chunked_upload(
+    upload_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Cancel and cleanup an in-progress chunked upload."""
+    success = chunked_upload_service.cancel_upload(upload_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+    
+    return {"message": "Upload cancelled", "upload_id": upload_id}
+
+
+@bulk_import_router.post("/cv-zip-chunked", response_model=CVZipParseResponse)
+async def parse_cv_zip_from_chunked(
+    upload_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Process a CV/ZIP file that was uploaded via chunked upload.
+    
+    This endpoint:
+    1. Retrieves the completed upload by upload_id
+    2. Processes the ZIP file (same as /cv-zip)
+    3. Cleans up the temporary file after processing
+    """
+    # Get the completed upload
+    upload = chunked_upload_service.get_upload_status(upload_id)
+    
+    if not upload:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+    
+    if upload.status != "completed":
+        raise HTTPException(status_code=400, detail=f"Upload is not complete (status: {upload.status})")
+    
+    if not upload.file_path:
+        raise HTTPException(status_code=400, detail="Upload file path not found")
+    
+    # Validate file type
+    if not upload.filename.lower().endswith('.zip'):
+        chunked_upload_service.cleanup_completed(upload_id)
+        raise HTTPException(status_code=400, detail="File must be a .zip archive")
+    
+    batch_id = str(uuid.uuid4())
+    candidates = []
+    excel_files_found = 0
+    excel_data_map = {}
+    
+    try:
+        # Read the assembled file
+        file_content = chunked_upload_service.get_file_content(upload_id)
+        
+        if not file_content:
+            raise HTTPException(status_code=400, detail="Failed to read uploaded file")
+        
+        resume_files = []
+        excel_files = []
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            zip_path = os.path.join(temp_dir, "upload.zip")
+            with open(zip_path, 'wb') as f:
+                f.write(file_content)
+            
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                for file_info in zip_ref.infolist():
+                    if file_info.is_dir():
+                        continue
+                    
+                    filename = os.path.basename(file_info.filename)
+                    ext = Path(filename).suffix.lower()
+                    
+                    with zip_ref.open(file_info) as f:
+                        content = f.read()
+                    
+                    if ext in ['.pdf', '.doc', '.docx']:
+                        resume_files.append((filename, content))
+                    elif ext in ['.xlsx', '.xls', '.csv']:
+                        excel_files.append((filename, content))
+                        excel_files_found += 1
+        
+        if not resume_files:
+            raise HTTPException(status_code=400, detail="No resume files (PDF, DOC, DOCX) found in ZIP")
+        
+        logger.info(f"[CV ZIP CHUNKED] Found {len(resume_files)} resumes, {excel_files_found} Excel files")
+        
+        # Parse Excel files for additional metadata
+        for excel_name, excel_content in excel_files:
+            try:
+                ext = Path(excel_name).suffix.lower()
+                if ext == '.csv':
+                    df = pd.read_csv(io.BytesIO(excel_content))
+                else:
+                    df = pd.read_excel(io.BytesIO(excel_content))
+                
+                df.columns = [col.strip().rstrip('*').strip().rstrip('.').strip().lower().replace(' ', '_').replace('.', '_') for col in df.columns]
+                
+                for _, row in df.iterrows():
+                    email = str(row.get('email', '')).strip().lower() if pd.notna(row.get('email')) else None
+                    phone = normalize_phone(str(row.get('contact_no', row.get('phone', '')))) if pd.notna(row.get('contact_no', row.get('phone'))) else None
+                    
+                    data = {
+                        'name': str(row.get('candidate_name', row.get('name', ''))).strip() if pd.notna(row.get('candidate_name', row.get('name'))) else None,
+                        'email': email,
+                        'phone': phone,
+                        'location': str(row.get('current_location', row.get('location', ''))).strip() if pd.notna(row.get('current_location', row.get('location'))) else None,
+                        'salary': parse_salary_string(str(row.get('annual_salary', row.get('salary', '')))),
+                        'employer': str(row.get('current_employer', '')).strip() if pd.notna(row.get('current_employer')) else None,
+                        'designation': str(row.get('designation', '')).strip() if pd.notna(row.get('designation')) else None,
+                    }
+                    
+                    if email:
+                        excel_data_map[email] = data
+                    if phone:
+                        excel_data_map[phone] = data
+                        
+            except Exception as e:
+                logger.warning(f"[CV ZIP CHUNKED] Error parsing Excel {excel_name}: {e}")
+        
+        # Process each resume
+        now = datetime.now(timezone.utc).isoformat()
+        
+        for idx, (filename, content) in enumerate(resume_files):
+            try:
+                candidate = CVCandidate(row_index=idx, filename=filename)
+                
+                # Upload to R2
+                file_id = str(uuid.uuid4())
+                r2_key = generate_r2_key("bulk-import-cv", filename)
+                
+                ext = Path(filename).suffix.lower()
+                content_type_map = {
+                    '.pdf': 'application/pdf',
+                    '.doc': 'application/msword',
+                    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                }
+                content_type = content_type_map.get(ext, 'application/octet-stream')
+                
+                r2_result = await upload_to_r2(content, r2_key, content_type)
+                candidate.resume_file_id = file_id
+                candidate.r2_metadata = r2_result
+                
+                # Extract text and parse with AI
+                resume_text = extract_text_from_file(content, filename)
+                
+                if resume_text:
+                    # Generate fingerprint
+                    candidate.resume_fingerprint = generate_resume_fingerprint(resume_text)
+                    
+                    # Parse with AI
+                    if len(resume_text) > 100:
+                        parsed = await parse_resume_with_ai(resume_text[:8000])
+                        
+                        if parsed.get('success') and parsed.get('data'):
+                            data = parsed['data']
+                            candidate.name = data.get('name')
+                            candidate.email = data.get('email')
+                            candidate.phone = data.get('phone')
+                            candidate.location = data.get('location')
+                            candidate.experience_years = data.get('experience_years', 0) or 0
+                            candidate.skills = data.get('skills', [])
+                            candidate.headline = data.get('headline')
+                            candidate.summary = data.get('summary')
+                            candidate.experience = data.get('experience', [])
+                            candidate.education = data.get('education', [])
+                        else:
+                            candidate.warnings.append(f"AI parsing failed: {parsed.get('error', 'Unknown error')}")
+                else:
+                    candidate.warnings.append("Could not extract text from file")
+                
+                # Try to match with Excel data
+                if candidate.email and candidate.email.lower() in excel_data_map:
+                    candidate.excel_data = excel_data_map[candidate.email.lower()]
+                elif candidate.phone:
+                    phone_norm = normalize_phone(candidate.phone)
+                    if phone_norm and phone_norm in excel_data_map:
+                        candidate.excel_data = excel_data_map[phone_norm]
+                
+                # Validate
+                if not candidate.name and not (candidate.excel_data and candidate.excel_data.get('name')):
+                    candidate.validation_errors.append("Could not extract name from CV")
+                
+                if not candidate.email and not candidate.phone:
+                    candidate.validation_errors.append("No email or phone found in CV")
+                    candidate.is_valid = False
+                
+                candidates.append(candidate)
+                
+            except Exception as e:
+                logger.error(f"[CV ZIP CHUNKED] Error processing {filename}: {e}")
+                candidates.append(CVCandidate(
+                    row_index=idx,
+                    filename=filename,
+                    is_valid=False,
+                    validation_errors=[str(e)]
+                ))
+        
+        valid_count = sum(1 for c in candidates if c.is_valid)
+        
+        # Store batch metadata
+        batch_doc = {
+            "id": batch_id,
+            "mode": "cv_zip",
+            "source": "chunked_upload",
+            "upload_id": upload_id,
+            "created_at": now,
+            "created_by": current_user["id"],
+            "created_by_name": current_user["name"],
+            "total_files": len(candidates),
+            "valid_files": valid_count,
+            "invalid_files": len(candidates) - valid_count,
+            "excel_files_found": excel_files_found,
+            "status": "pending_review",
+            "candidates_preview": [c.dict() for c in candidates]
+        }
+        await db.bulk_import_batches.insert_one(batch_doc)
+        
+        return CVZipParseResponse(
+            batch_id=batch_id,
+            total_files=len(candidates),
+            valid_files=valid_count,
+            invalid_files=len(candidates) - valid_count,
+            candidates=candidates,
+            excel_files_found=excel_files_found
+        )
+        
+    finally:
+        # Cleanup the chunked upload temporary file
+        chunked_upload_service.cleanup_completed(upload_id)
+
+logger = logging.getLogger(__name__)
+
 # Get Emergent LLM Key
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
