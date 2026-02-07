@@ -1,7 +1,7 @@
 {
-  "concurrent": 50,
-  "total": 75,
-  "successes": 75,
+  "concurrent": 75,
+  "total": 150,
+  "successes": 150,
   "failures": 0,
   "error_rate": 0.0,
   "grade": "A+",
@@ -10,8 +10,8 @@
   "server_busy": 0,
   "response_times": {
     "min": 0.235,
-    "mean": 0.241,
-    "max": 0.257,
-    "p50": 0.24
+    "mean": 0.24,
+    "max": 0.252,
+    "p50": 0.239
   }
 }
