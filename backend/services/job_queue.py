@@ -282,11 +282,12 @@ async def handle_batch_embedding_job(job: BackgroundJob, queue: JobQueueService)
     from config import db
     
     # Get candidates without embeddings
+    limit = job.input_data.get("limit", 1000)
     query = {"embedding": {"$exists": False}}
     if job.input_data.get("candidate_ids"):
         query["id"] = {"$in": job.input_data["candidate_ids"]}
     
-    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(1000)
+    candidates = await db.candidate_bank.find(query, {"_id": 0}).to_list(limit)
     
     if not candidates:
         return {"processed": 0, "message": "No candidates need embeddings"}
@@ -297,13 +298,187 @@ async def handle_batch_embedding_job(job: BackgroundJob, queue: JobQueueService)
         progress_message=f"Processing {len(candidates)} candidates..."
     )
     
-    processed = await batch_generate_embeddings(candidates, db)
+    result = await batch_generate_embeddings(candidates, db)
     
     return {
         "total_candidates": len(candidates),
-        "processed": processed,
-        "success_rate": f"{(processed/len(candidates)*100):.1f}%"
+        **result
     }
+
+
+async def handle_bulk_cv_parse_job(job: BackgroundJob, queue: JobQueueService) -> Dict[str, Any]:
+    """
+    Handler for bulk CV parsing jobs.
+    Parses multiple resumes in background, creating candidates as it goes.
+    """
+    from services.matching_engine import parse_resume_with_ai, extract_text_from_file
+    from services.r2_storage import upload_to_r2, generate_r2_key
+    from services.embeddings import embedding_service
+    from config import db
+    import tempfile
+    import zipfile
+    from pathlib import Path
+    
+    upload_id = job.input_data.get("upload_id")
+    batch_id = job.input_data.get("batch_id")
+    excel_data_map = job.input_data.get("excel_data_map", {})
+    
+    if not upload_id:
+        raise Exception("No upload_id provided")
+    
+    # Get the uploaded file
+    from services.chunked_upload import chunked_upload_service
+    
+    upload = chunked_upload_service.get_upload_status(upload_id)
+    if not upload or upload.status != "completed":
+        raise Exception("Upload not found or not completed")
+    
+    file_content = chunked_upload_service.get_file_content(upload_id)
+    if not file_content:
+        raise Exception("Could not read uploaded file")
+    
+    await queue.update_job_status(job.id, JobStatus.PROCESSING, progress=5, progress_message="Extracting ZIP...")
+    
+    # Extract resumes from ZIP
+    resume_files = []
+    with tempfile.TemporaryDirectory() as temp_dir:
+        zip_path = os.path.join(temp_dir, "upload.zip")
+        with open(zip_path, 'wb') as f:
+            f.write(file_content)
+        
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            for file_info in zip_ref.infolist():
+                if file_info.is_dir():
+                    continue
+                filename = os.path.basename(file_info.filename)
+                ext = Path(filename).suffix.lower()
+                if ext in ['.pdf', '.doc', '.docx']:
+                    with zip_ref.open(file_info) as f:
+                        content = f.read()
+                    resume_files.append((filename, content))
+    
+    if not resume_files:
+        raise Exception("No resume files found in ZIP")
+    
+    total = len(resume_files)
+    await queue.update_job_status(job.id, JobStatus.PROCESSING, progress=10, 
+                                   progress_message=f"Found {total} resumes. Starting parsing...")
+    
+    # Process each resume
+    results = {"processed": 0, "failed": 0, "candidates": []}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for idx, (filename, content) in enumerate(resume_files):
+        try:
+            progress = 10 + int((idx / total) * 80)
+            await queue.update_job_status(
+                job.id, JobStatus.PROCESSING, progress=progress,
+                progress_message=f"Parsing {idx + 1}/{total}: {filename}"
+            )
+            
+            # Upload to R2
+            r2_key = generate_r2_key("bulk-import-cv", filename)
+            ext = Path(filename).suffix.lower()
+            content_type_map = {
+                '.pdf': 'application/pdf',
+                '.doc': 'application/msword',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            }
+            content_type = content_type_map.get(ext, 'application/octet-stream')
+            r2_result = await upload_to_r2(content, r2_key, content_type)
+            
+            # Extract text and parse
+            resume_text = extract_text_from_file(content, filename)
+            
+            candidate_data = {
+                "id": str(uuid.uuid4()),
+                "source": "bulk_cv_async",
+                "cv_attached": True,
+                "resume_file_id": str(uuid.uuid4()),
+                "r2_metadata": r2_result,
+                "original_filename": filename,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": job.created_by,
+                "bulk_import_batch_id": batch_id,
+                "bulk_import_restricted": True
+            }
+            
+            if resume_text and len(resume_text) > 100:
+                parsed = await parse_resume_with_ai(resume_text[:8000])
+                if parsed.get('success') and parsed.get('data'):
+                    data = parsed['data']
+                    candidate_data.update({
+                        "name": data.get('name'),
+                        "email": data.get('email'),
+                        "phone": data.get('phone'),
+                        "location": data.get('location'),
+                        "experience_years": data.get('experience_years', 0) or 0,
+                        "skills": data.get('skills', []),
+                        "headline": data.get('headline'),
+                        "summary": data.get('summary'),
+                        "experience": data.get('experience', []),
+                        "education": data.get('education', [])
+                    })
+            
+            # Merge with Excel data if available
+            email = candidate_data.get("email", "").lower() if candidate_data.get("email") else None
+            if email and email in excel_data_map:
+                excel_row = excel_data_map[email]
+                if not candidate_data.get("name") and excel_row.get("name"):
+                    candidate_data["name"] = excel_row["name"]
+                if not candidate_data.get("location") and excel_row.get("location"):
+                    candidate_data["location"] = excel_row["location"]
+                if excel_row.get("salary"):
+                    candidate_data["current_salary"] = excel_row["salary"]
+            
+            # Validate
+            if not candidate_data.get("name"):
+                candidate_data["name"] = f"Candidate from {filename}"
+            
+            # Save to database
+            await db.candidate_bank.insert_one(candidate_data)
+            
+            # Generate embedding (non-blocking)
+            try:
+                embedding = await embedding_service.generate_candidate_embedding(candidate_data)
+                if embedding:
+                    await db.candidate_bank.update_one(
+                        {"id": candidate_data["id"]},
+                        {"$set": {"embedding": embedding, "embedding_updated_at": now}}
+                    )
+            except Exception as emb_err:
+                logger.warning(f"Embedding failed for {candidate_data['id']}: {emb_err}")
+            
+            results["processed"] += 1
+            results["candidates"].append({
+                "id": candidate_data["id"],
+                "name": candidate_data.get("name"),
+                "email": candidate_data.get("email")
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to parse {filename}: {e}")
+            results["failed"] += 1
+    
+    # Update batch record
+    await db.bulk_import_batches.update_one(
+        {"id": batch_id},
+        {"$set": {
+            "status": "completed",
+            "processed_count": results["processed"],
+            "failed_count": results["failed"],
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Cleanup upload
+    chunked_upload_service.cleanup_completed(upload_id)
+    
+    await queue.update_job_status(job.id, JobStatus.PROCESSING, progress=95,
+                                   progress_message="Finalizing...")
+    
+    return results
 
 
 # Register handlers when module is imported
@@ -311,6 +486,7 @@ def register_default_handlers():
     """Register default job handlers."""
     job_queue.register_handler(JobType.CV_PARSE, handle_cv_parse_job)
     job_queue.register_handler(JobType.BATCH_EMBEDDING, handle_batch_embedding_job)
+    job_queue.register_handler(JobType.BULK_IMPORT, handle_bulk_cv_parse_job)
 
 
 # Auto-register on import
