@@ -391,6 +391,74 @@ UPSTASH_REDIS_REST_TOKEN=***
 
 ---
 
+## Chunked File Upload for Large CV Imports (February 7, 2026)
+
+### Overview ✅ VERIFIED
+**Testing:** 100% backend tests passed (13/13), Frontend verified
+**Test Report:** `/app/test_reports/iteration_42.json`
+
+### Problem
+The bulk CV import feature was crashing when uploading files >1MB due to the environment's ingress proxy file size limit.
+
+### Solution: Chunked File Uploads
+Files are split into 512KB chunks on the frontend, uploaded sequentially, and reassembled on the server before processing.
+
+### Configuration
+| Setting | Value | Description |
+|---------|-------|-------------|
+| CHUNK_SIZE | 512KB | Size of each chunk |
+| MAX_FILE_SIZE | 100MB | Maximum upload size |
+| Chunk threshold | 1MB | Files >1MB use chunked upload |
+
+### Chunked Upload Flow
+1. **Init** (`POST /api/admin/bulk-import/chunk/init`) - Create upload session
+2. **Upload** (`POST /api/admin/bulk-import/chunk/upload`) - Upload each chunk (multipart form)
+3. **Complete** (`POST /api/admin/bulk-import/chunk/complete`) - Assemble all chunks
+4. **Process** (`POST /api/admin/bulk-import/cv-zip-chunked`) - Parse the assembled ZIP
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chunk/init` | POST | Initialize upload session, returns `upload_id` |
+| `/chunk/upload` | POST | Upload individual chunk |
+| `/chunk/complete` | POST | Assemble chunks into final file |
+| `/chunk/status/{id}` | GET | Get upload progress/status |
+| `/chunk/cancel/{id}` | DELETE | Cancel and cleanup upload |
+| `/cv-zip-chunked` | POST | Process chunked ZIP file |
+
+### Frontend Progress Phases
+- **Uploading... X%** (0-60%): Chunks being uploaded
+- **Processing CVs... X%** (60-100%): AI parsing resumes
+
+### Files Modified
+- `/app/backend/services/chunked_upload.py` - New chunked upload service
+- `/app/backend/routes/bulk_import.py` - Chunked upload endpoints
+- `/app/frontend/src/pages/admin/BulkImportPage.jsx` - Chunked upload UI
+
+---
+
+## Expanded Redis Caching (February 7, 2026)
+
+### Overview ✅ VERIFIED
+Redis caching expanded to additional public endpoints.
+
+### Newly Cached Endpoints
+
+| Endpoint | TTL | Description |
+|----------|-----|-------------|
+| `GET /api/jobs/browse` | 3 min | Public job browsing |
+| `GET /api/career-page/jobs` | 5 min | Career page job listings |
+
+### Performance Improvement
+- First request: ~800ms
+- Cached request: ~270ms (3x faster)
+
+### Files Modified
+- `/app/backend/routes/jobs.py` - Added caching to browse_jobs and career_page_jobs
+
+---
+
 ## Enhanced Bulk Candidate Import Tool (January 31, 2026)
 
 ### Overview ✅ VERIFIED
