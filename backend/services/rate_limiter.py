@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 # Rate limit configuration
 RATE_LIMITS = {
     "auth": {"requests": 30, "window": 60},       # 30 requests per minute for auth
-    "search": {"requests": 60, "window": 60},     # 60 requests per minute for search
-    "ai_match": {"requests": 10, "window": 60},   # 10 requests per minute for AI matching
-    "api": {"requests": 200, "window": 60},       # 200 requests per minute general API
-    "upload": {"requests": 5, "window": 60},      # 5 uploads per minute
+    "search": {"requests": 100, "window": 60},    # 100 requests per minute for search
+    "ai_match": {"requests": 60, "window": 60},   # 60 requests per minute for AI matching
+    "api": {"requests": 300, "window": 60},       # 300 requests per minute general API
+    "upload": {"requests": 10, "window": 60},     # 10 uploads per minute
 }
 
 
