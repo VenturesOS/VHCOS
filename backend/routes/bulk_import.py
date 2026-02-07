@@ -43,6 +43,9 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 # Import chunked upload service
 from services.chunked_upload import chunked_upload_service, CHUNK_SIZE, MAX_FILE_SIZE
 
+# Import job queue for background processing
+from services.job_queue import job_queue, JobType
+
 # Create router
 bulk_import_router = APIRouter(prefix="/api/admin/bulk-import", tags=["Bulk Import"])
 
