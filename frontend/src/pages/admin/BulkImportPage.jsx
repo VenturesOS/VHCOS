@@ -616,7 +616,7 @@ export default function BulkImportPage() {
                 Upload ZIP File
               </CardTitle>
               <CardDescription>
-                ZIP containing resume files (PDF, DOC, DOCX) and optional Excel files
+                ZIP containing resume files (PDF, DOC, DOCX) and optional Excel files. Max size: 100MB.
               </CardDescription>
             </CardHeader>
             <CardContent>
