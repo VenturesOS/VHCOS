@@ -41,6 +41,9 @@ from services.matching_engine import (
     find_similar_candidate
 )
 
+# Import embeddings service for semantic search
+from services.embeddings import embedding_service
+
 # Create router for applications endpoints
 applications_router = APIRouter(prefix="/api", tags=["Applications"])
 
