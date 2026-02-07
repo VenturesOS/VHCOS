@@ -993,7 +993,7 @@ async def find_matching_candidates(
                         "id": 1, "name": 1, "email": 1, "skills": 1,
                         "experience_years": 1, "education": 1, "location": 1,
                         "summary": 1, "source": 1, "created_by": 1,
-                        "search_score": 1
+                        "search_score": 1, "embedding": 1
                     }
                 }
             ])
