@@ -1069,8 +1069,6 @@ async def find_matching_candidates(
 
     # ============== FULL AI MODE — background job ==============
     if not use_quick:
-        import asyncio
-
         match_job_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
 
