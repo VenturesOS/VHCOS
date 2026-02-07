@@ -38,7 +38,9 @@ from services.matching_engine import (
     calculate_candidate_job_match,
     apply_must_have_filters,
     generate_resume_fingerprint,
-    find_similar_candidate
+    find_similar_candidate,
+    parse_job_requirements_fast,
+    calculate_fast_match_score,
 )
 
 # Import embeddings service for semantic search
