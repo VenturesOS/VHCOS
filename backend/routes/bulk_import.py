@@ -40,6 +40,9 @@ from services.matching_engine import parse_resume_with_ai, generate_resume_finge
 # Import Emergent LLM for industry detection
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
+# Import chunked upload service
+from services.chunked_upload import chunked_upload_service, CHUNK_SIZE, MAX_FILE_SIZE
+
 # Create router
 bulk_import_router = APIRouter(prefix="/api/admin/bulk-import", tags=["Bulk Import"])
 
