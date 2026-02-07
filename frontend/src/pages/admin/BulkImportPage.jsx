@@ -73,6 +73,74 @@ export default function BulkImportPage() {
   // Get auth token
   const getToken = () => localStorage.getItem('vhc_token');
 
+  // Chunked upload helper function
+  const uploadFileInChunks = async (file) => {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    
+    // Step 1: Initialize the upload
+    setUploadPhase('chunking');
+    const initResponse = await fetch(`${API_URL}/api/admin/bulk-import/chunk/init`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        total_size: file.size,
+        total_chunks: totalChunks
+      })
+    });
+    
+    if (!initResponse.ok) {
+      const error = await initResponse.json();
+      throw new Error(error.detail || 'Failed to initialize upload');
+    }
+    
+    const { upload_id } = await initResponse.json();
+    
+    // Step 2: Upload each chunk
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+      
+      const formData = new FormData();
+      formData.append('upload_id', upload_id);
+      formData.append('chunk_index', chunkIndex.toString());
+      formData.append('chunk', chunk, `chunk_${chunkIndex}`);
+      
+      const chunkResponse = await fetch(`${API_URL}/api/admin/bulk-import/chunk/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+        body: formData
+      });
+      
+      if (!chunkResponse.ok) {
+        const error = await chunkResponse.json();
+        throw new Error(error.detail || `Failed to upload chunk ${chunkIndex + 1}`);
+      }
+      
+      // Update progress (chunking phase: 0-60%)
+      const chunkProgress = Math.round(((chunkIndex + 1) / totalChunks) * 60);
+      setParseProgress(chunkProgress);
+    }
+    
+    // Step 3: Complete the upload
+    const completeResponse = await fetch(`${API_URL}/api/admin/bulk-import/chunk/complete?upload_id=${upload_id}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getToken()}` }
+    });
+    
+    if (!completeResponse.ok) {
+      const error = await completeResponse.json();
+      throw new Error(error.detail || 'Failed to complete upload');
+    }
+    
+    setParseProgress(65);
+    return upload_id;
+  };
+
   // Download template
   const handleDownloadTemplate = async () => {
     try {
