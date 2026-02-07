@@ -1,8 +1,10 @@
 """
 AI Matching Engine Service for VHC Talent OS
-Uses GPT-5.2 via Emergent LLM for resume/JD parsing and matching
+Uses GPT-5.2 via Emergent LLM for resume/JD parsing and matching.
+Includes fast (non-LLM) scoring for high-concurrency scenarios.
 """
 import os
+import re
 import json
 import hashlib
 from typing import List, Dict, Optional, Tuple
