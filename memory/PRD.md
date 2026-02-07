@@ -46,6 +46,8 @@
 **Two-Stage AI Matching Optimization: COMPLETE & TESTED (February 6, 2026)**
 **Phase 1 Scaling: MongoDB Atlas Search Integration: COMPLETE & TESTED (February 6, 2026)**
 **Phase 2 Prep: Redis Caching & Background Jobs: COMPLETE & TESTED (February 6, 2026)**
+**Chunked File Upload for Large CV Imports: COMPLETE & TESTED (February 7, 2026)**
+**Expanded Redis Caching (Jobs API): COMPLETE & TESTED (February 7, 2026)**
 
 ---
 
