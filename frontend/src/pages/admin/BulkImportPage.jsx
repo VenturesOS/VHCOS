@@ -312,20 +312,24 @@ export default function BulkImportPage() {
     setIsParsing(true);
     setParseProgress(5);
     setUploadPhase('');
+    const startTime = Date.now();
     
     try {
       let data;
       
       // Use chunked upload for files > 1MB (to bypass proxy limits)
       if (zipFile.size > 1 * 1024 * 1024) {
-        toast.info(`Large file detected (${(zipFile.size / (1024 * 1024)).toFixed(1)}MB). Using chunked upload...`);
-        
-        // Upload file in chunks
+        // Upload file in chunks (notifications handled in uploadFileInChunks)
         const upload_id = await uploadFileInChunks(zipFile);
         
         // Process the uploaded file
         setUploadPhase('processing');
         setParseProgress(70);
+        
+        toast.loading('AI is parsing your CVs... This may take a few minutes for large batches.', {
+          id: 'cv-processing',
+          duration: Infinity
+        });
         
         const response = await fetch(`${API_URL}/api/admin/bulk-import/cv-zip-chunked?upload_id=${upload_id}`, {
           method: 'POST',
@@ -340,6 +344,7 @@ export default function BulkImportPage() {
         }
         
         data = await response.json();
+        toast.dismiss('cv-processing');
         
       } else {
         // Standard upload for small files
@@ -347,6 +352,7 @@ export default function BulkImportPage() {
         formData.append('zip_file', zipFile);
         
         setParseProgress(30);
+        toast.loading('Processing CVs...', { id: 'cv-processing' });
         
         const response = await fetch(`${API_URL}/api/admin/bulk-import/cv-zip`, {
           method: 'POST',
@@ -362,6 +368,7 @@ export default function BulkImportPage() {
         }
         
         data = await response.json();
+        toast.dismiss('cv-processing');
       }
       
       setBatchId(data.batch_id);
@@ -374,14 +381,20 @@ export default function BulkImportPage() {
       });
       setSelectedCandidates(validIds);
       
+      // Calculate processing time
+      const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+      
       setParseProgress(100);
-      toast.success(`Parsed ${data.total_files} CVs. ${data.valid_files} valid, ${data.invalid_files} with errors.`);
+      toast.success(`✅ Processed ${data.total_files} CVs in ${totalTime}s • ${data.valid_files} valid, ${data.invalid_files} with errors`, {
+        duration: 5000
+      });
       
       if (data.excel_files_found > 0) {
         toast.info(`Found ${data.excel_files_found} Excel files with additional metadata`);
       }
       
     } catch (error) {
+      toast.dismiss('cv-processing');
       toast.error(error.message);
     } finally {
       setIsParsing(false);
