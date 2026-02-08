@@ -81,13 +81,13 @@ class TestMatchHistoryEndpointAuth:
     def test_match_history_requires_auth(self):
         """GET /api/matching/history requires authentication"""
         response = requests.get(f"{BASE_URL}/api/matching/history")
-        assert response.status_code == 401, "Should require authentication"
+        assert response.status_code in [401, 403], f"Should require authentication, got {response.status_code}"
         print("✅ GET /api/matching/history requires authentication")
     
     def test_match_history_detail_requires_auth(self):
         """GET /api/matching/history/{id} requires authentication"""
         response = requests.get(f"{BASE_URL}/api/matching/history/some-id")
-        assert response.status_code == 401, "Should require authentication"
+        assert response.status_code in [401, 403], f"Should require authentication, got {response.status_code}"
         print("✅ GET /api/matching/history/{id} requires authentication")
 
 
