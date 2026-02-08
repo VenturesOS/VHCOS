@@ -25,7 +25,8 @@ import {
   DollarSign,
   Upload,
   History,
-  Bug
+  Bug,
+  Activity
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
