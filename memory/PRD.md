@@ -76,6 +76,9 @@ Build an Enhanced Bulk Candidate Import Tool for a recruitment portal (VHC Talen
 - [x] In-memory caching with thundering herd prevention
 - [x] MongoDB connection pooling optimized for Atlas (maxConnecting=3)
 - [x] Embedding service caching (LRU for job embeddings)
+- [x] Bug Reports system — "Report Issue" button for all roles + Admin dashboard with stats/filtering
+- [x] Signup restricted to candidate-only (employer/recruiter/admin created by admin)
+- [x] Copyright year updated to 2026 across login/register pages
 - [x] MongoDB startup resilience (non-blocking validation, auto-reconnect)
 
 ## Backlog (Prioritized)
