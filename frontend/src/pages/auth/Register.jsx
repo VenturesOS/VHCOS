@@ -134,8 +134,6 @@ export default function Register() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="candidate">Job Seeker (Candidate)</SelectItem>
-                    <SelectItem value="employer">Employer / Hiring Manager</SelectItem>
-                    <SelectItem value="recruiter">Recruiter</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -172,7 +170,7 @@ export default function Register() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-slate-400">
-          © 2024 VHC Talent OS. All rights reserved.
+          © 2026 VHC Talent OS. All rights reserved.
         </p>
       </div>
     </div>

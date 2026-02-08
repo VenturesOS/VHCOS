@@ -138,7 +138,7 @@ export default function Login() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-slate-400">
-          © 2024 VHC Talent OS. All rights reserved.
+          © 2026 VHC Talent OS. All rights reserved.
         </p>
       </div>
     </div>
