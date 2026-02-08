@@ -132,6 +132,7 @@ app.include_router(teams_router)
 app.include_router(referrals_router)
 app.include_router(commercials_router)
 app.include_router(bug_reports_router)
+app.include_router(system_errors_router)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
