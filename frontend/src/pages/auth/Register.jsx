@@ -69,8 +69,8 @@ export default function Register() {
 
         <Card className="border-slate-200 shadow-lg">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="font-heading text-xl">Create an account</CardTitle>
-            <CardDescription>Get started with VHC Talent OS</CardDescription>
+            <CardTitle className="font-heading text-xl">Create your account</CardTitle>
+            <CardDescription>Register as a candidate to explore opportunities</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
