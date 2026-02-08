@@ -36,6 +36,7 @@ class ApplicationResponse(BaseModel):
     resume_url: Optional[str] = None
     status: str = "applied"
     stage: str = "applied"
+    source: Optional[str] = None  # Where the application came from (self, ai_screening, referral, etc.)
     notes: List[dict] = []
     edit_history: List[dict] = []  # Audit trail
     last_edited_by: Optional[dict] = None  # {name, role, timestamp}
