@@ -87,6 +87,7 @@ from services import (
 from routes import auth_router, public_router, files_router, admin_router, jobs_router, candidates_router, applications_router, settings_router, background_jobs_router, teams_router, referrals_router, commercials_router
 from routes.bulk_import import bulk_import_router
 from routes.bug_reports import bug_reports_router
+from routes.system_errors import system_errors_router, log_system_error
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
