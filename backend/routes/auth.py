@@ -31,7 +31,11 @@ auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 async def register(user_data: UserCreate, request: Request):
     # Rate limit registration
     rate_limiter.check_rate_limit(request, "auth")
-    
+
+    # Only candidate self-registration is allowed; employer/recruiter/admin created by admin
+    if user_data.role != "candidate":
+        raise HTTPException(status_code=403, detail="Only candidate registration is allowed. Employer and Recruiter accounts are created by admin.")
+
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
