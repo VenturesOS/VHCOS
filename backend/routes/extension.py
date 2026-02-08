@@ -145,7 +145,6 @@ async def capture_profile(
     3. If newer, update; if same/older, skip
     4. If new, create candidate record
     """
-    db = get_database()
     now = datetime.now(timezone.utc).isoformat()
     
     # Check by naukri_profile_id first (most reliable)
