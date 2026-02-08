@@ -262,6 +262,9 @@ export const matchingAPI = {
   getMatchHistory: () => api.get('/matching/history'),
   getMatchHistoryDetail: (id) => api.get(`/matching/history/${id}`),
   getJobsForCandidate: () => api.get('/matching/jobs-for-candidate'),
+  // Shortlist candidate from AI screening - adds to job pipeline
+  shortlistCandidate: (candidateId, jobId, notes = null) => 
+    api.post('/matching/shortlist', { candidate_id: candidateId, job_id: jobId, notes }),
 };
 
 // Bug Reports APIs

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Search, Upload, Sparkles, Filter, ChevronDown, ChevronUp, AlertCircle, Star, Zap, Brain, Loader2 } from 'lucide-react';
+import { Search, Upload, Sparkles, Filter, ChevronDown, ChevronUp, AlertCircle, Star, Zap, Brain, Loader2, CheckCircle } from 'lucide-react';
 
 export default function FindCandidatesPage() {
   const [jobs, setJobs] = useState([]);
