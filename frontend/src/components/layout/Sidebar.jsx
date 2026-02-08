@@ -149,6 +149,23 @@ export const Sidebar = () => {
             <p className="text-xs text-slate-500 truncate">{user?.email}</p>
           </div>
         </div>
+        {/* Download Extension - Only for admin, employer, recruiter */}
+        {['admin', 'employer', 'recruiter'].includes(user?.role) && (
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-slate-600 hover:text-[#7CB342] hover:bg-[#DCFCE7] mb-1"
+            onClick={() => {
+              const link = document.createElement('a');
+              link.href = `${process.env.REACT_APP_BACKEND_URL}/api/download/naukri-extension`;
+              link.download = 'vhc-naukri-extension.zip';
+              link.click();
+            }}
+            data-testid="download-extension-btn"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Naukri Extension
+          </Button>
+        )}
         <Button
           variant="ghost"
           className="w-full justify-start text-slate-600 hover:text-amber-600 hover:bg-amber-50 mb-1"
