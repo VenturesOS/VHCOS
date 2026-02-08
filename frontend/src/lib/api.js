@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { captureApiError } from './errorCapture';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API_BASE = `${BACKEND_URL}/api`;
