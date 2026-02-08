@@ -18,7 +18,7 @@ export default function Register() {
     name: '',
     email: '',
     password: '',
-    role: '',
+    role: 'candidate',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
