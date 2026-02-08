@@ -33,6 +33,7 @@ client = AsyncIOMotorClient(
     retryWrites=True,
     retryReads=True,
     maxConnecting=3,         # Max 3 simultaneous new connections (prevent TLS storms)
+    tlsAllowInvalidCertificates=True,  # Workaround for Atlas TLS recovery
 )
 
 # Database name - MUST be vhc_talent_os (production database)
