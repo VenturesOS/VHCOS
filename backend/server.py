@@ -1370,42 +1370,41 @@ async def validate_r2_connection():
 async def seed_admin():
     """
     Seeds admin user from environment variables on first run.
-    Admin requires password reset on first login for security.
-    Set ADMIN_EMAIL and ADMIN_PASSWORD in .env file.
     """
     admin_email = os.environ.get('ADMIN_EMAIL')
     admin_password = os.environ.get('ADMIN_PASSWORD')
     
-    # Only seed if both credentials are provided in environment
     if not admin_email or not admin_password:
         logging.warning("ADMIN_EMAIL or ADMIN_PASSWORD not set - skipping admin seeding")
         return
     
-    existing_admin = await db.users.find_one({"email": admin_email})
-    if not existing_admin:
-        admin_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+    try:
+        existing_admin = await db.users.find_one({"email": admin_email})
+        if not existing_admin:
+            admin_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc).isoformat()
+            
+            admin_doc = {
+                "id": admin_id,
+                "email": admin_email,
+                "name": "System Admin",
+                "role": "admin",
+                "password": hash_password(admin_password),
+                "phone": None,
+                "company_id": None,
+                "is_active": True,
+                "requires_password_reset": True,
+                "created_at": now
+            }
+            
+            await db.users.insert_one(admin_doc)
+            logging.info(f"Admin user seeded (requires password reset): {admin_email}")
         
-        admin_doc = {
-            "id": admin_id,
-            "email": admin_email,
-            "name": "System Admin",
-            "role": "admin",
-            "password": hash_password(admin_password),
-            "phone": None,
-            "company_id": None,
-            "is_active": True,
-            "requires_password_reset": True,  # Force password change on first login
-            "created_at": now
-        }
-        
-        await db.users.insert_one(admin_doc)
-        logging.info(f"Admin user seeded (requires password reset): {admin_email}")
-    
-    # Cleanup: Remove any test users on startup
-    test_result = await db.users.delete_many({"email": {"$regex": "@test\\.com$"}})
-    if test_result.deleted_count > 0:
-        logging.info(f"Cleaned up {test_result.deleted_count} test users")
+        test_result = await db.users.delete_many({"email": {"$regex": "@test\\.com$"}})
+        if test_result.deleted_count > 0:
+            logging.info(f"Cleaned up {test_result.deleted_count} test users")
+    except Exception as e:
+        logging.warning(f"Admin seeding skipped (DB not available): {e}")
 
 # Include the router in the main app
 app.include_router(api_router)
