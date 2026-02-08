@@ -107,6 +107,7 @@ function App() {
             <Route path="bulk-import" element={<BulkImportPage />} />
             <Route path="import-history" element={<ImportHistoryPage />} />
             <Route path="bug-reports" element={<BugReportsPage />} />
+            <Route path="system-health" element={<SystemHealthPage />} />
           </Route>
 
           {/* Recruiter Routes */}
