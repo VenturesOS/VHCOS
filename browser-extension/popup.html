@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VHC Talent OS</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 320px;
+      min-height: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #7CB342 0%, #558B2F 100%);
+      color: white;
+      padding: 16px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    
+    .content {
+      padding: 16px;
+    }
+    
+    /* Login Form */
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .form-group label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #64748b;
+    }
+    
+    .form-group input {
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    
+    .form-group input:focus {
+      border-color: #7CB342;
+    }
+    
+    .btn {
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #7CB342;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #689F38;
+    }
+    
+    .btn-primary:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+    
+    .error {
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: center;
+    }
+    
+    /* Dashboard */
+    .dashboard {
+      display: none;
+    }
+    
+    .user-info {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .user-info .name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    
+    .user-info .role {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: capitalize;
+    }
+    
+    .user-info .api-url {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+      word-break: break-all;
+    }
+    
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card .value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #7CB342;
+    }
+    
+    .stat-card .label {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    
+    /* Settings */
+    .settings {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .settings h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #1e293b;
+    }
+    
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+    
+    .setting-item label {
+      font-size: 13px;
+      color: #475569;
+    }
+    
+    /* Toggle Switch */
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+    
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #cbd5e1;
+      border-radius: 24px;
+      transition: 0.3s;
+    }
+    
+    .toggle .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    
+    .toggle input:checked + .slider {
+      background: #7CB342;
+    }
+    
+    .toggle input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    
+    /* Queue Status */
+    .queue-status {
+      background: #fef3c7;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #92400e;
+      display: none;
+    }
+    
+    .queue-status.visible {
+      display: block;
+    }
+    
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 12px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    
+    .footer a {
+      color: #7CB342;
+      text-decoration: none;
+    }
+    
+    /* Loading */
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>VHC Talent OS</h1>
+    <p>Naukri Auto Capture Extension</p>
+  </div>
+  
+  <div class="content">
+    <!-- Login Section -->
+    <div id="loginSection" class="login-form">
+      <div class="form-group">
+        <label>VHC Portal URL</label>
+        <input type="url" id="apiUrl" placeholder="https://your-vhc-portal.com" value="">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••">
+      </div>
+      <div id="loginError" class="error" style="display: none;"></div>
+      <button id="loginBtn" class="btn btn-primary">Login to VHC</button>
+    </div>
+    
+    <!-- Dashboard Section -->
+    <div id="dashboardSection" class="dashboard">
+      <div class="user-info">
+        <div class="name" id="userName">-</div>
+        <div class="role" id="userRole">-</div>
+        <div class="api-url" id="apiUrlDisplay">-</div>
+      </div>
+      
+      <div id="queueStatus" class="queue-status">
+        <strong>📥 Offline Queue:</strong> <span id="queueCount">0</span> profiles pending sync
+      </div>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="value" id="statToday">0</div>
+          <div class="label">Captured Today</div>
+        </div>
+        <div class="stat-card">
+          <div class="value" id="statWeek">0</div>
+          <div class="label">This Week</div>
+        </div>
+        <div class="stat-card">
+          <div class="value" id="statTotal">0</div>
+          <div class="label">Total Captured</div>
+        </div>
+        <div class="stat-card">
+          <div class="value" id="statUpdated">0</div>
+          <div class="label">Updated</div>
+        </div>
+      </div>
+      
+      <div class="settings">
+        <h3>⚙️ Settings</h3>
+        <div class="setting-item">
+          <label>Auto-capture profiles</label>
+          <label class="toggle">
+            <input type="checkbox" id="settingEnabled" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <label>Show notifications</label>
+          <label class="toggle">
+            <input type="checkbox" id="settingNotifications" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      
+      <button id="logoutBtn" class="btn btn-secondary" style="width: 100%;">Logout</button>
+    </div>
+  </div>
+  
+  <div class="footer">
+    Powered by <a href="#">VHC Talent OS</a> v1.0.0
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
