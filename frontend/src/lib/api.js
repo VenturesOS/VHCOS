@@ -249,6 +249,8 @@ export const matchingAPI = {
   },
   findCandidates: (params) => api.post('/matching/find-candidates', params),
   getMatchJobStatus: (jobId) => api.get(`/matching/jobs/${jobId}/status`),
+  getMatchHistory: () => api.get('/matching/history'),
+  getMatchHistoryDetail: (id) => api.get(`/matching/history/${id}`),
   getJobsForCandidate: () => api.get('/matching/jobs-for-candidate'),
 };
 
