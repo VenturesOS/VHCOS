@@ -1324,6 +1324,50 @@ async def get_match_job_status(
     return response
 
 
+@applications_router.get("/matching/history")
+async def get_match_history(
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Get past match search history for the current user.
+    Admin sees all, employer/recruiter see their own.
+    """
+    query = {}
+    if current_user["role"] in ("employer", "recruiter"):
+        query["searched_by"] = current_user["id"]
+
+    docs = await db.match_results.find(
+        query,
+        {"_id": 0, "id": 1, "job_id": 1, "job_title": 1, "jd_text": 1,
+         "searched_by_name": 1, "searched_by_role": 1, "mode": 1,
+         "matched_count": 1, "ai_scored_count": 1, "total_time_seconds": 1,
+         "filters": 1, "timestamp": 1}
+    ).sort("timestamp", -1).limit(100).to_list(100)
+
+    return docs
+
+
+@applications_router.get("/matching/history/{history_id}")
+async def get_match_history_detail(
+    history_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Get full results of a past match search.
+    """
+    doc = await db.match_results.find_one({"id": history_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Match history not found")
+
+    # Access control
+    if current_user["role"] in ("employer", "recruiter"):
+        if doc.get("searched_by") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    return doc
+
+
+
 @applications_router.get("/matching/jobs-for-candidate", response_model=List[JobMatchForCandidate])
 async def get_matching_jobs_for_candidate(
     current_user: dict = Depends(require_role(["candidate"]))
