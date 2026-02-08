@@ -125,6 +125,26 @@ export default function FindCandidatesPage() {
     return 'text-slate-500 bg-slate-100 border-slate-200';
   };
 
+  const handleShortlist = async (candidate) => {
+    if (!selectedJobId) {
+      toast.error('Please select a job to shortlist the candidate for');
+      return;
+    }
+    
+    setShortlistingId(candidate.candidate_id);
+    try {
+      const res = await matchingAPI.shortlistCandidate(candidate.candidate_id, selectedJobId);
+      setShortlistedCandidates(prev => new Set([...prev, candidate.candidate_id]));
+      toast.success(`${res.data.candidate_name} has been shortlisted for ${res.data.job_title}`);
+      setSelectedCandidate(null);
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to shortlist candidate';
+      toast.error(errorMsg);
+    } finally {
+      setShortlistingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6" data-testid="find-candidates-page">
       <div>
