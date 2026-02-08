@@ -53,6 +53,7 @@ import JobApplicantsPage from "./pages/employer/JobApplicantsPage";
 import AnalyticsPage from "./pages/employer/AnalyticsPage";
 import FindCandidatesPage from "./pages/employer/FindCandidatesPage";
 import MatchHistoryPage from "./pages/shared/MatchHistoryPage";
+import BugReportsPage from "./pages/admin/BugReportsPage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
 import EmployerCandidateBankPage from "./pages/employer/EmployerCandidateBankPage";
 
