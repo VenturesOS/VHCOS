@@ -88,6 +88,7 @@ export const Sidebar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
