@@ -1311,20 +1311,42 @@ async def get_company_pipeline(
 async def validate_mongodb_connection():
     """
     Validates MongoDB connectivity on application startup.
-    Retries connection before failing.
+    Recreates client if initial connection fails (handles stale TLS state).
     """
     import asyncio
-    for attempt in range(3):
+    from motor.motor_asyncio import AsyncIOMotorClient
+    global client, db
+
+    for attempt in range(5):
         try:
             await client.admin.command("ping")
             logging.info("MongoDB Atlas connected successfully")
             logging.info(f"Database: {db_name}")
             return
         except Exception as e:
-            logging.warning(f"MongoDB connection attempt {attempt+1}/3 failed: {e}")
-            if attempt < 2:
+            logging.warning(f"MongoDB connection attempt {attempt+1}/5 failed: {e}")
+            if attempt < 4:
+                # Close stale client and create fresh one
+                try:
+                    client.close()
+                except Exception:
+                    pass
                 await asyncio.sleep(5)
-    logging.error("MongoDB connection failed after 3 attempts. Application may have limited functionality.")
+                from config import mongodb_uri
+                client = AsyncIOMotorClient(
+                    mongodb_uri,
+                    maxPoolSize=50, minPoolSize=5, maxIdleTimeMS=30000,
+                    waitQueueTimeoutMS=15000, serverSelectionTimeoutMS=15000,
+                    connectTimeoutMS=10000, socketTimeoutMS=30000,
+                    retryWrites=True, retryReads=True, maxConnecting=3,
+                    tlsAllowInvalidCertificates=True,
+                )
+                db = client[db_name]
+                # Also update config module references
+                import config
+                config.client = client
+                config.db = db
+    logging.error("MongoDB connection failed after 5 attempts. Application may have limited functionality.")
 
 @app.on_event("startup")
 async def validate_r2_connection():
