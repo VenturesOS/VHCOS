@@ -93,7 +93,8 @@ class TestShortlistCandidate:
         # Get a candidate from candidate bank
         candidates_res = self.session.get(f"{BASE_URL}/api/candidate-bank?limit=50")
         assert candidates_res.status_code == 200
-        candidates = candidates_res.json()
+        candidates_data = candidates_res.json()
+        candidates = candidates_data.get("candidates", [])
         assert len(candidates) > 0, "No candidates found for testing"
         
         # Find a candidate not already in this job's pipeline
@@ -172,7 +173,8 @@ class TestShortlistCandidate:
         
         # Get a candidate
         candidates_res = self.session.get(f"{BASE_URL}/api/candidate-bank?limit=50")
-        candidates = candidates_res.json()
+        candidates_data = candidates_res.json()
+        candidates = candidates_data.get("candidates", [])
         
         # Find a candidate not already in pipeline
         candidate = None
@@ -216,7 +218,8 @@ class TestShortlistCandidate:
         
         # Get a candidate not in this job's pipeline
         candidates_res = self.session.get(f"{BASE_URL}/api/candidate-bank?limit=50")
-        candidates = candidates_res.json()
+        candidates_data = candidates_res.json()
+        candidates = candidates_data.get("candidates", [])
         
         candidate = None
         for c in candidates:
@@ -297,7 +300,8 @@ class TestShortlistFrontendAPI:
         job_id = jobs[2]["id"] if len(jobs) > 2 else jobs[0]["id"]
         
         candidates_res = self.session.get(f"{BASE_URL}/api/candidate-bank?limit=50")
-        candidates = candidates_res.json()
+        candidates_data = candidates_res.json()
+        candidates = candidates_data.get("candidates", [])
         
         candidate = None
         for c in candidates:
