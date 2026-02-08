@@ -254,6 +254,15 @@ export const matchingAPI = {
   getJobsForCandidate: () => api.get('/matching/jobs-for-candidate'),
 };
 
+// Bug Reports APIs
+export const bugReportsAPI = {
+  create: (data) => api.post('/bug-reports', data),
+  getAll: (status) => api.get('/bug-reports', { params: status ? { status } : {} }),
+  getOne: (id) => api.get(`/bug-reports/${id}`),
+  update: (id, params) => api.put(`/bug-reports/${id}`, null, { params }),
+  getStats: () => api.get('/bug-reports/stats/summary'),
+};
+
 // Candidate Data Bank APIs
 export const candidateBankAPI = {
   add: (file, email, name) => {
