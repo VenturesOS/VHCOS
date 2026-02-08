@@ -1,164 +1,164 @@
-<analysis>**original_problem_statement:**
-The user initially requested to build an Enhanced Bulk Candidate Import Tool with Excel/CV modes, AI enrichment, deduplication, and admin-only governance. The scope expanded to include UI fixes, inline profile editing, bug fixes for data parsing, and critical performance optimizations for search and AI matching. More recently, the user requested a migration to MongoDB Atlas, a phased scaling plan to handle millions of records, and a fix for large file uploads crashing the bulk import feature.
+<analysis>original_problem_statement:
+The initial request was to improve the performance and user experience of the AI-powered candidate matching feature.
+
+PRODUCT REQUIREMENTS:
+- **P0: Performance Fix:** Address the slow performance of the AI matching feature. The goal is to support at least 50 concurrent users with a response time of under 5 seconds for a Quick Match.
+- **P1: Refactor :** Clean up the main server file by extracting endpoints into modular router files.
+- **P2: UI Toggle:** Add a UI toggle on the frontend to allow users to choose between a Quick Match (fast, keyword-based) and a Full AI Match (slower, more comprehensive, runs in the background).
+- **Match History:** Implement a feature for employers and recruiters to view a history of their past searches.
+- **Error Reporting:**
+    - Add a Report Issue button for all users to manually report bugs.
+    - Implement an automated error capture mechanism for both frontend and backend exceptions.
+    - Create an admin dashboard to view both manual and automated error reports.
+- **UI/UX Fixes:**
+    - Update the copyright year to 2026.
+    - Restrict the public sign-up page to only allow Candidate role registration.
+- **Bug Fix:** Fix an issue where shortlisting a candidate from the AI screening results page does not add them to the job's pipeline.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack recruitment portal with a React frontend, a FastAPI backend, and a user-provided MongoDB Atlas database. All initial features, including the bulk import tool, AI enrichment, and various UI/UX improvements, are complete. Key performance and scalability features have been implemented:
-- **Database Migration:** The database was successfully migrated from a local instance to MongoDB Atlas.
-- **Phase 1 Scaling (Atlas Search):** MongoDB Atlas Search is integrated for fast, fuzzy-tolerant text search on candidates and jobs, significantly improving search performance.
-- **Phase 2 Prep (Caching & Background Jobs):** An Upstash Redis-powered caching layer is active on the main candidate search endpoint. A background job queue service has been created to handle long-running tasks asynchronously.
-- **Bug Fixes:** A critical pagination bug on the recruiter and employer pages was found by the testing agent and resolved.
-
-The agent was in the middle of implementing chunked uploads to fix an issue with large files.
+A full-stack application with a React frontend and a FastAPI backend using MongoDB Atlas. The application includes features for job and candidate management, and an AI-powered candidate matching system. Most of the requested features, including performance optimization,  refactoring, the UI toggle for matching, Match History, and a comprehensive error reporting system (both manual and automatic), have been implemented and tested.
 
 **Last working item**:
-The user reported that the bulk CV import feature crashes when uploading large files. The agent identified the probable cause as a 1MB file size limit imposed by the environment's ingress proxy and received approval to implement chunked uploads as a robust solution.
--   **Last item agent was working:** Implementing chunked file uploads. The agent created a new service file  and was about to add the corresponding API endpoints.
--   **Status:** IN PROGRESS
--   **Agent Testing Done:** N
--   **Which testing method agent to use?** both. The backend needs testing via  to verify the chunking API (init, upload, complete). The frontend needs testing with the screenshot tool to confirm a large file (>10MB) can be uploaded successfully through the UI.
--   **User Testing Done:** N
+- Last item agent was working: The agent was fixing a bug where the Shortlist Candidate button on the AI screening results page was not functional. The agent identified the issue and created a new backend endpoint  in  to handle the shortlisting logic.
+- Status: IN PROGRESS
+- Agent Testing Done: N
+- Which testing method agent to use? both
+- User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Bulk CV import crashes on large file sizes (P0)**
-    -   **Attempted fixes:** A service file  has been created to handle the logic.
-    -   **Next debug checklist:**
-        1.  Add API endpoints to  for initializing, uploading, and finalizing chunked file uploads.
-        2.  Update the frontend at  to use these new chunked upload endpoints.
-        3.  Implement a progress indicator on the frontend for better user experience during large uploads.
-        4.  Test by uploading a ZIP file larger than 10MB to ensure it completes successfully.
-    -   **Why fix this issue?** This is a critical bug that makes the bulk CV import feature unusable for its primary purpose of handling large batches of resumes.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Both.
+- **Issue 1**: Shortlisting a candidate from AI screening does not add them to the job pipeline.
+  - **Priority**: P0 (This is the current active task).
+  - **Description**: The Shortlist Candidate button on the  only shows a temporary notification (toast) but doesn't perform any action to link the candidate to the job.
+  - **Status**: IN PROGRESS
+
+  **Issues Detail**:
+  - **Issue 1**: Shortlisting a candidate from AI screening does not add them to the job pipeline.
+     - **Attempted fixes**: A new backend endpoint  has been created in . This endpoint accepts a  and a  and creates an  record in the database, effectively adding the candidate to the job's pipeline.
+     - **Next debug checklist**:
+        1.  **Frontend API Integration**: Create a function in  to call the new  endpoint.
+        2.  **Frontend Component Logic**: Modify . Update the  handler for the Shortlist Candidate button to call the new API function.
+        3.  **UI Feedback**: Ensure the UI provides clear feedback to the user upon successful shortlisting (e.g., changing the button state to Shortlisted, showing a success message) and handles potential errors.
+     - **Why fix this issue and what will be achieved with the fix?**: This is a critical bug fix that will make the AI screening feature useful. It allows recruiters and employers to directly act on the screening results by adding promising candidates to their hiring pipeline.
+     - **Status**: IN PROGRESS
+     - **Is recurring issue?** N
+     - **Should Test frontend/backend/both after fix?** both
+     - **Blocked on other issue**: None
 
 **In progress Task List**:
--   **Task 1: Complete Implementation of Chunked File Uploads (P0)**
-    -   **Where to resume:** Add the required API endpoints (, , ) to the  in .
-    -   **What will be achieved with this?** Users will be able to reliably upload large ZIP archives (e.g., up to 100MB) for bulk CV import, bypassing infrastructure file size limitations.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Both.
-    -   **Blocked on something:** None.
+  - **Task 1**: Complete the bug fix for the Shortlist Candidate functionality.
+     - **Where to resume**: The backend endpoint is complete. The next step is to wire it up to the frontend UI in .
+     - **What will be achieved with this?**: A core user flow will be fixed, enabling users to add candidates to a job mandate directly from the AI screening page.
+     - **Status**: IN PROGRESS
+     - **Should Test frontend/backend/both after fix?** both
+     - **Blocked on something**: None
 
 **Upcoming and Future Tasks**
-
-**Upcoming Tasks:**
--   **P1: Enable Vector Embeddings for Semantic Search:** The service for this () is created but non-functional. The next step is to investigate a working method to generate embeddings, possibly by asking the user for their own OpenAI API key if the Emergent LLM key proves insufficient. This will unlock true semantic search capabilities.
--   **P1: Implement Background CV Parsing:** Refactor the CV import process to use the newly created background job queue. This will offload the time-consuming parsing task, preventing request timeouts and providing a better user experience.
--   **P2: Expand Redis Caching:** Apply the existing Redis caching service to other high-traffic, read-only endpoints (e.g., job listings, company details) to further enhance overall application speed.
-
-**Future Tasks:**
--   Refactor remaining business logic (Team Management, Referrals) from  into dedicated route files.
--   Implement mocked features: WhatsApp & Email Campaign Automation.
--   Integrate Stripe for payments.
--   Build out multi-tenancy architecture in preparation for the B2B SaaS phase.
+There are no new upcoming or future tasks requested by the user. The agent should focus on completing the in-progress bug fix.
 
 **Completed work in this session**
--   **DB Migration to Atlas:** Successfully migrated the entire database from a local instance to the user's MongoDB Atlas cluster, including data and indexes.
--   **AI Matching Optimization:** Implemented a high-performance, two-stage matching engine that uses a fast database pre-filter before applying intensive AI scoring, dramatically reducing response times. A quick match option was also added.
--   **Phase 1 Scaling (Atlas Search):** Integrated MongoDB Atlas Search for fast, fuzzy, and scalable full-text search capabilities across the candidate bank.
--   **Phase 2 Prep (Caching & Jobs):** Successfully integrated Upstash Redis for caching search results and created a background job queue service to handle asynchronous tasks.
--   **Critical Bug Fix:** The testing agent found and fixed a critical bug on the  where the page crashed due to an unhandled paginated API response. A proactive fix was also applied to a similar page.
--   **Performance Fix (DB Indexes):** Resolved initial slow search performance by adding necessary indexes to the  collection.
--   **Server-Side Pagination & Debouncing:** Implemented on the main Candidate Data Bank page to improve performance and user experience.
+- **Performance & Matching (P0 & P2)**:
+  - Implemented Quick Match (non-LLM) and Full AI Match (background job) modes. ()
+  - Optimized the  endpoint with caching (LRU, thundering herd prevention) and concurrency controls, passing a load test of 75 concurrent users. ()
+  - Added a UI toggle on the frontend for users to select the match mode. ()
+- **Backend Refactoring (P1)**:
+  - Cleaned up  by removing duplicated route definitions and properly including modular routers.
+- **Match History Feature**:
+  - Created backend endpoints and frontend pages () to allow employers and recruiters to view their past searches.
+- **Error Reporting System**:
+  - Implemented a Report Issue button and dialog for manual bug submission by any user. ()
+  - Implemented automated capture of backend 500 errors and frontend exceptions. (, )
+  - Created Bug Reports and System Health dashboards for admins. (, )
+- **UI/UX Fixes**:
+  - Updated copyright year to 2026 on authentication pages. (, )
+  - Restricted the registration page to Candidate sign-ups only, both on the frontend and backend. (, )
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: Vector Embeddings Service is Non-Functional.**
-    -   **Debug checklist:**
-        1.  Use the  tool to confirm if  supports OpenAI embeddings.
-        2.  If not supported, devise a plan to ask the user for their own OpenAI API key to enable this feature.
-        3.  Modify  to use the confirmed working method.
-    -   **Why to solve this issue?** This is a blocker for implementing semantic search, a key requirement for the user's long-term vision of an advanced recruitment platform.
-    -   **Should Test frontend/backend/both after fix?** Backend.
-    -   **Is recurring issue?** N.
+There are no unresolved issues that were mentioned earlier and not addressed.
 
 **Known issue recurrence from previous fork**
--   None.
+- **Issue**:  when connecting to MongoDB Atlas.
+  - **Cause**: This error occurred multiple times, usually after a pod re-initialization (which assigns a new IP) or after an aggressive load test caused connection storms. The root cause is that MongoDB Atlas's IP whitelist did not include the pod's new IP address.
+  - **Resolution Status**: RESOLVED. The user manually added the pod's IP address to the Atlas whitelist.
+  - **Note**: This is an operational dependency. If the agent encounters this timeout error, the first step should be to ask the user to verify and update the IP whitelist in their MongoDB Atlas settings.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, MongoDB Atlas, Pydantic
--   **Frontend**: React, Shadcn UI
--   **Scalability**: MongoDB Atlas Search, Redis Caching (Upstash), Background Job Queues (Redis), Chunked File Uploads.
--   **Performance Tuning**: Database Indexing, Server-Side Pagination, Search Debouncing.
+- **Frontend**: React, Material-UI (MUI), Axios, React Router
+- **Backend**: FastAPI, Python, Motor (async MongoDB driver)
+- **Database**: MongoDB Atlas
+- **AI**: OpenAI API for generating text embeddings.
+- **Architecture**: REST API with a decoupled frontend/backend. Utilizes background jobs for long-running AI tasks, and employs advanced caching strategies (LRU, thundering herd prevention) for performance.
 
 **key DB schema**
--   **:** Contains a dedicated  index for MongoDB Atlas Search, covering fields like , , , , and .
--   **:** Contains a  index for MongoDB Atlas Search.
+- **users**: {email, role, ...}
+- **jobs**: {title, description, ...}
+- **candidates**: {user_id, skills, experience_years, ...}
+- **applications**: {job_id, candidate_id, status, ...} - **This is the collection the current bug fix will write to.**
+- **match_requests**: {user_id, job_description, match_mode, background_job_id, ...}
+- **match_results**: {request_id, candidates, status, ...}
+- **bug_reports**: {description, severity, status, user_id, reporter_role, ...}
+- **system_errors**: {source, message, stack_trace, user_id, ...}
 
 **changes in tech stack**
--   **Database:** Migrated from a local MongoDB instance to a user-provided MongoDB Atlas cluster.
--   **Caching:** Introduced Upstash Redis as a caching and message broker service.
--   **Search:** Integrated MongoDB Atlas Search for advanced full-text search.
+None.
 
 **All files of reference**
--   **/app/backend/services/chunked_upload.py**: **New file.** Created to manage the logic for chunked uploads.
--   **/app/backend/routes/bulk_import.py**: The target for the next modification to add the chunking API endpoints.
--   **/app/frontend/src/pages/admin/BulkImportPage.jsx**: Will need to be updated to consume the new chunking API.
--   **/app/backend/routes/candidates.py**: Updated to use Atlas Search and Redis caching.
--   **/app/backend/routes/applications.py**: Updated to use a two-stage matching process with Atlas Search.
--   **/app/backend/services/**: New directory containing services for caching, background jobs, and embeddings.
--   **/app/memory/PRD.md**: Contains updated documentation on all new features and scaling architecture.
+- : Contains the core matching logic and the newly added  endpoint.
+- : The UI for AI screening. The Shortlist Candidate button in this file needs to be updated.
+- : The central place for frontend API functions. A new function to call the  endpoint needs to be added here.
 
 **Areas that need refactoring**:
--   The  service needs a working implementation for generating vector embeddings.
--   The main  file still contains some business logic that should be moved to dedicated route files for better organization.
+- The  function in  is now over 400 lines long due to handling multiple logic paths (quick vs. full AI), caching, locking, and error handling. It could benefit from being broken down into smaller, single-responsibility helper functions to improve readability and maintainability.
 
 **key api endpoints**
--   : Now a highly optimized endpoint using Atlas Search, caching, and pagination.
--   : Uses a fast, two-stage matching algorithm.
--   : New endpoint for background jobs (partially functional).
--   **To be created:** , , .
+- : Performs candidate matching.
+- : **(Newly Added)** Adds a candidate to a job's pipeline.
+- : Retrieves past match results for the user.
+- : Submits a user-generated bug report.
+- : Submits an automatically captured system error.
+- : User registration endpoint, now restricted to the candidate role.
 
 **Critical Info for New Agent**
--   Your immediate task is to implement chunked file uploads to fix the bulk CV import feature. Start by adding the API endpoints in , then modify the frontend.
--   The application is now live on MongoDB Atlas and uses Upstash Redis. All credentials are in .
--   The vector embeddings feature () is a known issue and currently does not work. This is a blocker for future semantic search functionality and will require a proper fix, possibly by requesting an OpenAI key from the user.
--   For any new long-running process (like parsing), use the background job service () to prevent API timeouts.
+- **MongoDB IP Whitelisting**: If you encounter , the pod's IP address has likely changed. You must ask the user to add the new IP to the MongoDB Atlas IP access list.
+- **Current Task**: The immediate priority is to fix the Shortlist Candidate button. The backend endpoint is already created. You need to implement the frontend logic to call this endpoint.
 
 **documents and test reports created in this job**
--   /app/memory/PRD.md
--   /app/test_reports/iteration_41.json
+- 
+- 
+- Test reports from the testing agent are located in .
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User (pending):**  - User gave final approval to implement chunked file uploads.
-2.  **User:**  - User reported the critical bug regarding file upload size limits.
-3.  **User:**  - User requested a comprehensive platform diagnostic, which led to the discovery and fix of a UI bug.
-4.  **User:**  - User approved the implementation of Redis caching and background job services.
-5.  **User:** Provided Upstash Redis credentials.
-6.  **User:**  - User approved the plan to integrate MongoDB Atlas Search.
-7.  **User:**  - User asked for a detailed discussion on scaling the platform.
-8.  **User:** Provided a detailed overview of the long-term vision and phased growth plan for the application.
-9.  **User:**  - User expressed concerns about scaling the platform to handle millions of records.
-10. **User:**  - User provided new credentials for MongoDB Atlas after authentication failures.
+1.  - **(IN PROGRESS)** User reported the critical bug the agent is currently working on.
+2.  - **(Completed)** User approved work on the error reporting feature.
+3.  - **(Completed)** User selected the automated error reporting option.
+4.  - **(Completed)** User requested details on error reporting options.
+5.  - **(Completed)** User prioritized several smaller tasks which are now done.
+6.  - **(Completed)** User proposed new features (error reporting, copyright/signup fixes) which have been implemented.
+7.  - **(Completed)** User prioritized the Match History feature.
+8.  - **(Completed)** User provided requirements for Match History and error reporting.
+9.  - **(Resolved)** User confirmed they updated the IP whitelist for MongoDB, which resolved the connection issue.
+10.  - **(Resolved)** User asking for clarification on the MongoDB connection issue.
 
 **Project Health Check:**
--   **Broken**: The core Bulk CV Import feature is non-functional for large files.
--   **Mocked**:  (email),  (WhatsApp), Vector Embeddings service.
+- **Broken**: The Shortlist Candidate functionality is currently broken from a user's perspective, though the backend fix is in progress.
+- **Mocked**: No features are mocked.
 
 **3rd Party Integrations**
--   **OpenAI GPT-4/5.2**: Used for resume parsing and data enrichment (Uses Emergent LLM Key).
--   **MongoDB Atlas**: Primary database backend (user-provided credentials).
--   **MongoDB Atlas Search**: Integrated for advanced text search (configured via API).
--   **Upstash Redis**: Used for caching and as a message broker (user-provided credentials).
--   **Cloudflare R2**: Primary object storage.
--   **Cloudflare Turnstile**: Bot protection.
--   **Resend**: Mocked for email notifications.
--   **Twilio**: Mocked for WhatsApp notifications.
+- **OpenAI GPT-4o**: Uses Emergent LLM Key for text embeddings in the matching engine.
+- **MongoDB Atlas**: Requires User-provided connection string and IP whitelisting.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES. The last run () identified and fixed a critical frontend bug related to pagination.
--   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: 
--   **Known regressions**: None.
+- Testing agent used after significant changes: YES
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: []
+- Known regressions: None
 
 **Credentials to test flow:**
--   **Admin:**  / 
--   **Employer (Primary Test):**  / 
--   **Recruiter:**  / 
+The agent has access to the necessary credentials for employer, recruiter, and admin roles to test all application flows.
 
 **What agent forgot to execute**
--   The agent started the implementation of chunked uploads by creating the service file () but has not yet created the necessary API endpoints in  or modified the corresponding frontend page. This is the immediate next step.</analysis>
+The agent was midway through fixing the Shortlist Candidate bug. The backend endpoint was created, but the work to connect the frontend UI button to this new endpoint was not started. This is the main pending task.</analysis>
