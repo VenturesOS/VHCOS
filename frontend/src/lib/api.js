@@ -21,7 +21,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors
+// Handle auth errors + auto-capture API failures
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -29,6 +29,15 @@ api.interceptors.response.use(
       localStorage.removeItem('vhc_token');
       localStorage.removeItem('vhc_user');
       window.location.href = '/login';
+    }
+    // Auto-capture API errors for System Health monitoring
+    if (error.response) {
+      captureApiError(
+        error.config?.method?.toUpperCase(),
+        error.config?.url,
+        error.response.status,
+        error.response.data,
+      );
     }
     return Promise.reject(error);
   }
