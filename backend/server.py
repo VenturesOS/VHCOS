@@ -1317,7 +1317,6 @@ async def validate_mongodb_connection():
     Validates MongoDB connectivity on startup. Non-blocking: logs warning if unavailable.
     Motor will auto-reconnect on subsequent requests.
     """
-    import asyncio
     for attempt in range(3):
         try:
             await client.admin.command("ping")
