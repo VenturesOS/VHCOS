@@ -26,7 +26,8 @@ import {
   Upload,
   History,
   Bug,
-  Activity
+  Activity,
+  Download
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
