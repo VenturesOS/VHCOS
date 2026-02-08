@@ -132,6 +132,7 @@ function App() {
             <Route path="applicants" element={<ApplicantsPage />} />
             <Route path="approvals" element={<JobApprovalPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
+            <Route path="match-history" element={<MatchHistoryPage />} />
             <Route path="candidate-bank" element={<EmployerCandidateBankPage />} />
           </Route>
 
