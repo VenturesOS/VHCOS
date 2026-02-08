@@ -1391,6 +1391,52 @@ async def seed_admin():
 # Include the router in the main app
 app.include_router(api_router)
 
+
+# Auto-capture unhandled exceptions and log to system_errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback as tb
+    # Skip HTTP exceptions (they're intentional)
+    if isinstance(exc, HTTPException):
+        raise exc
+
+    error_msg = str(exc)
+    stack = tb.format_exception(type(exc), exc, exc.__traceback__)
+    stack_str = "".join(stack)
+
+    # Extract user from token if present
+    user_id = None
+    user_role = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            from utils import verify_token
+            payload = verify_token(auth_header.split(" ")[1])
+            user_id = payload.get("sub")
+            user_role = payload.get("role")
+        except Exception:
+            pass
+
+    try:
+        await log_system_error(
+            source="backend",
+            error_type=type(exc).__name__,
+            message=error_msg,
+            stack_trace=stack_str,
+            endpoint=str(request.url.path),
+            method=request.method,
+            status_code=500,
+            user_id=user_id,
+            user_role=user_role,
+        )
+    except Exception:
+        pass
+
+    logging.error(f"Unhandled exception on {request.method} {request.url.path}: {error_msg}")
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
