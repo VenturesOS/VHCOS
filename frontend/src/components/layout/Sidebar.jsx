@@ -69,6 +69,7 @@ const navItems = {
     { icon: CheckCircle, label: 'Approvals', path: '/employer/approvals' },
     { icon: Database, label: 'Candidate Bank', path: '/employer/candidate-bank' },
     { icon: Sparkles, label: 'Find Candidates', path: '/employer/find-candidates' },
+    { icon: History, label: 'Match History', path: '/employer/match-history' },
   ],
   candidate: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/candidate' },
