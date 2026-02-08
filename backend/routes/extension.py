@@ -14,7 +14,7 @@ from config import db
 
 logger = logging.getLogger(__name__)
 
-extension_router = APIRouter(prefix="/extension", tags=["Browser Extension"])
+extension_router = APIRouter(prefix="/api/extension", tags=["Browser Extension"])
 
 
 # ============== MODELS ==============
