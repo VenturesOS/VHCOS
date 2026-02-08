@@ -34,11 +34,6 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!formData.role) {
-      toast.error('Please select a role');
-      return;
-    }
 
     setLoading(true);
     setJustRegistered(true);
