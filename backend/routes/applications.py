@@ -1260,22 +1260,33 @@ async def find_matching_candidates(
     total_time = time.time() - start_time
     logger.info(f"[MATCH] Quick match done: {len(quick_results)} scored in {time.time() - stage2_start:.2f}s, total={total_time:.2f}s")
 
-    # Analytics
-    if match_req.job_id:
-        await db.match_results.insert_one({
-            "id": str(uuid.uuid4()),
-            "job_id": match_req.job_id,
-            "searched_by": current_user["id"],
-            "searched_by_role": current_user["role"],
-            "total_candidates_in_db": await db.candidate_bank.count_documents({}),
-            "pre_filtered_count": len(pre_filtered),
-            "ai_scored_count": len(filtered_candidates),
-            "matched_count": len([r for r in results if r.score >= 50 and not r.filtered_out]),
-            "mode": "quick",
-            "stage1_time_seconds": round(stage1_time, 2),
-            "total_time_seconds": round(total_time, 2),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+    # Store match history for Match History feature
+    history_id = str(uuid.uuid4())
+    top_results = [r.model_dump() for r in results if not r.filtered_out][:20]
+    await db.match_results.insert_one({
+        "id": history_id,
+        "job_id": match_req.job_id,
+        "jd_text": (match_req.jd_text or "")[:500],
+        "searched_by": current_user["id"],
+        "searched_by_name": current_user.get("name", ""),
+        "searched_by_role": current_user["role"],
+        "total_candidates_in_db": await db.candidate_bank.count_documents({}),
+        "pre_filtered_count": len(pre_filtered),
+        "ai_scored_count": len(filtered_candidates),
+        "matched_count": len([r for r in results if r.score >= 50 and not r.filtered_out]),
+        "mode": "quick",
+        "job_title": job.get("title", "") if job else "Custom JD",
+        "top_results": top_results,
+        "filters": {
+            "location": match_req.must_have_location,
+            "skills": match_req.must_have_skills,
+            "min_exp": match_req.min_experience,
+            "max_exp": match_req.max_experience,
+        },
+        "stage1_time_seconds": round(stage1_time, 2),
+        "total_time_seconds": round(total_time, 2),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
 
     _MATCH_SEMAPHORE.release()
     # Cache results as serialized dicts for fast JSONResponse return
