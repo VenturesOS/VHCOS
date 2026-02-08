@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="10" failures="2" skipped="0" tests="12" time="6.554" timestamp="2026-02-08T03:59:16.317383+00:00" hostname="agent-env-df36b20a-d4cb-455f-879c-9341e19cb47a"><testcase classname="backend.tests.test_match_history.TestMatchHistoryEndpointAuth" name="test_match_history_requires_auth" time="1.948"><failure message="AssertionError: Should require authentication&#10;assert 403 == 401&#10; +  where 403 = &lt;Response [403]&gt;.status_code">backend/tests/test_match_history.py:84: in test_match_history_requires_auth
+    assert response.status_code == 401, "Should require authentication"
+E   AssertionError: Should require authentication
+E   assert 403 == 401
+E    +  where 403 = &lt;Response [403]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryEndpointAuth" name="test_match_history_detail_requires_auth" time="0.039"><failure message="AssertionError: Should require authentication&#10;assert 403 == 401&#10; +  where 403 = &lt;Response [403]&gt;.status_code">backend/tests/test_match_history.py:90: in test_match_history_detail_requires_auth
+    assert response.status_code == 401, "Should require authentication"
+E   AssertionError: Should require authentication
+E   assert 403 == 401
+E    +  where 403 = &lt;Response [403]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryList" name="test_admin_can_get_all_history" time="1.673"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:33: in admin_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryList" name="test_employer_sees_only_own_history" time="1.364"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:44: in employer_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryList" name="test_recruiter_sees_only_own_history" time="1.375"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:55: in recruiter_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryDetail" name="test_get_history_detail_with_valid_id" time="0.000"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:33: in admin_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryDetail" name="test_get_history_detail_invalid_id_returns_404" time="0.000"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:33: in admin_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryDetail" name="test_employer_cannot_access_others_history" time="0.000"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:44: in employer_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestQuickMatchCreatesHistory" name="test_quick_match_creates_history_entry" time="0.000"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:44: in employer_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestQuickMatchCreatesHistory" name="test_history_entry_contains_correct_data" time="0.000"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:55: in recruiter_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryStructure" name="test_history_list_fields" time="0.000"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:33: in admin_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_match_history.TestMatchHistoryStructure" name="test_history_detail_fields" time="0.000"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_match_history.py:33: in admin_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase></testsuite></testsuites>
