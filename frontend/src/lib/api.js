@@ -273,6 +273,13 @@ export const bugReportsAPI = {
   getStats: () => api.get('/bug-reports/stats/summary'),
 };
 
+// System Errors APIs (Admin)
+export const systemErrorsAPI = {
+  getAll: (params) => api.get('/system-errors', { params }),
+  getStats: () => api.get('/system-errors/stats'),
+  clear: (days) => api.delete('/system-errors/clear', { params: { days } }),
+};
+
 // Candidate Data Bank APIs
 export const candidateBankAPI = {
   add: (file, email, name) => {
