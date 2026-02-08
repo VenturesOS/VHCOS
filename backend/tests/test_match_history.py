@@ -30,7 +30,7 @@ def admin_token():
         "password": ADMIN_PASSWORD
     })
     assert response.status_code == 200, f"Admin login failed: {response.text}"
-    return response.json()["token"]
+    return response.json()["access_token"]
 
 
 @pytest.fixture(scope="module")
@@ -41,7 +41,7 @@ def employer_token():
         "password": EMPLOYER_PASSWORD
     })
     assert response.status_code == 200, f"Employer login failed: {response.text}"
-    return response.json()["token"]
+    return response.json()["access_token"]
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +52,7 @@ def recruiter_token():
         "password": RECRUITER_PASSWORD
     })
     assert response.status_code == 200, f"Recruiter login failed: {response.text}"
-    return response.json()["token"]
+    return response.json()["access_token"]
 
 
 @pytest.fixture(scope="module")
