@@ -82,3 +82,21 @@ async def get_upload(filename: str, redirect: bool = True):
         return FileResponse(secondary_path)
     else:
         raise HTTPException(status_code=404, detail="File not found")
+
+
+@files_router.get("/download/naukri-extension")
+async def download_naukri_extension():
+    """
+    Download the VHC Naukri Auto-Capture browser extension.
+    Returns the extension ZIP file for installation in Chrome/Edge.
+    """
+    extension_path = UPLOAD_DIR / "vhc-naukri-extension.zip"
+    
+    if not extension_path.exists():
+        raise HTTPException(status_code=404, detail="Extension file not found")
+    
+    return FileResponse(
+        path=extension_path,
+        filename="vhc-naukri-extension.zip",
+        media_type="application/zip"
+    )
