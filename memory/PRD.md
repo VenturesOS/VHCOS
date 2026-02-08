@@ -72,9 +72,11 @@ Build an Enhanced Bulk Candidate Import Tool for a recruitment portal (VHC Talen
 - [x] P0: Load test passed — 75 concurrent users, 0% error rate, A+ grade
 - [x] P1: server.py refactored — teams/referrals/commercials extracted to dedicated route files
 - [x] P2: UI toggle for Quick Match vs Full AI Match with background job progress polling
+- [x] Match History page for Employer & Recruiter — list + detail view with saved top results
 - [x] In-memory caching with thundering herd prevention
 - [x] MongoDB connection pooling optimized for Atlas (maxConnecting=3)
 - [x] Embedding service caching (LRU for job embeddings)
+- [x] MongoDB startup resilience (non-blocking validation, auto-reconnect)
 
 ## Backlog (Prioritized)
 ### P1
