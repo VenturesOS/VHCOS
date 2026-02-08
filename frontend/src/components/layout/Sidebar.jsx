@@ -55,6 +55,7 @@ const navItems = {
     { icon: UserPlus, label: 'Referrals', path: '/recruiter/referrals' },
     { icon: UserCircle, label: 'Candidates', path: '/recruiter/candidates' },
     { icon: Sparkles, label: 'AI Screening', path: '/recruiter/find-candidates' },
+    { icon: History, label: 'Match History', path: '/recruiter/match-history' },
     { icon: Database, label: 'Candidate Bank', path: '/recruiter/candidate-bank' },
   ],
   employer: [
