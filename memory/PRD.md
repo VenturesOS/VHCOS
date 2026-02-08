@@ -81,6 +81,7 @@ Build an Enhanced Bulk Candidate Import Tool for a recruitment portal (VHC Talen
 - [x] Signup restricted to candidate-only (employer/recruiter/admin created by admin)
 - [x] Copyright year updated to 2026 across login/register pages
 - [x] MongoDB startup resilience (non-blocking validation, auto-reconnect)
+- [x] **Shortlist from AI Screening** — POST /api/matching/shortlist endpoint creates application record with stage='shortlisted' and source='ai_screening', with duplicate prevention and proper UI feedback (Feb 8, 2026)
 
 ## Backlog (Prioritized)
 ### P1
