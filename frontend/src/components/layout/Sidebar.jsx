@@ -24,10 +24,12 @@ import {
   CheckCircle,
   DollarSign,
   Upload,
-  History
+  History,
+  Bug
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
+import { ReportIssueDialog } from '../shared/ReportIssueDialog';
 
 const LOGO_URL = 'https://customer-assets.emergentagent.com/job_vhc-edit/artifacts/46yye45w_logo.svg';
 
