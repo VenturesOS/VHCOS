@@ -318,7 +318,6 @@ async def capture_profile(
 @extension_router.get("/stats")
 async def get_extension_stats(current_user: dict = Depends(get_current_user)):
     """Get statistics for extension-captured candidates"""
-    db = get_database()
     
     # Total captured by extension
     total_captured = await db.candidate_bank.count_documents({
