@@ -1368,6 +1368,105 @@ async def get_match_history_detail(
 
 
 
+class ShortlistRequest(BaseModel):
+    candidate_id: str
+    job_id: str
+    notes: Optional[str] = None
+
+
+@applications_router.post("/matching/shortlist")
+async def shortlist_candidate_from_screening(
+    req: ShortlistRequest,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Add a candidate from AI screening to a job's pipeline as a shortlisted applicant.
+    Creates an application record with stage='shortlisted' and source='ai_screening'.
+    """
+    # Validate job exists
+    job = await db.jobs.find_one({"id": req.job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Validate candidate exists in candidate bank
+    candidate = await db.candidate_bank.find_one({"id": req.candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found in candidate bank")
+
+    # Check if already applied/shortlisted for this job
+    existing = await db.applications.find_one({
+        "job_id": req.job_id,
+        "$or": [
+            {"candidate_id": req.candidate_id},
+            {"candidate_email": candidate.get("email", "").lower()},
+        ],
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Candidate already in pipeline for this job (stage: {existing.get('stage', 'unknown')})")
+
+    # Get company name
+    company = await db.companies.find_one({"id": job.get("company_id")}, {"name": 1, "_id": 0})
+    company_name = company.get("name") if company else job.get("company_name", "Unknown")
+
+    app_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    app_doc = {
+        "id": app_id,
+        "job_id": req.job_id,
+        "candidate_id": req.candidate_id,
+        "candidate_name": candidate.get("name", ""),
+        "candidate_email": candidate.get("email", ""),
+        "job_title": job.get("title"),
+        "company_name": company_name,
+        "cover_letter": None,
+        "status": "active",
+        "stage": "shortlisted",
+        "source": "ai_screening",
+        "shortlisted_by": current_user["id"],
+        "shortlisted_by_name": current_user.get("name", ""),
+        "shortlisted_by_role": current_user["role"],
+        "notes": [{"text": req.notes, "by": current_user["name"], "at": now}] if req.notes else [],
+        "edit_history": [],
+        "current_salary": candidate.get("current_salary"),
+        "notice_period": candidate.get("notice_period"),
+        "location": candidate.get("location"),
+        "experience_years": candidate.get("experience_years"),
+        "skills": candidate.get("skills", []),
+        "resume_url": candidate.get("resume_url"),
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    await db.applications.insert_one(app_doc)
+
+    # Increment applicant count on job
+    await db.jobs.update_one({"id": req.job_id}, {"$inc": {"applicant_count": 1}})
+
+    # Add to candidate's application history
+    try:
+        await add_application_to_history(req.candidate_id, {
+            "id": app_id,
+            "job_id": req.job_id,
+            "job_title": job.get("title"),
+            "company_name": company_name,
+            "source": "ai_screening",
+            "stage": "shortlisted",
+            "applied_at": now,
+        })
+    except Exception:
+        pass
+
+    return {
+        "message": "Candidate shortlisted successfully",
+        "application_id": app_id,
+        "candidate_name": candidate.get("name"),
+        "job_title": job.get("title"),
+        "stage": "shortlisted",
+    }
+
+
+
 @applications_router.get("/matching/jobs-for-candidate", response_model=List[JobMatchForCandidate])
 async def get_matching_jobs_for_candidate(
     current_user: dict = Depends(require_role(["candidate"]))
