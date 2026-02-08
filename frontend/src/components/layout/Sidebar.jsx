@@ -147,6 +147,15 @@ export const Sidebar = () => {
         </div>
         <Button
           variant="ghost"
+          className="w-full justify-start text-slate-600 hover:text-amber-600 hover:bg-amber-50 mb-1"
+          onClick={() => setReportOpen(true)}
+          data-testid="report-issue-btn"
+        >
+          <Bug className="w-4 h-4 mr-2" />
+          Report Issue
+        </Button>
+        <Button
+          variant="ghost"
           className="w-full justify-start text-slate-600 hover:text-red-600 hover:bg-red-50"
           onClick={handleLogout}
           data-testid="logout-btn"
@@ -155,6 +164,7 @@ export const Sidebar = () => {
           Logout
         </Button>
       </div>
+      <ReportIssueDialog open={reportOpen} onClose={() => setReportOpen(false)} />
     </>
   );
 
