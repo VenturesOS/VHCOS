@@ -122,21 +122,6 @@ export default function Register() {
                   </button>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">I am a</Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(value) => handleChange('role', value)}
-                  required
-                >
-                  <SelectTrigger data-testid="register-role-select" className="focus:ring-[#7CB342]">
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="candidate">Job Seeker (Candidate)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <Button
                 type="submit"
                 className="w-full bg-[#7CB342] hover:bg-[#689F38] text-white"
