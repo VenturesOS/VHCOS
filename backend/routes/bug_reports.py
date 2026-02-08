@@ -9,7 +9,7 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from config import db
-from routes.auth import require_role
+from utils import require_role
 
 logger = logging.getLogger(__name__)
 
