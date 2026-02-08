@@ -48,6 +48,7 @@ const navItems = {
     { icon: DollarSign, label: 'Commercials', path: '/admin/commercials' },
     { icon: UsersRound, label: 'Teams', path: '/admin/teams' },
     { icon: Network, label: 'Hierarchy', path: '/admin/hierarchy' },
+    { icon: Bug, label: 'Bug Reports', path: '/admin/bug-reports' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
   recruiter: [
