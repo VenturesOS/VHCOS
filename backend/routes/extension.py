@@ -10,7 +10,7 @@ import uuid
 import logging
 
 from utils.auth import get_current_user
-from config import get_database
+from config import db
 
 logger = logging.getLogger(__name__)
 
