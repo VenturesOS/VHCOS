@@ -230,7 +230,7 @@
       if (el) {
         const name = cleanText(el.textContent);
         if (name && name.length > 2 && name.length < 60 && !/profile.*found|search|resdex/i.test(name)) {
-          console.log('[VHC Extension v3.1] Found name from breadcrumb selector:', name);
+          console.log('[VHC Extension v3.2] Found name from breadcrumb selector:', name);
           return name;
         }
       }
@@ -247,7 +247,7 @@
         while (sibling) {
           const name = cleanText(sibling.textContent);
           if (name && name.length > 2 && name.length < 60 && !/profile|found|search/i.test(name)) {
-            console.log('[VHC Extension v3.1] Found name from breadcrumb (next to "profile found"):', name);
+            console.log('[VHC Extension v3.2] Found name from breadcrumb (next to "profile found"):', name);
             return name;
           }
           sibling = sibling.nextElementSibling;
@@ -260,7 +260,7 @@
           for (let i = idx + 1; i < children.length; i++) {
             const name = cleanText(children[i].textContent);
             if (name && name.length > 2 && name.length < 60 && !/profile|found|search/i.test(name)) {
-              console.log('[VHC Extension v3.1] Found name from breadcrumb (parent child):', name);
+              console.log('[VHC Extension v3.2] Found name from breadcrumb (parent child):', name);
               return name;
             }
           }
@@ -275,7 +275,7 @@
       if (rect.top < 150 && rect.top > 50 && !isInSidebar(el)) {
         const name = cleanText(el.textContent);
         if (name && name.length > 2 && name.length < 60 && !/profile|found|search|resdex|naukri|print|report/i.test(name)) {
-          console.log('[VHC Extension v3.1] Found name from top bold element:', name);
+          console.log('[VHC Extension v3.2] Found name from top bold element:', name);
           return name;
         }
       }
@@ -289,7 +289,7 @@
       titleText = titleText.replace(/\s*on\s+Naukri.*$/i, '').trim();
       if (titleText && titleText.length > 2 && titleText.length < 60 &&
           !/naukri|resdex|search|recruiter|login|home/i.test(titleText)) {
-        console.log('[VHC Extension v3.1] Found name from page title:', titleText);
+        console.log('[VHC Extension v3.2] Found name from page title:', titleText);
         return titleText;
       }
     }
@@ -308,14 +308,14 @@
         const name = cleanText(el.textContent);
         if (name && name.length > 2 && name.length < 60 && 
             !/company|org|employer|add to|send|save|forward|schedule|comment|view/i.test(name)) {
-          console.log('[VHC Extension v3.1] Found name from left-positioned element:', name, 
+          console.log('[VHC Extension v3.2] Found name from left-positioned element:', name, 
                       `(x:${Math.round(rect.left)}, y:${Math.round(rect.top)}, w:${Math.round(rect.width)})`);
           return name;
         }
       }
     }
 
-    console.log('[VHC Extension v3.1] WARNING: Could not find candidate name');
+    console.log('[VHC Extension v3.2] WARNING: Could not find candidate name');
     return null;
   }
 
@@ -334,7 +334,7 @@
       if (isInSidebar(link)) continue;
       const email = link.href.replace('mailto:', '').trim().toLowerCase();
       if (email.includes('@') && !email.includes('naukri.com') && !email.includes('@vhc.in')) {
-        console.log('[VHC Extension v3.1] Found email from mailto:', email);
+        console.log('[VHC Extension v3.2] Found email from mailto:', email);
         return email;
       }
     }
@@ -343,7 +343,7 @@
       if (isInSidebar(el)) continue;
       const m = el.textContent.match(/[\w.-]+@[\w.-]+\.\w+/);
       if (m && !m[0].includes('naukri.com')) {
-        console.log('[VHC Extension v3.1] Found email from element:', m[0]);
+        console.log('[VHC Extension v3.2] Found email from element:', m[0]);
         return m[0].toLowerCase();
       }
     }
@@ -353,12 +353,12 @@
     if (matches) {
       for (const email of matches) {
         if (!email.includes('naukri.com') && !email.includes('@vhc.in')) {
-          console.log('[VHC Extension v3.1] Found email from text:', email);
+          console.log('[VHC Extension v3.2] Found email from text:', email);
           return email.toLowerCase();
         }
       }
     }
-    console.log('[VHC Extension v3.1] Could not find email');
+    console.log('[VHC Extension v3.2] Could not find email');
     return null;
   }
 
@@ -369,11 +369,11 @@
       const text = el.href ? el.href.replace('tel:', '') : el.textContent;
       const m = text.match(/(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
       if (m) {
-        console.log('[VHC Extension v3.1] Found phone:', m[0]);
+        console.log('[VHC Extension v3.2] Found phone:', m[0]);
         return m[0].replace(/[\s-]/g, '');
       }
     }
-    console.log('[VHC Extension v3.1] Could not find phone');
+    console.log('[VHC Extension v3.2] Could not find phone');
     return null;
   }
 
@@ -385,7 +385,7 @@
       // Profile photo is usually 60-200px, in the left portion, top area
       if (rect.width >= 50 && rect.width <= 250 && rect.top < 600 && rect.left < window.innerWidth * 0.5) {
         if (img.src && !img.src.includes('logo') && !img.src.includes('icon') && !img.src.includes('sprite')) {
-          console.log('[VHC Extension v3.1] Found photo URL');
+          console.log('[VHC Extension v3.2] Found photo URL');
           return img.src;
         }
       }
@@ -402,7 +402,7 @@
     if (currentMatch) {
       result.designation = cleanText(currentMatch[1]);
       result.company = cleanText(currentMatch[2]);
-      console.log('[VHC Extension v3.1] Found current role:', result.designation, 'at', result.company);
+      console.log('[VHC Extension v3.2] Found current role:', result.designation, 'at', result.company);
     }
 
     // Fallback: separate patterns
@@ -441,7 +441,7 @@
       if (m) {
         let years = parseFloat(m[1]);
         if (m[2]) years += parseInt(m[2]) / 12;
-        console.log('[VHC Extension v3.1] Found experience:', years, 'years');
+        console.log('[VHC Extension v3.2] Found experience:', years, 'years');
         return years;
       }
     }
@@ -460,7 +460,7 @@
       const m = mainText.match(p);
       if (m) {
         const salary = Math.round(parseFloat(m[1]) * 100000);
-        console.log('[VHC Extension v3.1] Found salary:', salary);
+        console.log('[VHC Extension v3.2] Found salary:', salary);
         return salary;
       }
     }
@@ -473,7 +473,7 @@
     // Look for "Pref. location   CityName" pattern
     const prefLocMatch = mainText.match(/Pref\.?\s*location\s+([A-Za-z\s,]+?)(?:\n|$)/i);
     if (prefLocMatch) {
-      console.log('[VHC Extension v3.1] Found preferred location:', prefLocMatch[1]);
+      console.log('[VHC Extension v3.2] Found preferred location:', prefLocMatch[1]);
       return cleanText(prefLocMatch[1]);
     }
     // Try general location pattern
@@ -481,7 +481,7 @@
     if (locEl) {
       const loc = cleanText(locEl.textContent);
       if (loc && loc.length < 50) {
-        console.log('[VHC Extension v3.1] Found location from element:', loc);
+        console.log('[VHC Extension v3.2] Found location from element:', loc);
         return loc;
       }
     }
@@ -493,7 +493,7 @@
     const m = mainText.match(/(\d+)\s*(?:Month|Months?)\s*(?:notice)?/i);
     if (m) {
       const notice = `${m[1]} Month${parseInt(m[1]) > 1 ? 's' : ''}`;
-      console.log('[VHC Extension v3.1] Found notice:', notice);
+      console.log('[VHC Extension v3.2] Found notice:', notice);
       return notice;
     }
     if (/immediate/i.test(mainText)) return 'Immediate';
@@ -505,7 +505,7 @@
     // From screenshot: "Highest degree  Bachelor of Elementary Education (B.El.Ed) Sree Sasth..."
     const m = mainText.match(/Highest\s*degree\s+(.+?)(?:\n|$)/i);
     if (m) {
-      console.log('[VHC Extension v3.1] Found highest degree:', m[1].substring(0, 60));
+      console.log('[VHC Extension v3.2] Found highest degree:', m[1].substring(0, 60));
       return cleanText(m[1]);
     }
     return null;
@@ -526,7 +526,7 @@
     // Also look for pipe-separated skills in the main text (common Naukri format)
     // From sidebar screenshot: "Email | Cold Calling | Customer Relationship..."
     // But this is the SIDEBAR data — we must avoid it
-    console.log('[VHC Extension v3.1] Found skills:', skills.size);
+    console.log('[VHC Extension v3.2] Found skills:', skills.size);
     return [...skills];
   }
 
@@ -672,16 +672,16 @@
   // ===================== MAIN SCRAPING FUNCTION =====================
 
   async function scrapeProfileData() {
-    console.log('[VHC Extension v3.1] Scraping profile data from MAIN profile area...');
+    console.log('[VHC Extension v3.2] Scraping profile data from MAIN profile area...');
 
     // Log what container we're using
     const container = getMainContainer();
-    console.log('[VHC Extension v3.1] Main container:', container.id || container.tagName, 
+    console.log('[VHC Extension v3.2] Main container:', container.id || container.tagName, 
                 'width:', container.offsetWidth);
 
     // Log sidebar detection
     const sidebar = getSidebarContainer();
-    console.log('[VHC Extension v3.1] Sidebar container found:', !!sidebar);
+    console.log('[VHC Extension v3.2] Sidebar container found:', !!sidebar);
 
     const name = extractName();
     const nameParts = splitName(name);
@@ -732,15 +732,15 @@
     const highest = extractHighestDegree();
     if (highest) data.highest_qualification = highest;
 
-    console.log('[VHC Extension v3.1] === EXTRACTION RESULT ===');
-    console.log('[VHC Extension v3.1] Name:', data.name);
-    console.log('[VHC Extension v3.1] Email:', data.email);
-    console.log('[VHC Extension v3.1] Phone:', data.phone);
-    console.log('[VHC Extension v3.1] Company:', data.current_company);
-    console.log('[VHC Extension v3.1] Designation:', data.current_designation);
-    console.log('[VHC Extension v3.1] Experience:', data.total_experience_years);
-    console.log('[VHC Extension v3.1] Skills:', data.key_skills?.length);
-    console.log('[VHC Extension v3.1] ========================');
+    console.log('[VHC Extension v3.2] === EXTRACTION RESULT ===');
+    console.log('[VHC Extension v3.2] Name:', data.name);
+    console.log('[VHC Extension v3.2] Email:', data.email);
+    console.log('[VHC Extension v3.2] Phone:', data.phone);
+    console.log('[VHC Extension v3.2] Company:', data.current_company);
+    console.log('[VHC Extension v3.2] Designation:', data.current_designation);
+    console.log('[VHC Extension v3.2] Experience:', data.total_experience_years);
+    console.log('[VHC Extension v3.2] Skills:', data.key_skills?.length);
+    console.log('[VHC Extension v3.2] ========================');
 
     return data;
   }
@@ -755,7 +755,7 @@
   }
 
   async function scrollToLoadContent() {
-    console.log('[VHC Extension v3.1] Scrolling to load content...');
+    console.log('[VHC Extension v3.2] Scrolling to load content...');
     const scrollHeight = document.documentElement.scrollHeight;
     const viewportHeight = window.innerHeight;
     let pos = 0;
@@ -766,14 +766,14 @@
     }
     window.scrollTo(0, 0);
     await sleep(500);
-    console.log('[VHC Extension v3.1] Scroll complete');
+    console.log('[VHC Extension v3.2] Scroll complete');
   }
 
   async function manualCapture() {
     if (isCapturing) return { success: false, error: 'Capture already in progress' };
     if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context invalidated. Refresh page.' }; }
     isCapturing = true;
-    console.log('[VHC Extension v3.1] Manual capture triggered');
+    console.log('[VHC Extension v3.2] Manual capture triggered');
     try {
       const auth = await getAuthToken();
       if (!auth) return { success: false, error: 'Not logged in. Login via extension popup.' };
@@ -807,7 +807,7 @@
     if (isCapturing || lastCapturedUrl === window.location.href) return;
     if (!isExtensionValid()) return;
     isCapturing = true;
-    console.log('[VHC Extension v3.1] Starting auto-capture...');
+    console.log('[VHC Extension v3.2] Starting auto-capture...');
     try {
       const profileData = await scrapeProfileData();
       if (!profileData || !profileData.name) return;
@@ -823,7 +823,7 @@
       }
     } catch (error) {
       if (!error.message?.includes('Extension context invalidated')) {
-        console.error('[VHC Extension v3.1] Auto-capture error:', error);
+        console.error('[VHC Extension v3.2] Auto-capture error:', error);
       }
     } finally {
       isCapturing = false;
@@ -902,13 +902,13 @@
   // ===================== INIT =====================
 
   async function init() {
-    console.log('[VHC Extension v3.1] Initializing...');
+    console.log('[VHC Extension v3.2] Initializing...');
     addFloatingButton();
     const settings = await getSettings();
     if (!settings.enabled) return;
     const auth = await getAuthToken();
-    if (!auth) { console.log('[VHC Extension v3.1] Not authenticated, skipping auto-capture'); return; }
-    if (!isProfilePage()) { console.log('[VHC Extension v3.1] Not a profile page, skipping'); return; }
+    if (!auth) { console.log('[VHC Extension v3.2] Not authenticated, skipping auto-capture'); return; }
+    if (!isProfilePage()) { console.log('[VHC Extension v3.2] Not a profile page, skipping'); return; }
     if (document.readyState !== 'complete') await new Promise(r => window.addEventListener('load', r));
     await scrollToLoadContent();
     setTimeout(() => captureProfile(), CONFIG.CAPTURE_DELAY);
