@@ -109,6 +109,7 @@ function App() {
             <Route path="import-history" element={<ImportHistoryPage />} />
             <Route path="bug-reports" element={<BugReportsPage />} />
             <Route path="system-health" element={<SystemHealthPage />} />
+            <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
           {/* Recruiter Routes */}
