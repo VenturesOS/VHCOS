@@ -950,17 +950,34 @@
   // ===================== HELPERS =====================
 
   async function getSettings() {
-    return new Promise(resolve => {
-      chrome.storage.sync.get({ enabled: true, showNotifications: true, autoCapture: true }, resolve);
-    });
+    if (!isExtensionValid()) return { enabled: true, showNotifications: true, autoCapture: true };
+    try {
+      return await new Promise((resolve, reject) => {
+        chrome.storage.sync.get({ enabled: true, showNotifications: true, autoCapture: true }, (result) => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(result);
+        });
+      });
+    } catch (e) {
+      console.warn('[VHC Extension] getSettings failed:', e.message);
+      return { enabled: true, showNotifications: true, autoCapture: true };
+    }
   }
 
   async function getAuthToken() {
-    return new Promise(resolve => {
-      chrome.storage.sync.get(['vhc_token', 'vhc_api_url'], (result) => {
-        resolve(result.vhc_token && result.vhc_api_url ? { token: result.vhc_token, apiUrl: result.vhc_api_url } : null);
+    if (!isExtensionValid()) { handleInvalidContext(); return null; }
+    try {
+      return await new Promise((resolve, reject) => {
+        chrome.storage.sync.get(['vhc_token', 'vhc_api_url'], (result) => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(result.vhc_token && result.vhc_api_url ? { token: result.vhc_token, apiUrl: result.vhc_api_url } : null);
+        });
       });
-    });
+    } catch (e) {
+      console.warn('[VHC Extension] getAuthToken failed:', e.message);
+      handleInvalidContext();
+      return null;
+    }
   }
 
   // ===================== INIT =====================
