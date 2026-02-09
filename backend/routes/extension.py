@@ -552,7 +552,7 @@ def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: 
         "photo_url": profile.photo_url,
         
         # === CONTACT ===
-        "email": profile.email.lower() if profile.email else f"naukri_{candidate_id[:8]}@placeholder.com",
+        "email": profile.email.lower() if profile.email else None,
         "alternate_email": profile.alternate_email,
         "phone": profile.phone,
         "phone_normalized": normalize_phone(profile.phone) if profile.phone else None,
