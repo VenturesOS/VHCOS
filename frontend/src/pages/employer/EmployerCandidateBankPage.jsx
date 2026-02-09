@@ -333,6 +333,24 @@ export default function EmployerCandidateBankPage() {
                           <Download className="w-4 h-4" />
                         </Button>
                       )}
+                      {/* Naukri source badge + view full profile */}
+                      {candidate.source === 'naukri_extension' && (
+                        <>
+                          <span className="px-2 py-1 text-xs rounded-full font-medium bg-orange-50 text-orange-600">Naukri</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`naukri-profile/${candidate.id}`);
+                            }}
+                            className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                            data-testid={`view-naukri-profile-${candidate.id}`}
+                          >
+                            <FileText className="w-4 h-4 mr-1" /> Full Profile
+                          </Button>
+                        </>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
