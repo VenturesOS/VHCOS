@@ -47,7 +47,6 @@
    * KEY FIX: Use innerText directly on the live DOM element (not a clone).
    */
   function getRawPageText() {
-    // Strategy: Get text from body and intelligently strip header/nav/footer
     let text = '';
     
     // Try #cap-container first
@@ -57,7 +56,7 @@
       console.log(`[VHC v${VERSION}] Text from #cap-container: ${text.length} chars`);
     }
     
-    // If #cap-container is empty or too short, use body
+    // If too short, use body
     if (text.length < 200) {
       text = document.body.innerText || '';
       console.log(`[VHC v${VERSION}] Text from body: ${text.length} chars`);
@@ -65,32 +64,16 @@
     
     if (text.length < 50) return text;
     
-    // Strip common nav/header text that appears at the top of Naukri pages
-    // These are navigation items before the actual profile content
-    const navPatterns = [
-      /^.*?(Jobs\s*&\s*Responses|Resdex|Reports|My\s*Naukri).*?\n/gim,
-    ];
-    
-    // Find where the actual profile content starts
-    // Profile usually starts after breadcrumb "N profile found" or with the candidate name
+    // Find where profile content starts (skip nav)
     const profileStart = text.search(/\d+\s*profile[s]?\s*found/i);
     if (profileStart > 0 && profileStart < 500) {
       text = text.substring(profileStart);
-      console.log(`[VHC v${VERSION}] Trimmed header, starting from "profile found": ${text.length} chars`);
     }
     
-    // Trim sidebar content: "AI matched similar profiles" and everything after
-    const sidebarIdx = text.search(/AI\s*matched\s*similar\s*profiles/i);
-    if (sidebarIdx > 200) {
-      text = text.substring(0, sidebarIdx);
-      console.log(`[VHC v${VERSION}] Trimmed sidebar at pos ${sidebarIdx}: ${text.length} chars`);
-    }
-    
-    // Also trim "No comments" / "Add comments" section and everything after
-    const commentIdx = text.search(/No\s*comments|Add\s*comment/i);
-    if (commentIdx > 200) {
-      text = text.substring(0, commentIdx);
-    }
+    // DO NOT trim at "AI matched similar profiles" — the CV preview with 
+    // email/phone appears AFTER the main profile but BEFORE or MIXED with sidebar.
+    // Instead, we keep everything and let AI sort it out.
+    // AI prompt already instructs to extract from the candidate's own data only.
     
     return text.trim();
   }
