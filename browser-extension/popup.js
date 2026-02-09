@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loginBtn = document.getElementById('loginBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const loginError = document.getElementById('loginError');
+  const manualCaptureBtn = document.getElementById('manualCaptureBtn');
+  const captureStatus = document.getElementById('captureStatus');
+  const statusDot = document.getElementById('statusDot');
+  const pageStatusText = document.getElementById('pageStatusText');
   
   // Check auth status
   const authStatus = await chrome.runtime.sendMessage({ action: 'checkAuth' });
@@ -56,6 +60,59 @@ document.addEventListener('DOMContentLoaded', async () => {
   logoutBtn.addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ action: 'logout' });
     showLogin();
+  });
+  
+  // Manual capture handler
+  manualCaptureBtn.addEventListener('click', async () => {
+    manualCaptureBtn.disabled = true;
+    manualCaptureBtn.innerHTML = '<span class="loading"></span> Capturing...';
+    showCaptureStatus('info', 'Sending capture request to active tab...');
+    
+    try {
+      // Get the active tab
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab) {
+        showCaptureStatus('error', 'No active tab found');
+        return;
+      }
+      
+      // Check if it's a Naukri page
+      if (!tab.url.includes('naukri.com')) {
+        showCaptureStatus('error', 'Not a Naukri page. Please open a Naukri profile.');
+        return;
+      }
+      
+      // Send message to content script to capture
+      const response = await chrome.tabs.sendMessage(tab.id, { action: 'manualCapture' });
+      
+      if (response && response.success) {
+        if (response.action === 'created') {
+          showCaptureStatus('success', `✅ ${response.name || 'Profile'} added to VHC!`);
+        } else if (response.action === 'updated') {
+          showCaptureStatus('success', `🔄 ${response.name || 'Profile'} updated!`);
+        } else if (response.action === 'exists') {
+          showCaptureStatus('info', `ℹ️ ${response.name || 'Profile'} already up-to-date`);
+        } else if (response.action === 'queued') {
+          showCaptureStatus('info', `📥 ${response.name || 'Profile'} queued for sync`);
+        }
+        // Refresh stats
+        loadStats();
+      } else {
+        showCaptureStatus('error', response?.error || 'Capture failed. Check if profile data is visible.');
+      }
+      
+    } catch (error) {
+      console.error('Manual capture error:', error);
+      if (error.message.includes('Receiving end does not exist')) {
+        showCaptureStatus('error', 'Extension not active on this page. Please refresh the Naukri page.');
+      } else {
+        showCaptureStatus('error', `Error: ${error.message}`);
+      }
+    } finally {
+      manualCaptureBtn.disabled = false;
+      manualCaptureBtn.textContent = 'Capture This Profile';
+    }
   });
   
   // Settings handlers
@@ -114,6 +171,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         queueStatus.classList.remove('visible');
       }
     });
+    
+    // Check current page status
+    checkPageStatus();
+  }
+  
+  async function checkPageStatus() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab || !tab.url) {
+        setPageStatus('gray', 'Unknown page');
+        return;
+      }
+      
+      if (tab.url.includes('naukri.com')) {
+        if (tab.url.includes('/profile') || tab.url.includes('viewResume') || 
+            tab.url.includes('view-resume') || tab.url.includes('cvPreview')) {
+          setPageStatus('green', '✓ Naukri profile page detected');
+          manualCaptureBtn.disabled = false;
+        } else {
+          setPageStatus('yellow', 'Naukri page (not a profile)');
+          manualCaptureBtn.disabled = true;
+        }
+      } else {
+        setPageStatus('gray', 'Not a Naukri page');
+        manualCaptureBtn.disabled = true;
+      }
+    } catch (error) {
+      setPageStatus('red', 'Error checking page');
+    }
+  }
+  
+  function setPageStatus(color, text) {
+    statusDot.className = `status-dot ${color}`;
+    pageStatusText.textContent = text;
   }
   
   async function loadStats() {
@@ -131,5 +223,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => {
       loginError.style.display = 'none';
     }, 5000);
+  }
+  
+  function showCaptureStatus(type, message) {
+    captureStatus.textContent = message;
+    captureStatus.className = `capture-status visible ${type}`;
+    
+    // Auto-hide after 10 seconds for success/info
+    if (type !== 'error') {
+      setTimeout(() => {
+        captureStatus.classList.remove('visible');
+      }, 10000);
+    }
   }
 });
