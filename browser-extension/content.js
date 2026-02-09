@@ -47,37 +47,52 @@
    * KEY FIX: Use innerText directly on the live DOM element (not a clone).
    */
   function getRawPageText() {
-    // First, try to get text from #cap-container (Naukri's main content)
-    const container = document.getElementById('cap-container') || document.getElementById('rdxRoot');
+    // Strategy: Get text from body and intelligently strip header/nav/footer
+    let text = '';
     
+    // Try #cap-container first
+    const container = document.getElementById('cap-container');
     if (container) {
-      // Get the raw innerText — this works on the live DOM
-      let text = container.innerText || '';
-      console.log(`[VHC v${VERSION}] Text from #${container.id}: ${text.length} chars`);
-      
-      if (text.length > 100) {
-        // Remove any obvious sidebar content
-        // The sidebar "AI matched similar profiles" text usually appears after the main profile
-        const sidebarIdx = text.search(/AI\s*matched\s*similar\s*profiles/i);
-        if (sidebarIdx > 0) {
-          text = text.substring(0, sidebarIdx);
-          console.log(`[VHC v${VERSION}] Trimmed sidebar, text now: ${text.length} chars`);
-        }
-        return text;
-      }
-    }
-
-    // Fallback: Get text from body, strip nav/footer
-    let bodyText = document.body.innerText || '';
-    console.log(`[VHC v${VERSION}] Text from body: ${bodyText.length} chars`);
-    
-    // Try to trim sidebar
-    const sidebarIdx = bodyText.search(/AI\s*matched\s*similar\s*profiles/i);
-    if (sidebarIdx > 0) {
-      bodyText = bodyText.substring(0, sidebarIdx);
+      text = container.innerText || '';
+      console.log(`[VHC v${VERSION}] Text from #cap-container: ${text.length} chars`);
     }
     
-    return bodyText;
+    // If #cap-container is empty or too short, use body
+    if (text.length < 200) {
+      text = document.body.innerText || '';
+      console.log(`[VHC v${VERSION}] Text from body: ${text.length} chars`);
+    }
+    
+    if (text.length < 50) return text;
+    
+    // Strip common nav/header text that appears at the top of Naukri pages
+    // These are navigation items before the actual profile content
+    const navPatterns = [
+      /^.*?(Jobs\s*&\s*Responses|Resdex|Reports|My\s*Naukri).*?\n/gim,
+    ];
+    
+    // Find where the actual profile content starts
+    // Profile usually starts after breadcrumb "N profile found" or with the candidate name
+    const profileStart = text.search(/\d+\s*profile[s]?\s*found/i);
+    if (profileStart > 0 && profileStart < 500) {
+      text = text.substring(profileStart);
+      console.log(`[VHC v${VERSION}] Trimmed header, starting from "profile found": ${text.length} chars`);
+    }
+    
+    // Trim sidebar content: "AI matched similar profiles" and everything after
+    const sidebarIdx = text.search(/AI\s*matched\s*similar\s*profiles/i);
+    if (sidebarIdx > 200) {
+      text = text.substring(0, sidebarIdx);
+      console.log(`[VHC v${VERSION}] Trimmed sidebar at pos ${sidebarIdx}: ${text.length} chars`);
+    }
+    
+    // Also trim "No comments" / "Add comments" section and everything after
+    const commentIdx = text.search(/No\s*comments|Add\s*comment/i);
+    if (commentIdx > 200) {
+      text = text.substring(0, commentIdx);
+    }
+    
+    return text.trim();
   }
 
   function extractNaukriProfileId() {
