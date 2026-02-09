@@ -141,6 +141,7 @@ function App() {
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
             <Route path="candidate-bank" element={<EmployerCandidateBankPage />} />
+            <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
           {/* Candidate Routes */}
