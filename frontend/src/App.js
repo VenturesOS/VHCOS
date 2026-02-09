@@ -53,6 +53,7 @@ import JobApplicantsPage from "./pages/employer/JobApplicantsPage";
 import AnalyticsPage from "./pages/employer/AnalyticsPage";
 import FindCandidatesPage from "./pages/employer/FindCandidatesPage";
 import MatchHistoryPage from "./pages/shared/MatchHistoryPage";
+import NaukriProfileView from "./pages/shared/NaukriProfileView";
 import BugReportsPage from "./pages/admin/BugReportsPage";
 import SystemHealthPage from "./pages/admin/SystemHealthPage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
