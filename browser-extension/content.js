@@ -272,19 +272,40 @@
       education: capturePayload.education?.length,
     });
 
-    // Step 4: Send to capture endpoint via background script
-    if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Context lost.' }; }
+    // Step 4: Send to capture endpoint DIRECTLY (not via background script)
+    // This avoids service worker termination issues in Manifest V3
+    console.log(`[VHC v${VERSION}] Sending capture directly to API...`);
     
-    const response = await chrome.runtime.sendMessage({ action: 'captureProfile', data: capturePayload });
-    
-    if (response?.success) {
+    try {
+      const captureResponse = await fetch(`${auth.apiUrl}/api/extension/capture`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth.token}`
+        },
+        body: JSON.stringify(capturePayload)
+      });
+
+      if (!captureResponse.ok) {
+        const errorData = await captureResponse.json().catch(() => ({}));
+        const errorMsg = errorData.detail || `HTTP ${captureResponse.status}`;
+        console.error(`[VHC v${VERSION}] Capture API error:`, errorMsg);
+        if (isManual) showToast(`Error: ${errorMsg}`, 'error');
+        return { success: false, error: errorMsg };
+      }
+
+      const result = await captureResponse.json();
+      console.log(`[VHC v${VERSION}] Capture result:`, result);
+      
       lastCapturedUrl = window.location.href;
       const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'up-to-date' };
-      if (isManual) showToast(`${capturePayload.name} ${msgs[response.action] || 'captured'}`, 'success');
-      return { success: true, action: response.action, name: capturePayload.name };
+      if (isManual) showToast(`${capturePayload.name} ${msgs[result.action] || 'captured'}`, 'success');
+      return { success: true, action: result.action, name: capturePayload.name };
+    } catch (captureError) {
+      console.error(`[VHC v${VERSION}] Capture fetch error:`, captureError);
+      if (isManual) showToast(`Capture failed: ${captureError.message}`, 'error');
+      return { success: false, error: captureError.message };
     }
-
-    return { success: false, error: response?.error || 'Capture failed' };
   }
 
   async function manualCapture() {
