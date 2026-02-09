@@ -165,27 +165,47 @@
     console.log(`[VHC v${VERSION}] Sending ${rawText.length} chars to AI extraction...`);
 
     let aiResult;
-    try {
-      const aiResponse = await fetch(`${auth.apiUrl}/api/extension/ai-extract`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${auth.token}`
-        },
-        body: JSON.stringify({
-          raw_text: rawText.substring(0, 15000),
-          page_url: window.location.href,
-          page_title: document.title,
-          naukri_profile_id: naukriId
-        })
-      });
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`[VHC v${VERSION}] Retry attempt ${attempt}...`);
+          await sleep(2000 * attempt); // Wait 2s, 4s between retries
+        }
+        const aiResponse = await fetch(`${auth.apiUrl}/api/extension/ai-extract`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${auth.token}`
+          },
+          body: JSON.stringify({
+            raw_text: rawText.substring(0, 15000),
+            page_url: window.location.href,
+            page_title: document.title,
+            naukri_profile_id: naukriId
+          })
+        });
 
-      aiResult = await aiResponse.json();
-      console.log(`[VHC v${VERSION}] AI extraction result:`, aiResult.success ? 'SUCCESS' : 'FAILED', aiResult.error || '');
-    } catch (e) {
-      console.error(`[VHC v${VERSION}] AI extraction error:`, e);
-      return { success: false, error: `AI extraction failed: ${e.message}` };
+        aiResult = await aiResponse.json();
+        
+        if (aiResult.success) break; // Success, exit retry loop
+        
+        // If rate limited, retry
+        if (aiResult.error && (aiResult.error.includes('429') || aiResult.error.includes('rate'))) {
+          console.log(`[VHC v${VERSION}] Rate limited, will retry...`);
+          continue;
+        }
+        break; // Other error, don't retry
+        
+      } catch (e) {
+        console.error(`[VHC v${VERSION}] AI extraction error (attempt ${attempt}):`, e);
+        if (attempt === maxRetries) {
+          return { success: false, error: `AI extraction failed: ${e.message}` };
+        }
+      }
     }
+    
+    console.log(`[VHC v${VERSION}] AI extraction result:`, aiResult?.success ? 'SUCCESS' : 'FAILED', aiResult?.error || '');
 
     if (!aiResult.success || !aiResult.profile_data) {
       return { success: false, error: aiResult.error || 'AI extraction returned no data' };
