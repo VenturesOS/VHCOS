@@ -51,21 +51,86 @@
 
   function isInSidebar(element) {
     if (!element) return false;
-    const patterns = [
+    // Comprehensive sidebar/related patterns for Naukri Resdex
+    const sidebarPatterns = [
       'sidebar', 'rightsec', 'similar', 'matched', 'recommendation',
       'aimatched', 'recruitersviewed', 'rightsection', 'comment',
-      'relatedprofile', 'othercandidate'
+      'relatedprofile', 'othercandidate', 'right-section', 'right_section',
+      'suggestedprofile', 'suggested-profile', 'matchedprofile',
+      'sidematch', 'rightpanel', 'right-panel', 'aside', 'sidecard',
+      'similarcandidate', 'similar-candidate', 'otherprofile',
+      'rightcol', 'right-col', 'rightcolumn', 'right-column',
+      'rhs', 'rhspanel', 'rhs-panel', 'recommendedprofile',
+      'morelike', 'more-like', 'viewsimilar', 'view-similar',
+      'profileflyout', 'profile-flyout', 'flyout', 'miniprofile',
+      'mini-profile', 'quickview', 'quick-view', 'preview-card',
+      'previewcard', 'hoverpanel', 'hover-panel', 'tooltip-profile'
     ];
     let parent = element;
-    while (parent && parent !== document.body) {
-      const cls = (parent.className || '').toLowerCase();
+    let depth = 0;
+    while (parent && parent !== document.body && depth < 20) {
+      const cls = (parent.className || '').toString().toLowerCase();
       const id = (parent.id || '').toLowerCase();
-      for (const p of patterns) {
+      const role = (parent.getAttribute('role') || '').toLowerCase();
+      const tag = parent.tagName?.toLowerCase();
+      
+      // Check tag
+      if (tag === 'aside') return true;
+      
+      // Check ARIA role
+      if (role === 'complementary' || role === 'tooltip') return true;
+      
+      // Check patterns
+      for (const p of sidebarPatterns) {
         if (cls.includes(p) || id.includes(p)) return true;
       }
+      
+      // Check data attributes
+      const dataSection = (parent.getAttribute('data-section') || '').toLowerCase();
+      if (dataSection.includes('similar') || dataSection.includes('recommend') || dataSection.includes('right')) return true;
+      
       parent = parent.parentElement;
+      depth++;
     }
     return false;
+  }
+
+  /**
+   * Find the main profile container — the largest content area that is NOT a sidebar.
+   * Strategy: Look for known main-content selectors, then fall back to the widest element.
+   */
+  function getMainContainer() {
+    // Priority 1: Known Naukri main content selectors
+    const mainSelectors = [
+      '#root > div > div:not([class*="right"]):not([class*="sidebar"])',
+      '.leftSection', '.left-section', '.mainContent', '.main-content',
+      '.profileContent', '.profile-content', '.profileDetail', '.profile-detail',
+      '.leftSec', '.left_sec', '.leftCol', '.left-col', '.leftColumn',
+      '.candidateProfile', '.candidate-profile', '.resumeDetail', '.resume-detail',
+      'main', 'article', '[role="main"]',
+      '.contentArea', '.content-area', '.primaryContent', '.primary-content'
+    ];
+    for (const sel of mainSelectors) {
+      const el = document.querySelector(sel);
+      if (el && !isInSidebar(el) && el.offsetWidth > 400) return el;
+    }
+    
+    // Priority 2: Find the largest non-sidebar direct child of root/body
+    const rootEl = document.querySelector('#root, #app, .app') || document.body;
+    const children = rootEl.querySelectorAll(':scope > div > div, :scope > div');
+    let best = null;
+    let bestWidth = 0;
+    for (const child of children) {
+      if (isInSidebar(child)) continue;
+      const w = child.offsetWidth;
+      if (w > bestWidth && w > 300) {
+        bestWidth = w;
+        best = child;
+      }
+    }
+    if (best) return best;
+    
+    return document.body;
   }
 
   function isUserOwnContact(email) {
