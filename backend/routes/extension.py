@@ -612,9 +612,20 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
         "last_updated_by": user["id"],
         
         # Always update Naukri metadata
+        "naukri_profile_id": profile.naukri_profile_id,
         "naukri_profile_url": profile.naukri_profile_url,
         "naukri_profile_updated": profile.profile_last_updated,
         "naukri_last_active": profile.last_active,
+        
+        # Track source — mark as naukri if captured via extension
+        "source": "naukri_extension",
+        "source_details": {
+            "captured_by": user["id"],
+            "captured_by_name": user.get("name", user.get("email")),
+            "captured_by_role": user.get("role"),
+            "captured_at": profile.scraped_at,
+            "extension_version": "2.0.0"
+        },
     }
     
     # Update ALL fields if they have values
