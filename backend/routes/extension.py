@@ -302,6 +302,15 @@ async def capture_profile(
             {"_id": 0}
         )
     
+    # If not found, try exact name match (case-insensitive) for naukri-sourced candidates
+    if not existing and profile.name:
+        import re
+        name_regex = re.compile(f"^{re.escape(profile.name.strip())}$", re.IGNORECASE)
+        existing = await db.candidate_bank.find_one(
+            {"name": name_regex, "source": "naukri_extension"},
+            {"_id": 0}
+        )
+    
     if existing:
         # Update existing record
         update_data = build_complete_update(profile, current_user, now)
