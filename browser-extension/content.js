@@ -189,12 +189,13 @@
    */
   function findSection(headingTexts) {
     if (!Array.isArray(headingTexts)) headingTexts = [headingTexts];
-    const headings = qsaMain('h2, h3, h4, .sectionTitle, [class*="sectionTitle"], [class*="SectionTitle"], .heading, [class*="heading"]');
+    const main = getMainContainer();
+    const headings = main.querySelectorAll('h2, h3, h4, .sectionTitle, [class*="sectionTitle"], [class*="SectionTitle"], .heading, [class*="heading"], [class*="Heading"]');
     for (const h of headings) {
+      if (isInSidebar(h)) continue;
       const hText = (h.textContent || '').trim().toLowerCase();
       for (const target of headingTexts) {
         if (hText.includes(target.toLowerCase())) {
-          // Return the parent section container
           return h.closest('section, .section, [class*="Section"], [class*="section"]') || h.parentElement;
         }
       }
