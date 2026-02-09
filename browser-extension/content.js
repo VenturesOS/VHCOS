@@ -143,22 +143,41 @@
 
   /** Get all visible text from the main profile area (exclude sidebar). */
   function getMainProfileText() {
-    const main = document.querySelector('.leftSection, .mainContent, .profileContent, main, article');
+    const main = getMainContainer();
     return main ? main.innerText : document.body.innerText;
   }
 
-  /** Query selector scoped to main profile area only. */
+  /** Query selector scoped to main profile container only. */
   function qsMain(selector) {
+    const main = getMainContainer();
+    // First try within the main container
+    const el = main.querySelector(selector);
+    if (el && !isInSidebar(el)) return el;
+    // Fallback: all matching elements, filter out sidebar
     const els = document.querySelectorAll(selector);
-    for (const el of els) {
-      if (!isInSidebar(el)) return el;
+    for (const e of els) {
+      if (!isInSidebar(e)) return e;
     }
     return null;
   }
 
   /** Query selector ALL scoped to main profile area. */
   function qsaMain(selector) {
-    return [...document.querySelectorAll(selector)].filter(el => !isInSidebar(el));
+    const main = getMainContainer();
+    const results = [];
+    // First collect from main container
+    const inMain = main.querySelectorAll(selector);
+    for (const el of inMain) {
+      if (!isInSidebar(el)) results.push(el);
+    }
+    // If nothing found, try whole document
+    if (results.length === 0) {
+      const all = document.querySelectorAll(selector);
+      for (const el of all) {
+        if (!isInSidebar(el)) results.push(el);
+      }
+    }
+    return results;
   }
 
   // ===================== SECTION FINDER =====================
