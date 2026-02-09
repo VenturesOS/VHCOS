@@ -268,6 +268,122 @@ class CaptureResponse(BaseModel):
     message: str
 
 
+# ============== AI EXTRACTION ==============
+
+class AIExtractRequest(BaseModel):
+    raw_text: str
+    page_url: str
+    page_title: Optional[str] = None
+    naukri_profile_id: Optional[str] = None
+
+class AIExtractResponse(BaseModel):
+    success: bool
+    profile_data: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+@extension_router.post("/ai-extract", response_model=AIExtractResponse)
+async def ai_extract_profile(
+    request: AIExtractRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Use OpenAI to extract structured profile data from raw Naukri page text."""
+    import os
+    import json as json_module
+    
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return AIExtractResponse(success=False, error="OpenAI API key not configured")
+    
+    if not request.raw_text or len(request.raw_text) < 50:
+        return AIExtractResponse(success=False, error="Insufficient text to extract profile")
+    
+    # Truncate to ~12000 chars to stay within token limits
+    raw_text = request.raw_text[:12000]
+    
+    prompt = f"""Extract ALL candidate profile information from this Naukri Resdex profile page text. 
+Return a JSON object with these exact fields (use null for missing data):
+
+{{
+  "name": "Full name of the candidate",
+  "email": "email address",
+  "phone": "phone number",
+  "current_company": "current employer name",
+  "current_designation": "current job title/role",
+  "current_industry": "industry",
+  "total_experience_years": number (e.g. 15.5),
+  "headline": "resume headline text",
+  "profile_summary": "full profile summary/about text",
+  "current_salary": number in INR (e.g. 3500000 for 35 Lacs),
+  "expected_salary": number in INR or null,
+  "notice_period": "e.g. 1 Month, 2 Months, Immediate",
+  "location": "current city/location",
+  "preferred_locations": ["city1", "city2"],
+  "date_of_birth": "DOB string",
+  "gender": "Male/Female/Other",
+  "marital_status": "status",
+  "nationality": "nationality",
+  "category": "General/OBC/SC/ST etc",
+  "key_skills": ["skill1", "skill2", ...],
+  "it_skills": [{{"name": "skill", "version": "ver", "experience_years": num}}],
+  "work_experience": [{{"company": "name", "designation": "title", "from_date": "date", "to_date": "date or null if current", "is_current": boolean, "description": "role description"}}],
+  "education": [{{"degree": "degree name", "institution": "university/college", "year_of_passing": "year", "specialization": "field"}}],
+  "certifications": [{{"name": "cert name"}}],
+  "projects": [{{"title": "project title", "description": "desc"}}],
+  "languages": [{{"language": "name", "proficiency": "level"}}],
+  "online_profiles": [{{"platform": "LinkedIn/GitHub/etc", "url": "url"}}]
+}}
+
+IMPORTANT: 
+- Extract EVERY piece of information available. Be thorough.
+- For salary, convert "X Lacs" to full number (35 Lacs = 3500000)
+- For experience, extract as a decimal number (15 years 6 months = 15.5)
+- Include ALL work experiences, education entries, skills
+- Return ONLY valid JSON, no markdown or explanation
+
+Page text:
+{raw_text}"""
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "system", "content": "You are a data extraction expert. Extract structured profile data from recruitment platform text. Return only valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.1,
+                    "response_format": {"type": "json_object"}
+                }
+            )
+        
+        if response.status_code != 200:
+            logger.error(f"[AI Extract] OpenAI error: {response.status_code} {response.text[:200]}")
+            return AIExtractResponse(success=False, error=f"OpenAI API error: {response.status_code}")
+        
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
+        profile_data = json_module.loads(content)
+        
+        # Add metadata
+        profile_data["naukri_profile_id"] = request.naukri_profile_id
+        profile_data["naukri_profile_url"] = request.page_url
+        
+        logger.info(f"[AI Extract] Successfully extracted profile for: {profile_data.get('name')}")
+        
+        return AIExtractResponse(success=True, profile_data=profile_data)
+        
+    except Exception as e:
+        logger.error(f"[AI Extract] Error: {str(e)}")
+        return AIExtractResponse(success=False, error=str(e))
+
+
 # ============== ENDPOINTS ==============
 
 @extension_router.post("/capture", response_model=CaptureResponse)
