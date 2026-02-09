@@ -1,15 +1,24 @@
 /**
- * VHC Talent OS - Naukri Resdex Profile Scraper v3.1
- * Built from real Naukri Resdex page DOM analysis.
+ * VHC Talent OS - Naukri Resdex Profile Scraper v3.2
+ * 
+ * Strategy: Instead of relying on DOM class names (which are React-generated),
+ * we extract the FULL visible text from the main profile area and parse it
+ * using known section headings and patterns from real Naukri profiles.
  *
- * Page layout (confirmed from screenshots):
- *   - Breadcrumb: "X profile found > CandidateName" (MOST RELIABLE for name)
- *   - LEFT: Main profile card (photo, name, experience, salary, location, current role, education, skills, contact)
- *   - RIGHT: "AI matched similar profiles" section with tabs "Profile details" / "Recruiters also viewed"
- *            Contains small profile cards of OTHER candidates — MUST BE EXCLUDED
- *   - RIGHT: "No comments" / "Add comments" section
- *
- * DOM: #rdxRoot > #cap-container > React SPA content
+ * Naukri profile sections (from real PDF export):
+ *   - Breadcrumb with candidate name
+ *   - Quick info bar: experience, salary, location, notice period
+ *   - Resume headline
+ *   - Profile summary
+ *   - Work Experience (multiple entries)
+ *   - Education (multiple entries)  
+ *   - Key skills (tags)
+ *   - IT Skills (table)
+ *   - Certifications
+ *   - Projects
+ *   - Languages
+ *   - Personal details (DOB, gender, marital status, category)
+ *   - Career preferences (desired location, job type, employment type)
  */
 
 (function() {
@@ -18,182 +27,94 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
+  const VERSION = '3.2.0';
   const CONFIG = {
-    CAPTURE_DELAY: 3000,
-    SCROLL_DELAY: 500,
+    CAPTURE_DELAY: 4000,
+    SCROLL_DELAY: 800,
     TOAST_DURATION: 4000,
   };
 
   let isCapturing = false;
   let lastCapturedUrl = null;
 
-  console.log('[VHC Extension v3.2] Content script loaded on:', window.location.href);
+  console.log(`[VHC Extension v${VERSION}] Content script loaded on:`, window.location.href);
 
   // ===================== EXTENSION CONTEXT GUARD =====================
-
   function isExtensionValid() {
     try { return !!(chrome && chrome.runtime && chrome.runtime.id); } catch (e) { return false; }
   }
-
   function handleInvalidContext() {
     showToast('Extension was updated. Please refresh this page (F5).', 'error');
   }
 
-  // ===================== UTILITY HELPERS =====================
-
+  // ===================== UTILITY =====================
   function cleanText(text) {
     if (!text) return null;
     return text.replace(/\s+/g, ' ').replace(/[\n\r\t]/g, ' ').trim() || null;
   }
-
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /** Get text from element, stripping script/style/hidden elements */
-  function getCleanText(el) {
-    if (!el) return '';
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll('script, style, noscript, iframe, [style*="display:none"], [style*="display: none"]').forEach(e => e.remove());
-    // Also remove any "AI matched similar profiles" sections from clone
-    removeSidebarFromClone(clone);
-    return (clone.innerText || clone.textContent || '').trim();
-  }
-
-  /** Remove sidebar/similar-profiles sections from a cloned element */
-  function removeSidebarFromClone(clone) {
-    // Find and remove any element containing "similar profiles", "AI matched", "also viewed" headings
-    const allEls = clone.querySelectorAll('*');
-    for (const el of allEls) {
-      const text = (el.textContent || '').trim().toLowerCase();
-      const cls = (el.className || '').toString().toLowerCase();
-      // If this is a heading/title for the sidebar section, remove its parent container
-      if (
-        (text.includes('ai matched') && text.includes('similar')) ||
-        (text.includes('similar profiles')) ||
-        (text.includes('also viewed')) ||
-        cls.includes('similar') ||
-        cls.includes('aimatched') ||
-        cls.includes('comment')
-      ) {
-        // Remove the closest section-like parent
-        const container = el.closest('[class*="section"], [class*="Section"], [class*="panel"], [class*="Panel"], [class*="card"], [class*="Card"]') || el.parentElement;
-        if (container && container !== clone) {
-          container.remove();
-          break; // Re-scanning after removal
-        }
-      }
-    }
-  }
+  function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
   // ===================== SIDEBAR DETECTION =====================
 
-  /**
-   * Identify the "AI matched similar profiles" container and mark it.
-   * This is the RIGHT sidebar section that shows other candidates.
-   * We find it by looking for headings containing "similar profiles" or "AI matched".
-   */
-  function getSidebarContainer() {
-    const allElements = document.querySelectorAll('*');
-    for (const el of allElements) {
-      const text = (el.textContent || '').trim();
-      // The heading "AI matched similar profiles" identifies the sidebar
-      if (/AI\s*matched\s*similar\s*profiles/i.test(text) && text.length < 100) {
-        // Find the container that holds this heading AND the profile cards below
-        let container = el;
-        while (container.parentElement && container.parentElement.tagName !== 'BODY') {
-          const rect = container.getBoundingClientRect();
-          // The sidebar container is typically 300-500px wide on the right
-          if (rect.width > 200 && rect.width < 600 && rect.height > 200) {
-            return container;
-          }
-          container = container.parentElement;
+  /** Find the "AI matched similar profiles" sidebar and return it */
+  function findSidebarContainer() {
+    // Look for text "AI matched" or "similar profiles" or "also viewed"
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+    while (walker.nextNode()) {
+      const text = walker.currentNode.textContent.trim().toLowerCase();
+      if (text.includes('ai matched') || text.includes('similar profiles') || text.includes('also viewed')) {
+        // Walk up to find a substantial container
+        let el = walker.currentNode.parentElement;
+        while (el && el !== document.body) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 200 && rect.height > 200) return el;
+          el = el.parentElement;
         }
-        return el.parentElement?.parentElement || el.parentElement;
       }
     }
     return null;
   }
 
-  /** Check if element is inside the sidebar / similar-profiles area */
   function isInSidebar(element) {
     if (!element) return false;
-
-    // Method 1: Check if inside the known sidebar container
-    const sidebarContainer = getSidebarContainer();
-    if (sidebarContainer && sidebarContainer.contains(element)) return true;
-
-    // Method 2: Pattern-based class/id check
-    const sidebarPatterns = [
-      'similar', 'matched', 'recommendation', 'aimatched', 'ai-matched',
-      'rightsection', 'right-section', 'rightpanel', 'right-panel',
-      'suggestedprofile', 'alsoviewed', 'also-viewed',
-      'comment', 'sidecard', 'miniprofile', 'quickview'
-    ];
-    let parent = element;
-    let depth = 0;
-    while (parent && parent !== document.body && depth < 15) {
-      const cls = (parent.className || '').toString().toLowerCase();
-      const id = (parent.id || '').toLowerCase();
-      if (parent.tagName?.toLowerCase() === 'aside') return true;
-      for (const p of sidebarPatterns) {
-        if (cls.includes(p) || id.includes(p)) return true;
-      }
-      parent = parent.parentElement;
-      depth++;
-    }
-
-    // Method 3: Position check — if in the right 30% of viewport and narrow
+    const sidebar = findSidebarContainer();
+    if (sidebar && sidebar.contains(element)) return true;
+    // Position check: right 30% of viewport
     const rect = element.getBoundingClientRect();
-    if (rect.width > 0 && rect.left > window.innerWidth * 0.7 && rect.width < window.innerWidth * 0.35) {
-      return true;
-    }
-
+    if (rect.width > 0 && rect.left > window.innerWidth * 0.68 && rect.width < window.innerWidth * 0.35) return true;
     return false;
   }
 
-  // ===================== SCOPED QUERIES =====================
+  // ===================== MAIN PROFILE TEXT =====================
 
-  function getMainContainer() {
-    return document.getElementById('cap-container') || document.getElementById('rdxRoot') || document.body;
-  }
-
-  function qsMain(selector) {
-    const main = getMainContainer();
-    const els = main.querySelectorAll(selector);
-    for (const el of els) {
-      if (!isInSidebar(el)) return el;
-    }
-    return null;
-  }
-
-  function qsaMain(selector) {
-    const main = getMainContainer();
-    return [...main.querySelectorAll(selector)].filter(el => !isInSidebar(el));
-  }
-
+  /**
+   * Extract ALL visible text from the main profile area, 
+   * excluding sidebar, scripts, styles, and hidden elements.
+   */
   function getMainProfileText() {
-    const main = getMainContainer();
-    return getCleanText(main);
-  }
-
-  function findSection(headingTexts) {
-    if (!Array.isArray(headingTexts)) headingTexts = [headingTexts];
-    const main = getMainContainer();
-    const headings = main.querySelectorAll('h2, h3, h4, [class*="heading"], [class*="Heading"], [class*="title"], [class*="Title"]');
-    for (const h of headings) {
-      if (isInSidebar(h)) continue;
-      const hText = (h.textContent || '').trim().toLowerCase();
-      for (const target of headingTexts) {
-        if (hText.includes(target.toLowerCase())) {
-          return h.closest('section, [class*="section"], [class*="Section"]') || h.parentElement;
-        }
+    const container = document.getElementById('cap-container') || document.getElementById('rdxRoot') || document.body;
+    const clone = container.cloneNode(true);
+    
+    // Remove unwanted elements
+    clone.querySelectorAll('script, style, noscript, iframe, svg, [aria-hidden="true"]').forEach(e => e.remove());
+    
+    // Remove sidebar from clone
+    const sidebarPatterns = ['similar', 'aimatched', 'ai-matched', 'also-viewed', 'alsoviewed', 'comment'];
+    clone.querySelectorAll('*').forEach(el => {
+      const cls = (el.className || '').toString().toLowerCase();
+      for (const p of sidebarPatterns) {
+        if (cls.includes(p)) { el.remove(); return; }
       }
-    }
-    return null;
+    });
+    
+    // Also remove elements that are positioned in the right sidebar area
+    // (We can't check getBoundingClientRect on cloned elements, so we skip this)
+    
+    const text = (clone.innerText || clone.textContent || '').trim();
+    return text;
   }
 
-  // ===================== EXTRACTION FUNCTIONS =====================
+  // ===================== TEXT-BASED EXTRACTION =====================
 
   function extractNaukriProfileId() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -201,121 +122,45 @@
     if (sid) return `naukri_${sid}`;
     const profileParam = urlParams.get('profile_id') || urlParams.get('profileId') || urlParams.get('id');
     if (profileParam) return `naukri_${profileParam}`;
-    const urlMatch = window.location.href.match(/\/(\d{5,})\/?/);
-    if (urlMatch) return `naukri_${urlMatch[1]}`;
     return `naukri_${Date.now()}`;
   }
 
-  /**
-   * CRITICAL: Extract the correct candidate name.
-   * Strategy (in order of reliability for Naukri Resdex):
-   *   1. Breadcrumb — Shows "X profile found > CandidateName" (MOST RELIABLE)
-   *   2. Page <title> — Usually "CandidateName - something"
-   *   3. First name-like element in the LEFT portion of the page (NOT sidebar)
-   */
   function extractName() {
-    // === Strategy 1: BREADCRUMB (most reliable on Naukri Resdex) ===
-    // The breadcrumb on Naukri shows: icon > "X profile found" > "CandidateName"
-    // From screenshot: "1 profile found > Bhanupriya.R"
-    // Look for ALL elements that could be breadcrumb items
-    const breadcrumbSelectors = [
-      '[class*="breadcrumb"] a:last-child',
-      '[class*="breadcrumb"] span:last-child',
-      '[class*="breadcrumb"] li:last-child',
-      '[class*="Breadcrumb"] a:last-child',
-      '[class*="Breadcrumb"] span:last-child',
-    ];
-    for (const sel of breadcrumbSelectors) {
-      const el = document.querySelector(sel);
-      if (el) {
-        const name = cleanText(el.textContent);
-        if (name && name.length > 2 && name.length < 60 && !/profile.*found|search|resdex/i.test(name)) {
-          console.log('[VHC Extension v3.2] Found name from breadcrumb selector:', name);
-          return name;
-        }
+    // Strategy 1: Breadcrumb — "N profile found > CandidateName"
+    const allText = document.body.innerText;
+    const breadcrumbMatch = allText.match(/\d+\s*profile[s]?\s*found[\s>»]+([A-Za-z][A-Za-z.\s]+)/i);
+    if (breadcrumbMatch) {
+      const name = cleanText(breadcrumbMatch[1]);
+      if (name && name.length > 2 && name.length < 60) {
+        console.log(`[VHC v${VERSION}] Name from breadcrumb: ${name}`);
+        return name;
       }
     }
 
-    // Try broader breadcrumb detection — look for the text pattern "X profile found > Name"
-    const allTextElements = document.querySelectorAll('span, a, li, div');
-    for (const el of allTextElements) {
-      const text = el.textContent.trim();
-      // Match "N profile found" pattern — the NEXT sibling or child should be the name
-      if (/\d+\s*profile.*found/i.test(text) && text.length < 40) {
-        // Check next sibling elements
-        let sibling = el.nextElementSibling;
-        while (sibling) {
-          const name = cleanText(sibling.textContent);
-          if (name && name.length > 2 && name.length < 60 && !/profile|found|search/i.test(name)) {
-            console.log('[VHC Extension v3.2] Found name from breadcrumb (next to "profile found"):', name);
-            return name;
-          }
-          sibling = sibling.nextElementSibling;
-        }
-        // Check parent's children after this element
-        const parent = el.parentElement;
-        if (parent) {
-          const children = [...parent.children];
-          const idx = children.indexOf(el);
-          for (let i = idx + 1; i < children.length; i++) {
-            const name = cleanText(children[i].textContent);
-            if (name && name.length > 2 && name.length < 60 && !/profile|found|search/i.test(name)) {
-              console.log('[VHC Extension v3.2] Found name from breadcrumb (parent child):', name);
-              return name;
-            }
-          }
-        }
+    // Strategy 2: Page title
+    const title = document.title;
+    if (title) {
+      const titleName = title.replace(/\s*[-|–]\s*(Profile|Naukri|Resdex|Resume|Search).*$/i, '').trim();
+      if (titleName.length > 2 && titleName.length < 60 && !/naukri|resdex|search|recruiter/i.test(titleName)) {
+        console.log(`[VHC v${VERSION}] Name from title: ${titleName}`);
+        return titleName;
       }
     }
 
-    // Also try: look for bold text in breadcrumb area (top of page, first 150px)
-    const topBoldElements = document.querySelectorAll('strong, b, [class*="bold"], [class*="Bold"]');
-    for (const el of topBoldElements) {
-      const rect = el.getBoundingClientRect();
-      if (rect.top < 150 && rect.top > 50 && !isInSidebar(el)) {
-        const name = cleanText(el.textContent);
-        if (name && name.length > 2 && name.length < 60 && !/profile|found|search|resdex|naukri|print|report/i.test(name)) {
-          console.log('[VHC Extension v3.2] Found name from top bold element:', name);
-          return name;
-        }
-      }
-    }
-
-    // === Strategy 2: Page <title> ===
-    const pageTitle = document.querySelector('title');
-    if (pageTitle) {
-      let titleText = pageTitle.textContent;
-      titleText = titleText.replace(/\s*[-|–]\s*(Profile|Naukri|Resdex|Resume|Search).*$/i, '').trim();
-      titleText = titleText.replace(/\s*on\s+Naukri.*$/i, '').trim();
-      if (titleText && titleText.length > 2 && titleText.length < 60 &&
-          !/naukri|resdex|search|recruiter|login|home/i.test(titleText)) {
-        console.log('[VHC Extension v3.2] Found name from page title:', titleText);
-        return titleText;
-      }
-    }
-
-    // === Strategy 3: First large name in LEFT portion of main content ===
-    const main = getMainContainer();
-    // Look for name-like elements that are: in the left 60%, in the top 500px, NOT in sidebar
-    const nameEls = main.querySelectorAll(
-      '[class*="name"], [class*="Name"], h1, h2, [class*="candidateName"], [class*="profileName"]'
-    );
-    for (const el of nameEls) {
+    // Strategy 3: First large text element in left/top area
+    const container = document.getElementById('cap-container') || document.body;
+    const candidates = container.querySelectorAll('h1, h2, [class*="name"], [class*="Name"]');
+    for (const el of candidates) {
       if (isInSidebar(el)) continue;
       const rect = el.getBoundingClientRect();
-      // Must be in left portion and upper part of page
-      if (rect.left < window.innerWidth * 0.55 && rect.top < 500 && rect.top > 100 && rect.width > 50) {
+      if (rect.top > 50 && rect.top < 400 && rect.left < window.innerWidth * 0.5) {
         const name = cleanText(el.textContent);
-        if (name && name.length > 2 && name.length < 60 && 
-            !/company|org|employer|add to|send|save|forward|schedule|comment|view/i.test(name)) {
-          console.log('[VHC Extension v3.2] Found name from left-positioned element:', name, 
-                      `(x:${Math.round(rect.left)}, y:${Math.round(rect.top)}, w:${Math.round(rect.width)})`);
+        if (name && name.length > 2 && name.length < 60 && !/search|decode|naukri|similar|add to|view/i.test(name)) {
+          console.log(`[VHC v${VERSION}] Name from element: ${name}`);
           return name;
         }
       }
     }
-
-    console.log('[VHC Extension v3.2] WARNING: Could not find candidate name');
     return null;
   }
 
@@ -327,65 +172,213 @@
     return { first_name: parts[0], middle_name: parts.slice(1, -1).join(' '), last_name: parts[parts.length - 1] };
   }
 
-  function extractEmail() {
-    const main = getMainContainer();
-    // Look for mailto links NOT in sidebar
-    for (const link of main.querySelectorAll('a[href^="mailto:"]')) {
-      if (isInSidebar(link)) continue;
-      const email = link.href.replace('mailto:', '').trim().toLowerCase();
-      if (email.includes('@') && !email.includes('naukri.com') && !email.includes('@vhc.in')) {
-        console.log('[VHC Extension v3.2] Found email from mailto:', email);
-        return email;
+  /**
+   * Parse the full profile text into sections using known Naukri headings.
+   */
+  function parseProfileSections(fullText) {
+    const sections = {};
+    const sectionHeadings = [
+      'resume headline', 'profile summary', 'work experience', 'employment',
+      'education', 'key skills', 'it skills', 'technical skills',
+      'certifications', 'projects', 'languages', 'personal details',
+      'career profile', 'desired job profile', 'online profile',
+      'current salary', 'expected salary', 'notice period'
+    ];
+    
+    const lines = fullText.split('\n');
+    let currentSection = 'header';
+    sections[currentSection] = [];
+    
+    for (const line of lines) {
+      const trimmedLower = line.trim().toLowerCase();
+      let matched = false;
+      for (const heading of sectionHeadings) {
+        if (trimmedLower === heading || trimmedLower.startsWith(heading + ':') || 
+            trimmedLower.startsWith(heading + ' :') ||
+            (trimmedLower.includes(heading) && trimmedLower.length < heading.length + 20)) {
+          currentSection = heading.replace(/\s+/g, '_');
+          sections[currentSection] = [];
+          matched = true;
+          break;
+        }
+      }
+      if (!matched && line.trim()) {
+        if (!sections[currentSection]) sections[currentSection] = [];
+        sections[currentSection].push(line.trim());
       }
     }
-    // Look for email-like elements
-    for (const el of main.querySelectorAll('[class*="email"], [class*="Email"]')) {
-      if (isInSidebar(el)) continue;
-      const m = el.textContent.match(/[\w.-]+@[\w.-]+\.\w+/);
-      if (m && !m[0].includes('naukri.com')) {
-        console.log('[VHC Extension v3.2] Found email from element:', m[0]);
-        return m[0].toLowerCase();
-      }
+    
+    return sections;
+  }
+
+  function extractFromText(fullText) {
+    const data = {};
+    const sections = parseProfileSections(fullText);
+    
+    console.log(`[VHC v${VERSION}] Parsed sections:`, Object.keys(sections).filter(k => sections[k].length > 0));
+
+    // --- Experience years ---
+    const expMatch = fullText.match(/(\d+)\s*(?:Years?|Yrs?|y)\s*(?:(\d+)\s*(?:Months?|Mos?|m))?/i);
+    if (expMatch) {
+      data.total_experience_years = parseFloat(expMatch[1]) + (expMatch[2] ? parseInt(expMatch[2]) / 12 : 0);
+      console.log(`[VHC v${VERSION}] Experience: ${data.total_experience_years}`);
     }
-    // Look for visible email text in LEFT part of page
-    const mainText = getMainProfileText();
-    const matches = mainText.match(/[\w.-]+@[\w.-]+\.(com|in|org|net|co\.in|io|gmail\.com)/gi);
-    if (matches) {
-      for (const email of matches) {
-        if (!email.includes('naukri.com') && !email.includes('@vhc.in')) {
-          console.log('[VHC Extension v3.2] Found email from text:', email);
-          return email.toLowerCase();
+
+    // --- Current salary ---
+    const salaryMatch = fullText.match(/₹\s*(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA)/i) ||
+                        fullText.match(/Rs\.?\s*(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA)/i) ||
+                        fullText.match(/(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh)\s*(?:PA|per\s*annum)?/i);
+    if (salaryMatch) {
+      data.current_salary = Math.round(parseFloat(salaryMatch[1]) * 100000);
+      console.log(`[VHC v${VERSION}] Salary: ${data.current_salary}`);
+    }
+
+    // --- Notice period ---
+    const noticeMatch = fullText.match(/(?:Notice\s*(?:Period)?[:\s]*)?(\d+)\s*(?:Month|Months)/i) ||
+                        fullText.match(/(Immediate(?:ly)?)/i);
+    if (noticeMatch) {
+      data.notice_period = noticeMatch[1].toLowerCase().includes('immediate') ? 'Immediate' : `${noticeMatch[1]} Month${parseInt(noticeMatch[1]) > 1 ? 's' : ''}`;
+      console.log(`[VHC v${VERSION}] Notice: ${data.notice_period}`);
+    }
+
+    // --- Location ---
+    const locMatch = fullText.match(/(?:Current\s*)?(?:Location|City)[:\s]*([A-Za-z\s]+?)(?:\n|$|\|)/i);
+    if (locMatch) data.location = cleanText(locMatch[1]);
+    // Also try: location is often shown after experience/salary in the quick info bar
+    const prefLocMatch = fullText.match(/(?:Pref\.?\s*location|Desired\s*(?:Location|City))\s*(?:Preference)?[:\s]*([^\n]+)/i);
+    if (prefLocMatch) {
+      data.preferred_locations = prefLocMatch[1].split(/[,\/]/).map(l => cleanText(l)).filter(Boolean);
+    }
+
+    // --- Current role ---
+    const currentMatch = fullText.match(/Current\s+(.+?)\s+at\s+(.+?)\s+(?:since|from)/i);
+    if (currentMatch) {
+      data.current_designation = cleanText(currentMatch[1]);
+      data.current_company = cleanText(currentMatch[2]);
+      console.log(`[VHC v${VERSION}] Current: ${data.current_designation} at ${data.current_company}`);
+    }
+
+    // --- Resume headline ---
+    if (sections.resume_headline?.length > 0) {
+      data.headline = sections.resume_headline.join(' ').substring(0, 500);
+      console.log(`[VHC v${VERSION}] Headline: ${data.headline.substring(0, 60)}...`);
+    }
+
+    // --- Profile summary ---
+    if (sections.profile_summary?.length > 0) {
+      data.profile_summary = sections.profile_summary.join('\n').substring(0, 3000);
+      console.log(`[VHC v${VERSION}] Summary: ${data.profile_summary.substring(0, 60)}...`);
+    }
+
+    // --- Email ---
+    const emailMatch = fullText.match(/[\w.-]+@[\w.-]+\.(com|in|org|net|co\.in|io|gmail\.com)/i);
+    if (emailMatch && !emailMatch[0].includes('naukri.com')) {
+      data.email = emailMatch[0].toLowerCase();
+      console.log(`[VHC v${VERSION}] Email: ${data.email}`);
+    }
+
+    // --- Phone ---
+    const phoneMatch = fullText.match(/(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
+    if (phoneMatch) {
+      data.phone = phoneMatch[0].replace(/[\s-]/g, '');
+      console.log(`[VHC v${VERSION}] Phone: ${data.phone}`);
+    }
+
+    // --- Key skills ---
+    if (sections.key_skills?.length > 0) {
+      const skillText = sections.key_skills.join(' ');
+      // Skills are usually comma-separated or pipe-separated or in spans
+      data.key_skills = skillText.split(/[,|•·]/).map(s => cleanText(s)).filter(s => s && s.length > 1 && s.length < 50);
+      console.log(`[VHC v${VERSION}] Skills: ${data.key_skills.length}`);
+    }
+
+    // --- Education ---
+    if (sections.education?.length > 0) {
+      data.education = [];
+      let currentEdu = {};
+      for (const line of sections.education) {
+        const degreeMatch = line.match(/^(MBA|B\.?Tech|M\.?Tech|B\.?Sc|M\.?Sc|BCA|MCA|B\.?E|M\.?E|B\.?Com|M\.?Com|PGDM|PhD|Diploma|Bachelor|Master|MS|BSc|MSc).*/i);
+        if (degreeMatch) {
+          if (currentEdu.degree) data.education.push(currentEdu);
+          currentEdu = { degree: cleanText(line) };
+        } else if (line.match(/university|institute|college|school/i) && currentEdu.degree) {
+          currentEdu.institution = cleanText(line);
+        } else if (line.match(/^\d{4}$/) && currentEdu.degree) {
+          currentEdu.year_of_passing = line.trim();
+        }
+      }
+      if (currentEdu.degree) data.education.push(currentEdu);
+      console.log(`[VHC v${VERSION}] Education entries: ${data.education.length}`);
+    }
+
+    // --- Personal details ---
+    const dobMatch = fullText.match(/(?:DOB|Date\s*of\s*Birth|Born)[:\s]*(\d{1,2}\s*\w+[\s,]*\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+    if (dobMatch) data.date_of_birth = cleanText(dobMatch[1]);
+    const genderMatch = fullText.match(/Gender[:\s]*(Male|Female|Other|Transgender)/i);
+    if (genderMatch) data.gender = genderMatch[1];
+    const maritalMatch = fullText.match(/Marital\s*Status[:\s]*(Single|Married|Unmarried|Divorced|Widowed|Separated|Single\/unmarried)/i);
+    if (maritalMatch) data.marital_status = cleanText(maritalMatch[1]);
+    const categoryMatch = fullText.match(/Category[:\s]*(General|OBC|SC|ST|EWS)/i);
+    if (categoryMatch) data.category = categoryMatch[1];
+
+    // --- Languages ---
+    if (sections.languages?.length > 0) {
+      data.languages = [];
+      for (const line of sections.languages) {
+        const langMatch = line.match(/^([A-Za-z]+)\s*[-–:]/);
+        if (langMatch) {
+          const lang = { language: langMatch[1] };
+          if (/expert/i.test(line)) lang.proficiency = 'Expert';
+          else if (/proficient/i.test(line)) lang.proficiency = 'Proficient';
+          else if (/beginner/i.test(line)) lang.proficiency = 'Beginner';
+          data.languages.push(lang);
         }
       }
     }
-    console.log('[VHC Extension v3.2] Could not find email');
-    return null;
+
+    // --- Certifications ---
+    if (sections.certifications?.length > 0) {
+      data.certifications = sections.certifications
+        .filter(l => l.length > 3 && l.length < 200)
+        .map(name => ({ name: cleanText(name) }));
+      console.log(`[VHC v${VERSION}] Certifications: ${data.certifications.length}`);
+    }
+
+    return data;
   }
 
-  function extractPhone() {
-    const main = getMainContainer();
-    for (const el of main.querySelectorAll('[class*="phone"], [class*="mobile"], [class*="Phone"], [class*="Mobile"], a[href^="tel:"]')) {
+  // ===================== SKILL EXTRACTION (DOM-based fallback) =====================
+
+  function extractSkillsFromDOM() {
+    const skills = new Set();
+    const container = document.getElementById('cap-container') || document.body;
+    // Skills are usually in spans/chips near a "Key Skills" heading
+    const allSpans = container.querySelectorAll('span, a');
+    let nearSkillSection = false;
+    for (const el of allSpans) {
       if (isInSidebar(el)) continue;
-      const text = el.href ? el.href.replace('tel:', '') : el.textContent;
-      const m = text.match(/(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
-      if (m) {
-        console.log('[VHC Extension v3.2] Found phone:', m[0]);
-        return m[0].replace(/[\s-]/g, '');
+      const text = el.textContent.trim();
+      if (/key\s*skills/i.test(text)) { nearSkillSection = true; continue; }
+      if (nearSkillSection && text.length > 1 && text.length < 50) {
+        // Stop if we hit another section heading
+        if (/^(IT Skills|Education|Work|Employment|Certification|Project|Language|Personal)/i.test(text)) break;
+        if (!/key\s*skills|show more|show less|edit/i.test(text)) {
+          skills.add(text);
+        }
       }
     }
-    console.log('[VHC Extension v3.2] Could not find phone');
-    return null;
+    return [...skills];
   }
 
+  // ===================== PHOTO =====================
+
   function extractPhotoUrl() {
-    const main = getMainContainer();
-    for (const img of main.querySelectorAll('img')) {
+    const container = document.getElementById('cap-container') || document.body;
+    for (const img of container.querySelectorAll('img')) {
       if (isInSidebar(img)) continue;
       const rect = img.getBoundingClientRect();
-      // Profile photo is usually 60-200px, in the left portion, top area
-      if (rect.width >= 50 && rect.width <= 250 && rect.top < 600 && rect.left < window.innerWidth * 0.5) {
-        if (img.src && !img.src.includes('logo') && !img.src.includes('icon') && !img.src.includes('sprite')) {
-          console.log('[VHC Extension v3.2] Found photo URL');
+      if (rect.width >= 50 && rect.width <= 250 && rect.top < 500 && rect.left < window.innerWidth * 0.5) {
+        if (img.src && !img.src.includes('logo') && !img.src.includes('icon') && !img.src.includes('sprite') && !img.src.includes('svg')) {
           return img.src;
         }
       }
@@ -393,354 +386,97 @@
     return null;
   }
 
-  function extractCurrentEmployment() {
-    const result = { company: null, designation: null, department: null, industry: null };
-    const mainText = getMainProfileText();
-    
-    // From screenshot: "Current   Customer Success Manager at Numeric UPS since Oct ... 1 Month"
-    const currentMatch = mainText.match(/Current\s+(.+?)\s+at\s+(.+?)\s+since/i);
-    if (currentMatch) {
-      result.designation = cleanText(currentMatch[1]);
-      result.company = cleanText(currentMatch[2]);
-      console.log('[VHC Extension v3.2] Found current role:', result.designation, 'at', result.company);
-    }
-
-    // Fallback: separate patterns
-    if (!result.designation) {
-      const lines = mainText.split('\n').filter(l => l.trim().length > 0 && l.trim().length < 200);
-      for (let i = 0; i < lines.length; i++) {
-        if (/^Current$/i.test(lines[i].trim()) && i + 1 < lines.length) {
-          const nextLine = lines[i + 1].trim();
-          if (nextLine.length > 3 && !/window\.|document\.|function|script|nLogger/i.test(nextLine)) {
-            const atMatch = nextLine.match(/(.+?)\s+at\s+(.+?)(?:\s+since|$)/i);
-            if (atMatch) {
-              result.designation = cleanText(atMatch[1]);
-              result.company = cleanText(atMatch[2].replace(/\s+since.*/, ''));
-            } else {
-              result.designation = cleanText(nextLine);
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    return result;
-  }
-
-  function extractTotalExperience() {
-    const mainText = getMainProfileText();
-    // From screenshot: "9y" or "9y 0m"
-    const patterns = [
-      /(\d+)y\s*(\d+)?m/i,
-      /(\d+(?:\.\d+)?)\s*(?:Years?|Yrs?)\s*(?:(\d+)\s*(?:Months?|Mos?))?/i,
-      /Experience[:\s]*(\d+(?:\.\d+)?)/i,
-    ];
-    for (const p of patterns) {
-      const m = mainText.match(p);
-      if (m) {
-        let years = parseFloat(m[1]);
-        if (m[2]) years += parseInt(m[2]) / 12;
-        console.log('[VHC Extension v3.2] Found experience:', years, 'years');
-        return years;
-      }
-    }
-    return null;
-  }
-
-  function extractCurrentSalary() {
-    const mainText = getMainProfileText();
-    // From screenshot: "₹ 11 Lacs" or "₹11 Lacs"
-    const patterns = [
-      /₹\s*(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA)/i,
-      /Rs\.?\s*(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA)/i,
-      /(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA)/i,
-    ];
-    for (const p of patterns) {
-      const m = mainText.match(p);
-      if (m) {
-        const salary = Math.round(parseFloat(m[1]) * 100000);
-        console.log('[VHC Extension v3.2] Found salary:', salary);
-        return salary;
-      }
-    }
-    return null;
-  }
-
-  function extractLocation() {
-    const mainText = getMainProfileText();
-    // From screenshot: location shown with pin icon, "Chennai"
-    // Look for "Pref. location   CityName" pattern
-    const prefLocMatch = mainText.match(/Pref\.?\s*location\s+([A-Za-z\s,]+?)(?:\n|$)/i);
-    if (prefLocMatch) {
-      console.log('[VHC Extension v3.2] Found preferred location:', prefLocMatch[1]);
-      return cleanText(prefLocMatch[1]);
-    }
-    // Try general location pattern
-    const locEl = qsMain('[class*="location"], [class*="Location"], [class*="city"]');
-    if (locEl) {
-      const loc = cleanText(locEl.textContent);
-      if (loc && loc.length < 50) {
-        console.log('[VHC Extension v3.2] Found location from element:', loc);
-        return loc;
-      }
-    }
-    return null;
-  }
-
-  function extractNotice() {
-    const mainText = getMainProfileText();
-    const m = mainText.match(/(\d+)\s*(?:Month|Months?)\s*(?:notice)?/i);
-    if (m) {
-      const notice = `${m[1]} Month${parseInt(m[1]) > 1 ? 's' : ''}`;
-      console.log('[VHC Extension v3.2] Found notice:', notice);
-      return notice;
-    }
-    if (/immediate/i.test(mainText)) return 'Immediate';
-    return null;
-  }
-
-  function extractHighestDegree() {
-    const mainText = getMainProfileText();
-    // From screenshot: "Highest degree  Bachelor of Elementary Education (B.El.Ed) Sree Sasth..."
-    const m = mainText.match(/Highest\s*degree\s+(.+?)(?:\n|$)/i);
-    if (m) {
-      console.log('[VHC Extension v3.2] Found highest degree:', m[1].substring(0, 60));
-      return cleanText(m[1]);
-    }
-    return null;
-  }
-
-  function extractKeySkills() {
-    const skills = new Set();
-    const sec = findSection(['key skills', 'skills']);
-    if (sec) {
-      for (const el of sec.querySelectorAll('span, a, [class*="chip"], [class*="tag"], [class*="skill"]')) {
-        if (isInSidebar(el)) continue;
-        const skill = cleanText(el.textContent);
-        if (skill && skill.length > 1 && skill.length < 50 && !/key\s*skills?|skills?:/i.test(skill)) {
-          skills.add(skill);
-        }
-      }
-    }
-    // Also look for pipe-separated skills in the main text (common Naukri format)
-    // From sidebar screenshot: "Email | Cold Calling | Customer Relationship..."
-    // But this is the SIDEBAR data — we must avoid it
-    console.log('[VHC Extension v3.2] Found skills:', skills.size);
-    return [...skills];
-  }
-
-  function extractITSkills() {
-    const itSkills = [];
-    const sec = findSection(['it skills', 'technical skills']);
-    if (!sec) return itSkills;
-    for (const row of sec.querySelectorAll('tr, [class*="skillRow"], [class*="row"]')) {
-      const cells = row.querySelectorAll('td, [class*="cell"], span');
-      if (cells.length >= 2) {
-        const skill = { name: cleanText(cells[0]?.textContent) };
-        if (cells.length > 1) skill.version = cleanText(cells[1]?.textContent);
-        if (cells.length > 2) skill.last_used = cleanText(cells[2]?.textContent);
-        if (cells.length > 3) {
-          const m = (cells[3]?.textContent || '').match(/(\d+)/);
-          if (m) skill.experience_years = parseInt(m[1]);
-        }
-        if (skill.name) itSkills.push(skill);
-      }
-    }
-    return itSkills;
-  }
-
-  function extractWorkExperience() {
-    const experiences = [];
-    const sec = findSection(['employment', 'work experience', 'experience']);
-    if (!sec) return experiences;
-    // Each job is a repeated block
-    for (const entry of sec.querySelectorAll('[class*="exp"], [class*="Exp"], [class*="employment"]')) {
-      if (isInSidebar(entry)) continue;
-      const exp = {};
-      const bold = entry.querySelector('strong, b, [class*="title"], [class*="desig"], h3, h4');
-      if (bold) exp.designation = cleanText(bold.textContent);
-      const compEl = entry.querySelector('[class*="company"], [class*="org"]');
-      if (compEl) exp.company = cleanText(compEl.textContent);
-      const dateEl = entry.querySelector('[class*="duration"], [class*="date"]');
-      if (dateEl) {
-        exp.duration = cleanText(dateEl.textContent);
-        const fromTo = dateEl.textContent.match(/(\w+[\s']?\d{2,4})\s*[-–to]+\s*(\w+[\s']?\d{2,4}|present|current|till\s*date)/i);
-        if (fromTo) {
-          exp.from_date = cleanText(fromTo[1]);
-          exp.to_date = /present|current|till/i.test(fromTo[2]) ? null : cleanText(fromTo[2]);
-          exp.is_current = /present|current|till/i.test(fromTo[2]);
-        }
-      }
-      if (exp.designation || exp.company) experiences.push(exp);
-    }
-    return experiences;
-  }
-
-  function extractEducation() {
-    const educations = [];
-    const sec = findSection(['education', 'qualification']);
-    if (sec) {
-      for (const entry of sec.querySelectorAll('[class*="edu"], [class*="Edu"], [class*="qual"]')) {
-        if (isInSidebar(entry)) continue;
-        const edu = {};
-        const degreeEl = entry.querySelector('[class*="degree"], [class*="course"], h3, h4, strong');
-        if (degreeEl) edu.degree = cleanText(degreeEl.textContent);
-        const instEl = entry.querySelector('[class*="institution"], [class*="university"], [class*="college"]');
-        if (instEl) edu.institution = cleanText(instEl.textContent);
-        if (edu.degree || edu.institution) educations.push(edu);
-      }
-    }
-    // If no structured education found, try highest degree text
-    if (educations.length === 0) {
-      const highest = extractHighestDegree();
-      if (highest) educations.push({ degree: highest });
-    }
-    return educations;
-  }
-
-  function extractCertifications() {
-    const certs = [];
-    const sec = findSection(['certification', 'certificate']);
-    if (!sec) return certs;
-    for (const entry of sec.querySelectorAll('[class*="cert"], li')) {
-      if (isInSidebar(entry)) continue;
-      const name = cleanText(entry.textContent);
-      if (name && name.length > 2 && name.length < 200) certs.push({ name });
-    }
-    return certs;
-  }
-
-  function extractProjects() {
-    const projects = [];
-    const sec = findSection(['project']);
-    if (!sec) return projects;
-    for (const entry of sec.querySelectorAll('[class*="project"], li')) {
-      if (isInSidebar(entry)) continue;
-      const title = cleanText(entry.querySelector('h4, h3, strong, [class*="title"]')?.textContent || entry.textContent);
-      if (title && title.length > 2) projects.push({ title });
-    }
-    return projects;
-  }
-
-  function extractLanguages() {
-    const langs = [];
-    const sec = findSection(['language']);
-    if (!sec) return langs;
-    for (const entry of sec.querySelectorAll('[class*="lang"], li, tr')) {
-      if (isInSidebar(entry)) continue;
-      const text = cleanText(entry.textContent);
-      if (text && text.length > 1 && text.length < 50 && !/languages?:/i.test(text)) {
-        langs.push({ language: text });
-      }
-    }
-    return langs;
-  }
-
-  function extractOnlineProfiles() {
-    const profiles = [];
-    const sec = findSection(['online profile', 'social profile']);
-    if (sec) {
-      for (const link of sec.querySelectorAll('a[href]')) {
-        const url = link.href;
-        if (!url || url.includes('naukri.com')) continue;
-        let platform = 'Other';
-        if (url.includes('linkedin')) platform = 'LinkedIn';
-        else if (url.includes('github')) platform = 'GitHub';
-        profiles.push({ platform, url });
-      }
-    }
-    return profiles;
-  }
-
-  function extractPersonalDetails() {
-    const details = {};
-    const mainText = getMainProfileText();
-    const patterns = {
-      date_of_birth: /(?:DOB|Date\s*of\s*Birth)[:\s]*([^\n|,]+)/i,
-      gender: /Gender[:\s]*(Male|Female|Other|Transgender)/i,
-      marital_status: /Marital\s*Status[:\s]*(Single|Married|Unmarried|Divorced|Widowed)/i,
-      nationality: /Nationality[:\s]*([^\n|,]+)/i,
-    };
-    for (const [key, regex] of Object.entries(patterns)) {
-      const m = mainText.match(regex);
-      if (m) details[key] = cleanText(m[1]);
-    }
-    return Object.keys(details).length > 0 ? details : null;
-  }
-
   // ===================== MAIN SCRAPING FUNCTION =====================
 
   async function scrapeProfileData() {
-    console.log('[VHC Extension v3.2] Scraping profile data from MAIN profile area...');
-
-    // Log what container we're using
-    const container = getMainContainer();
-    console.log('[VHC Extension v3.2] Main container:', container.id || container.tagName, 
-                'width:', container.offsetWidth);
-
-    // Log sidebar detection
-    const sidebar = getSidebarContainer();
-    console.log('[VHC Extension v3.2] Sidebar container found:', !!sidebar);
+    console.log(`[VHC v${VERSION}] Starting profile scrape...`);
 
     const name = extractName();
+    if (!name) {
+      console.log(`[VHC v${VERSION}] ERROR: Could not find candidate name`);
+      return null;
+    }
+
     const nameParts = splitName(name);
-    const currentEmployment = extractCurrentEmployment();
-    const onlineProfiles = extractOnlineProfiles();
-    const totalExp = extractTotalExperience();
-    const location = extractLocation();
-    const salary = extractCurrentSalary();
+    const fullText = getMainProfileText();
+    
+    console.log(`[VHC v${VERSION}] Main profile text length: ${fullText.length} chars`);
+    
+    // Parse all data from text
+    const textData = extractFromText(fullText);
+    
+    // Try DOM-based skill extraction as fallback
+    let skills = textData.key_skills || [];
+    if (skills.length === 0) {
+      skills = extractSkillsFromDOM();
+      console.log(`[VHC v${VERSION}] Skills from DOM fallback: ${skills.length}`);
+    }
 
     const data = {
       naukri_profile_id: extractNaukriProfileId(),
       naukri_profile_url: window.location.href,
       name: name,
       first_name: nameParts.first_name || null,
+      middle_name: nameParts.middle_name || null,
       last_name: nameParts.last_name || null,
       photo_url: extractPhotoUrl(),
-      email: extractEmail(),
-      phone: extractPhone(),
-      headline: null,
-      profile_summary: null,
-      current_company: currentEmployment.company,
-      current_designation: currentEmployment.designation,
-      current_industry: currentEmployment.industry,
-      total_experience_years: totalExp,
-      total_experience_months: totalExp ? Math.round(totalExp * 12) : null,
-      total_experience_display: totalExp ? `${totalExp} years` : null,
-      work_experience: extractWorkExperience(),
-      education: extractEducation(),
-      key_skills: extractKeySkills(),
-      it_skills: extractITSkills(),
-      certifications: extractCertifications(),
-      projects: extractProjects(),
-      languages: extractLanguages(),
-      online_profiles: onlineProfiles,
-      linkedin_url: (onlineProfiles.find(p => p.platform === 'LinkedIn') || {}).url || null,
-      personal_details: extractPersonalDetails(),
+      email: textData.email || null,
+      phone: textData.phone || null,
+      headline: textData.headline || null,
+      resume_headline: textData.headline || null,
+      profile_summary: textData.profile_summary || null,
+      current_company: textData.current_company || null,
+      current_designation: textData.current_designation || null,
+      current_industry: null,
+      total_experience_years: textData.total_experience_years || null,
+      total_experience_months: textData.total_experience_years ? Math.round(textData.total_experience_years * 12) : null,
+      work_experience: [],
+      education: textData.education || [],
+      key_skills: skills,
+      it_skills: [],
+      certifications: textData.certifications || [],
+      projects: [],
+      languages: textData.languages || [],
+      online_profiles: [],
+      personal_details: {},
       career_preferences: {
-        current_salary: salary,
-        notice_period: extractNotice(),
-        current_location: location,
+        current_salary: textData.current_salary || null,
+        notice_period: textData.notice_period || null,
+        current_location: textData.location || null,
+        preferred_locations: textData.preferred_locations || [],
       },
       scraped_at: new Date().toISOString(),
-      raw_profile_text: getMainProfileText().substring(0, 5000),
-      extension_version: '3.2.0'
+      raw_profile_text: fullText.substring(0, 8000),
+      extension_version: VERSION
     };
 
-    // Highest degree
-    const highest = extractHighestDegree();
-    if (highest) data.highest_qualification = highest;
+    // Add personal details if found
+    if (textData.date_of_birth) data.personal_details.date_of_birth = textData.date_of_birth;
+    if (textData.gender) data.personal_details.gender = textData.gender;
+    if (textData.marital_status) data.personal_details.marital_status = textData.marital_status;
+    if (textData.category) data.personal_details.category = textData.category;
 
-    console.log('[VHC Extension v3.2] === EXTRACTION RESULT ===');
-    console.log('[VHC Extension v3.2] Name:', data.name);
-    console.log('[VHC Extension v3.2] Email:', data.email);
-    console.log('[VHC Extension v3.2] Phone:', data.phone);
-    console.log('[VHC Extension v3.2] Company:', data.current_company);
-    console.log('[VHC Extension v3.2] Designation:', data.current_designation);
-    console.log('[VHC Extension v3.2] Experience:', data.total_experience_years);
-    console.log('[VHC Extension v3.2] Skills:', data.key_skills?.length);
-    console.log('[VHC Extension v3.2] ========================');
+    // Set highest qualification
+    if (data.education.length > 0) {
+      data.highest_qualification = data.education[0].degree;
+    }
+
+    console.log(`[VHC v${VERSION}] === EXTRACTION RESULT ===`);
+    console.log(`[VHC v${VERSION}] Name: ${data.name}`);
+    console.log(`[VHC v${VERSION}] Email: ${data.email}`);
+    console.log(`[VHC v${VERSION}] Phone: ${data.phone}`);
+    console.log(`[VHC v${VERSION}] Company: ${data.current_company}`);
+    console.log(`[VHC v${VERSION}] Designation: ${data.current_designation}`);
+    console.log(`[VHC v${VERSION}] Experience: ${data.total_experience_years}`);
+    console.log(`[VHC v${VERSION}] Salary: ${data.career_preferences?.current_salary}`);
+    console.log(`[VHC v${VERSION}] Notice: ${data.career_preferences?.notice_period}`);
+    console.log(`[VHC v${VERSION}] Location: ${data.career_preferences?.current_location}`);
+    console.log(`[VHC v${VERSION}] Skills: ${data.key_skills?.length}`);
+    console.log(`[VHC v${VERSION}] Education: ${data.education?.length}`);
+    console.log(`[VHC v${VERSION}] Headline: ${data.headline ? 'Yes' : 'No'}`);
+    console.log(`[VHC v${VERSION}] Summary: ${data.profile_summary ? 'Yes' : 'No'}`);
+    console.log(`[VHC v${VERSION}] Raw text length: ${data.raw_profile_text?.length}`);
+    console.log(`[VHC v${VERSION}] ========================`);
 
     return data;
   }
@@ -748,72 +484,65 @@
   // ===================== CAPTURE FLOW =====================
 
   function isProfilePage() {
-    const url = window.location.href;
-    return url.includes('resdex') || url.includes('profile') ||
-           url.includes('viewResume') || url.includes('view-resume') ||
-           url.includes('cvPreview') || url.includes('preview');
+    return /resdex|profile|viewResume|view-resume|cvPreview|preview/i.test(window.location.href);
   }
 
   async function scrollToLoadContent() {
-    console.log('[VHC Extension v3.2] Scrolling to load content...');
-    const scrollHeight = document.documentElement.scrollHeight;
-    const viewportHeight = window.innerHeight;
+    console.log(`[VHC v${VERSION}] Scrolling to load all content...`);
+    const totalHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    const step = window.innerHeight * 0.6;
     let pos = 0;
-    while (pos < scrollHeight) {
-      pos += viewportHeight * 0.8;
-      window.scrollTo(0, pos);
+    while (pos < totalHeight) {
+      pos += step;
+      window.scrollTo({ top: pos, behavior: 'smooth' });
       await sleep(CONFIG.SCROLL_DELAY);
     }
-    window.scrollTo(0, 0);
-    await sleep(500);
-    console.log('[VHC Extension v3.2] Scroll complete');
+    // Scroll back to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    await sleep(1000);
+    console.log(`[VHC v${VERSION}] Scroll complete (page height: ${totalHeight}px)`);
   }
 
   async function manualCapture() {
-    if (isCapturing) return { success: false, error: 'Capture already in progress' };
-    if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context invalidated. Refresh page.' }; }
+    if (isCapturing) return { success: false, error: 'Capture in progress' };
+    if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Refresh page' }; }
     isCapturing = true;
-    console.log('[VHC Extension v3.2] Manual capture triggered');
+    console.log(`[VHC v${VERSION}] Manual capture triggered`);
     try {
       const auth = await getAuthToken();
-      if (!auth) return { success: false, error: 'Not logged in. Login via extension popup.' };
+      if (!auth) return { success: false, error: 'Not logged in. Login via popup.' };
       showToast('Capturing profile...', 'info');
       await scrollToLoadContent();
-      await sleep(1000);
+      await sleep(1500);
       const profileData = await scrapeProfileData();
-      if (!profileData || !profileData.name) {
-        return { success: false, error: 'Could not extract profile. Are you on a profile page?' };
-      }
+      if (!profileData || !profileData.name) return { success: false, error: 'Could not extract profile.' };
       if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Context lost.' }; }
       const response = await chrome.runtime.sendMessage({ action: 'captureProfile', data: profileData });
-      if (response && response.success) {
+      if (response?.success) {
         lastCapturedUrl = window.location.href;
-        const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'already up-to-date', queued: 'queued for sync' };
+        const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'up-to-date', queued: 'queued' };
         showToast(`${profileData.name} ${msgs[response.action] || 'captured'}`, response.action === 'created' ? 'success' : 'info');
         return { success: true, action: response.action, name: profileData.name };
       }
-      showToast(response?.error || 'Unknown error', 'error');
+      showToast(response?.error || 'Error', 'error');
       return { success: false, error: response?.error };
     } catch (error) {
       if (error.message?.includes('Extension context invalidated')) handleInvalidContext();
       else showToast(`Error: ${error.message}`, 'error');
       return { success: false, error: error.message };
-    } finally {
-      isCapturing = false;
-    }
+    } finally { isCapturing = false; }
   }
 
   async function captureProfile() {
     if (isCapturing || lastCapturedUrl === window.location.href) return;
     if (!isExtensionValid()) return;
     isCapturing = true;
-    console.log('[VHC Extension v3.2] Starting auto-capture...');
     try {
       const profileData = await scrapeProfileData();
-      if (!profileData || !profileData.name) return;
+      if (!profileData?.name) return;
       if (!isExtensionValid()) return;
       const response = await chrome.runtime.sendMessage({ action: 'captureProfile', data: profileData });
-      if (response && response.success) {
+      if (response?.success) {
         lastCapturedUrl = window.location.href;
         const settings = await getSettings();
         if (settings.showNotifications) {
@@ -821,45 +550,29 @@
           else if (response.action === 'updated') showToast(`${profileData.name} updated`, 'info');
         }
       }
-    } catch (error) {
-      if (!error.message?.includes('Extension context invalidated')) {
-        console.error('[VHC Extension v3.2] Auto-capture error:', error);
-      }
-    } finally {
-      isCapturing = false;
-    }
+    } catch (e) {
+      if (!e.message?.includes('Extension context')) console.error(`[VHC v${VERSION}]`, e);
+    } finally { isCapturing = false; }
   }
 
   // ===================== MESSAGE LISTENER =====================
-
   if (isExtensionValid()) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === 'manualCapture') {
-        manualCapture().then(sendResponse);
-        return true;
-      }
-      if (request.action === 'getPageInfo') {
-        sendResponse({ url: window.location.href, isProfilePage: isProfilePage() });
-        return true;
-      }
+      if (request.action === 'manualCapture') { manualCapture().then(sendResponse); return true; }
+      if (request.action === 'getPageInfo') { sendResponse({ url: window.location.href, isProfilePage: isProfilePage() }); return true; }
     });
   }
 
   // ===================== UI =====================
-
   function addFloatingButton() {
     const existing = document.getElementById('vhc-floating-btn');
     if (existing) existing.remove();
     const btn = document.createElement('button');
     btn.id = 'vhc-floating-btn';
     btn.className = 'vhc-capture-btn';
-    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-    btn.title = 'Capture to VHC Talent OS';
-    btn.addEventListener('click', async () => {
-      btn.classList.add('capturing');
-      await manualCapture();
-      btn.classList.remove('capturing');
-    });
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    btn.title = `VHC Capture v${VERSION}`;
+    btn.addEventListener('click', async () => { btn.classList.add('capturing'); await manualCapture(); btn.classList.remove('capturing'); });
     document.body.appendChild(btn);
   }
 
@@ -877,47 +590,31 @@
 
   async function getSettings() {
     if (!isExtensionValid()) return { enabled: true, showNotifications: true, autoCapture: true };
-    try {
-      return await new Promise((resolve, reject) => {
-        chrome.storage.sync.get({ enabled: true, showNotifications: true, autoCapture: true }, r => {
-          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-          else resolve(r);
-        });
-      });
-    } catch (e) { return { enabled: true, showNotifications: true, autoCapture: true }; }
+    try { return await new Promise((res, rej) => { chrome.storage.sync.get({ enabled: true, showNotifications: true, autoCapture: true }, r => { if (chrome.runtime.lastError) rej(chrome.runtime.lastError); else res(r); }); }); }
+    catch (e) { return { enabled: true, showNotifications: true, autoCapture: true }; }
   }
 
   async function getAuthToken() {
     if (!isExtensionValid()) { handleInvalidContext(); return null; }
-    try {
-      return await new Promise((resolve, reject) => {
-        chrome.storage.sync.get(['vhc_token', 'vhc_api_url'], r => {
-          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-          else resolve(r.vhc_token && r.vhc_api_url ? { token: r.vhc_token, apiUrl: r.vhc_api_url } : null);
-        });
-      });
-    } catch (e) { handleInvalidContext(); return null; }
+    try { return await new Promise((res, rej) => { chrome.storage.sync.get(['vhc_token', 'vhc_api_url'], r => { if (chrome.runtime.lastError) rej(chrome.runtime.lastError); else res(r.vhc_token && r.vhc_api_url ? { token: r.vhc_token, apiUrl: r.vhc_api_url } : null); }); }); }
+    catch (e) { handleInvalidContext(); return null; }
   }
 
   // ===================== INIT =====================
-
   async function init() {
-    console.log('[VHC Extension v3.2] Initializing...');
+    console.log(`[VHC v${VERSION}] Initializing...`);
     addFloatingButton();
     const settings = await getSettings();
     if (!settings.enabled) return;
     const auth = await getAuthToken();
-    if (!auth) { console.log('[VHC Extension v3.2] Not authenticated, skipping auto-capture'); return; }
-    if (!isProfilePage()) { console.log('[VHC Extension v3.2] Not a profile page, skipping'); return; }
+    if (!auth) { console.log(`[VHC v${VERSION}] Not authenticated`); return; }
+    if (!isProfilePage()) { console.log(`[VHC v${VERSION}] Not a profile page`); return; }
     if (document.readyState !== 'complete') await new Promise(r => window.addEventListener('load', r));
     await scrollToLoadContent();
     setTimeout(() => captureProfile(), CONFIG.CAPTURE_DELAY);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 
 })();
