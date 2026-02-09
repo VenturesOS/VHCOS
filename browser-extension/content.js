@@ -207,20 +207,29 @@
 
   function extractNaukriProfileId() {
     const url = window.location.href;
+    // Use the full URL path as the profile ID base — most reliable
     const urlParams = new URLSearchParams(window.location.search);
+    
+    // Resdex uses ?sid=xxx or similar query params
     const sid = urlParams.get('sid');
     if (sid) return `naukri_${sid}`;
-    const urlMatch = url.match(/\/(\d+)\/?(\?|$|&)/);
+    
+    // Try other common params
+    const profileParam = urlParams.get('profile_id') || urlParams.get('profileId') || urlParams.get('id') || urlParams.get('pid');
+    if (profileParam) return `naukri_${profileParam}`;
+    
+    // Extract numeric ID from URL path
+    const urlMatch = url.match(/\/(\d{5,})\/?/);
     if (urlMatch) return `naukri_${urlMatch[1]}`;
-    const mainArea = document.querySelector('.leftSection, .mainContent, .profileContent');
-    if (mainArea) {
-      const profileIdEl = mainArea.querySelector('[data-profile-id], [id*="profileId"]');
-      if (profileIdEl) {
-        const id = profileIdEl.getAttribute('data-profile-id') || profileIdEl.id;
-        if (id) return `naukri_${id}`;
-      }
+    
+    // Fallback: hash the full URL path (stable for the same profile)
+    const urlPath = new URL(url).pathname + new URL(url).search;
+    let hash = 0;
+    for (let i = 0; i < urlPath.length; i++) {
+      hash = ((hash << 5) - hash) + urlPath.charCodeAt(i);
+      hash |= 0;
     }
-    return `naukri_${btoa(url).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)}`;
+    return `naukri_url_${Math.abs(hash).toString(36)}`;
   }
 
   function extractName() {
