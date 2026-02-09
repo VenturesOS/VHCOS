@@ -24,6 +24,20 @@
 
   console.log('[VHC Extension] Content script v2.0 loaded on:', window.location.href);
 
+  // ===================== EXTENSION CONTEXT GUARD =====================
+
+  function isExtensionValid() {
+    try {
+      return !!(chrome && chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function handleInvalidContext() {
+    showToast('Extension was updated. Please refresh this page (F5) to reconnect.', 'error');
+  }
+
   // ===================== UTILITY HELPERS =====================
 
   function cleanText(text) {
