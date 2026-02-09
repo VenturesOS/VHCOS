@@ -522,14 +522,31 @@ export default function CandidateDataBankPage() {
                         candidate.source === 'recruiter_upload' ? 'bg-purple-50 text-purple-600' :
                         candidate.source === 'candidate_registration' ? 'bg-green-50 text-green-600' :
                         candidate.source === 'bulk_import' ? 'bg-amber-50 text-amber-600' :
+                        candidate.source === 'naukri_extension' ? 'bg-orange-50 text-orange-600' :
                         'bg-slate-100 text-slate-600'
                       }`}>
                         {candidate.source === 'job_application' ? 'Applied' :
                          candidate.source === 'recruiter_upload' ? 'Recruiter Upload' :
                          candidate.source === 'candidate_registration' ? 'Registered' :
                          candidate.source === 'bulk_import' ? 'Bulk Import' :
+                         candidate.source === 'naukri_extension' ? 'Naukri' :
                          'Direct Upload'}
                       </span>
+                      {/* View Full Naukri Profile */}
+                      {candidate.source === 'naukri_extension' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`naukri-profile/${candidate.id}`);
+                          }}
+                          className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                          data-testid={`view-naukri-profile-${candidate.id}`}
+                        >
+                          <FileText className="w-4 h-4 mr-1" /> Full Profile
+                        </Button>
+                      )}
                       {/* Bulk Import Restricted Badge */}
                       {candidate.bulk_import_restricted && (
                         <Badge variant="outline" className="border-amber-300 text-amber-600 text-xs">
