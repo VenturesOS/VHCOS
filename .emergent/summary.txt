@@ -1,164 +1,189 @@
 <analysis>original_problem_statement:
-The initial request was to improve the performance and user experience of the AI-powered candidate matching feature.
+The user initially requested to fix a bug where shortlisting a candidate from the AI screening results page did not add them to the job's pipeline. After the bug was fixed, the user requested comprehensive project documentation. Following that, the user proposed and prioritized the development of a browser extension for automatically scraping candidate profiles from Naukri.com. The scope expanded to capturing every single detail from the Naukri profile for a 1:1 data match in the application.
 
 PRODUCT REQUIREMENTS:
-- **P0: Performance Fix:** Address the slow performance of the AI matching feature. The goal is to support at least 50 concurrent users with a response time of under 5 seconds for a Quick Match.
-- **P1: Refactor :** Clean up the main server file by extracting endpoints into modular router files.
-- **P2: UI Toggle:** Add a UI toggle on the frontend to allow users to choose between a Quick Match (fast, keyword-based) and a Full AI Match (slower, more comprehensive, runs in the background).
-- **Match History:** Implement a feature for employers and recruiters to view a history of their past searches.
-- **Error Reporting:**
-    - Add a Report Issue button for all users to manually report bugs.
-    - Implement an automated error capture mechanism for both frontend and backend exceptions.
-    - Create an admin dashboard to view both manual and automated error reports.
-- **UI/UX Fixes:**
-    - Update the copyright year to 2026.
-    - Restrict the public sign-up page to only allow Candidate role registration.
-- **Bug Fix:** Fix an issue where shortlisting a candidate from the AI screening results page does not add them to the job's pipeline.
+- **P0: Naukri Auto-Sourcing Browser Extension:**
+    - Create a browser extension that automatically scrapes candidate profiles when a recruiter views them on Naukri.com.
+    - The scraping should be passive and fully automatic, triggering 2-3 seconds after the page loads.
+    - **Data Capture:** The extension must capture **ALL** available data fields from the Naukri profile, including personal details (DOB, gender, marital status), full work history, complete education details, detailed skills with proficiency, certifications, projects, languages, preferences, and profile metadata.
+    - **Data Handling:** The backend must have a robust duplicate detection mechanism (using , then email, then phone) and perform a  or  operation. Updates should only happen if the Naukri profile is newer than the stored version.
+    - **Frontend:** Add a download button for the extension in the main sidebar. Create a new, dedicated profile page to display the comprehensively scraped data in a format that mirrors the Naukri profile.
+    - **UX:** The extension should pre-fill the portal URL. It should have a manual capture button for testing and provide non-intrusive toast notifications for success/update/exists statuses. It must also handle being offline by queuing captures.
+- **P1: Implement Real Email Notifications:**
+    - Integrate the Resend API to send real email notifications for events like shortlisting, job applications, etc.
+    - The user has created a subdomain  for this purpose. The API key is stored.
+    - This task is currently ON HOLD pending user's DNS verification.
+- **P2: Future Backlog:**
+    - Stripe Integration for payments.
+    - Multi-tenancy Architecture.
+    - Implement real WhatsApp integration with Twilio.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application with a React frontend and a FastAPI backend using MongoDB Atlas. The application includes features for job and candidate management, and an AI-powered candidate matching system. Most of the requested features, including performance optimization,  refactoring, the UI toggle for matching, Match History, and a comprehensive error reporting system (both manual and automatic), have been implemented and tested.
+A full-stack application with a React frontend and a FastAPI backend using MongoDB. The app features AI-powered candidate matching (Quick Match & Full AI Match), match history, and a manual/automated error reporting system.
+
+A browser extension for Naukri has been created with the basic structure, including a backend API for capturing data. A download button for the extension is present in the application's sidebar. The extension has undergone initial bug-fixing for incorrect profile capture and contact detail scraping. The backend can successfully receive and store a basic version of the profile data in the  collection.
 
 **Last working item**:
-- Last item agent was working: The agent was fixing a bug where the Shortlist Candidate button on the AI screening results page was not functional. The agent identified the issue and created a new backend endpoint  in  to handle the shortlisting logic.
+- Last item agent was working: The agent was starting to implement the user's request for a complete 1:1 data capture from Naukri profiles. To facilitate this, a new comprehensive Pydantic model was created in  to represent all the detailed fields. The next step is to update the backend API and the extension's scraper to use this new, detailed model.
 - Status: IN PROGRESS
 - Agent Testing Done: N
 - Which testing method agent to use? both
 - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1**: Shortlisting a candidate from AI screening does not add them to the job pipeline.
-  - **Priority**: P0 (This is the current active task).
-  - **Description**: The Shortlist Candidate button on the  only shows a temporary notification (toast) but doesn't perform any action to link the candidate to the job.
+- **Issue 1**: The browser extension does not yet capture all the data fields from a Naukri profile as requested by the user for a 1:1 match.
+  - **Priority**: P0
+  - **Description**: The current implementation only scrapes a subset of fields. The user wants every single piece of information, including full work/education history, detailed skills, personal details, projects, certifications, etc.
   - **Status**: IN PROGRESS
 
   **Issues Detail**:
-  - **Issue 1**: Shortlisting a candidate from AI screening does not add them to the job pipeline.
-     - **Attempted fixes**: A new backend endpoint  has been created in . This endpoint accepts a  and a  and creates an  record in the database, effectively adding the candidate to the job's pipeline.
+  - **Issue 1**: Incomplete data capture by the Naukri browser extension.
+     - **Attempted fixes**: A new detailed Pydantic model has been created at  to serve as the data structure for the complete profile.
      - **Next debug checklist**:
-        1.  **Frontend API Integration**: Create a function in  to call the new  endpoint.
-        2.  **Frontend Component Logic**: Modify . Update the  handler for the Shortlist Candidate button to call the new API function.
-        3.  **UI Feedback**: Ensure the UI provides clear feedback to the user upon successful shortlisting (e.g., changing the button state to Shortlisted, showing a success message) and handles potential errors.
-     - **Why fix this issue and what will be achieved with the fix?**: This is a critical bug fix that will make the AI screening feature useful. It allows recruiters and employers to directly act on the screening results by adding promising candidates to their hiring pipeline.
+        1.  **Backend**: Modify the  endpoint in  to accept and process the new  model.
+        2.  **Backend**: Enhance the database schema logic in the capture endpoint to correctly store the nested and detailed data (e.g., work history, education arrays) in the  collection.
+        3.  **Browser Extension**: Update the scraper logic in  to find and extract all the new data fields from the Naukri profile page's DOM.
+        4.  **Frontend**: Create a new, dedicated component/page (e.g., ) to display all the captured fields in a detailed view, mirroring the Naukri layout.
+        5.  **Frontend**: Update the main  page to link to this new detailed view for candidates sourced from the extension.
+     - **Why fix this issue and what will be achieved with the fix?**: This will fulfill the user's primary requirement for the extension, which is to create a complete and faithful copy of a candidate's Naukri profile within the VHC Talent OS, providing recruiters with all necessary information without leaving the platform.
      - **Status**: IN PROGRESS
      - **Is recurring issue?** N
      - **Should Test frontend/backend/both after fix?** both
      - **Blocked on other issue**: None
 
 **In progress Task List**:
-  - **Task 1**: Complete the bug fix for the Shortlist Candidate functionality.
-     - **Where to resume**: The backend endpoint is complete. The next step is to wire it up to the frontend UI in .
-     - **What will be achieved with this?**: A core user flow will be fixed, enabling users to add candidates to a job mandate directly from the AI screening page.
-     - **Status**: IN PROGRESS
-     - **Should Test frontend/backend/both after fix?** both
-     - **Blocked on something**: None
+- **Task 1**: Complete the Naukri Auto-Sourcing Extension.
+    - **Where to resume**: The  model is created. Resume by updating the API endpoint in  to use this new model.
+    - **What will be achieved with this?**: A powerful, automated sourcing tool that significantly enhances the application's value proposition for recruiters by saving time and centralizing candidate data.
+    - **Status**: IN PROGRESS
+    - **Should Test frontend/backend/both after fix?** both
+    - **Blocked on something**: None
 
 **Upcoming and Future Tasks**
-There are no new upcoming or future tasks requested by the user. The agent should focus on completing the in-progress bug fix.
+- **Upcoming Tasks**:
+    - **P1: Implement Real Email Notifications** (ON HOLD): The Resend API integration is paused, waiting for the user to complete DNS verification for . The API key is already stored in .
+- **Future Tasks**:
+    - P2: Stripe Integration for payments.
+    - P2: Multi-tenancy Architecture.
+    - P2: Implement real WhatsApp integration with Twilio.
+    - P3: Production deployment optimization.
+    - P3: Advanced analytics dashboard.
+    - P3: Candidate deduplication improvements.
 
 **Completed work in this session**
-- **Performance & Matching (P0 & P2)**:
-  - Implemented Quick Match (non-LLM) and Full AI Match (background job) modes. ()
-  - Optimized the  endpoint with caching (LRU, thundering herd prevention) and concurrency controls, passing a load test of 75 concurrent users. ()
-  - Added a UI toggle on the frontend for users to select the match mode. ()
-- **Backend Refactoring (P1)**:
-  - Cleaned up  by removing duplicated route definitions and properly including modular routers.
-- **Match History Feature**:
-  - Created backend endpoints and frontend pages () to allow employers and recruiters to view their past searches.
-- **Error Reporting System**:
-  - Implemented a Report Issue button and dialog for manual bug submission by any user. ()
-  - Implemented automated capture of backend 500 errors and frontend exceptions. (, )
-  - Created Bug Reports and System Health dashboards for admins. (, )
-- **UI/UX Fixes**:
-  - Updated copyright year to 2026 on authentication pages. (, )
-  - Restricted the registration page to Candidate sign-ups only, both on the frontend and backend. (, )
+- **Bug Fix**:
+    - Fixed the Shortlist Candidate button functionality on the AI screening page. This involved adding a backend endpoint () and connecting the frontend UI. The fix was verified via curl, manual testing, and the testing agent.
+- **Documentation**:
+    - Created a comprehensive .
+    - Created a .
+    - Created a PDF-ready .
+- **Feature: Naukri Browser Extension (V1)**:
+    - Created the full directory structure and initial files for a Manifest V3 browser extension.
+    - Built the backend API endpoints (, ) to support the extension.
+    - Added a Download Extension button to the main sidebar for all relevant user roles.
+    - Implemented bug fixes based on user feedback (e.g., ignoring sidebar profiles, fixing contact info scraping).
+    - Packaged the extension into a downloadable ZIP file ().
+    - Verified that captured data is correctly stored and visible in the Candidate Bank UI.
 
 **Earlier issues found/mentioned but not fixed**
-There are no unresolved issues that were mentioned earlier and not addressed.
+None.
 
 **Known issue recurrence from previous fork**
 - **Issue**:  when connecting to MongoDB Atlas.
-  - **Cause**: This error occurred multiple times, usually after a pod re-initialization (which assigns a new IP) or after an aggressive load test caused connection storms. The root cause is that MongoDB Atlas's IP whitelist did not include the pod's new IP address.
-  - **Resolution Status**: RESOLVED. The user manually added the pod's IP address to the Atlas whitelist.
-  - **Note**: This is an operational dependency. If the agent encounters this timeout error, the first step should be to ask the user to verify and update the IP whitelist in their MongoDB Atlas settings.
+  - **Cause**: Pod IP changes after re-initialization.
+  - **Resolution Status**: RESOLVED previously by user.
+  - **Note for Agent**: If this error occurs, the first step is to ask the user to add the pod's current IP to the MongoDB Atlas IP access list.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: React, Material-UI (MUI), Axios, React Router
+- **Frontend**: React, Material-UI (MUI), Axios
 - **Backend**: FastAPI, Python, Motor (async MongoDB driver)
 - **Database**: MongoDB Atlas
-- **AI**: OpenAI API for generating text embeddings.
-- **Architecture**: REST API with a decoupled frontend/backend. Utilizes background jobs for long-running AI tasks, and employs advanced caching strategies (LRU, thundering herd prevention) for performance.
+- **AI**: OpenAI API for embeddings.
+- **Architecture**: REST API, Decoupled Frontend/Backend.
+- **New**: Browser Extension (Manifest V3), DOM Scraping.
 
 **key DB schema**
-- **users**: {email, role, ...}
-- **jobs**: {title, description, ...}
-- **candidates**: {user_id, skills, experience_years, ...}
-- **applications**: {job_id, candidate_id, status, ...} - **This is the collection the current bug fix will write to.**
-- **match_requests**: {user_id, job_description, match_mode, background_job_id, ...}
-- **match_results**: {request_id, candidates, status, ...}
-- **bug_reports**: {description, severity, status, user_id, reporter_role, ...}
-- **system_errors**: {source, message, stack_trace, user_id, ...}
+- **candidate_bank**: The schema has been significantly expanded to support the Naukri extension. Key new fields include:
+    - : (string) Unique identifier from Naukri URL, used for deduplication.
+    - : (string)
+    - : (datetime)
+    - : (array of objects) 
+    - : (array of objects) 
+    - : (array of objects) 
+    - , , : (array of objects)
+    - : (object) 
+    - : (object) 
+    - : (array of objects)
 
 **changes in tech stack**
-None.
+-  was installed and added to .
 
 **All files of reference**
-- : Contains the core matching logic and the newly added  endpoint.
-- : The UI for AI screening. The Shortlist Candidate button in this file needs to be updated.
-- : The central place for frontend API functions. A new function to call the  endpoint needs to be added here.
+- ****: **(NEW)** The comprehensive Pydantic model for a full Naukri profile.
+- ****: The API endpoint that needs to be updated to handle the new  model.
+- ****: The scraper script that needs to be updated to extract all the new fields.
+- ****: Contains the Download Extension button.
+- ****: The page that lists candidates and will need to be updated to link to a new detailed profile view.
 
 **Areas that need refactoring**:
-- The  function in  is now over 400 lines long due to handling multiple logic paths (quick vs. full AI), caching, locking, and error handling. It could benefit from being broken down into smaller, single-responsibility helper functions to improve readability and maintainability.
+- A new dedicated frontend page/component is required to display the detailed Naukri profile data. The existing candidate view is insufficient.
 
 **key api endpoints**
-- : Performs candidate matching.
-- : **(Newly Added)** Adds a candidate to a job's pipeline.
-- : Retrieves past match results for the user.
-- : Submits a user-generated bug report.
-- : Submits an automatically captured system error.
-- : User registration endpoint, now restricted to the candidate role.
+- : **(In Progress)** Receives scraped profile data from the browser extension. Needs to be updated for the comprehensive model.
+- : Retrieves capture statistics for the extension popup.
+- : Serves the  file for download.
+- : **(Completed)** Adds a candidate to a job's pipeline.
 
 **Critical Info for New Agent**
-- **MongoDB IP Whitelisting**: If you encounter , the pod's IP address has likely changed. You must ask the user to add the new IP to the MongoDB Atlas IP access list.
-- **Current Task**: The immediate priority is to fix the Shortlist Candidate button. The backend endpoint is already created. You need to implement the frontend logic to call this endpoint.
+- **User's Top Priority is the Extension**: The user has explicitly put the email integration on hold to prioritize the development of the Naukri browser extension.
+- **1:1 Data Match is Crucial**: The user's main requirement is that the extension captures *every single piece of data* from a Naukri profile. The agent must focus on expanding the scraper () and backend model () to be exhaustive.
+- **Create a New Detailed View**: The current UI for viewing candidates is not sufficient for the amount of data being scraped. A new, dedicated, and detailed profile view must be created on the frontend.
+- **Resend Integration is Ready but Paused**: The API key for Resend is in . The task is blocked only by the user's DNS verification. Do not work on it until the user confirms verification is complete.
 
 **documents and test reports created in this job**
 - 
 - 
-- Test reports from the testing agent are located in .
+- 
+-  (This is the extension package)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  - **(IN PROGRESS)** User reported the critical bug the agent is currently working on.
-2.  - **(Completed)** User approved work on the error reporting feature.
-3.  - **(Completed)** User selected the automated error reporting option.
-4.  - **(Completed)** User requested details on error reporting options.
-5.  - **(Completed)** User prioritized several smaller tasks which are now done.
-6.  - **(Completed)** User proposed new features (error reporting, copyright/signup fixes) which have been implemented.
-7.  - **(Completed)** User prioritized the Match History feature.
-8.  - **(Completed)** User provided requirements for Match History and error reporting.
-9.  - **(Resolved)** User confirmed they updated the IP whitelist for MongoDB, which resolved the connection issue.
-10.  - **(Resolved)** User asking for clarification on the MongoDB connection issue.
+1.  - **(IN PROGRESS)** User specified that the extension must capture every single detail from a Naukri profile for a 1:1 match, including AI matching for industry and location.
+2.  - **(Completed)** User asked to verify that scraped data is correctly stored and visible in the UI. The agent confirmed this works for the basic data model.
+3.  - **(Completed)** User reported two bugs with the extension: it was scraping the wrong profile (sidebar) and using the recruiter's own contact details. The agent has fixed this.
+4.  - **(Completed)** User requested a manual capture button in the extension for testing purposes.
+5.  - **(Completed)** User asked to simplify the extension login by removing or pre-filling the VHC Portal URL field.
+6.  - **(Completed)** User requested a download button for the extension to be placed inside the application UI.
+7.  - **(IN PROGRESS)** User elaborated on their vision for a fully automated, passive scraping extension.
+8.  - **(Completed)** User provided the Resend API key and shared the browser extension idea.
+9.  - **(On Hold)** User confirmed the creation of the subdomain for Resend email integration.
+10.  - **(On Hold)** User decided to proceed with email integration ( domain) and put WhatsApp on hold.
 
 **Project Health Check:**
-- **Broken**: The Shortlist Candidate functionality is currently broken from a user's perspective, though the backend fix is in progress.
-- **Mocked**: No features are mocked.
+- **Broken**: None
+- **Mocked**:
+    - Email Notifications ( integration is on hold).
+    - WhatsApp Notifications ( integration not started).
+- **In Progress**:
+    - Naukri Auto-Sourcing Browser Extension feature.
 
 **3rd Party Integrations**
-- **OpenAI GPT-4o**: Uses Emergent LLM Key for text embeddings in the matching engine.
+- **OpenAI GPT-4o**: Uses Emergent LLM Key for text embeddings.
 - **MongoDB Atlas**: Requires User-provided connection string and IP whitelisting.
+- **Resend (Email)**: **(Configured but On Hold)** API key is in . Blocked on user's DNS verification.
 
 **Testing status**
-- Testing agent used after significant changes: YES
+- Testing agent used after significant changes: YES (for the shortlist bug fix).
 - Troubleshoot agent used after agent stuck in loop: NO
 - Test files created: []
 - Known regressions: None
 
 **Credentials to test flow:**
-The agent has access to the necessary credentials for employer, recruiter, and admin roles to test all application flows.
+- Admin:  / 
 
 **What agent forgot to execute**
-The agent was midway through fixing the Shortlist Candidate bug. The backend endpoint was created, but the work to connect the frontend UI button to this new endpoint was not started. This is the main pending task.</analysis>
+The agent correctly identified the next steps for the comprehensive profile capture but was interrupted after creating the new  model. The crucial work of updating the API endpoint, the scraper logic, and creating the new detailed frontend view remains to be done.</analysis>
