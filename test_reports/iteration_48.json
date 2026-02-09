@@ -1,0 +1,103 @@
+{
+  "summary": "Naukri Auto-Sourcing Browser Extension feature tested. Backend: 11/11 API tests passed. Frontend: NaukriProfileView page fully functional with all 6 tabs (Overview, Experience, Education, Skills, Personal, Preferences) displaying comprehensive candidate data. Routes configured for admin, recruiter, and employer roles.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "CandidateBank", "issues": ["Search results take several seconds to load with 1700+ candidates - pagination working but search is slow"]}
+    ]
+  },
+
+  "passed_tests": [
+    "✅ POST /api/extension/capture - Creates new candidate with comprehensive Naukri profile data",
+    "✅ POST /api/extension/capture - Updates existing candidate when same naukri_profile_id sent (action:updated)",
+    "✅ POST /api/extension/capture - Duplicate detection by email finds and updates existing candidate",
+    "✅ GET /api/extension/profile/{id} - Returns complete candidate profile with all Naukri fields",
+    "✅ GET /api/extension/profile/{id} - Returns 404 for non-existent candidate",
+    "✅ GET /api/extension/stats - Returns capture statistics (total_captured, user_captured, today_captured)",
+    "✅ GET /api/candidate-bank - Lists candidates with source='naukri_extension' visible",
+    "✅ POST /api/extension/capture - All array fields (work_experience, education, certifications, etc.) captured correctly",
+    "✅ Extension endpoints require authentication (401/403)",
+    "✅ NaukriProfileView page loads at /admin/naukri-profile/{candidateId}",
+    "✅ NaukriProfileView shows profile header with name, designation, company, Naukri Sourced badge",
+    "✅ NaukriProfileView shows quick info bar (email, phone, location, experience, notice period)",
+    "✅ NaukriProfileView Overview tab shows Profile Summary, Key Skills, Recent Experience, Compensation, Education, Source Details",
+    "✅ NaukriProfileView Experience tab shows work history timeline with Current badge",
+    "✅ NaukriProfileView Education tab shows education cards and certifications",
+    "✅ NaukriProfileView Skills tab shows Key Skills badges, IT/Technical Skills table, Languages, Projects",
+    "✅ NaukriProfileView Personal tab shows personal details and address sections",
+    "✅ NaukriProfileView Preferences tab shows Salary & Notice, Location Preferences, Industry & Role, Job Type Preferences",
+    "✅ Routing works for admin, recruiter, and employer roles to naukri-profile/:candidateId",
+    "✅ CandidateBank pages (admin/recruiter/employer) have Naukri badge and Full Profile button code"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_extension.py",
+    "/app/test_reports/pytest/pytest_naukri_extension.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Backend: extension.py correctly implements duplicate detection in priority order (naukri_profile_id → email → phone)",
+    "Backend: CompleteNaukriProfileInput Pydantic model handles all 60+ fields from Naukri profiles",
+    "Backend: build_complete_candidate() stores data in flat structure for MongoDB with nested arrays for experience/education/etc",
+    "Backend: build_complete_update() correctly updates only provided fields while preserving existing data",
+    "Frontend: NaukriProfileView.jsx uses tabbed layout with 6 tabs, proper data-testid attributes",
+    "Frontend: formatSalaryINR utility correctly formats Indian currency",
+    "Frontend: CandidateBankRecord Pydantic model uses ConfigDict(extra='ignore') - extra fields from MongoDB are silently ignored in list API",
+    "Frontend: All three role pages (admin/recruiter/employer) have consistent Naukri badge and Full Profile button logic"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_naukri_extension.py - New test file for Naukri Extension API"
+  ],
+
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (all tabs and features verified)"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "seed_data_creation": "Test candidates created with TEST_ prefix for duplicate detection tests",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Naukri Auto-Sourcing Browser Extension fully implemented. Test candidate 'Priya Patel' (ID: 62f9b2ea-f498-494a-a649-2ace564d7405) exists with source='naukri_extension' and comprehensive profile data. Extension endpoints: POST /api/extension/capture (create/update), GET /api/extension/profile/{id} (full profile), GET /api/extension/stats (statistics). Frontend NaukriProfileView page at /admin|recruiter|employer/naukri-profile/:candidateId displays all captured data in tabbed format. CandidateBank pages show 'Naukri' badge and 'Full Profile' button for naukri_extension sourced candidates.",
+
+  "features_verified": {
+    "POST /api/extension/capture (create)": "Works - creates new candidate with all Naukri fields",
+    "POST /api/extension/capture (update by naukri_profile_id)": "Works - returns action:updated",
+    "POST /api/extension/capture (update by email)": "Works - detects duplicate by email",
+    "GET /api/extension/profile/{id}": "Works - returns full candidate document from MongoDB",
+    "GET /api/extension/stats": "Works - returns total_captured, user_captured, today_captured",
+    "GET /api/candidate-bank with naukri_extension source": "Works - source field included in list API response",
+    "NaukriProfileView - Overview tab": "Works - shows summary, skills, experience, compensation",
+    "NaukriProfileView - Experience tab": "Works - shows work history timeline",
+    "NaukriProfileView - Education tab": "Works - shows education cards and certifications",
+    "NaukriProfileView - Skills tab": "Works - shows skills, IT skills table, languages, projects",
+    "NaukriProfileView - Personal tab": "Works - shows personal details and address",
+    "NaukriProfileView - Preferences tab": "Works - shows salary, location, role preferences",
+    "Routing for all roles": "Works - admin/recruiter/employer all have naukri-profile routes"
+  },
+
+  "api_endpoints_tested": [
+    "POST /api/extension/capture - Create/update Naukri profile",
+    "GET /api/extension/profile/{candidate_id} - Get full profile",
+    "GET /api/extension/stats - Get capture statistics",
+    "GET /api/candidate-bank - List candidates (with source field)"
+  ],
+
+  "mocked_apis": ["None - all APIs are real"]
+}
