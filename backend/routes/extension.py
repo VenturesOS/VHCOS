@@ -647,7 +647,7 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
         "industry": profile.current_industry,
         "role_category": profile.current_role_category,
         "employment_status": profile.employment_status,
-        "experience_years": profile.total_experience_years,
+        "experience_years": int(profile.total_experience_years) if profile.total_experience_years else None,
         "experience_months": profile.total_experience_months,
         "experience_display": profile.total_experience_display,
         "highest_qualification": profile.highest_qualification,
