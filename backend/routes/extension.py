@@ -447,7 +447,7 @@ def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: 
         "employment_status": profile.employment_status,
         
         # === EXPERIENCE ===
-        "experience_years": profile.total_experience_years or 0,
+        "experience_years": int(profile.total_experience_years) if profile.total_experience_years else 0,
         "experience_months": profile.total_experience_months,
         "experience_display": profile.total_experience_display,
         "experience": [exp.model_dump() for exp in profile.work_experience],
