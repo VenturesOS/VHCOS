@@ -888,12 +888,14 @@
 
   async function captureProfile() {
     if (isCapturing || lastCapturedUrl === window.location.href) return;
+    if (!isExtensionValid()) return;
     isCapturing = true;
     try {
       const profileData = await scrapeProfileData();
       if (!profileData || !profileData.name) return;
+      if (!isExtensionValid()) return;
       const response = await chrome.runtime.sendMessage({ action: 'captureProfile', data: profileData });
-      if (response.success) {
+      if (response && response.success) {
         lastCapturedUrl = window.location.href;
         const settings = await getSettings();
         if (settings.showNotifications) {
@@ -902,7 +904,11 @@
         }
       }
     } catch (error) {
-      console.error('[VHC Extension] Capture error:', error);
+      if (error.message?.includes('Extension context invalidated')) {
+        console.warn('[VHC Extension] Context invalidated during auto-capture. Refresh page to reconnect.');
+      } else {
+        console.error('[VHC Extension] Capture error:', error);
+      }
     } finally {
       isCapturing = false;
     }
