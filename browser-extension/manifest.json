@@ -34,10 +34,9 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.naukri.com/mnjuser/profile*",
-        "https://www.naukri.com/recruit/viewResume/*",
-        "https://resdex.naukri.com/v2/view-resume/*",
-        "https://resdex.naukri.com/cvPreview/*"
+        "https://www.naukri.com/*",
+        "https://naukri.com/*",
+        "https://*.naukri.com/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],
