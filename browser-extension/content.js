@@ -94,27 +94,43 @@
   }
 
   async function scrollToLoadContent() {
-    console.log(`[VHC v${VERSION}] Scrolling to load all content...`);
-    const totalHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    const step = window.innerHeight * 0.5;
-    let pos = 0;
+    console.log(`[VHC v${VERSION}] Scrolling to load ALL content including CV preview...`);
     
-    // Scroll down slowly to trigger lazy loading
-    while (pos < totalHeight) {
+    // First pass: scroll to bottom slowly to trigger lazy loading
+    let lastHeight = 0;
+    let currentHeight = document.documentElement.scrollHeight;
+    let pos = 0;
+    const step = window.innerHeight * 0.5;
+    
+    while (pos < currentHeight) {
       pos += step;
       window.scrollTo({ top: pos, behavior: 'smooth' });
       await sleep(CONFIG.SCROLL_DELAY);
+      currentHeight = document.documentElement.scrollHeight; // May grow as content loads
     }
     
-    // Wait for content to render
-    await sleep(1500);
+    // Wait for lazy-loaded content (CV preview) to render
+    await sleep(2000);
     
-    // Scroll back up
+    // Second pass: page may have grown after first scroll, scroll to new bottom
+    const newHeight = document.documentElement.scrollHeight;
+    if (newHeight > currentHeight + 200) {
+      console.log(`[VHC v${VERSION}] Page grew from ${currentHeight} to ${newHeight}, scrolling more...`);
+      pos = currentHeight;
+      while (pos < newHeight) {
+        pos += step;
+        window.scrollTo({ top: pos, behavior: 'smooth' });
+        await sleep(CONFIG.SCROLL_DELAY);
+      }
+      await sleep(2000);
+    }
+    
+    // Scroll back to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
     await sleep(1000);
     
-    const newHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    console.log(`[VHC v${VERSION}] Scroll complete. Height: ${totalHeight} -> ${newHeight}`);
+    const finalHeight = document.documentElement.scrollHeight;
+    console.log(`[VHC v${VERSION}] Scroll complete. Final page height: ${finalHeight}px`);
   }
 
   /**
