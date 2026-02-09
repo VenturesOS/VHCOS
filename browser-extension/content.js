@@ -224,7 +224,22 @@
   }
 
   function extractName() {
-    // Breadcrumb — most reliable for Resdex
+    const main = getMainContainer();
+    
+    // Priority 1: Page title / breadcrumb — most reliable for Resdex
+    const pageTitle = document.querySelector('title');
+    if (pageTitle) {
+      // Naukri titles are often "Name - Profile on Naukri" or "Name | Naukri"
+      const titleText = pageTitle.textContent.split(/[-|–]/)[0].trim();
+      if (titleText && titleText.length > 2 && titleText.length < 60 && 
+          !titleText.toLowerCase().includes('naukri') && 
+          !titleText.toLowerCase().includes('resdex') &&
+          !titleText.toLowerCase().includes('search')) {
+        return titleText;
+      }
+    }
+    
+    // Priority 2: Breadcrumb
     const breadcrumb = document.querySelector('.breadcrumb, [class*="breadcrumb"], [class*="Breadcrumb"]');
     if (breadcrumb) {
       const items = breadcrumb.querySelectorAll('span, a, li');
@@ -235,29 +250,29 @@
         }
       }
     }
-    // Page header
-    const pageTitle = qsMain('h1, [class*="profileTitle"], [class*="candidateName"]');
-    if (pageTitle) {
-      const name = cleanText(pageTitle.textContent);
+    
+    // Priority 3: First h1 in main container (NOT sidebar)
+    const h1 = main.querySelector('h1');
+    if (h1 && !isInSidebar(h1)) {
+      const name = cleanText(h1.textContent);
       if (name && name.length > 2 && name.length < 60) return name;
     }
-    // Specific selectors
-    const selectors = [
+    
+    // Priority 4: Specific selectors scoped to main container
+    const nameSelectors = [
       '.profileCard .name', '.leftSection .name', '.mainContent .name',
-      '[class*="leftSec"] .name', '[class*="profileCard"] .name'
+      '[class*="leftSec"] .name', '[class*="profileCard"] .name',
+      '[class*="candidateName"]', '[class*="profileTitle"]',
+      '.name', '[class*="Name"]:not([class*="company"])'
     ];
-    for (const s of selectors) {
-      const el = qsMain(s);
-      if (el) {
+    for (const s of nameSelectors) {
+      const el = main.querySelector(s);
+      if (el && !isInSidebar(el)) {
         const name = cleanText(el.textContent);
-        if (name && name.length > 2 && name.length < 60) return name;
+        if (name && name.length > 2 && name.length < 60 && !name.toLowerCase().includes('name:')) return name;
       }
     }
-    // Generic .name
-    for (const el of qsaMain('.name, [class*="Name"]')) {
-      const name = cleanText(el.textContent);
-      if (name && name.length > 2 && name.length < 60 && !name.toLowerCase().includes('name:')) return name;
-    }
+    
     return null;
   }
 
