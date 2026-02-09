@@ -23,6 +23,7 @@ const NOTICE_PERIODS = [
 ];
 
 export default function RecruiterCandidateBankPage() {
+  const navigate = useNavigate();
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
