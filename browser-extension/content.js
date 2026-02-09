@@ -27,7 +27,7 @@
   let isCapturing = false;
   let lastCapturedUrl = null;
 
-  console.log('[VHC Extension v3.1] Content script loaded on:', window.location.href);
+  console.log('[VHC Extension v3.2] Content script loaded on:', window.location.href);
 
   // ===================== EXTENSION CONTEXT GUARD =====================
 
@@ -725,7 +725,7 @@
       },
       scraped_at: new Date().toISOString(),
       raw_profile_text: getMainProfileText().substring(0, 5000),
-      extension_version: '3.1.0'
+      extension_version: '3.2.0'
     };
 
     // Highest degree
