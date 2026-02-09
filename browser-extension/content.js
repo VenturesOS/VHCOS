@@ -1,9 +1,15 @@
 /**
- * VHC Talent OS - Naukri Profile Scraper v2.0
- * Content script that runs on Naukri profile pages
- * Captures ALL available data fields for 1:1 profile matching
+ * VHC Talent OS - Naukri Resdex Profile Scraper v3.0
+ * Specifically built for Naukri Resdex profile preview pages.
+ * 
+ * Key DOM structure (from real Naukri page):
+ *   #rdxRoot > #cap-container  — main React app content
+ *   .headGNBWrap               — top navigation (ignore)
+ *   .footerHtml                — footer (ignore)
+ *   #talentCloudBody           — talent cloud widget (hidden, ignore)
+ *   #modalRoot                 — modal container (ignore)
  *
- * Output format matches CompleteNaukriProfileInput backend schema exactly.
+ * URL: resdex.naukri.com/v3/preview?tabKey=profile&sid=...
  */
 
 (function() {
@@ -16,26 +22,21 @@
     CAPTURE_DELAY: 3000,
     SCROLL_DELAY: 500,
     TOAST_DURATION: 4000,
-    RETRY_ATTEMPTS: 3
   };
 
   let isCapturing = false;
   let lastCapturedUrl = null;
 
-  console.log('[VHC Extension] Content script v2.0 loaded on:', window.location.href);
+  console.log('[VHC Extension] Content script v3.0 loaded on:', window.location.href);
 
   // ===================== EXTENSION CONTEXT GUARD =====================
 
   function isExtensionValid() {
-    try {
-      return !!(chrome && chrome.runtime && chrome.runtime.id);
-    } catch (e) {
-      return false;
-    }
+    try { return !!(chrome && chrome.runtime && chrome.runtime.id); } catch (e) { return false; }
   }
 
   function handleInvalidContext() {
-    showToast('Extension was updated. Please refresh this page (F5) to reconnect.', 'error');
+    showToast('Extension was updated. Please refresh this page (F5).', 'error');
   }
 
   // ===================== UTILITY HELPERS =====================
@@ -49,154 +50,147 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Get clean text from an element, excluding script/style tags and hidden elements.
+   */
+  function getCleanText(el) {
+    if (!el) return '';
+    // Clone the element so we can remove unwanted children
+    const clone = el.cloneNode(true);
+    // Remove script, style, noscript elements
+    clone.querySelectorAll('script, style, noscript, iframe, [style*="display:none"], [style*="display: none"]').forEach(e => e.remove());
+    return clone.innerText || clone.textContent || '';
+  }
+
+  // ===================== MAIN PROFILE CONTAINER =====================
+
+  /**
+   * The Naukri Resdex page renders inside #cap-container (within #rdxRoot).
+   * Inside that, the profile is typically split into:
+   *   - A main/left section with full profile details
+   *   - A right/sidebar section with similar/suggested profiles
+   *
+   * Since the internal class names are React-generated and may change,
+   * we use a heuristic: the main profile section is the FIRST large child
+   * of #cap-container that contains detailed profile information.
+   */
+  function getMainContainer() {
+    // Priority 1: #cap-container is the known main content area
+    const capContainer = document.getElementById('cap-container');
+    if (capContainer) {
+      // Look for the main profile section inside cap-container
+      // Naukri typically uses a flex/grid layout. The main profile is the wider left section.
+      const children = capContainer.querySelectorAll(':scope > div > div, :scope > div');
+      if (children.length > 0) {
+        // Find the widest child that isn't tiny (likely main content vs sidebar)
+        let mainChild = null;
+        let maxWidth = 0;
+        for (const child of children) {
+          const rect = child.getBoundingClientRect();
+          // Must be visible and substantial
+          if (rect.width > 400 && rect.height > 200 && rect.width > maxWidth) {
+            maxWidth = rect.width;
+            mainChild = child;
+          }
+        }
+        if (mainChild) {
+          console.log('[VHC Extension] Found main profile container (width:', maxWidth + ')');
+          return mainChild;
+        }
+      }
+      console.log('[VHC Extension] Using #cap-container as main container');
+      return capContainer;
+    }
+
+    // Priority 2: #rdxRoot
+    const rdxRoot = document.getElementById('rdxRoot');
+    if (rdxRoot) {
+      console.log('[VHC Extension] Using #rdxRoot as main container');
+      return rdxRoot;
+    }
+
+    console.log('[VHC Extension] Falling back to document.body');
+    return document.body;
+  }
+
+  /**
+   * Check if an element is in the sidebar/suggested profiles area.
+   * Strategy: Check if the element is to the RIGHT of the page center,
+   * or if it's inside a container that's narrower and positioned right.
+   */
   function isInSidebar(element) {
     if (!element) return false;
-    // Comprehensive sidebar/related patterns for Naukri Resdex
+
+    // Check by class/id patterns
     const sidebarPatterns = [
       'sidebar', 'rightsec', 'similar', 'matched', 'recommendation',
-      'aimatched', 'recruitersviewed', 'rightsection', 'comment',
-      'relatedprofile', 'othercandidate', 'right-section', 'right_section',
-      'suggestedprofile', 'suggested-profile', 'matchedprofile',
-      'sidematch', 'rightpanel', 'right-panel', 'aside', 'sidecard',
-      'similarcandidate', 'similar-candidate', 'otherprofile',
-      'rightcol', 'right-col', 'rightcolumn', 'right-column',
-      'rhs', 'rhspanel', 'rhs-panel', 'recommendedprofile',
-      'morelike', 'more-like', 'viewsimilar', 'view-similar',
-      'profileflyout', 'profile-flyout', 'flyout', 'miniprofile',
-      'mini-profile', 'quickview', 'quick-view', 'preview-card',
-      'previewcard', 'hoverpanel', 'hover-panel', 'tooltip-profile'
+      'aimatched', 'rightsection', 'relatedprofile', 'othercandidate',
+      'right-section', 'suggestedprofile', 'matchedprofile',
+      'rightpanel', 'right-panel', 'sidecard', 'similarcandidate',
+      'rightcol', 'right-col', 'rhs', 'rhspanel',
+      'flyout', 'miniprofile', 'quickview', 'preview-card',
+      'hoverpanel', 'tooltip-profile'
     ];
+    
     let parent = element;
     let depth = 0;
-    while (parent && parent !== document.body && depth < 20) {
+    while (parent && parent !== document.body && depth < 15) {
       const cls = (parent.className || '').toString().toLowerCase();
       const id = (parent.id || '').toLowerCase();
-      const role = (parent.getAttribute('role') || '').toLowerCase();
       const tag = parent.tagName?.toLowerCase();
       
-      // Check tag
       if (tag === 'aside') return true;
       
-      // Check ARIA role
-      if (role === 'complementary' || role === 'tooltip') return true;
-      
-      // Check patterns
       for (const p of sidebarPatterns) {
         if (cls.includes(p) || id.includes(p)) return true;
       }
       
-      // Check data attributes
-      const dataSection = (parent.getAttribute('data-section') || '').toLowerCase();
-      if (dataSection.includes('similar') || dataSection.includes('recommend') || dataSection.includes('right')) return true;
-      
       parent = parent.parentElement;
       depth++;
     }
+
+    // Position-based check: if the element is in the right 35% of the page, likely sidebar
+    const rect = element.getBoundingClientRect();
+    const pageWidth = window.innerWidth;
+    if (rect.left > pageWidth * 0.65 && rect.width < pageWidth * 0.4) {
+      return true;
+    }
+
     return false;
   }
 
-  /**
-   * Find the main profile container — the largest content area that is NOT a sidebar.
-   * Strategy: Look for known main-content selectors, then fall back to the widest element.
-   */
-  function getMainContainer() {
-    // Priority 1: Known Naukri main content selectors
-    const mainSelectors = [
-      '#root > div > div:not([class*="right"]):not([class*="sidebar"])',
-      '.leftSection', '.left-section', '.mainContent', '.main-content',
-      '.profileContent', '.profile-content', '.profileDetail', '.profile-detail',
-      '.leftSec', '.left_sec', '.leftCol', '.left-col', '.leftColumn',
-      '.candidateProfile', '.candidate-profile', '.resumeDetail', '.resume-detail',
-      'main', 'article', '[role="main"]',
-      '.contentArea', '.content-area', '.primaryContent', '.primary-content'
-    ];
-    for (const sel of mainSelectors) {
-      const el = document.querySelector(sel);
-      if (el && !isInSidebar(el) && el.offsetWidth > 400) return el;
-    }
-    
-    // Priority 2: Find the largest non-sidebar direct child of root/body
-    const rootEl = document.querySelector('#root, #app, .app') || document.body;
-    const children = rootEl.querySelectorAll(':scope > div > div, :scope > div');
-    let best = null;
-    let bestWidth = 0;
-    for (const child of children) {
-      if (isInSidebar(child)) continue;
-      const w = child.offsetWidth;
-      if (w > bestWidth && w > 300) {
-        bestWidth = w;
-        best = child;
-      }
-    }
-    if (best) return best;
-    
-    return document.body;
-  }
-
-  function isUserOwnContact(email) {
-    if (!email) return false;
-    const headerArea = document.querySelector('header, nav, .header, .navbar, [class*="Header"]');
-    if (headerArea && headerArea.innerText.toLowerCase().includes(email.toLowerCase())) return true;
-    if (email.includes('@vhc.in')) return true;
-    return false;
-  }
-
-  /** Get all visible text from the main profile area (exclude sidebar). */
-  function getMainProfileText() {
-    const main = getMainContainer();
-    return main ? main.innerText : document.body.innerText;
-  }
-
-  /** Query selector scoped to main profile container only. */
+  /** Query within main container, excluding sidebar */
   function qsMain(selector) {
     const main = getMainContainer();
-    // First try within the main container
-    const el = main.querySelector(selector);
-    if (el && !isInSidebar(el)) return el;
-    // Fallback: all matching elements, filter out sidebar
-    const els = document.querySelectorAll(selector);
-    for (const e of els) {
-      if (!isInSidebar(e)) return e;
+    const els = main.querySelectorAll(selector);
+    for (const el of els) {
+      if (!isInSidebar(el)) return el;
     }
     return null;
   }
 
-  /** Query selector ALL scoped to main profile area. */
   function qsaMain(selector) {
     const main = getMainContainer();
-    const results = [];
-    // First collect from main container
-    const inMain = main.querySelectorAll(selector);
-    for (const el of inMain) {
-      if (!isInSidebar(el)) results.push(el);
-    }
-    // If nothing found, try whole document
-    if (results.length === 0) {
-      const all = document.querySelectorAll(selector);
-      for (const el of all) {
-        if (!isInSidebar(el)) results.push(el);
-      }
-    }
-    return results;
+    return [...main.querySelectorAll(selector)].filter(el => !isInSidebar(el));
   }
 
-  // ===================== SECTION FINDER =====================
+  /** Get clean text from main profile area only */
+  function getMainProfileText() {
+    const main = getMainContainer();
+    return getCleanText(main);
+  }
 
-  /**
-   * Naukri Resdex profile pages are organized into labelled sections.
-   * This helper finds a section by its heading text and returns the
-   * container element so we can extract structured data from it.
-   */
+  /** Find a section by heading text within main container */
   function findSection(headingTexts) {
     if (!Array.isArray(headingTexts)) headingTexts = [headingTexts];
     const main = getMainContainer();
-    const headings = main.querySelectorAll('h2, h3, h4, .sectionTitle, [class*="sectionTitle"], [class*="SectionTitle"], .heading, [class*="heading"], [class*="Heading"]');
+    const headings = main.querySelectorAll('h2, h3, h4, [class*="heading"], [class*="Heading"], [class*="title"], [class*="Title"]');
     for (const h of headings) {
       if (isInSidebar(h)) continue;
       const hText = (h.textContent || '').trim().toLowerCase();
       for (const target of headingTexts) {
         if (hText.includes(target.toLowerCase())) {
-          return h.closest('section, .section, [class*="Section"], [class*="section"]') || h.parentElement;
+          return h.closest('section, [class*="section"], [class*="Section"]') || h.parentElement;
         }
       }
     }
@@ -207,22 +201,14 @@
 
   function extractNaukriProfileId() {
     const url = window.location.href;
-    // Use the full URL path as the profile ID base — most reliable
     const urlParams = new URLSearchParams(window.location.search);
-    
-    // Resdex uses ?sid=xxx or similar query params
     const sid = urlParams.get('sid');
     if (sid) return `naukri_${sid}`;
-    
-    // Try other common params
     const profileParam = urlParams.get('profile_id') || urlParams.get('profileId') || urlParams.get('id') || urlParams.get('pid');
     if (profileParam) return `naukri_${profileParam}`;
-    
-    // Extract numeric ID from URL path
     const urlMatch = url.match(/\/(\d{5,})\/?/);
     if (urlMatch) return `naukri_${urlMatch[1]}`;
-    
-    // Fallback: hash the full URL path (stable for the same profile)
+    // Hash fallback
     const urlPath = new URL(url).pathname + new URL(url).search;
     let hash = 0;
     for (let i = 0; i < urlPath.length; i++) {
@@ -234,54 +220,62 @@
 
   function extractName() {
     const main = getMainContainer();
-    
-    // Priority 1: Page title / breadcrumb — most reliable for Resdex
+
+    // Strategy 1: Page <title> — Naukri titles are usually "CandidateName - Profile..."
     const pageTitle = document.querySelector('title');
     if (pageTitle) {
-      // Naukri titles are often "Name - Profile on Naukri" or "Name | Naukri"
-      const titleText = pageTitle.textContent.split(/[-|–]/)[0].trim();
-      if (titleText && titleText.length > 2 && titleText.length < 60 && 
-          !titleText.toLowerCase().includes('naukri') && 
-          !titleText.toLowerCase().includes('resdex') &&
-          !titleText.toLowerCase().includes('search')) {
+      let titleText = pageTitle.textContent;
+      // Remove common suffixes
+      titleText = titleText.replace(/\s*[-|–]\s*(Profile|Naukri|Resdex|Resume).*$/i, '').trim();
+      titleText = titleText.replace(/\s*on\s+Naukri.*$/i, '').trim();
+      if (titleText && titleText.length > 2 && titleText.length < 60 &&
+          !/naukri|resdex|search|recruiter|login|home/i.test(titleText)) {
+        console.log('[VHC Extension] Found name from page title:', titleText);
         return titleText;
       }
     }
-    
-    // Priority 2: Breadcrumb
-    const breadcrumb = document.querySelector('.breadcrumb, [class*="breadcrumb"], [class*="Breadcrumb"]');
+
+    // Strategy 2: The FIRST h1 in main container (main profile name is always h1)
+    const h1s = main.querySelectorAll('h1');
+    for (const h1 of h1s) {
+      if (isInSidebar(h1)) continue;
+      const name = cleanText(h1.textContent);
+      if (name && name.length > 2 && name.length < 60 && !/similar|suggest|recommend/i.test(name)) {
+        console.log('[VHC Extension] Found name from h1:', name);
+        return name;
+      }
+    }
+
+    // Strategy 3: Breadcrumb — last item is usually the candidate name
+    const breadcrumb = document.querySelector('[class*="breadcrumb"], [class*="Breadcrumb"]');
     if (breadcrumb) {
       const items = breadcrumb.querySelectorAll('span, a, li');
       if (items.length > 0) {
         const name = cleanText(items[items.length - 1].textContent);
-        if (name && name.length > 2 && name.length < 60 && !name.includes('Similar') && !name.includes('profile')) {
+        if (name && name.length > 2 && name.length < 60) {
+          console.log('[VHC Extension] Found name from breadcrumb:', name);
           return name;
         }
       }
     }
-    
-    // Priority 3: First h1 in main container (NOT sidebar)
-    const h1 = main.querySelector('h1');
-    if (h1 && !isInSidebar(h1)) {
-      const name = cleanText(h1.textContent);
-      if (name && name.length > 2 && name.length < 60) return name;
-    }
-    
-    // Priority 4: Specific selectors scoped to main container
-    const nameSelectors = [
-      '.profileCard .name', '.leftSection .name', '.mainContent .name',
-      '[class*="leftSec"] .name', '[class*="profileCard"] .name',
-      '[class*="candidateName"]', '[class*="profileTitle"]',
-      '.name', '[class*="Name"]:not([class*="company"])'
-    ];
-    for (const s of nameSelectors) {
-      const el = main.querySelector(s);
-      if (el && !isInSidebar(el)) {
+
+    // Strategy 4: Look for name-like elements in the TOP portion of main container
+    // The main profile name should be near the top of the page
+    const candidates = main.querySelectorAll('[class*="name"], [class*="Name"], .name');
+    for (const el of candidates) {
+      if (isInSidebar(el)) continue;
+      const rect = el.getBoundingClientRect();
+      // Must be in the top 400px of the page and on the left side
+      if (rect.top < 400 && rect.left < window.innerWidth * 0.6) {
         const name = cleanText(el.textContent);
-        if (name && name.length > 2 && name.length < 60 && !name.toLowerCase().includes('name:')) return name;
+        if (name && name.length > 2 && name.length < 60 && !/company|org|employer/i.test(el.className || '')) {
+          console.log('[VHC Extension] Found name from top-positioned element:', name);
+          return name;
+        }
       }
     }
-    
+
+    console.log('[VHC Extension] Could not find name');
     return null;
   }
 
@@ -294,53 +288,81 @@
   }
 
   function extractEmail() {
-    const selectors = ['.email', '[class*="email"]', '[class*="Email"]', 'a[href^="mailto:"]'];
-    for (const s of selectors) {
-      for (const el of qsaMain(s)) {
-        const text = el.href ? el.href.replace('mailto:', '') : el.textContent;
-        const m = text.match(/[\w.-]+@[\w.-]+\.\w+/);
-        if (m && !isUserOwnContact(m[0])) return m[0].toLowerCase();
+    const main = getMainContainer();
+    // Look for mailto links
+    const mailtoLinks = main.querySelectorAll('a[href^="mailto:"]');
+    for (const link of mailtoLinks) {
+      if (isInSidebar(link)) continue;
+      const email = link.href.replace('mailto:', '').trim().toLowerCase();
+      if (email && email.includes('@')) {
+        console.log('[VHC Extension] Found email from mailto:', email);
+        return email;
       }
     }
+    // Look for elements with email-like classes
+    const emailEls = main.querySelectorAll('[class*="email"], [class*="Email"], [data-type="email"]');
+    for (const el of emailEls) {
+      if (isInSidebar(el)) continue;
+      const text = el.textContent.trim();
+      const m = text.match(/[\w.-]+@[\w.-]+\.\w+/);
+      if (m) {
+        console.log('[VHC Extension] Found email from element:', m[0]);
+        return m[0].toLowerCase();
+      }
+    }
+    // Regex scan of main text
     const mainText = getMainProfileText();
     const matches = mainText.match(/[\w.-]+@[\w.-]+\.(com|in|org|net|co\.in|io)/gi);
     if (matches) {
       for (const email of matches) {
-        if (!isUserOwnContact(email)) return email.toLowerCase();
+        // Skip recruiter's own email
+        if (!email.includes('@vhc.in') && !email.includes('naukri.com')) {
+          console.log('[VHC Extension] Found email from text scan:', email);
+          return email.toLowerCase();
+        }
       }
     }
+    console.log('[VHC Extension] Could not find email (may need to click "View" button)');
     return null;
   }
 
   function extractPhone() {
-    const selectors = ['.phone', '.mobile', '[class*="phone"]', '[class*="mobile"]', '[class*="Phone"]', '[class*="Mobile"]', 'a[href^="tel:"]'];
-    for (const s of selectors) {
-      for (const el of qsaMain(s)) {
-        const text = el.href ? el.href.replace('tel:', '') : el.textContent;
-        const m = text.match(/(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
-        if (m) return m[0].replace(/[\s-]/g, '');
+    const main = getMainContainer();
+    const phoneEls = main.querySelectorAll('[class*="phone"], [class*="mobile"], [class*="Phone"], [class*="Mobile"], a[href^="tel:"]');
+    for (const el of phoneEls) {
+      if (isInSidebar(el)) continue;
+      const text = el.href ? el.href.replace('tel:', '') : el.textContent;
+      const m = text.match(/(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
+      if (m) {
+        const phone = m[0].replace(/[\s-]/g, '');
+        console.log('[VHC Extension] Found phone:', phone);
+        return phone;
       }
     }
     const mainText = getMainProfileText();
     const m = mainText.match(/(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
-    if (m) return m[0].replace(/[\s-]/g, '');
+    if (m) {
+      console.log('[VHC Extension] Found phone from text:', m[0]);
+      return m[0].replace(/[\s-]/g, '');
+    }
+    console.log('[VHC Extension] Could not find phone (may need to click "View" button)');
     return null;
   }
 
   function extractPhotoUrl() {
-    const selectors = [
-      '.profile-photo img', '.profilePic img', '.user-image img',
-      '[class*="profilePhoto"] img', '.candidate-photo img', '.photo img', '[class*="avatar"] img'
-    ];
-    for (const s of selectors) {
-      const el = qsMain(s);
-      if (el && el.src && !el.src.includes('default') && !el.src.includes('placeholder')) return el.src;
+    const main = getMainContainer();
+    const imgs = main.querySelectorAll('img[src*="profile"], img[src*="photo"], img[src*="avatar"], img[class*="photo"], img[class*="avatar"], img[class*="profile"]');
+    for (const img of imgs) {
+      if (isInSidebar(img)) continue;
+      if (img.src && !img.src.includes('default') && !img.src.includes('placeholder') && img.naturalWidth > 30) {
+        return img.src;
+      }
     }
     return null;
   }
 
   function extractHeadline() {
-    const selectors = ['.headline', '.resumeHeadline', '.profile-headline', '[class*="headline"]', '.tagline'];
+    const selectors = ['[class*="headline"]', '[class*="resumeHeadline"]', '[class*="tagline"]'];
     for (const s of selectors) {
       const el = qsMain(s);
       if (el && el.textContent.trim().length > 10) return cleanText(el.textContent);
@@ -349,180 +371,191 @@
   }
 
   function extractProfileSummary() {
-    const selectors = ['.summary', '.profileSummary', '.about-me', '.profile-summary', '[class*="summary"]', '.synopsis'];
+    const selectors = ['[class*="summary"]', '[class*="Synopsis"]', '[class*="about"]'];
     for (const s of selectors) {
       const el = qsMain(s);
       if (el && el.textContent.trim().length > 30) return cleanText(el.textContent);
     }
-    // Also check labelled section
     const sec = findSection(['profile summary', 'summary', 'about me', 'about']);
     if (sec) {
-      const text = cleanText(sec.textContent);
-      if (text && text.length > 30) return text;
+      const text = getCleanText(sec);
+      if (text && text.length > 30) return cleanText(text);
     }
     return null;
   }
 
   function extractCurrentEmployment() {
     const result = { company: null, designation: null, department: null, industry: null };
-    const pageText = getMainProfileText();
+    const mainText = getMainProfileText();
 
-    // Pattern: "Current — Designation at Company since Date"
-    const currentMatch = pageText.match(/Current[:\s—-]*(.+?)(?:at|@)\s+(.+?)(?:\s+since|\s*$)/i);
-    if (currentMatch) {
-      result.designation = cleanText(currentMatch[1]);
-      result.company = cleanText(currentMatch[2].replace(/\s+since.*/, ''));
+    // Pattern: Look for "Current" section text — but exclude script content
+    // Split by newlines and find lines with relevant keywords
+    const lines = mainText.split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.length < 200);
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Company name is often after "at" or standalone near "Current"
+      if (/^current$/i.test(line) || /current\s*(company|employer|organization)/i.test(line)) {
+        // Next non-empty line might be company
+        if (i + 1 < lines.length && lines[i + 1].length > 1 && lines[i + 1].length < 100) {
+          if (!result.company) {
+            result.company = cleanText(lines[i + 1]);
+            console.log('[VHC Extension] Found company from "Current" line:', result.company);
+          }
+        }
+      }
+      
+      // Designation
+      if (/designation|job\s*title|role/i.test(line) && i + 1 < lines.length) {
+        const next = lines[i + 1];
+        if (next.length > 2 && next.length < 100 && !/window\.|document\.|function/i.test(next)) {
+          if (!result.designation) {
+            result.designation = cleanText(next);
+            console.log('[VHC Extension] Found designation:', result.designation);
+          }
+        }
+      }
     }
 
-    // Fallback selectors
+    // Fallback: specific elements
     if (!result.company) {
-      const el = qsMain('.currentCompany, .company, [class*="currentEmployer"], .orgName, [class*="companyName"]');
+      const el = qsMain('[class*="currentCompany"], [class*="company"], [class*="orgName"], [class*="companyName"], [class*="employer"]');
       if (el) result.company = cleanText(el.textContent);
     }
     if (!result.designation) {
-      const el = qsMain('.designation, .currentDesignation, [class*="designation"], .jobTitle, [class*="jobTitle"]');
+      const el = qsMain('[class*="designation"], [class*="jobTitle"], [class*="currentDesig"]');
       if (el) result.designation = cleanText(el.textContent);
     }
 
-    // Industry
-    const indMatch = pageText.match(/Industry[:\s]*([^\n|]+)/i);
-    if (indMatch) result.industry = cleanText(indMatch[1]);
-
-    // Department
-    const deptMatch = pageText.match(/Department[:\s]*([^\n|]+)/i);
-    if (deptMatch) result.department = cleanText(deptMatch[1]);
+    // Industry from text
+    for (const line of lines) {
+      const indMatch = line.match(/^Industry[:\s]*(.+)/i);
+      if (indMatch && indMatch[1].length < 100) {
+        result.industry = cleanText(indMatch[1]);
+        break;
+      }
+    }
 
     return result;
   }
 
   function extractTotalExperience() {
-    const pageText = getMainProfileText();
-    // "15y", "15 years", "15 yrs"
-    const m = pageText.match(/(\d+(?:\.\d+)?)\s*(?:y(?:ears?|rs?)?|yoe)/i);
-    if (m) return parseFloat(m[1]);
-    const el = qsMain('.experience, .totalExperience, [class*="experience"]');
-    if (el) {
-      const m2 = el.textContent.match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i);
-      if (m2) return parseFloat(m2[1]);
+    const mainText = getMainProfileText();
+    // Look for experience patterns — "X Years Y Months" or "X Yrs"
+    const patterns = [
+      /(\d+(?:\.\d+)?)\s*(?:Years?|Yrs?)\s*(?:(\d+)\s*(?:Months?|Mos?))?/i,
+      /(?:Total|Overall)\s*(?:Experience|Exp)[:\s]*(\d+(?:\.\d+)?)\s*(?:Years?|Yrs?)/i,
+      /Experience[:\s]*(\d+(?:\.\d+)?)\s*(?:Years?|Yrs?)/i,
+    ];
+    for (const p of patterns) {
+      const m = mainText.match(p);
+      if (m) {
+        let years = parseFloat(m[1]);
+        if (m[2]) years += parseInt(m[2]) / 12;
+        console.log('[VHC Extension] Found experience years:', years);
+        return years;
+      }
     }
     return null;
   }
 
   function extractWorkExperience() {
     const experiences = [];
-    // Try to find Experience section
     const sec = findSection(['employment', 'work experience', 'experience']);
     if (!sec) return experiences;
 
-    // Each experience entry is typically a card or repeated block
-    const entries = sec.querySelectorAll('.experience-card, .expCard, [class*="expCard"], [class*="ExperienceCard"], [class*="employment-card"], .workExp');
+    // Look for repeated blocks — each job entry
+    const entries = sec.querySelectorAll('[class*="exp"], [class*="Exp"], [class*="employment"], [class*="Employment"], [class*="work"]');
+    const seen = new Set();
     for (const entry of entries) {
       if (isInSidebar(entry)) continue;
+      const text = getCleanText(entry);
+      if (text.length < 10 || seen.has(text)) continue;
+      seen.add(text);
+      
       const exp = {};
-      const titleEl = entry.querySelector('.designation, .title, [class*="designation"], [class*="title"], h3, h4');
-      if (titleEl) exp.designation = cleanText(titleEl.textContent);
-      const compEl = entry.querySelector('.company, .orgName, [class*="company"], [class*="org"]');
+      // First strong/bold text is usually designation
+      const bold = entry.querySelector('strong, b, [class*="title"], [class*="desig"], h3, h4');
+      if (bold) exp.designation = cleanText(bold.textContent);
+      
+      // Company
+      const compEl = entry.querySelector('[class*="company"], [class*="org"], [class*="Company"]');
       if (compEl) exp.company = cleanText(compEl.textContent);
-      const dateEl = entry.querySelector('.duration, .dates, [class*="duration"], [class*="date"]');
+      
+      // Dates
+      const dateEl = entry.querySelector('[class*="duration"], [class*="date"], [class*="period"]');
       if (dateEl) {
-        const dateText = dateEl.textContent;
-        exp.duration = cleanText(dateText);
-        const fromTo = dateText.match(/(\w+[\s']?\d{2,4})\s*[-–to]+\s*(\w+[\s']?\d{2,4}|present|current)/i);
+        exp.duration = cleanText(dateEl.textContent);
+        const fromTo = dateEl.textContent.match(/(\w+[\s']?\d{2,4})\s*[-–to]+\s*(\w+[\s']?\d{2,4}|present|current|till\s*date)/i);
         if (fromTo) {
           exp.from_date = cleanText(fromTo[1]);
-          exp.to_date = fromTo[2].toLowerCase().includes('present') ? null : cleanText(fromTo[2]);
-          exp.is_current = fromTo[2].toLowerCase().includes('present') || fromTo[2].toLowerCase().includes('current');
+          exp.to_date = /present|current|till/i.test(fromTo[2]) ? null : cleanText(fromTo[2]);
+          exp.is_current = /present|current|till/i.test(fromTo[2]);
         }
       }
-      const descEl = entry.querySelector('.description, .jobDescription, [class*="description"]');
+      
+      // Description
+      const descEl = entry.querySelector('[class*="description"], [class*="desc"], [class*="detail"]');
       if (descEl) exp.description = cleanText(descEl.textContent);
-      const locEl = entry.querySelector('.location, [class*="location"]');
+      
+      // Location
+      const locEl = entry.querySelector('[class*="location"], [class*="city"]');
       if (locEl) exp.location = cleanText(locEl.textContent);
 
-      if (exp.designation || exp.company) {
-        experiences.push(exp);
-      }
+      if (exp.designation || exp.company) experiences.push(exp);
     }
-
-    // Fallback: parse from text if no structured cards found
-    if (experiences.length === 0) {
-      const text = sec.innerText;
-      // Simple heuristic: split by company-like patterns
-      const blocks = text.split(/\n(?=[A-Z][\w\s]+(?:at|@)\s)/);
-      for (const block of blocks) {
-        const atMatch = block.match(/(.+?)(?:at|@)\s+(.+?)(?:\n|$)/);
-        if (atMatch) {
-          experiences.push({
-            designation: cleanText(atMatch[1]),
-            company: cleanText(atMatch[2])
-          });
-        }
-      }
-    }
-
     return experiences;
   }
 
   function extractEducation() {
     const educations = [];
     const sec = findSection(['education', 'qualification', 'academic']);
-    if (sec) {
-      const entries = sec.querySelectorAll('.education-card, .eduCard, [class*="eduCard"], [class*="EducationCard"], .qualCard');
-      for (const entry of entries) {
-        if (isInSidebar(entry)) continue;
-        const edu = {};
-        const degreeEl = entry.querySelector('.degree, .course, [class*="degree"], [class*="course"], h3, h4');
-        if (degreeEl) edu.degree = cleanText(degreeEl.textContent);
-        const instEl = entry.querySelector('.institution, .university, .college, [class*="institution"], [class*="university"]');
-        if (instEl) edu.institution = cleanText(instEl.textContent);
-        const yearEl = entry.querySelector('.year, .passout, [class*="year"], [class*="passout"]');
-        if (yearEl) {
-          const ym = yearEl.textContent.match(/(\d{4})/);
-          if (ym) edu.year_of_passing = ym[1];
-        }
-        const scoreEl = entry.querySelector('.score, .percentage, .cgpa, [class*="score"], [class*="grade"]');
-        if (scoreEl) edu.score = cleanText(scoreEl.textContent);
-        const typeEl = entry.querySelector('[class*="courseType"], [class*="fullTime"]');
-        if (typeEl) edu.degree_type = cleanText(typeEl.textContent);
+    if (!sec) return educations;
 
-        if (edu.degree || edu.institution) educations.push(edu);
+    const entries = sec.querySelectorAll('[class*="edu"], [class*="Edu"], [class*="qual"], [class*="Qual"]');
+    for (const entry of entries) {
+      if (isInSidebar(entry)) continue;
+      const edu = {};
+      const degreeEl = entry.querySelector('[class*="degree"], [class*="course"], h3, h4, strong, b');
+      if (degreeEl) edu.degree = cleanText(degreeEl.textContent);
+      const instEl = entry.querySelector('[class*="institution"], [class*="university"], [class*="college"]');
+      if (instEl) edu.institution = cleanText(instEl.textContent);
+      const yearEl = entry.querySelector('[class*="year"], [class*="passout"]');
+      if (yearEl) {
+        const ym = yearEl.textContent.match(/(\d{4})/);
+        if (ym) edu.year_of_passing = ym[1];
       }
+      if (edu.degree || edu.institution) educations.push(edu);
     }
-
-    // Fallback: look for "Highest degree" line
-    if (educations.length === 0) {
-      const pageText = getMainProfileText();
-      const m = pageText.match(/Highest\s*(?:degree|qualification)[:\s]*([^\n]+)/i);
-      if (m) educations.push({ degree: cleanText(m[1]) });
-    }
-
     return educations;
   }
 
   function extractKeySkills() {
     const skills = new Set();
-    const selectors = ['.keySkills', '.skills', '[class*="keySkill"]', '[class*="KeySkill"]'];
-    for (const s of selectors) {
-      const container = qsMain(s);
-      if (container) {
-        const chips = container.querySelectorAll('span, .chip, .tag, a, [class*="skill"], [class*="chip"]');
+    const sec = findSection(['key skills', 'skills']);
+    if (sec) {
+      const chips = sec.querySelectorAll('span, a, [class*="chip"], [class*="tag"], [class*="skill"], [class*="Skill"]');
+      chips.forEach(el => {
+        if (isInSidebar(el)) return;
+        const skill = cleanText(el.textContent);
+        if (skill && skill.length > 1 && skill.length < 50 && !/key\s*skills?|skills?:/i.test(skill)) {
+          skills.add(skill);
+        }
+      });
+    }
+    // Fallback: look for skill containers anywhere in main
+    if (skills.size === 0) {
+      const containers = qsaMain('[class*="keySkill"], [class*="KeySkill"], [class*="skill-list"], [class*="skillList"]');
+      for (const container of containers) {
+        const chips = container.querySelectorAll('span, a');
         chips.forEach(el => {
           const skill = cleanText(el.textContent);
           if (skill && skill.length > 1 && skill.length < 50) skills.add(skill);
         });
       }
     }
-
-    // Also look for skills in a labelled section
-    const sec = findSection(['key skills', 'skills']);
-    if (sec) {
-      const chips = sec.querySelectorAll('span, .chip, .tag, a');
-      chips.forEach(el => {
-        const skill = cleanText(el.textContent);
-        if (skill && skill.length > 1 && skill.length < 50) skills.add(skill);
-      });
-    }
-
+    console.log('[VHC Extension] Found skills:', skills.size);
     return [...skills];
   }
 
@@ -530,11 +563,9 @@
     const itSkills = [];
     const sec = findSection(['it skills', 'technical skills', 'software skills']);
     if (!sec) return itSkills;
-
-    // IT skills are often in a table: Skill | Version | Last Used | Experience
-    const rows = sec.querySelectorAll('tr, .skillRow, [class*="skillRow"]');
+    const rows = sec.querySelectorAll('tr, [class*="skillRow"], [class*="row"]');
     for (const row of rows) {
-      const cells = row.querySelectorAll('td, .cell, span');
+      const cells = row.querySelectorAll('td, [class*="cell"], span');
       if (cells.length >= 2) {
         const skill = {
           name: cleanText(cells[0]?.textContent),
@@ -543,10 +574,10 @@
           experience_years: null
         };
         if (cells.length > 3) {
-          const expMatch = (cells[3]?.textContent || '').match(/(\d+)/);
-          if (expMatch) skill.experience_years = parseInt(expMatch[1]);
+          const m = (cells[3]?.textContent || '').match(/(\d+)/);
+          if (m) skill.experience_years = parseInt(m[1]);
         }
-        if (skill.name) itSkills.push(skill);
+        if (skill.name && skill.name.length > 1) itSkills.push(skill);
       }
     }
     return itSkills;
@@ -556,18 +587,17 @@
     const certs = [];
     const sec = findSection(['certification', 'certificate']);
     if (!sec) return certs;
-
-    const entries = sec.querySelectorAll('.certCard, [class*="certCard"], [class*="CertCard"], .certification-item, li');
+    const entries = sec.querySelectorAll('[class*="cert"], li, [class*="item"]');
     for (const entry of entries) {
       if (isInSidebar(entry)) continue;
-      const cert = {};
-      const nameEl = entry.querySelector('.name, .certName, h4, h3, [class*="name"]') || entry;
-      cert.name = cleanText(nameEl.textContent);
-      const authEl = entry.querySelector('.authority, .issuer, [class*="authority"], [class*="issuer"]');
-      if (authEl) cert.issuing_authority = cleanText(authEl.textContent);
-      const dateEl = entry.querySelector('.date, [class*="date"]');
-      if (dateEl) cert.issue_date = cleanText(dateEl.textContent);
-      if (cert.name && cert.name.length > 2) certs.push(cert);
+      const nameEl = entry.querySelector('h4, h3, strong, b, [class*="name"]') || entry;
+      const name = cleanText(nameEl.textContent);
+      if (name && name.length > 2 && name.length < 200) {
+        const cert = { name };
+        const authEl = entry.querySelector('[class*="authority"], [class*="issuer"]');
+        if (authEl) cert.issuing_authority = cleanText(authEl.textContent);
+        certs.push(cert);
+      }
     }
     return certs;
   }
@@ -576,20 +606,17 @@
     const projects = [];
     const sec = findSection(['project']);
     if (!sec) return projects;
-
-    const entries = sec.querySelectorAll('.projectCard, [class*="projectCard"], [class*="ProjectCard"], li');
+    const entries = sec.querySelectorAll('[class*="project"], [class*="Project"], li');
     for (const entry of entries) {
       if (isInSidebar(entry)) continue;
-      const proj = {};
-      const titleEl = entry.querySelector('.title, .projectTitle, h4, h3, [class*="title"]') || entry;
-      proj.title = cleanText(titleEl.textContent);
-      const descEl = entry.querySelector('.description, [class*="description"]');
-      if (descEl) proj.description = cleanText(descEl.textContent);
-      const statusEl = entry.querySelector('.status, [class*="status"]');
-      if (statusEl) proj.status = cleanText(statusEl.textContent);
-      const roleEl = entry.querySelector('.role, [class*="role"]');
-      if (roleEl) proj.role = cleanText(roleEl.textContent);
-      if (proj.title && proj.title.length > 2) projects.push(proj);
+      const titleEl = entry.querySelector('h4, h3, strong, b, [class*="title"]') || entry;
+      const title = cleanText(titleEl.textContent);
+      if (title && title.length > 2 && title.length < 200) {
+        const proj = { title };
+        const descEl = entry.querySelector('[class*="description"], [class*="desc"]');
+        if (descEl) proj.description = cleanText(descEl.textContent);
+        projects.push(proj);
+      }
     }
     return projects;
   }
@@ -598,25 +625,17 @@
     const langs = [];
     const sec = findSection(['language']);
     if (!sec) return langs;
-
-    const entries = sec.querySelectorAll('.langRow, [class*="langRow"], [class*="language-item"], li, tr');
+    const entries = sec.querySelectorAll('[class*="lang"], li, tr');
     for (const entry of entries) {
       if (isInSidebar(entry)) continue;
       const text = cleanText(entry.textContent);
-      if (!text || text.length < 2) continue;
+      if (!text || text.length < 2 || /languages?:/i.test(text)) continue;
       const lang = { language: text };
       const profMatch = text.match(/(beginner|proficient|expert|native|fluent|intermediate)/i);
       if (profMatch) {
         lang.proficiency = profMatch[1];
         lang.language = cleanText(text.replace(profMatch[0], ''));
       }
-      // Read/Write/Speak checkboxes
-      const checks = entry.querySelectorAll('input[type="checkbox"]:checked, .checked, [class*="checked"]');
-      const labels = entry.querySelectorAll('.label, td, span');
-      const fullText = entry.textContent.toLowerCase();
-      lang.read = fullText.includes('read');
-      lang.write = fullText.includes('write');
-      lang.speak = fullText.includes('speak');
       if (lang.language) langs.push(lang);
     }
     return langs;
@@ -634,15 +653,6 @@
         if (url.includes('linkedin')) platform = 'LinkedIn';
         else if (url.includes('github')) platform = 'GitHub';
         else if (url.includes('twitter') || url.includes('x.com')) platform = 'Twitter';
-        else if (url.includes('stackoverflow')) platform = 'StackOverflow';
-        profiles.push({ platform, url });
-      }
-    }
-    // Also scan for LinkedIn/GitHub links anywhere in main area
-    for (const a of qsaMain('a[href*="linkedin.com"], a[href*="github.com"]')) {
-      const url = a.href;
-      const platform = url.includes('linkedin') ? 'LinkedIn' : 'GitHub';
-      if (!profiles.some(p => p.url === url)) {
         profiles.push({ platform, url });
       }
     }
@@ -651,37 +661,24 @@
 
   function extractPersonalDetails() {
     const details = {};
-    const pageText = getMainProfileText();
-    const sec = findSection(['personal detail', 'personal info']);
-    const text = sec ? sec.innerText : pageText;
+    const mainText = getMainProfileText();
+    const lines = mainText.split('\n').map(l => l.trim());
 
     const patterns = {
       date_of_birth: /(?:DOB|Date\s*of\s*Birth|Born)[:\s]*([^\n|,]+)/i,
       gender: /Gender[:\s]*(Male|Female|Other|Transgender)/i,
-      marital_status: /(?:Marital\s*Status|Married)[:\s]*(Single|Married|Unmarried|Divorced|Widowed|Separated)/i,
+      marital_status: /(?:Marital\s*Status)[:\s]*(Single|Married|Unmarried|Divorced|Widowed|Separated)/i,
       nationality: /Nationality[:\s]*([^\n|,]+)/i,
-      category: /Category[:\s]*(General|OBC|SC|ST|EWS|[^\n|,]+)/i,
+      category: /Category[:\s]*(General|OBC|SC|ST|EWS|[^\n|,]{2,20})/i,
     };
 
     for (const [key, regex] of Object.entries(patterns)) {
-      const m = text.match(regex);
+      const m = mainText.match(regex);
       if (m) details[key] = cleanText(m[1]);
     }
 
-    // Passport
-    if (/passport/i.test(text)) {
+    if (/passport/i.test(mainText)) {
       details.has_passport = true;
-      const passMatch = text.match(/Passport\s*(?:No|Number)?[:\s]*([A-Z0-9]+)/i);
-      if (passMatch) details.passport_number = passMatch[1];
-    }
-
-    // Address
-    const addrMatch = text.match(/(?:Current\s*)?Address[:\s]*([^\n]+)/i);
-    if (addrMatch) details.current_address = cleanText(addrMatch[1]);
-
-    // Differently abled
-    if (/differently\s*abled[:\s]*yes/i.test(text)) {
-      details.differently_abled = true;
     }
 
     return Object.keys(details).length > 0 ? details : null;
@@ -689,118 +686,71 @@
 
   function extractCareerPreferences() {
     const prefs = {};
-    const pageText = getMainProfileText();
+    const mainText = getMainProfileText();
+    const lines = mainText.split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.length < 200);
 
-    // Current salary — "Rs X Lacs" / "X LPA"
-    const salaryMatch = pageText.match(/(?:Current\s*(?:CTC|Salary|Annual\s*Salary))[:\s]*(?:Rs\.?\s*|INR\s*)?(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA|L)/i);
-    if (salaryMatch) {
-      prefs.current_salary = Math.round(parseFloat(salaryMatch[1]) * 100000);
-    } else {
-      // Try standalone salary pattern near top
-      const m = pageText.match(/(?:₹|Rs\.?\s*)(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA)/i);
-      if (m) prefs.current_salary = Math.round(parseFloat(m[1]) * 100000);
+    // Salary — look for "Rs X Lacs" or "X LPA" or just numeric values near salary keywords
+    for (const line of lines) {
+      if (/current\s*(ctc|salary|annual)/i.test(line) || /ctc/i.test(line)) {
+        const m = line.match(/(?:₹|Rs\.?\s*)?(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA|L|PA)/i);
+        if (m) {
+          prefs.current_salary = Math.round(parseFloat(m[1].replace(/,/g, '')) * 100000);
+          console.log('[VHC Extension] Found current salary:', prefs.current_salary);
+          break;
+        }
+        // Try plain number (in lakhs)
+        const m2 = line.match(/(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA|L)/i);
+        if (m2) {
+          prefs.current_salary = Math.round(parseFloat(m2[1]) * 100000);
+          console.log('[VHC Extension] Found current salary:', prefs.current_salary);
+          break;
+        }
+      }
     }
 
     // Expected salary
-    const expMatch = pageText.match(/(?:Expected|Expects?)[:\s]*(?:₹|Rs\.?\s*)?(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA)/i);
-    if (expMatch) prefs.expected_salary = Math.round(parseFloat(expMatch[1]) * 100000);
-
-    // Notice period
-    const noticePatterns = [
-      /Notice\s*(?:Period)?[:\s]*(\d+\s*(?:Month|Day|Week)s?|Immediate(?:ly)?)/i,
-      /(\d+)\s*(?:Month|Months)\s*(?:notice)?/i,
-      /(Immediate(?:ly)?)/i
-    ];
-    for (const p of noticePatterns) {
-      const m = pageText.match(p);
-      if (m) {
-        let notice = m[1].trim();
-        if (notice.toLowerCase().includes('immediate')) notice = 'Immediate';
-        prefs.notice_period = notice;
-        break;
+    for (const line of lines) {
+      if (/expected|expects?/i.test(line)) {
+        const m = line.match(/(\d+(?:\.\d+)?)\s*(?:Lacs?|Lakh|LPA|L)/i);
+        if (m) {
+          prefs.expected_salary = Math.round(parseFloat(m[1]) * 100000);
+          break;
+        }
       }
     }
-    // Serving notice
-    if (/serving\s*notice/i.test(pageText)) prefs.is_serving_notice = true;
 
-    // Current location
-    const locMatch = pageText.match(/(?:Current\s*Location|Location)[:\s]*([A-Za-z\s,]+?)(?:\s*\||$|\n)/i);
-    if (locMatch) prefs.current_location = cleanText(locMatch[1]);
-    if (!prefs.current_location) {
-      // Try emoji location indicator
-      const emojiLoc = pageText.match(/📍\s*([A-Za-z\s,]+?)(?:\s*\||$|\n)/);
-      if (emojiLoc) prefs.current_location = cleanText(emojiLoc[1]);
+    // Notice period
+    const noticeMatch = mainText.match(/Notice\s*(?:Period)?[:\s]*(\d+\s*(?:Month|Day|Week)s?|Immediate(?:ly)?)/i);
+    if (noticeMatch) {
+      prefs.notice_period = cleanText(noticeMatch[1]);
+      if (prefs.notice_period.toLowerCase().includes('immediate')) prefs.notice_period = 'Immediate';
+      console.log('[VHC Extension] Found notice period:', prefs.notice_period);
     }
+
+    if (/serving\s*notice/i.test(mainText)) prefs.is_serving_notice = true;
+
+    // Location
+    const locEl = qsMain('[class*="location"], [class*="Location"], [class*="city"], [class*="City"]');
+    if (locEl) prefs.current_location = cleanText(locEl.textContent);
+    
     if (!prefs.current_location) {
-      const el = qsMain('.location, .currentLocation, [class*="location"], .city, [class*="Location"]');
-      if (el) prefs.current_location = cleanText(el.textContent);
+      const locMatch = mainText.match(/(?:Current\s*)?Location[:\s]*([A-Za-z\s,]+?)(?:\s*\||$|\n)/i);
+      if (locMatch) prefs.current_location = cleanText(locMatch[1]);
     }
 
     // Preferred locations
-    const prefLocMatch = pageText.match(/Pref(?:erred)?\.?\s*(?:locations?|loc)[:\s]*([^\n+]+)/i);
+    const prefLocMatch = mainText.match(/Pref(?:erred)?\.?\s*(?:locations?|loc)[:\s]*([^\n]+)/i);
     if (prefLocMatch) {
       prefs.preferred_locations = prefLocMatch[1].split(/[,\/]/).map(l => cleanText(l)).filter(Boolean);
-    }
-
-    // Preferred industry
-    const indMatch = pageText.match(/(?:Preferred\s*)?Industry[:\s]*([^\n|]+)/i);
-    if (indMatch) {
-      prefs.preferred_industry = indMatch[1].split(/[,\/]/).map(i => cleanText(i)).filter(Boolean);
-    }
-
-    // Functional area
-    const faMatch = pageText.match(/Functional\s*Area[:\s]*([^\n|]+)/i);
-    if (faMatch) {
-      prefs.preferred_functional_area = faMatch[1].split(/[,\/]/).map(f => cleanText(f)).filter(Boolean);
-    }
-
-    // Role category
-    const roleMatch = pageText.match(/Role\s*(?:Category)?[:\s]*([^\n|]+)/i);
-    if (roleMatch) {
-      prefs.preferred_role = roleMatch[1].split(/[,\/]/).map(r => cleanText(r)).filter(Boolean);
     }
 
     return Object.keys(prefs).length > 0 ? prefs : null;
   }
 
-  function extractProfileLastUpdated() {
-    const selectors = ['.lastUpdatedOn', '.profileLastUpdated', '.updateDate', '[class*="lastUpdate"]', '[class*="Modified"]', '[class*="Active"]'];
-    for (const s of selectors) {
-      const el = qsMain(s);
-      if (el) {
-        const text = el.textContent.trim();
-        const dateMatch = text.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/);
-        if (dateMatch) return dateMatch[1];
-        if (/today|active today/i.test(text)) return new Date().toISOString().split('T')[0];
-      }
-    }
-    return null;
-  }
-
-  function extractResumeInfo() {
-    const downloadBtn = document.querySelector('[class*="download"], .downloadResume, [class*="attachedCV"], [class*="resumeDownload"]');
-    const hasResume = !!downloadBtn;
-    let title = null;
-    const titleEl = qsMain('[class*="resumeTitle"], .resumeTitle');
-    if (titleEl) title = cleanText(titleEl.textContent);
-    return { has_resume: hasResume, resume_title: title };
-  }
-
-  /** Capture raw text of each major section for debugging */
-  function extractRawSections() {
-    const sections = {};
-    const sectionNames = ['employment', 'education', 'key skills', 'it skills', 'certification', 'project', 'personal detail', 'career profile', 'online profile', 'language'];
-    for (const name of sectionNames) {
-      const sec = findSection([name]);
-      if (sec) sections[name] = sec.innerText.substring(0, 2000);
-    }
-    return Object.keys(sections).length > 0 ? sections : null;
-  }
-
   // ===================== MAIN SCRAPING FUNCTION =====================
 
   async function scrapeProfileData() {
-    console.log('[VHC Extension] Scraping COMPLETE profile data...');
+    console.log('[VHC Extension] Scraping profile data from MAIN profile area...');
 
     const name = extractName();
     const nameParts = splitName(name);
@@ -808,114 +758,52 @@
     const careerPreferences = extractCareerPreferences();
     const personalDetails = extractPersonalDetails();
     const onlineProfiles = extractOnlineProfiles();
-    const resumeInfo = extractResumeInfo();
     const totalExp = extractTotalExperience();
 
-    // Build the data object matching CompleteNaukriProfileInput exactly
     const data = {
-      // Naukri Identification
       naukri_profile_id: extractNaukriProfileId(),
       naukri_profile_url: window.location.href,
       naukri_resume_id: null,
-
-      // Basic Info
       name: name,
       first_name: nameParts.first_name || null,
       middle_name: nameParts.middle_name || null,
       last_name: nameParts.last_name || null,
       photo_url: extractPhotoUrl(),
-
-      // Contact
       email: extractEmail(),
       alternate_email: null,
       phone: extractPhone(),
       alternate_phone: null,
-
-      // Professional Identity
       headline: extractHeadline(),
       resume_headline: extractHeadline(),
       profile_summary: extractProfileSummary(),
-
-      // Current Employment
       current_company: currentEmployment.company,
       current_designation: currentEmployment.designation,
       current_department: currentEmployment.department,
       current_industry: currentEmployment.industry,
-      current_role_category: null,
-      employment_status: null,
-
-      // Experience
       total_experience_years: totalExp,
       total_experience_months: totalExp ? Math.round(totalExp * 12) : null,
       total_experience_display: totalExp ? `${totalExp} years` : null,
       work_experience: extractWorkExperience(),
-
-      // Education
-      highest_qualification: null,
-      highest_degree: null,
       education: extractEducation(),
-
-      // Skills
       key_skills: extractKeySkills(),
-      key_skills_display: null,
       it_skills: extractITSkills(),
-      soft_skills: [],
-      tools: [],
-
-      // Certifications
       certifications: extractCertifications(),
-
-      // Projects
       projects: extractProjects(),
-
-      // Languages
       languages: extractLanguages(),
-
-      // Online Profiles
       online_profiles: onlineProfiles,
       linkedin_url: (onlineProfiles.find(p => p.platform === 'LinkedIn') || {}).url || null,
       github_url: (onlineProfiles.find(p => p.platform === 'GitHub') || {}).url || null,
-      portfolio_url: null,
-
-      // Personal Details (nested object)
       personal_details: personalDetails,
-
-      // Career Preferences (nested object)
       career_preferences: careerPreferences,
-
-      // Additional
-      accomplishments: null,
-      about_me: null,
-      additional_info: null,
-
-      // Resume
-      has_resume: resumeInfo.has_resume,
-      resume_title: resumeInfo.resume_title,
-      resume_format: null,
-
-      // Timestamps
-      profile_created_on: null,
-      profile_last_updated: extractProfileLastUpdated(),
-      last_active: null,
-
-      // Activity
-      response_rate: null,
-
-      // Raw data for debugging
-      raw_profile_text: getMainProfileText().substring(0, 5000),
-      raw_sections: extractRawSections(),
-
-      // Scrape metadata
+      has_resume: !!document.querySelector('[class*="download"], [class*="attachedCV"], [class*="resumeDownload"]'),
       scraped_at: new Date().toISOString()
     };
 
-    // Set highest education from first entry
     if (data.education.length > 0) {
       data.highest_qualification = data.education[0].degree;
-      data.highest_degree = data.education[0].degree;
     }
 
-    console.log('[VHC Extension] Extracted complete profile:', {
+    console.log('[VHC Extension] Extracted data summary: ', {
       name: data.name,
       email: data.email,
       phone: data.phone,
@@ -923,12 +811,9 @@
       skills: data.key_skills?.length || 0,
       experience: data.work_experience?.length || 0,
       education: data.education?.length || 0,
-      certifications: data.certifications?.length || 0,
-      languages: data.languages?.length || 0,
-      hasPersonalDetails: !!data.personal_details,
-      hasCareerPrefs: !!data.career_preferences
     });
 
+    console.log('[VHC Extension] Scraped profile:', data.name);
     return data;
   }
 
@@ -942,6 +827,7 @@
   }
 
   async function scrollToLoadContent() {
+    console.log('[VHC Extension] Scrolling to load content...');
     const scrollHeight = document.documentElement.scrollHeight;
     const viewportHeight = window.innerHeight;
     let pos = 0;
@@ -952,12 +838,14 @@
     }
     window.scrollTo(0, 0);
     await sleep(500);
+    console.log('[VHC Extension] Scroll complete');
   }
 
   async function manualCapture() {
     if (isCapturing) return { success: false, error: 'Capture already in progress' };
-    if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context invalidated. Please refresh the page.' }; }
+    if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context invalidated. Please refresh.' }; }
     isCapturing = true;
+    console.log('[VHC Extension] Manual capture triggered');
     try {
       const auth = await getAuthToken();
       if (!auth) return { success: false, error: 'Not logged in to VHC. Please login via extension popup.' };
@@ -971,7 +859,7 @@
         return { success: false, error: 'Could not extract profile data. Make sure you are on a profile page.' };
       }
 
-      if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context lost during capture.' }; }
+      if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context lost.' }; }
 
       const response = await chrome.runtime.sendMessage({ action: 'captureProfile', data: profileData });
       if (response && response.success) {
@@ -981,7 +869,7 @@
         return { success: true, action: response.action, name: profileData.name };
       } else {
         showToast(response?.error || 'Unknown error', 'error');
-        return { success: false, error: response?.error || 'Unknown error' };
+        return { success: false, error: response?.error };
       }
     } catch (error) {
       if (error.message?.includes('Extension context invalidated')) {
@@ -1013,9 +901,7 @@
         }
       }
     } catch (error) {
-      if (error.message?.includes('Extension context invalidated')) {
-        console.warn('[VHC Extension] Context invalidated during auto-capture. Refresh page to reconnect.');
-      } else {
+      if (!error.message?.includes('Extension context invalidated')) {
         console.error('[VHC Extension] Capture error:', error);
       }
     } finally {
@@ -1054,6 +940,7 @@
       btn.classList.remove('capturing');
     });
     document.body.appendChild(btn);
+    console.log('[VHC Extension] Floating button added');
   }
 
   function showToast(message, type = 'info') {
@@ -1083,7 +970,6 @@
         });
       });
     } catch (e) {
-      console.warn('[VHC Extension] getSettings failed:', e.message);
       return { enabled: true, showNotifications: true, autoCapture: true };
     }
   }
@@ -1098,7 +984,6 @@
         });
       });
     } catch (e) {
-      console.warn('[VHC Extension] getAuthToken failed:', e.message);
       handleInvalidContext();
       return null;
     }
@@ -1107,6 +992,7 @@
   // ===================== INIT =====================
 
   async function init() {
+    console.log('[VHC Extension] Initializing...');
     addFloatingButton();
     const settings = await getSettings();
     if (!settings.enabled) return;
