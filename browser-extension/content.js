@@ -723,7 +723,9 @@
         notice_period: extractNotice(),
         current_location: location,
       },
-      scraped_at: new Date().toISOString()
+      scraped_at: new Date().toISOString(),
+      raw_profile_text: getMainProfileText().substring(0, 5000),
+      extension_version: '3.1.0'
     };
 
     // Highest degree
