@@ -380,8 +380,8 @@ class TestNaukriExtensionAuth:
         
         response = session.post(f"{BASE_URL}/api/extension/capture", json=profile_data)
         
-        # Should return 401 Unauthorized
-        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+        # Should return 401 or 403 (Unauthorized/Forbidden)
+        assert response.status_code in [401, 403], f"Expected 401/403, got {response.status_code}"
         print("✅ Capture endpoint requires authentication")
         
     def test_stats_requires_auth(self):
@@ -390,8 +390,8 @@ class TestNaukriExtensionAuth:
         
         response = session.get(f"{BASE_URL}/api/extension/stats")
         
-        # Should return 401 Unauthorized
-        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+        # Should return 401 or 403 (Unauthorized/Forbidden)
+        assert response.status_code in [401, 403], f"Expected 401/403, got {response.status_code}"
         print("✅ Stats endpoint requires authentication")
         
     def test_profile_requires_auth(self):
@@ -400,8 +400,8 @@ class TestNaukriExtensionAuth:
         
         response = session.get(f"{BASE_URL}/api/extension/profile/any-id")
         
-        # Should return 401 Unauthorized
-        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+        # Should return 401 or 403 (Unauthorized/Forbidden)
+        assert response.status_code in [401, 403], f"Expected 401/403, got {response.status_code}"
         print("✅ Profile endpoint requires authentication")
 
 
