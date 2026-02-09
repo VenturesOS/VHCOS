@@ -355,7 +355,7 @@ export default function RecruiterCandidateBankPage() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`naukri-profile/${candidate.id}`);
+                              navigate(`../naukri-profile/${candidate.id}`);
                             }}
                             className="text-orange-600 border-orange-300 hover:bg-orange-50"
                             data-testid={`view-naukri-profile-${candidate.id}`}
