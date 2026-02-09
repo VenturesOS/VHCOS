@@ -916,16 +916,18 @@
 
   // ===================== MESSAGE LISTENER =====================
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'manualCapture') {
-      manualCapture().then(sendResponse);
-      return true;
-    }
-    if (request.action === 'getPageInfo') {
-      sendResponse({ url: window.location.href, isProfilePage: isProfilePage() });
-      return true;
-    }
-  });
+  if (isExtensionValid()) {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (request.action === 'manualCapture') {
+        manualCapture().then(sendResponse);
+        return true;
+      }
+      if (request.action === 'getPageInfo') {
+        sendResponse({ url: window.location.href, isProfilePage: isProfilePage() });
+        return true;
+      }
+    });
+  }
 
   // ===================== UI ELEMENTS =====================
 
