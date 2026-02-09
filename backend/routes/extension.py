@@ -301,12 +301,15 @@ async def ai_extract_profile(
     raw_text = request.raw_text[:12000]
     
     prompt = f"""Extract ALL candidate profile information from this Naukri Resdex profile page text. 
+The text includes the profile summary at the top AND an attached CV/resume preview at the bottom.
+The CV preview section (after "Attached CV" or "Download CV") often contains the candidate's REAL email and phone number.
+
 Return a JSON object with these exact fields (use null for missing data):
 
 {{
   "name": "Full name of the candidate",
-  "email": "email address",
-  "phone": "phone number",
+  "email": "email address (check CV preview section carefully for real email)",
+  "phone": "phone number with country code (check CV preview section for real number)",
   "current_company": "current employer name",
   "current_designation": "current job title/role",
   "current_industry": "industry",
@@ -338,6 +341,8 @@ IMPORTANT:
 - For salary, convert "X Lacs" to full number (35 Lacs = 3500000)
 - For experience, extract as a decimal number (15 years 6 months = 15.5)
 - Include ALL work experiences, education entries, skills
+- The text may contain data from "AI matched similar profiles" sidebar — IGNORE that. Only extract the MAIN candidate's data.
+- Look for email and phone in the CV/resume preview section at the bottom of the text
 - Return ONLY valid JSON, no markdown or explanation
 
 Page text:
