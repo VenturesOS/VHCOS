@@ -70,9 +70,17 @@ export default function NaukriProfileView() {
   const loadProfile = async () => {
     try {
       const res = await extensionAPI.getProfile(candidateId);
-      setProfile(res.data);
+      if (res.data) {
+        setProfile(res.data);
+      } else {
+        setProfile(null);
+      }
     } catch (error) {
-      toast.error('Failed to load profile');
+      // Don't let 401 interceptor redirect — handle gracefully
+      if (error.response?.status !== 401) {
+        toast.error('Failed to load profile');
+      }
+      setProfile(null);
     } finally {
       setLoading(false);
     }
@@ -80,22 +88,43 @@ export default function NaukriProfileView() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="spinner" />
+      <div className="flex items-center justify-center py-20" data-testid="profile-loading">
+        <div className="animate-spin w-8 h-8 border-2 border-[#7CB342] border-t-transparent rounded-full" />
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="text-center py-20">
-        <p className="text-slate-500">Profile not found</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>
+      <div className="text-center py-20" data-testid="profile-not-found">
+        <p className="text-slate-500 mb-4">Profile not found or could not be loaded.</p>
+        <Button variant="outline" onClick={() => navigate(-1)}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Go Back
         </Button>
       </div>
     );
   }
+
+  // Safe accessors for nested data
+  const p = {
+    ...profile,
+    experience: profile.experience || [],
+    education: profile.education || [],
+    skills: profile.skills || [],
+    it_skills: profile.it_skills || [],
+    certifications_detailed: profile.certifications_detailed || [],
+    languages: profile.languages || [],
+    projects: profile.projects || [],
+    online_profiles: profile.online_profiles || [],
+    preferred_locations: profile.preferred_locations || [],
+    preferred_industry: profile.preferred_industry || [],
+    preferred_functional_area: profile.preferred_functional_area || [],
+    preferred_role: profile.preferred_role || [],
+    preferred_job_type: profile.preferred_job_type || [],
+    preferred_employment_type: profile.preferred_employment_type || [],
+    preferred_shift: profile.preferred_shift || [],
+    source_details: profile.source_details || {},
+  };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto" data-testid="naukri-profile-view">
