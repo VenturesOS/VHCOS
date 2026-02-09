@@ -22,13 +22,121 @@
   let isCapturing = false;
   let lastCapturedUrl = null;
 
+  console.log('[VHC Extension] Content script loaded on:', window.location.href);
+
   /**
-   * Initialize the extension
+   * Listen for messages from popup
+   */
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('[VHC Extension] Received message:', request.action);
+    
+    if (request.action === 'manualCapture') {
+      manualCapture().then(sendResponse);
+      return true; // Keep channel open for async response
+    }
+    
+    if (request.action === 'getPageInfo') {
+      sendResponse({
+        url: window.location.href,
+        isProfilePage: isProfilePage()
+      });
+      return true;
+    }
+  });
+
+  /**
+   * Manual capture triggered from popup
+   */
+  async function manualCapture() {
+    console.log('[VHC Extension] Manual capture triggered');
+    
+    if (isCapturing) {
+      return { success: false, error: 'Capture already in progress' };
+    }
+    
+    isCapturing = true;
+    
+    try {
+      // Check if user is logged in
+      const auth = await getAuthToken();
+      if (!auth) {
+        return { success: false, error: 'Not logged in to VHC. Please login via extension popup.' };
+      }
+      
+      // Show capturing indicator
+      showToast('🔄 Capturing profile...', 'info');
+      
+      // Scroll to load all content first
+      await scrollToLoadContent();
+      
+      // Wait a moment for any lazy content
+      await sleep(1000);
+      
+      // Scrape the profile
+      const profileData = await scrapeProfileData();
+      
+      if (!profileData || !profileData.name) {
+        return { success: false, error: 'Could not extract profile data. Make sure you are on a profile page.' };
+      }
+      
+      console.log('[VHC Extension] Scraped profile:', profileData.name);
+      console.log('[VHC Extension] Profile data:', JSON.stringify(profileData, null, 2));
+      
+      // Send to background script for API call
+      const response = await chrome.runtime.sendMessage({
+        action: 'captureProfile',
+        data: profileData
+      });
+      
+      if (response.success) {
+        lastCapturedUrl = window.location.href;
+        
+        if (response.action === 'created') {
+          showToast(`✅ ${profileData.name} added to VHC!`, 'success');
+        } else if (response.action === 'updated') {
+          showToast(`🔄 ${profileData.name} profile updated!`, 'info');
+        } else if (response.action === 'exists') {
+          showToast(`ℹ️ ${profileData.name} already up-to-date`, 'info');
+        } else if (response.action === 'queued') {
+          showToast(`📥 ${profileData.name} queued for sync`, 'info');
+        }
+        
+        return { success: true, action: response.action, name: profileData.name };
+      } else {
+        showToast(`❌ ${response.error}`, 'error');
+        return { success: false, error: response.error };
+      }
+      
+    } catch (error) {
+      console.error('[VHC Extension] Manual capture error:', error);
+      showToast(`❌ Error: ${error.message}`, 'error');
+      return { success: false, error: error.message };
+    } finally {
+      isCapturing = false;
+    }
+  }
+
+  /**
+   * Check if current page is a profile page
+   */
+  function isProfilePage() {
+    const url = window.location.href;
+    return url.includes('/profile') || 
+           url.includes('viewResume') || 
+           url.includes('view-resume') || 
+           url.includes('cvPreview');
+  }
+
+  /**
+   * Initialize the extension for auto-capture
    */
   async function init() {
-    console.log('[VHC Extension] Initializing on:', window.location.href);
+    console.log('[VHC Extension] Initializing...');
     
-    // Check if extension is enabled
+    // Add floating capture button
+    addFloatingButton();
+    
+    // Check if extension is enabled for auto-capture
     const settings = await getSettings();
     if (!settings.enabled) {
       console.log('[VHC Extension] Auto-capture disabled');
@@ -39,7 +147,12 @@
     const auth = await getAuthToken();
     if (!auth) {
       console.log('[VHC Extension] User not logged in to VHC');
-      showToast('⚠️ Please login to VHC Talent OS', 'warning');
+      return;
+    }
+
+    // Only auto-capture on profile pages
+    if (!isProfilePage()) {
+      console.log('[VHC Extension] Not a profile page, skipping auto-capture');
       return;
     }
 
@@ -51,6 +164,36 @@
     
     // Start capture after delay
     setTimeout(() => captureProfile(), CONFIG.CAPTURE_DELAY);
+  }
+
+  /**
+   * Add floating capture button to the page
+   */
+  function addFloatingButton() {
+    // Remove existing button if any
+    const existing = document.getElementById('vhc-floating-btn');
+    if (existing) existing.remove();
+    
+    const btn = document.createElement('button');
+    btn.id = 'vhc-floating-btn';
+    btn.className = 'vhc-capture-btn';
+    btn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    `;
+    btn.title = 'Capture to VHC Talent OS';
+    
+    btn.addEventListener('click', async () => {
+      btn.classList.add('capturing');
+      const result = await manualCapture();
+      btn.classList.remove('capturing');
+    });
+    
+    document.body.appendChild(btn);
+    console.log('[VHC Extension] Floating button added');
   }
 
   /**
@@ -70,6 +213,7 @@
    * Scroll down the page to trigger lazy loading
    */
   async function scrollToLoadContent() {
+    console.log('[VHC Extension] Scrolling to load content...');
     const scrollHeight = document.documentElement.scrollHeight;
     const viewportHeight = window.innerHeight;
     let currentPosition = 0;
@@ -83,10 +227,11 @@
     // Scroll back to top
     window.scrollTo(0, 0);
     await sleep(500);
+    console.log('[VHC Extension] Scroll complete');
   }
 
   /**
-   * Main profile capture function
+   * Main profile capture function (for auto-capture)
    */
   async function captureProfile() {
     if (isCapturing) return;
@@ -96,14 +241,13 @@
     }
 
     isCapturing = true;
-    console.log('[VHC Extension] Starting profile capture...');
+    console.log('[VHC Extension] Starting auto-capture...');
 
     try {
       const profileData = await scrapeProfileData();
       
       if (!profileData || !profileData.name) {
         console.log('[VHC Extension] Could not extract profile data');
-        showToast('⚠️ Could not extract profile data', 'warning');
         return;
       }
 
@@ -118,22 +262,25 @@
       if (response.success) {
         lastCapturedUrl = window.location.href;
         
-        if (response.action === 'created') {
-          showToast(`✅ ${profileData.name} added to VHC`, 'success');
-        } else if (response.action === 'updated') {
-          showToast(`🔄 ${profileData.name} profile updated`, 'info');
-        } else if (response.action === 'exists') {
-          showToast(`ℹ️ ${profileData.name} already up-to-date`, 'info');
-        } else if (response.action === 'queued') {
-          showToast(`📥 ${profileData.name} queued for sync`, 'info');
+        const settings = await getSettings();
+        if (settings.showNotifications) {
+          if (response.action === 'created') {
+            showToast(`✅ ${profileData.name} added to VHC`, 'success');
+          } else if (response.action === 'updated') {
+            showToast(`🔄 ${profileData.name} profile updated`, 'info');
+          } else if (response.action === 'exists') {
+            // Silent for "exists" to avoid noise
+            console.log('[VHC Extension] Profile already up-to-date');
+          } else if (response.action === 'queued') {
+            showToast(`📥 ${profileData.name} queued for sync`, 'info');
+          }
         }
       } else {
-        showToast(`❌ Failed: ${response.error}`, 'error');
+        console.error('[VHC Extension] Capture failed:', response.error);
       }
 
     } catch (error) {
       console.error('[VHC Extension] Capture error:', error);
-      showToast('❌ Error capturing profile', 'error');
     } finally {
       isCapturing = false;
     }
@@ -143,6 +290,8 @@
    * Scrape all profile data from the page
    */
   async function scrapeProfileData() {
+    console.log('[VHC Extension] Scraping profile data...');
+    
     const data = {
       // Source identification
       naukri_profile_id: extractNaukriProfileId(),
@@ -200,6 +349,14 @@
       resume_available: checkResumeAvailable()
     };
 
+    console.log('[VHC Extension] Extracted data summary:', {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      company: data.current_company,
+      skills: data.skills?.length || 0
+    });
+
     return data;
   }
 
@@ -210,21 +367,23 @@
     const urlMatch = window.location.href.match(/\/(\d+)\/?(\?|$)/);
     if (urlMatch) return `naukri_${urlMatch[1]}`;
     
-    // Try from page content
+    // Try from data attributes
     const profileIdEl = document.querySelector('[data-profile-id], [id*="profileId"]');
-    if (profileIdEl) return `naukri_${profileIdEl.getAttribute('data-profile-id') || profileIdEl.id}`;
+    if (profileIdEl) {
+      const id = profileIdEl.getAttribute('data-profile-id') || profileIdEl.id;
+      if (id) return `naukri_${id}`;
+    }
     
-    // Generate from email if available
-    const email = extractEmail();
-    if (email) return `naukri_${btoa(email).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)}`;
-    
-    return `naukri_${Date.now()}`;
+    // Generate from URL hash
+    const urlHash = btoa(window.location.href).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    return `naukri_${urlHash}`;
   }
 
   function extractProfileLastUpdated() {
     const selectors = [
       '.lastUpdatedOn', '.profileLastUpdated', '.updateDate',
-      '[class*="lastUpdate"]', '[class*="profileUpdate"]'
+      '[class*="lastUpdate"]', '[class*="profileUpdate"]',
+      '.updatedOn', '.last-modified'
     ];
     
     for (const selector of selectors) {
@@ -239,30 +398,43 @@
   }
 
   function extractName() {
+    // Try various selectors for name
     const selectors = [
       '.name', '.fullname', '.candidate-name', '.profileName',
       'h1[class*="name"]', '.resumeName', '[class*="candidateName"]',
-      '.naukri-profile-name', '#name', '.user-name'
+      '.naukri-profile-name', '#name', '.user-name',
+      '.widgetHead .name', '.pCnt .name', '[class*="Name"]'
     ];
     
     for (const selector of selectors) {
       const el = document.querySelector(selector);
       if (el && el.textContent.trim()) {
-        return cleanText(el.textContent);
+        const name = cleanText(el.textContent);
+        if (name && name.length > 2 && name.length < 100) {
+          console.log('[VHC Extension] Found name:', name, 'using selector:', selector);
+          return name;
+        }
       }
     }
     
-    // Try meta tags
-    const metaName = document.querySelector('meta[name="candidate-name"], meta[property="profile:name"]');
-    if (metaName) return metaName.content;
+    // Try h1 or h2 tags
+    const headings = document.querySelectorAll('h1, h2');
+    for (const h of headings) {
+      const text = cleanText(h.textContent);
+      if (text && text.length > 2 && text.length < 50 && !text.includes('Naukri') && !text.includes('Resume')) {
+        console.log('[VHC Extension] Found name from heading:', text);
+        return text;
+      }
+    }
     
+    console.log('[VHC Extension] Could not find name');
     return null;
   }
 
   function extractEmail() {
     const selectors = [
       '.email', '[class*="email"]', 'a[href^="mailto:"]',
-      '.contactEmail', '.profile-email'
+      '.contactEmail', '.profile-email', '[class*="Email"]'
     ];
     
     for (const selector of selectors) {
@@ -270,22 +442,29 @@
       if (el) {
         const text = el.href?.replace('mailto:', '') || el.textContent;
         const emailMatch = text.match(/[\w.-]+@[\w.-]+\.\w+/);
-        if (emailMatch) return emailMatch[0].toLowerCase();
+        if (emailMatch) {
+          console.log('[VHC Extension] Found email:', emailMatch[0]);
+          return emailMatch[0].toLowerCase();
+        }
       }
     }
     
-    // Search in page content
+    // Search in entire page
     const pageText = document.body.innerText;
-    const emailMatch = pageText.match(/[\w.-]+@[\w.-]+\.(com|in|org|net|co\.in)/i);
-    if (emailMatch) return emailMatch[0].toLowerCase();
+    const emailMatch = pageText.match(/[\w.-]+@[\w.-]+\.(com|in|org|net|co\.in|io)/i);
+    if (emailMatch) {
+      console.log('[VHC Extension] Found email from page:', emailMatch[0]);
+      return emailMatch[0].toLowerCase();
+    }
     
+    console.log('[VHC Extension] Could not find email');
     return null;
   }
 
   function extractPhone() {
     const selectors = [
       '.phone', '.mobile', '[class*="phone"]', '[class*="mobile"]',
-      'a[href^="tel:"]', '.contactNumber'
+      'a[href^="tel:"]', '.contactNumber', '[class*="Phone"]', '[class*="Mobile"]'
     ];
     
     for (const selector of selectors) {
@@ -293,17 +472,31 @@
       if (el) {
         const text = el.href?.replace('tel:', '') || el.textContent;
         const phoneMatch = text.match(/(\+91[\s-]?)?[6-9]\d{9}/);
-        if (phoneMatch) return phoneMatch[0].replace(/[\s-]/g, '');
+        if (phoneMatch) {
+          const phone = phoneMatch[0].replace(/[\s-]/g, '');
+          console.log('[VHC Extension] Found phone:', phone);
+          return phone;
+        }
       }
     }
     
+    // Search in page text
+    const pageText = document.body.innerText;
+    const phoneMatch = pageText.match(/(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}/);
+    if (phoneMatch) {
+      const phone = phoneMatch[0].replace(/[\s-]/g, '');
+      console.log('[VHC Extension] Found phone from page:', phone);
+      return phone;
+    }
+    
+    console.log('[VHC Extension] Could not find phone');
     return null;
   }
 
   function extractPhotoUrl() {
     const selectors = [
       '.profile-photo img', '.profilePic img', '.user-image img',
-      '[class*="profilePhoto"] img', '.candidate-photo img'
+      '[class*="profilePhoto"] img', '.candidate-photo img', '.photo img'
     ];
     
     for (const selector of selectors) {
@@ -318,7 +511,8 @@
   function extractHeadline() {
     const selectors = [
       '.headline', '.resumeHeadline', '.profile-headline',
-      '[class*="headline"]', '.tagline', '.title'
+      '[class*="headline"]', '.tagline', '.designation',
+      '.pCnt .title', '.widgetHead .exp'
     ];
     
     for (const selector of selectors) {
@@ -333,7 +527,8 @@
   function extractSummary() {
     const selectors = [
       '.summary', '.profileSummary', '.about-me', '.profile-summary',
-      '[class*="summary"]', '[class*="about"]', '.keySkillsSummary'
+      '[class*="summary"]', '[class*="about"]', '.keySkillsSummary',
+      '.synopsis', '.description'
     ];
     
     for (const selector of selectors) {
@@ -348,33 +543,39 @@
   function extractCurrentCompany() {
     const selectors = [
       '.currentCompany', '.company', '[class*="currentEmployer"]',
-      '.orgName', '.employer', '[class*="companyName"]'
+      '.orgName', '.employer', '[class*="companyName"]',
+      '.org', '.organization'
     ];
     
     for (const selector of selectors) {
       const el = document.querySelector(selector);
-      if (el) return cleanText(el.textContent);
+      if (el) {
+        const text = cleanText(el.textContent);
+        if (text && text.length > 2) {
+          console.log('[VHC Extension] Found company:', text);
+          return text;
+        }
+      }
     }
     
-    // Try from experience section - first entry
-    const expSection = document.querySelector('.experience, [class*="experience"]');
-    if (expSection) {
-      const companyEl = expSection.querySelector('.company, .orgName, [class*="company"]');
-      if (companyEl) return cleanText(companyEl.textContent);
-    }
-    
+    console.log('[VHC Extension] Could not find company');
     return null;
   }
 
   function extractCurrentDesignation() {
     const selectors = [
       '.designation', '.currentDesignation', '[class*="designation"]',
-      '.jobTitle', '.title', '[class*="jobTitle"]'
+      '.jobTitle', '.title', '[class*="jobTitle"]', '.role'
     ];
     
     for (const selector of selectors) {
       const el = document.querySelector(selector);
-      if (el) return cleanText(el.textContent);
+      if (el) {
+        const text = cleanText(el.textContent);
+        if (text && text.length > 2 && text.length < 100) {
+          return text;
+        }
+      }
     }
     return null;
   }
@@ -382,7 +583,7 @@
   function extractCurrentSalary() {
     const selectors = [
       '.currentSalary', '.salary', '[class*="salary"]',
-      '[class*="ctc"]', '.annualSalary'
+      '[class*="ctc"]', '.annualSalary', '[class*="Salary"]'
     ];
     
     for (const selector of selectors) {
@@ -398,7 +599,6 @@
         const numMatch = text.match(/(\d+(?:,\d+)*)/);
         if (numMatch) {
           const num = parseInt(numMatch[1].replace(/,/g, ''));
-          // If less than 100, assume lakhs
           return num < 100 ? num * 100000 : num;
         }
       }
@@ -426,7 +626,8 @@
 
   function extractNoticePeriod() {
     const selectors = [
-      '.noticePeriod', '[class*="notice"]', '.availability'
+      '.noticePeriod', '[class*="notice"]', '.availability',
+      '[class*="Notice"]', '.serving'
     ];
     
     for (const selector of selectors) {
@@ -451,12 +652,17 @@
   function extractLocation() {
     const selectors = [
       '.location', '.currentLocation', '[class*="location"]',
-      '.city', '.address'
+      '.city', '.address', '[class*="Location"]'
     ];
     
     for (const selector of selectors) {
       const el = document.querySelector(selector);
-      if (el) return cleanText(el.textContent);
+      if (el) {
+        const text = cleanText(el.textContent);
+        if (text && text.length > 2 && text.length < 100) {
+          return text;
+        }
+      }
     }
     return null;
   }
@@ -483,14 +689,13 @@
   function extractTotalExperience() {
     const selectors = [
       '.experience', '.totalExperience', '[class*="experience"]',
-      '.workExp', '.expYears'
+      '.workExp', '.expYears', '[class*="Experience"]'
     ];
     
     for (const selector of selectors) {
       const el = document.querySelector(selector);
       if (el) {
         const text = el.textContent;
-        // Match patterns like "7 years", "7.5 yrs", "7 yrs 6 months"
         const yearsMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:years?|yrs?)/i);
         if (yearsMatch) {
           return Math.round(parseFloat(yearsMatch[1]));
@@ -504,13 +709,14 @@
     const experience = [];
     const expSections = document.querySelectorAll(
       '.experience-section, .workExperience, [class*="experienceList"] > *, ' +
-      '.exp-section, [class*="employment"] > *, .job-history > *'
+      '.exp-section, [class*="employment"] > *, .job-history > *, ' +
+      '[class*="expSection"], [class*="workExp"]'
     );
     
-    expSections.forEach((section, index) => {
+    expSections.forEach((section) => {
       const exp = {
-        company: extractFromSection(section, ['.company', '.orgName', '[class*="company"]']),
-        designation: extractFromSection(section, ['.designation', '.title', '[class*="title"]']),
+        company: extractFromSection(section, ['.company', '.orgName', '[class*="company"]', '.org']),
+        designation: extractFromSection(section, ['.designation', '.title', '[class*="title"]', '.role']),
         from_date: extractFromSection(section, ['.fromDate', '.startDate', '[class*="from"]']),
         to_date: extractFromSection(section, ['.toDate', '.endDate', '[class*="to"]']),
         duration: extractFromSection(section, ['.duration', '.tenure', '[class*="duration"]']),
@@ -519,13 +725,11 @@
       };
       
       if (exp.company || exp.designation) {
-        // Check if current job
         if (!exp.to_date || exp.to_date.toLowerCase().includes('present')) {
           exp.to_date = null;
           exp.is_current = true;
         }
         
-        // Calculate duration in months if not available
         if (!exp.duration && exp.from_date) {
           exp.duration_months = calculateDurationMonths(exp.from_date, exp.to_date);
         }
@@ -541,7 +745,7 @@
     const education = [];
     const eduSections = document.querySelectorAll(
       '.education-section, .educationList > *, [class*="education"] > *, ' +
-      '.qualification > *, .academics > *'
+      '.qualification > *, .academics > *, [class*="eduSection"]'
     );
     
     eduSections.forEach(section => {
@@ -565,7 +769,8 @@
     const skills = [];
     const skillSelectors = [
       '.keySkills span', '.skills span', '.skill-tag', 
-      '[class*="skill"] span', '.chip', '.tag'
+      '[class*="skill"] span', '.chip', '.tag',
+      '[class*="Skill"] span', '.skillList span'
     ];
     
     for (const selector of skillSelectors) {
@@ -578,6 +783,7 @@
       });
     }
     
+    console.log('[VHC Extension] Found skills:', skills.length);
     return skills;
   }
 
@@ -596,7 +802,6 @@
       };
       
       if (skill.skill) {
-        // Parse experience years
         if (skill.experience_years) {
           const match = skill.experience_years.match(/(\d+)/);
           skill.experience_years = match ? parseInt(match[1]) : null;
@@ -682,9 +887,7 @@
   }
 
   function extractGender() {
-    const selectors = [
-      '.gender', '[class*="gender"]'
-    ];
+    const selectors = ['.gender', '[class*="gender"]'];
     
     for (const selector of selectors) {
       const el = document.querySelector(selector);
@@ -699,9 +902,7 @@
   }
 
   function extractMaritalStatus() {
-    const selectors = [
-      '.maritalStatus', '[class*="marital"]'
-    ];
+    const selectors = ['.maritalStatus', '[class*="marital"]'];
     
     for (const selector of selectors) {
       const el = document.querySelector(selector);
@@ -771,7 +972,6 @@
   }
 
   function calculateDurationMonths(fromDate, toDate) {
-    // Simple calculation - can be enhanced
     try {
       const from = new Date(fromDate);
       const to = toDate ? new Date(toDate) : new Date();
@@ -825,7 +1025,6 @@
     toast.className = `vhc-toast vhc-toast-${type}`;
     toast.innerHTML = `
       <div class="vhc-toast-content">
-        <img src="${chrome.runtime.getURL('icons/icon32.png')}" class="vhc-toast-icon" />
         <span>${message}</span>
       </div>
     `;
