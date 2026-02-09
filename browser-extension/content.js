@@ -847,6 +847,7 @@
 
   async function manualCapture() {
     if (isCapturing) return { success: false, error: 'Capture already in progress' };
+    if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context invalidated. Please refresh the page.' }; }
     isCapturing = true;
     try {
       const auth = await getAuthToken();
@@ -861,18 +862,24 @@
         return { success: false, error: 'Could not extract profile data. Make sure you are on a profile page.' };
       }
 
+      if (!isExtensionValid()) { handleInvalidContext(); return { success: false, error: 'Extension context lost during capture.' }; }
+
       const response = await chrome.runtime.sendMessage({ action: 'captureProfile', data: profileData });
-      if (response.success) {
+      if (response && response.success) {
         lastCapturedUrl = window.location.href;
         const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'already up-to-date', queued: 'queued for sync' };
         showToast(`${profileData.name} ${msgs[response.action] || 'captured'}`, response.action === 'created' ? 'success' : 'info');
         return { success: true, action: response.action, name: profileData.name };
       } else {
-        showToast(response.error, 'error');
-        return { success: false, error: response.error };
+        showToast(response?.error || 'Unknown error', 'error');
+        return { success: false, error: response?.error || 'Unknown error' };
       }
     } catch (error) {
-      showToast(`Error: ${error.message}`, 'error');
+      if (error.message?.includes('Extension context invalidated')) {
+        handleInvalidContext();
+      } else {
+        showToast(`Error: ${error.message}`, 'error');
+      }
       return { success: false, error: error.message };
     } finally {
       isCapturing = false;
