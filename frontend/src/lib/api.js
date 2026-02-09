@@ -348,6 +348,12 @@ export const candidateBankAPI = {
   },
 };
 
+// Extension API (Naukri profile capture)
+export const extensionAPI = {
+  getProfile: (candidateId) => api.get(`/extension/profile/${candidateId}`),
+  getStats: () => api.get('/extension/stats'),
+};
+
 // Bulk Import APIs (Admin only)
 export const bulkImportAPI = {
   // Download template
