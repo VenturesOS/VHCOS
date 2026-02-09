@@ -137,26 +137,26 @@ export default function NaukriProfileView() {
       <Card className="border-slate-200 overflow-hidden">
         <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-5">
           <div className="flex items-center gap-4">
-            {profile.photo_url ? (
-              <img src={profile.photo_url} alt={profile.name} className="w-16 h-16 rounded-full border-2 border-white object-cover" />
+            {p.photo_url ? (
+              <img src={p.photo_url} alt={p.name} className="w-16 h-16 rounded-full border-2 border-white object-cover" />
             ) : (
               <div className="w-16 h-16 rounded-full bg-[#7CB342] flex items-center justify-center border-2 border-white">
-                <span className="text-white font-bold text-2xl">{profile.name?.charAt(0).toUpperCase()}</span>
+                <span className="text-white font-bold text-2xl">{(p.name || '?').charAt(0).toUpperCase()}</span>
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-heading font-bold text-white truncate" data-testid="profile-name">{profile.name}</h1>
-              <p className="text-slate-300 text-sm truncate">{profile.designation || profile.headline || ''}</p>
-              {profile.current_employer && (
+              <h1 className="text-xl font-heading font-bold text-white truncate" data-testid="profile-name">{p.name || 'Unknown'}</h1>
+              <p className="text-slate-300 text-sm truncate">{p.designation || p.headline || ''}</p>
+              {p.current_employer && (
                 <p className="text-slate-400 text-sm flex items-center gap-1 mt-0.5">
-                  <Building2 className="w-3 h-3" /> {profile.current_employer}
+                  <Building2 className="w-3 h-3" /> {p.current_employer}
                 </p>
               )}
             </div>
             <div className="flex flex-col items-end gap-1">
               <Badge className="bg-[#7CB342] text-white text-xs">Naukri Sourced</Badge>
-              {profile.naukri_profile_url && (
-                <a href={profile.naukri_profile_url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+              {p.naukri_profile_url && (
+                <a href={p.naukri_profile_url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
                   View on Naukri <ExternalLink className="w-3 h-3" />
                 </a>
               )}
@@ -167,11 +167,11 @@ export default function NaukriProfileView() {
         {/* Quick info bar */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-px bg-slate-100">
           {[
-            { icon: Mail, label: profile.email || 'N/A' },
-            { icon: Phone, label: profile.phone || 'N/A' },
-            { icon: MapPin, label: profile.location || profile.preferred_locations?.[0] || 'N/A' },
-            { icon: Clock, label: profile.experience_years ? `${profile.experience_years} yrs exp` : 'N/A' },
-            { icon: Briefcase, label: profile.notice_period || 'N/A' },
+            { icon: Mail, label: p.email || 'N/A' },
+            { icon: Phone, label: p.phone || 'N/A' },
+            { icon: MapPin, label: p.location || p.preferred_locations[0] || 'N/A' },
+            { icon: Clock, label: p.experience_years ? `${p.experience_years} yrs exp` : 'N/A' },
+            { icon: Briefcase, label: p.notice_period || 'N/A' },
           ].map((item, i) => (
             <div key={i} className="bg-white px-4 py-2.5 flex items-center gap-2 text-sm">
               <item.icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
@@ -195,66 +195,45 @@ export default function NaukriProfileView() {
         {/* OVERVIEW TAB */}
         <TabsContent value="overview">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left column */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Summary */}
-              {profile.summary && (
+              {p.summary && (
                 <Section title="Profile Summary" icon={User} testId="section-summary">
-                  <p className="text-sm text-slate-600 leading-relaxed">{profile.summary}</p>
+                  <p className="text-sm text-slate-600 leading-relaxed">{p.summary}</p>
                 </Section>
               )}
-
-              {/* Key Skills */}
-              {profile.skills?.length > 0 && (
+              {p.skills.length > 0 && (
                 <Section title="Key Skills" testId="section-skills">
                   <div className="flex flex-wrap gap-1.5">
-                    {profile.skills.map((skill, i) => (
+                    {p.skills.map((skill, i) => (
                       <Badge key={i} variant="secondary" className="bg-[#DCFCE7] text-[#558B2F] text-xs px-2.5 py-1">{skill}</Badge>
                     ))}
                   </div>
                 </Section>
               )}
-
-              {/* Work Experience (top 3) */}
-              {profile.experience?.length > 0 && (
+              {p.experience.length > 0 && (
                 <Section title="Recent Experience" icon={Briefcase} testId="section-recent-exp">
-                  {profile.experience.slice(0, 3).map((exp, i) => (
-                    <TimelineCard
-                      key={i}
-                      title={exp.designation || exp.title || 'Role'}
-                      subtitle={exp.company}
-                      duration={exp.duration || `${exp.from_date || ''} - ${exp.to_date || 'Present'}`}
-                      location={exp.location}
-                      description={exp.description}
-                      isCurrent={exp.is_current}
-                    />
+                  {p.experience.slice(0, 3).map((exp, i) => (
+                    <TimelineCard key={i} title={exp.designation || exp.title || 'Role'} subtitle={exp.company} duration={exp.duration || `${exp.from_date || ''} - ${exp.to_date || 'Present'}`} location={exp.location} description={exp.description} isCurrent={exp.is_current} />
                   ))}
-                  {profile.experience.length > 3 && (
-                    <p className="text-xs text-slate-400 pl-6">+{profile.experience.length - 3} more positions</p>
-                  )}
+                  {p.experience.length > 3 && <p className="text-xs text-slate-400 pl-6">+{p.experience.length - 3} more positions</p>}
                 </Section>
               )}
             </div>
-
-            {/* Right column */}
             <div className="space-y-4">
-              {/* Salary Info */}
               <Card className="border-slate-200">
                 <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-700">Compensation</CardTitle></CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  <InfoRow label="Current CTC" value={profile.current_salary ? formatSalaryINR(profile.current_salary) : null} />
-                  <InfoRow label="Expected CTC" value={profile.expected_salary ? formatSalaryINR(profile.expected_salary) : null} />
-                  <InfoRow label="Notice Period" value={profile.notice_period} />
+                  <InfoRow label="Current CTC" value={p.current_salary ? formatSalaryINR(p.current_salary) : null} />
+                  <InfoRow label="Expected CTC" value={p.expected_salary ? formatSalaryINR(p.expected_salary) : null} />
+                  <InfoRow label="Notice Period" value={p.notice_period} />
                 </CardContent>
               </Card>
-
-              {/* Education summary */}
-              {(profile.highest_qualification || profile.education?.length > 0) && (
+              {(p.highest_qualification || p.education.length > 0) && (
                 <Card className="border-slate-200">
                   <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-700">Education</CardTitle></CardHeader>
                   <CardContent className="space-y-2 text-sm">
-                    {profile.highest_qualification && <InfoRow label="Highest" value={profile.highest_qualification} />}
-                    {profile.education?.slice(0, 2).map((edu, i) => (
+                    {p.highest_qualification && <InfoRow label="Highest" value={p.highest_qualification} />}
+                    {p.education.slice(0, 2).map((edu, i) => (
                       <div key={i} className="py-1 border-t border-slate-50 first:border-0">
                         <p className="font-medium text-slate-800">{edu.degree}</p>
                         {edu.institution && <p className="text-slate-500 text-xs">{edu.institution}</p>}
@@ -264,15 +243,13 @@ export default function NaukriProfileView() {
                   </CardContent>
                 </Card>
               )}
-
-              {/* Source info */}
               <Card className="border-slate-200">
                 <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-700">Source Details</CardTitle></CardHeader>
                 <CardContent className="space-y-1 text-xs text-slate-500">
-                  <p>Captured by: {profile.source_details?.captured_by_name || 'N/A'}</p>
-                  <p>Captured at: {profile.source_details?.captured_at ? new Date(profile.source_details.captured_at).toLocaleString() : 'N/A'}</p>
-                  <p>Extension v{profile.source_details?.extension_version || '2.0.0'}</p>
-                  {profile.naukri_profile_updated && <p>Naukri Updated: {profile.naukri_profile_updated}</p>}
+                  <p>Captured by: {p.source_details.captured_by_name || 'N/A'}</p>
+                  <p>Captured at: {p.source_details.captured_at ? new Date(p.source_details.captured_at).toLocaleString() : 'N/A'}</p>
+                  <p>Extension v{p.source_details.extension_version || '2.0.0'}</p>
+                  {p.naukri_profile_updated && <p>Naukri Updated: {p.naukri_profile_updated}</p>}
                 </CardContent>
               </Card>
             </div>
@@ -282,17 +259,9 @@ export default function NaukriProfileView() {
         {/* EXPERIENCE TAB */}
         <TabsContent value="experience">
           <Section title="Work Experience" icon={Briefcase} testId="section-work-experience">
-            {profile.experience?.length > 0 ? (
-              profile.experience.map((exp, i) => (
-                <TimelineCard
-                  key={i}
-                  title={exp.designation || exp.title || 'Role'}
-                  subtitle={exp.company}
-                  duration={exp.duration || `${exp.from_date || ''} - ${exp.to_date || 'Present'}`}
-                  location={exp.location}
-                  description={exp.description}
-                  isCurrent={exp.is_current}
-                />
+            {p.experience.length > 0 ? (
+              p.experience.map((exp, i) => (
+                <TimelineCard key={i} title={exp.designation || exp.title || 'Role'} subtitle={exp.company} duration={exp.duration || `${exp.from_date || ''} - ${exp.to_date || 'Present'}`} location={exp.location} description={exp.description} isCurrent={exp.is_current} />
               ))
             ) : (
               <p className="text-slate-400 text-sm text-center py-8">No work experience data captured</p>
@@ -303,9 +272,9 @@ export default function NaukriProfileView() {
         {/* EDUCATION TAB */}
         <TabsContent value="education">
           <Section title="Education" icon={GraduationCap} testId="section-education">
-            {profile.education?.length > 0 ? (
+            {p.education.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {profile.education.map((edu, i) => (
+                {p.education.map((edu, i) => (
                   <Card key={i} className="border-slate-200">
                     <CardContent className="p-4">
                       <p className="font-semibold text-slate-900">{edu.degree || 'Degree'}</p>
@@ -324,12 +293,10 @@ export default function NaukriProfileView() {
             ) : (
               <p className="text-slate-400 text-sm text-center py-8">No education data captured</p>
             )}
-
-            {/* Certifications */}
-            {profile.certifications_detailed?.length > 0 && (
+            {p.certifications_detailed.length > 0 && (
               <Section title="Certifications" icon={Award} testId="section-certifications">
                 <div className="space-y-2">
-                  {profile.certifications_detailed.map((cert, i) => (
+                  {p.certifications_detailed.map((cert, i) => (
                     <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
                       <Award className="w-5 h-5 text-amber-500 flex-shrink-0" />
                       <div>
@@ -347,32 +314,27 @@ export default function NaukriProfileView() {
 
         {/* SKILLS TAB */}
         <TabsContent value="skills">
-          {/* Key Skills */}
-          {profile.skills?.length > 0 && (
+          {p.skills.length > 0 && (
             <Section title="Key Skills" testId="section-key-skills">
               <div className="flex flex-wrap gap-2">
-                {profile.skills.map((skill, i) => (
+                {p.skills.map((skill, i) => (
                   <Badge key={i} variant="secondary" className="bg-[#DCFCE7] text-[#558B2F] px-3 py-1.5">{skill}</Badge>
                 ))}
               </div>
             </Section>
           )}
-
-          {/* IT Skills table */}
-          {profile.it_skills?.length > 0 && (
+          {p.it_skills.length > 0 && (
             <Section title="IT / Technical Skills" testId="section-it-skills">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 text-left">
-                      <th className="px-4 py-2 font-medium text-slate-600">Skill</th>
-                      <th className="px-4 py-2 font-medium text-slate-600">Version</th>
-                      <th className="px-4 py-2 font-medium text-slate-600">Last Used</th>
-                      <th className="px-4 py-2 font-medium text-slate-600">Experience</th>
-                    </tr>
-                  </thead>
+                  <thead><tr className="bg-slate-50 text-left">
+                    <th className="px-4 py-2 font-medium text-slate-600">Skill</th>
+                    <th className="px-4 py-2 font-medium text-slate-600">Version</th>
+                    <th className="px-4 py-2 font-medium text-slate-600">Last Used</th>
+                    <th className="px-4 py-2 font-medium text-slate-600">Experience</th>
+                  </tr></thead>
                   <tbody className="divide-y divide-slate-100">
-                    {profile.it_skills.map((skill, i) => (
+                    {p.it_skills.map((skill, i) => (
                       <tr key={i} className="hover:bg-slate-50">
                         <td className="px-4 py-2 font-medium text-slate-800">{skill.name}</td>
                         <td className="px-4 py-2 text-slate-600">{skill.version || '-'}</td>
@@ -385,12 +347,10 @@ export default function NaukriProfileView() {
               </div>
             </Section>
           )}
-
-          {/* Languages */}
-          {profile.languages?.length > 0 && (
+          {p.languages.length > 0 && (
             <Section title="Languages" icon={Languages} testId="section-languages">
               <div className="flex flex-wrap gap-2">
-                {profile.languages.map((lang, i) => (
+                {p.languages.map((lang, i) => (
                   <div key={i} className="px-3 py-2 bg-slate-50 rounded-lg border border-slate-100 text-sm">
                     <span className="font-medium text-slate-800">{lang.language}</span>
                     {lang.proficiency && <span className="text-slate-400 ml-1">({lang.proficiency})</span>}
@@ -399,12 +359,10 @@ export default function NaukriProfileView() {
               </div>
             </Section>
           )}
-
-          {/* Projects */}
-          {profile.projects?.length > 0 && (
+          {p.projects.length > 0 && (
             <Section title="Projects" icon={FolderOpen} testId="section-projects">
               <div className="space-y-3">
-                {profile.projects.map((proj, i) => (
+                {p.projects.map((proj, i) => (
                   <Card key={i} className="border-slate-200">
                     <CardContent className="p-4">
                       <p className="font-semibold text-slate-900">{proj.title}</p>
@@ -418,8 +376,7 @@ export default function NaukriProfileView() {
               </div>
             </Section>
           )}
-
-          {(!profile.skills?.length && !profile.it_skills?.length) && (
+          {p.skills.length === 0 && p.it_skills.length === 0 && (
             <p className="text-slate-400 text-sm text-center py-8">No skills data captured</p>
           )}
         </TabsContent>
@@ -429,48 +386,40 @@ export default function NaukriProfileView() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Section title="Personal Details" icon={User} testId="section-personal-details">
               <div className="space-y-1">
-                <InfoRow label="Date of Birth" value={profile.date_of_birth} icon={Calendar} />
-                <InfoRow label="Age" value={profile.age} />
-                <InfoRow label="Gender" value={profile.gender} />
-                <InfoRow label="Marital Status" value={profile.marital_status} />
-                <InfoRow label="Nationality" value={profile.nationality} />
-                <InfoRow label="Category" value={profile.category} />
-                <InfoRow label="Passport" value={profile.has_passport ? `Yes${profile.passport_number ? ` (${profile.passport_number})` : ''}` : null} />
-                {profile.differently_abled && <InfoRow label="Differently Abled" value="Yes" />}
+                <InfoRow label="Date of Birth" value={p.date_of_birth} icon={Calendar} />
+                <InfoRow label="Age" value={p.age} />
+                <InfoRow label="Gender" value={p.gender} />
+                <InfoRow label="Marital Status" value={p.marital_status} />
+                <InfoRow label="Nationality" value={p.nationality} />
+                <InfoRow label="Category" value={p.category} />
+                <InfoRow label="Passport" value={p.has_passport ? `Yes${p.passport_number ? ` (${p.passport_number})` : ''}` : null} />
+                {p.differently_abled && <InfoRow label="Differently Abled" value="Yes" />}
               </div>
             </Section>
-
             <Section title="Address" icon={MapPin} testId="section-address">
               <div className="space-y-3">
-                {(profile.current_address || profile.current_city) && (
+                {(p.current_address || p.current_city) ? (
                   <div>
                     <p className="text-xs text-slate-400 mb-1">Current Address</p>
-                    <p className="text-sm text-slate-700">
-                      {[profile.current_address, profile.current_city, profile.current_state, profile.current_country, profile.current_pincode].filter(Boolean).join(', ')}
-                    </p>
+                    <p className="text-sm text-slate-700">{[p.current_address, p.current_city, p.current_state, p.current_country, p.current_pincode].filter(Boolean).join(', ')}</p>
                   </div>
-                )}
-                {(profile.permanent_address || profile.permanent_city) && (
+                ) : null}
+                {(p.permanent_address || p.permanent_city) ? (
                   <div>
                     <p className="text-xs text-slate-400 mb-1">Permanent Address</p>
-                    <p className="text-sm text-slate-700">
-                      {[profile.permanent_address, profile.permanent_city, profile.permanent_state, profile.permanent_country, profile.permanent_pincode].filter(Boolean).join(', ')}
-                    </p>
+                    <p className="text-sm text-slate-700">{[p.permanent_address, p.permanent_city, p.permanent_state, p.permanent_country, p.permanent_pincode].filter(Boolean).join(', ')}</p>
                   </div>
-                )}
-                {!profile.current_address && !profile.current_city && !profile.permanent_address && !profile.permanent_city && (
+                ) : null}
+                {!p.current_address && !p.current_city && !p.permanent_address && !p.permanent_city && (
                   <p className="text-slate-400 text-sm">No address data captured</p>
                 )}
               </div>
             </Section>
-
-            {/* Online Profiles */}
-            {profile.online_profiles?.length > 0 && (
+            {p.online_profiles.length > 0 && (
               <Section title="Online Profiles" icon={Globe} testId="section-online-profiles">
                 <div className="space-y-2">
-                  {profile.online_profiles.map((op, i) => (
-                    <a key={i} href={op.url} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors text-sm">
+                  {p.online_profiles.map((op, i) => (
+                    <a key={i} href={op.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors text-sm">
                       <Globe className="w-4 h-4 text-[#7CB342]" />
                       <span className="font-medium text-slate-700">{op.platform}</span>
                       <ExternalLink className="w-3 h-3 text-slate-400 ml-auto" />
@@ -478,9 +427,6 @@ export default function NaukriProfileView() {
                   ))}
                 </div>
               </Section>
-            )}
-            {profile.linkedin_url && !profile.online_profiles?.some(p => p.platform === 'LinkedIn') && (
-              <InfoRow label="LinkedIn" value={<a href={profile.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{profile.linkedin_url}</a>} icon={Globe} />
             )}
           </div>
         </TabsContent>
@@ -490,75 +436,56 @@ export default function NaukriProfileView() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Section title="Salary & Notice" testId="section-salary-notice">
               <div className="space-y-1">
-                <InfoRow label="Current CTC" value={profile.current_salary ? formatSalaryINR(profile.current_salary) : null} />
-                <InfoRow label="Expected CTC" value={profile.expected_salary ? formatSalaryINR(profile.expected_salary) : null} />
-                <InfoRow label="Notice Period" value={profile.notice_period} />
-                {profile.is_serving_notice && <InfoRow label="Serving Notice" value="Yes" />}
-                {profile.last_working_day && <InfoRow label="Last Working Day" value={profile.last_working_day} />}
-                {profile.notice_negotiable && <InfoRow label="Negotiable" value="Yes" />}
+                <InfoRow label="Current CTC" value={p.current_salary ? formatSalaryINR(p.current_salary) : null} />
+                <InfoRow label="Expected CTC" value={p.expected_salary ? formatSalaryINR(p.expected_salary) : null} />
+                <InfoRow label="Notice Period" value={p.notice_period} />
+                {p.is_serving_notice && <InfoRow label="Serving Notice" value="Yes" />}
+                {p.last_working_day && <InfoRow label="Last Working Day" value={p.last_working_day} />}
+                {p.notice_negotiable && <InfoRow label="Negotiable" value="Yes" />}
               </div>
             </Section>
-
             <Section title="Location Preferences" testId="section-location-prefs">
               <div className="space-y-1">
-                <InfoRow label="Current Location" value={profile.location} icon={MapPin} />
-                {profile.preferred_locations?.length > 0 && (
+                <InfoRow label="Current Location" value={p.location} icon={MapPin} />
+                {p.preferred_locations.length > 0 && (
                   <div className="py-1.5">
                     <p className="text-sm text-slate-500 mb-1">Preferred Locations</p>
-                    <div className="flex flex-wrap gap-1">
-                      {profile.preferred_locations.map((loc, i) => (
-                        <Badge key={i} variant="outline" className="text-xs">{loc}</Badge>
-                      ))}
-                    </div>
+                    <div className="flex flex-wrap gap-1">{p.preferred_locations.map((loc, i) => (<Badge key={i} variant="outline" className="text-xs">{loc}</Badge>))}</div>
                   </div>
                 )}
-                {profile.willing_to_relocate && <InfoRow label="Willing to Relocate" value="Yes" />}
+                {p.willing_to_relocate && <InfoRow label="Willing to Relocate" value="Yes" />}
               </div>
             </Section>
-
             <Section title="Industry & Role" testId="section-industry-role">
               <div className="space-y-1">
-                <InfoRow label="Industry" value={profile.industry} />
-                {profile.preferred_industry?.length > 0 && (
+                <InfoRow label="Industry" value={p.industry} />
+                {p.preferred_industry.length > 0 && (
                   <div className="py-1.5">
                     <p className="text-sm text-slate-500 mb-1">Preferred Industry</p>
-                    <div className="flex flex-wrap gap-1">
-                      {profile.preferred_industry.map((ind, i) => (
-                        <Badge key={i} variant="outline" className="text-xs">{ind}</Badge>
-                      ))}
-                    </div>
+                    <div className="flex flex-wrap gap-1">{p.preferred_industry.map((ind, i) => (<Badge key={i} variant="outline" className="text-xs">{ind}</Badge>))}</div>
                   </div>
                 )}
-                {profile.preferred_functional_area?.length > 0 && (
+                {p.preferred_functional_area.length > 0 && (
                   <div className="py-1.5">
                     <p className="text-sm text-slate-500 mb-1">Functional Area</p>
-                    <div className="flex flex-wrap gap-1">
-                      {profile.preferred_functional_area.map((fa, i) => (
-                        <Badge key={i} variant="outline" className="text-xs">{fa}</Badge>
-                      ))}
-                    </div>
+                    <div className="flex flex-wrap gap-1">{p.preferred_functional_area.map((fa, i) => (<Badge key={i} variant="outline" className="text-xs">{fa}</Badge>))}</div>
                   </div>
                 )}
-                {profile.preferred_role?.length > 0 && (
+                {p.preferred_role.length > 0 && (
                   <div className="py-1.5">
                     <p className="text-sm text-slate-500 mb-1">Preferred Role</p>
-                    <div className="flex flex-wrap gap-1">
-                      {profile.preferred_role.map((r, i) => (
-                        <Badge key={i} variant="outline" className="text-xs">{r}</Badge>
-                      ))}
-                    </div>
+                    <div className="flex flex-wrap gap-1">{p.preferred_role.map((r, i) => (<Badge key={i} variant="outline" className="text-xs">{r}</Badge>))}</div>
                   </div>
                 )}
               </div>
             </Section>
-
             <Section title="Job Type Preferences" testId="section-job-type-prefs">
               <div className="space-y-1">
-                {profile.preferred_job_type?.length > 0 && <InfoRow label="Job Type" value={profile.preferred_job_type.join(', ')} />}
-                {profile.preferred_employment_type?.length > 0 && <InfoRow label="Employment" value={profile.preferred_employment_type.join(', ')} />}
-                {profile.preferred_shift?.length > 0 && <InfoRow label="Shift" value={profile.preferred_shift.join(', ')} />}
-                {profile.work_from_home && <InfoRow label="WFH" value="Preferred" />}
-                {profile.remote_work_preference && <InfoRow label="Remote" value={profile.remote_work_preference} />}
+                {p.preferred_job_type.length > 0 && <InfoRow label="Job Type" value={p.preferred_job_type.join(', ')} />}
+                {p.preferred_employment_type.length > 0 && <InfoRow label="Employment" value={p.preferred_employment_type.join(', ')} />}
+                {p.preferred_shift.length > 0 && <InfoRow label="Shift" value={p.preferred_shift.join(', ')} />}
+                {p.work_from_home && <InfoRow label="WFH" value="Preferred" />}
+                {p.remote_work_preference && <InfoRow label="Remote" value={p.remote_work_preference} />}
               </div>
             </Section>
           </div>
