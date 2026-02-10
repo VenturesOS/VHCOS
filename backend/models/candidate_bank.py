@@ -8,7 +8,7 @@ from typing import List, Optional, Any, Literal
 class CandidateBankRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    email: str
+    email: Optional[str] = None  # Made optional for Naukri profiles with hidden email
     name: str
     phone: Optional[str] = None
     phone_normalized: Optional[str] = None
