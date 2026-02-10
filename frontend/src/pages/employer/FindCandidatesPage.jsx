@@ -126,14 +126,16 @@ export default function FindCandidatesPage() {
   };
 
   const handleShortlist = async (candidate) => {
-    if (!selectedJobId) {
-      toast.error('Please select a job to shortlist the candidate for');
+    // Use selectedJobId or shortlistJobId (from the dialog job picker)
+    const jobId = selectedJobId || shortlistJobId;
+    if (!jobId) {
+      toast.error('Please select a job mandate to shortlist the candidate for');
       return;
     }
     
     setShortlistingId(candidate.candidate_id);
     try {
-      const res = await matchingAPI.shortlistCandidate(candidate.candidate_id, selectedJobId);
+      const res = await matchingAPI.shortlistCandidate(candidate.candidate_id, jobId);
       setShortlistedCandidates(prev => new Set([...prev, candidate.candidate_id]));
       toast.success(`${res.data.candidate_name} has been shortlisted for ${res.data.job_title}`);
       setSelectedCandidate(null);
