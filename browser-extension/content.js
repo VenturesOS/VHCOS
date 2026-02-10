@@ -487,13 +487,14 @@
       return { success: false, error: 'AI could not find candidate name in the text.' };
     }
 
-    // Step 3: Build capture payload from AI data
+    // Step 3: Build capture payload — prefer DOM-extracted values over AI
+    const finalName = domName || profileData.name;
     const capturePayload = {
       naukri_profile_id: naukriId,
       naukri_profile_url: window.location.href,
-      name: profileData.name,
-      first_name: profileData.name?.split(/[\s.]+/)[0] || null,
-      last_name: profileData.name?.split(/[\s.]+/).slice(-1)[0] || null,
+      name: finalName,
+      first_name: finalName?.split(/[\s.]+/)[0] || null,
+      last_name: finalName?.split(/[\s.]+/).slice(-1)[0] || null,
       email: domContacts.email || profileData.email || null,
       phone: domContacts.phone || profileData.phone || null,
       headline: profileData.headline || null,
