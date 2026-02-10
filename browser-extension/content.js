@@ -178,12 +178,57 @@
     return result.trim();
   }
 
-  // ===================== DOM CONTACT EXTRACTION =====================
+  // ===================== DOM DIRECT EXTRACTION =====================
 
   /**
-   * Directly extract email and phone from the DOM before AI processing.
-   * These are used as "hints" so the AI doesn't confuse the candidate's
-   * contact info with the logged-in recruiter's info.
+   * Extract candidate NAME from document.title.
+   * Resdex page titles typically follow: "Candidate Name - Naukri Resdex" or similar.
+   * This is the MOST reliable source for the candidate's name.
+   */
+  function extractNameFromTitle() {
+    const title = document.title || '';
+    console.log(`[VHC v${VERSION}] Page title: "${title}"`);
+
+    if (!title || title.length < 3) return null;
+
+    // Common Resdex title patterns:
+    // "Candidate Name | Naukri Resdex"
+    // "Candidate Name - Naukri"
+    // "Preview - Candidate Name"
+    // "Resdex - Candidate Name"
+
+    // Try splitting by common separators
+    const separators = [' | ', ' - ', ' – ', ' — '];
+    for (const sep of separators) {
+      if (title.includes(sep)) {
+        const parts = title.split(sep);
+        for (const part of parts) {
+          const cleaned = part.trim();
+          // Skip parts that are Naukri branding
+          if (/naukri|resdex|preview|search|recruiter/i.test(cleaned)) continue;
+          // A name should be 2+ words, 3-60 chars, no digits
+          if (cleaned.length >= 3 && cleaned.length <= 60 && /^[A-Za-z]/.test(cleaned) && !/\d/.test(cleaned)) {
+            console.log(`[VHC v${VERSION}] DOM name (from title): "${cleaned}"`);
+            return cleaned;
+          }
+        }
+      }
+    }
+
+    // If no separator found, try the whole title if it looks like a name
+    const trimmedTitle = title.trim();
+    if (trimmedTitle.length >= 3 && trimmedTitle.length <= 60 && /^[A-Za-z]/.test(trimmedTitle) && !/\d/.test(trimmedTitle) && !/naukri|resdex|preview|search/i.test(trimmedTitle)) {
+      console.log(`[VHC v${VERSION}] DOM name (whole title): "${trimmedTitle}"`);
+      return trimmedTitle;
+    }
+
+    console.log(`[VHC v${VERSION}] Could not extract name from title`);
+    return null;
+  }
+
+  /**
+   * Extract email and phone from TARGETED DOM selectors only.
+   * Does NOT scan body text (that picks up the logged-in recruiter's info).
    */
   function extractContactFromDOM() {
     const contacts = { email: null, phone: null };
@@ -204,9 +249,8 @@
       }
     }
 
-    // Strategy 2: Look for elements near the candidate info card that contain email patterns
+    // Strategy 2: Look in contact-area DOM elements only
     if (!contacts.email) {
-      // Look in elements that commonly hold contact info on Resdex
       const contactSelectors = [
         '[class*="contact"]', '[class*="Contact"]',
         '[class*="email"]', '[class*="Email"]', '[class*="mail"]',
@@ -214,7 +258,6 @@
         '[class*="candidateInfo"]', '[class*="candidate-info"]',
         '[class*="profileCard"]', '[class*="profile-card"]',
         '[class*="infoCard"]', '[class*="info-card"]',
-        // Resdex-specific patterns
         '[class*="topCard"]', '[class*="top-card"]',
         '[class*="quickInfo"]', '[class*="quick-info"]',
         '[class*="contactDetail"]', '[class*="contact-detail"]',
@@ -243,12 +286,10 @@
       }
     }
 
-    // Strategy 3: Scan all visible text near phone numbers / "Call candidate" buttons
+    // Strategy 3: Look near "Call candidate" / WhatsApp buttons
     if (!contacts.email) {
-      // The email is usually near the phone/call button area
       const callButtons = document.querySelectorAll('[class*="call"], [class*="Call"], [class*="phone"], [class*="Phone"], [class*="whatsapp"], [class*="WhatsApp"]');
       for (const btn of callButtons) {
-        // Check parent and sibling elements
         const parent = btn.parentElement?.parentElement || btn.parentElement;
         if (parent) {
           const parentText = parent.innerText || '';
@@ -268,26 +309,9 @@
       }
     }
 
-    // Strategy 4: Regex scan the top portion of the page (first ~2000 chars of body text)
-    if (!contacts.email) {
-      const bodyText = document.body.innerText || '';
-      // Scan a reasonable portion that would contain the profile card
-      const topText = bodyText.substring(0, 3000);
-      const emails = topText.match(emailRegex);
-      if (emails) {
-        for (const e of emails) {
-          const eLower = e.toLowerCase();
-          if (!eLower.includes('@naukri.com') && !eLower.includes('support@') && !eLower.includes('noreply@')) {
-            contacts.email = eLower;
-            console.log(`[VHC v${VERSION}] DOM email (body scan): ${eLower}`);
-            break;
-          }
-        }
-      }
-    }
+    // NO Strategy 4 (body text scan) — it picks up the recruiter's email from the nav/header
 
     // --- PHONE ---
-    // Look for phone near "Call candidate" or contact area
     const phoneEls = document.querySelectorAll('[class*="phone"], [class*="Phone"], [class*="mobile"], [class*="Mobile"], [class*="contact"], [class*="Contact"]');
     for (const el of phoneEls) {
       const text = el.innerText || el.textContent || '';
@@ -297,6 +321,10 @@
         console.log(`[VHC v${VERSION}] DOM phone: ${contacts.phone}`);
         break;
       }
+    }
+
+    return contacts;
+  }
     }
 
     return contacts;
