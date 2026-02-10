@@ -377,9 +377,19 @@ export default function FindCandidatesPage() {
                   <AlertCircle className="w-3 h-3" />AI recommendation is advisory. Final decision requires human approval.
                 </p>
                 {!selectedJobId && (
-                  <p className="text-xs text-amber-600 mb-3 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />Select a job above to enable shortlisting
-                  </p>
+                  <div className="mb-3">
+                    <Label className="text-xs text-slate-500 mb-1 block">Select job mandate to shortlist for:</Label>
+                    <Select value={shortlistJobId} onValueChange={setShortlistJobId}>
+                      <SelectTrigger data-testid="shortlist-job-select" className="h-8 text-sm">
+                        <SelectValue placeholder="Choose a job mandate..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {jobs.map((job) => (
+                          <SelectItem key={job.id} value={job.id}>{job.title} - {job.location}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 <div className="flex gap-3">
                   <Button variant="outline" className="flex-1 text-slate-600 hover:bg-slate-100"
@@ -396,7 +406,7 @@ export default function FindCandidatesPage() {
                   ) : (
                     <Button className="flex-1 bg-[#7CB342] hover:bg-[#689F38]"
                       data-testid="shortlist-candidate-btn"
-                      disabled={!selectedJobId || shortlistingId === selectedCandidate.candidate_id}
+                      disabled={(!selectedJobId && !shortlistJobId) || shortlistingId === selectedCandidate.candidate_id}
                       onClick={() => handleShortlist(selectedCandidate)}>
                       {shortlistingId === selectedCandidate.candidate_id ? (
                         <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Shortlisting...</>
