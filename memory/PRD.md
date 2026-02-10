@@ -21,34 +21,48 @@ A Chrome extension scrapes candidate profiles from Naukri.com (Resdex) and saves
 - Bug reporting system (manual + automated)
 - System health dashboard
 
-## Naukri Auto-Sourcing Browser Extension (v3.5.0)
+## Naukri Auto-Sourcing Browser Extension (v3.6.0)
 ### Implementation
 - **AI-Powered Pipeline**: Extension captures page text -> Backend AI endpoint (OpenAI GPT-4o-mini) extracts structured JSON -> Capture endpoint saves to DB
-- **Direct API Calls**: Extension v3.5.0 calls capture API directly via fetch (bypasses Manifest V3 service worker reliability issues)
-- **Text Cleaning**: Strips nav/header/footer/sidebar noise from DOM before AI extraction
-- **Smart Scrolling**: Multi-pass scroll with late-content detection for CV preview (email/phone)
+- **Multi-Strategy Text Extraction**:
+  - Strategy A: Try 15+ Resdex-specific container selectors (profileContainer, candidateDetail, rightSection, etc.)
+  - Strategy B: Clone body + aggressive DOM stripping (40+ noise selectors for nav, sidebar, chatbot, ads)
+  - Strategy C: Line-by-line text post-processing (removes nav patterns, finds profile content start)
+- **Direct API Calls**: Extension calls capture API directly via fetch (bypasses Manifest V3 service worker)
+- **Smart Scrolling**: Multi-pass scroll with late-content detection for lazy-loaded CV preview
+- **Strict AI Prompt**: Never appends years/titles to name, rejects naukri.com/placeholder emails, ignores marketing text
+- **Backend Validation**: Rejects invalid names (nav text, marketing slogans), cleans appended experience years, strips fake emails
 - **Deduplication**: naukri_profile_id -> email -> phone -> name match chain
-- **Backend**: POST /api/extension/capture, POST /api/extension/ai-extract, GET /api/extension/profile/{id}, GET /api/extension/stats
-- **Frontend**: NaukriProfileView.jsx with 6 tabs (Overview, Experience, Education, Skills, Personal, Preferences)
-- **Download**: GET /api/download/naukri-extension serves extension ZIP
-- **CandidateBankRecord**: email field is Optional to support Naukri profiles with hidden contact info
+- **CandidateBankRecord**: email field is Optional for Naukri profiles with hidden contacts
 - **"Hidden on Naukri"**: Profile view shows italic muted text for null email/phone
+
+### Key Endpoints
+- POST /api/extension/capture (with validation)
+- POST /api/extension/ai-extract (strict OpenAI prompt)
+- GET /api/extension/profile/{id}
+- GET /api/extension/stats
+- GET /api/download/naukri-extension (no-cache headers, version header)
 
 ## Tech Stack
 - **Frontend**: React, Shadcn UI, Tailwind CSS, Axios
 - **Backend**: FastAPI, Python, Motor (async MongoDB)
 - **Database**: MongoDB Atlas
-- **AI**: OpenAI GPT-4o-mini (via Emergent LLM Key) for profile text extraction
-- **Extension**: Chrome Manifest V3 (content scripts, service worker, popup)
+- **AI**: OpenAI GPT-4o-mini (via Emergent LLM Key)
+- **Extension**: Chrome Manifest V3
 
 ## Key Credentials
 - Admin: admin@vhc.in / VhcAdmin@2024
 
+## Completed (Dec 2025 - Feb 2026)
+- Full AI extraction pipeline (DOM scraping -> AI parsing)
+- Frontend routing fix (was redirecting to homepage)
+- Extension stability fixes (CORS, service worker bypass)
+- Backend packaging fix (manifest.json at root of ZIP)
+- v3.5.0: Silent capture fix, text cleaning, CV scroll improvements
+- v3.6.0: Multi-strategy text extraction, strict AI prompt, backend name/email validation, test data cleanup
+
 ## Backlog / Future Tasks
-- P1: Improve inline candidate detail view (buggy for Naukri-sourced candidates missing audit logs)
-- P2: Admin tool to clean up bad/test data from older extension versions
-- P2: Stripe integration for payments
-- P2: Multi-tenancy architecture
-- P3: Refactor monolithic content.js into smaller modules
+- P1: Fix inline candidate detail view (buggy for Naukri-sourced candidates)
+- P2: Admin tool to clean up bad data from older extension versions
+- P3: Refactor monolithic content.js into modules
 - P3: Advanced analytics dashboard
-- P3: Email Notifications (Resend API - ON HOLD, DNS pending)
