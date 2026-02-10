@@ -367,10 +367,11 @@ class TestV36ValidProfileCapture:
     def test_accept_valid_profile_with_clean_data(self):
         """Test capture accepts valid profile with all fields correctly"""
         valid_email = f"{self.test_id}_complete@example.com"
+        unique_name = f"Test User {self.test_id[:8]}"
         profile_data = {
             "naukri_profile_id": f"{self.test_id}_valid_complete",
             "naukri_profile_url": f"https://www.naukri.com/profile/{self.test_id}",
-            "name": "Rajiv Mathur",
+            "name": unique_name,
             "email": valid_email,
             "phone": "9876543210",
             "headline": "Senior Software Engineer at TechCorp",
