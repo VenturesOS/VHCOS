@@ -1,180 +1,174 @@
-<analysis>**original_problem_statement**: The user wants to build a Chrome extension to scrape candidate profiles from Naukri.com (a job portal) and save them into their VHC Talent OS application.
+<analysis>**original_problem_statement:**
+The user wants to fix and improve a Chrome extension designed to scrape candidate profiles from Naukri.com's Resdex platform. The main issues reported throughout the session are:
+1.  **Incorrect Data Capture (P0):** The extension frequently captures the recruiter's own contact information (email/phone) instead of the candidate's, or captures garbled/irrelevant text.
+2.  **Profile Visibility (P1):** Profiles captured via the extension are not visible to users with the sourcer (recruiter) role in the application's candidate data bank. They are only visible to the admin.
+3.  **Unreliable Search (P2):** When searching for a candidate (e.g., Candidate B) in the data bank, the results incorrectly show a different, previously searched-for candidate (e.g., Candidate A).
+4.  **Broken UI (P2):** The inline candidate detail view in the candidate bank is empty or broken for profiles sourced from Naukri.
+5.  **Disabled Shortlisting (P3):** In the AI Screening feature, the option to shortlist a candidate is disabled when using the Paste JD or Upload JD options, as it requires a job mandate to be selected first.
+6.  **Extension Failures (P1):** The extension's manual capture button sometimes disappears, and auto-scanning fails, often due to JavaScript errors.
 
-The key requirements that evolved during the session are:
-1.  **Accurate Profile Scraping**: The extension must capture the main profile on the page, not the similar profiles shown in the sidebar.
-2.  **Complete Data Extraction**: All visible fields from the Naukri profile, including experience, education, skills, and contact details (email/phone) from the attached CV preview, must be extracted.
-3.  **AI-Powered Parsing**: Use OpenAI to reliably extract structured data from the unstructured text of the profile page, making the extension resilient to Naukri's UI changes.
-4.  **Stable Integration**: The captured data must be saved correctly in the backend candidate database. Viewing the captured profiles in the VHC frontend should work seamlessly for all user roles (Admin, Recruiter, Employer) without crashes or incorrect redirects.
-5.  **Deduplication**: The system should avoid creating duplicate profiles, using the unique Naukri profile ID ( from the URL) as the primary key.
-6.  **User-Friendly Experience**: The extension should be easy to use, with clear status indicators (e.g., if it's on a valid profile page) and a simple capture button.
+The user has also requested a detailed technical explanation of the limitations causing these issues and a robust plan to fix them.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A Chrome extension () and a backend system (VHC Talent OS) are in place. The system has gone through significant iterations:
-- The data extraction method was completely changed from manual DOM-selector-based scraping to an **AI-powered pipeline**. The extension now just grabs all page text and sends it to a backend endpoint (), which uses OpenAI to parse it into structured JSON.
-- The backend correctly handles deduplication based on .
-- The frontend has a dedicated page () to display the rich data from Naukri profiles.
-- A critical bug causing users to be redirected to the homepage when trying to view a profile has been fixed by correcting the relative navigation paths in React Router.
-- The extension packaging and  have been fixed to resolve CORS and installation issues.
+- A Python/FastAPI backend with a React frontend.
+- A MongoDB database utilizing Atlas Search for candidate searching.
+- A Manifest V3 Chrome Extension (, , ) designed to scrape Naukri.com profiles.
+- The extension's scraping logic has gone through several iterations but still struggles to reliably distinguish candidate data from recruiter data and other noise on the page. The last stable version was v3.7.0, but it still had the core data extraction flaws.
 
 **Last working item**:
-*   **Last item agent was working**: The agent was debugging a critical issue where the extension successfully uses AI to extract a profile's data (visible in the browser console), but the final step of saving this data to the backend fails silently. The profile never appears in the Candidate Bank. The agent's hypothesis was that the message from the content script () to the background script () was failing due to the Manifest V3 service worker being terminated by Chrome. The proposed solution was to bypass the background script and have  call the capture API endpoint directly.
-*   **Status**: IN PROGRESS
-*   **Agent Testing Done**: N
-*   **Which testing method agent to use?**: Frontend testing agent to run the full extension flow, combined with manual verification of the browser console and the candidate bank UI.
-*   **User Testing Done**: N
+The user provided a new  script (intended for v3.8.0) and asked the agent to test it without updating the extension yet. This new script contains a more advanced, multi-layered approach to solve the contact extraction problem.
+
+- Last item agent was working: The agent performed a static analysis of the user-provided  script.
+- Status: BLOCKED
+- Agent Testing Done: Y (Static analysis only)
+- Which testing method agent to use? The next step is not testing. The agent must first communicate the bug it found in the user's script (see Issue 1 below) and propose a fix. After applying the fix, the agent should update the extension and use both the backend and frontend testing agents to verify all functionalities.
+- User Testing Done: N
 
 **All Pending/In progress Issue list**:
-*   **Issue 1**: Silent Capture Failure (Priority: P0)
-*   **Issue 2**: Scraped Text Includes Unwanted Navigation/Header Content (Priority: P1)
-*   **Issue 3**: Extension Stops Working After a Few Captures (Priority: P2)
+- Issue 1: **Bug in User-Provided v3.8.0 Script (P0)**
+- Issue 2: **Incorrect Email/Phone Capture (P1)**
+- Issue 3: **Unreliable Candidate Bank Search (P2)**
+- Issue 4: **Broken Inline Candidate Detail View (P2)**
 
-**Issues Detail**:
-*   **Issue 1: Silent Capture Failure**
-    *   **Attempted fixes**: Agent checked backend logs and ruled out API errors for similar  requests. The investigation pointed towards a failure in the Chrome extension's internal messaging system ().
-    *   **Next debug checklist**:
-        1.  Modify  in the  function.
-        2.  Replace the  call with a direct  call to the  endpoint.
-        3.  Ensure the  call includes the necessary  header with the auth token and the correct API portal URL, both of which are already available in .
-        4.  Add detailed  statements in the  and  blocks of the new  call to explicitly confirm if the API call succeeded or failed.
-    *   **Why fix this issue and what will be achieved with the fix?**: This is the highest priority bug. Fixing it will make the extension's core functionality work again, allowing users to save profiles to the candidate bank.
-    *   **Status**: IN PROGRESS
-    *   **Is recurring issue?**: N
-    *   **Should Test frontend/backend/both after fix?**: Both.
-    *   **Blocked on other issue**: None.
+Issues Detail:
+- **Issue 1: Bug in User-Provided v3.8.0 Script**
+  - **Description**: The user's new script attempts to fetch the recruiter's credentials from  to use as a blocklist during extraction. It tries to read a single object key: . However, the extension's login flow saves user data under multiple, separate keys (, ). This mismatch will cause the blocklist feature, which is the cornerstone of the new solution, to fail silently.
+  - **Attempted fixes**: None. The agent has only identified the bug.
+  - **Next debug checklist**:
+    1.  Inform the user about the bug in their provided script.
+    2.  Modify the  function in the user's  to correctly read  from .
+    3.  Confirm with the user before proceeding to integrate this fixed script.
+  - **Why fix this issue and what will be achieved with the fix?**: Fixing this is critical to implementing the user's desired solution. It will enable the extension to correctly identify and ignore the recruiter's own contact details, significantly improving capture accuracy.
+  - **Status**: NOT STARTED
+  - **Is recurring issue?** N
+  - **Should Test frontend/backend/both after fix?** Both.
+  - **Blocked on other issue**: None. This is the primary blocker.
 
-*   **Issue 2: Scraped Text Includes Unwanted Navigation/Header Content**
-    *   **Attempted fixes**: A simple string trim based on a keyword failed because the keyword wasn't always present.
-    *   **Next debug checklist**:
-        1.  In , locate the text extraction logic within .
-        2.  Instead of , first try to get text from a more specific main content container like .
-        3.  If falling back to , programmatically identify and remove common header/footer/nav elements (e.g., ) from a cloned DOM before extracting the text.
-    *   **Why fix this issue and what will be achieved with the fix?**: This will provide cleaner data to the OpenAI endpoint, improving accuracy, reducing token consumption, and lowering costs.
-    *   **Status**: NOT STARTED
-    *   **Is recurring issue?**: Y
-    *   **Should Test frontend/backend/both after fix?**: Frontend.
+- **Issue 2: Incorrect Email/Phone Capture**
+  - **Description**: This is the main, recurring problem. The extension flattens the 2D page layout into 1D text, losing the spatial context that separates the recruiter's header info from the candidate's main content info. This causes regex scans and AI extraction to pick the wrong data.
+  - **Attempted fixes**: Previous versions tried simple CSS selectors and basic text processing, which failed. The user's new script (v3.8.0) proposes a more robust, layered solution, but it's blocked by Issue 1.
+  - **Next debug checklist**:
+    1.  Resolve Issue 1.
+    2.  Integrate the fixed v3.8.0  script.
+    3.  Update the backend AI prompt to accept and use the recruiter's email as an explicit ignore instruction.
+  - **Why fix this issue and what will be achieved with the fix?**: This will solve the most critical product failure, leading to clean, accurate candidate profiles in the database.
+  - **Status**: BLOCKED
+  - **Is recurring issue?** Y
+  - **Should Test frontend/backend/both after fix?** Both.
+  - **Blocked on other issue**: Issue 1: Bug in User-Provided v3.8.0 Script
 
-*   **Issue 3: Extension Stops Working After a Few Captures**
-    *   **Attempted fixes**: Retry logic was added to the AI endpoint.
-    *   **Next debug checklist**: This issue is likely a symptom of Issue 1 (silent capture failure). The failure of the background service worker would cause all subsequent capture attempts to fail.
-    *   **Why fix this issue and what will be achieved with the fix?**: Enables users to source multiple candidates efficiently in a single session.
-    *   **Status**: BLOCKED
-    *   **Is recurring issue?**: Y
-    *   **Should Test frontend/backend/both after fix?**: Frontend.
-    *   **Blocked on other issue**: Issue 1: Silent Capture Failure.
+- **Issue 3: Unreliable Candidate Bank Search**
+  - **Description**: User reports that searching for one name (e.g., Candidate B) incorrectly returns results for a previous search (e.g., Candidate A).
+  - **Attempted fixes**: Agent added backend Redis cache invalidation on new captures and tightened the Atlas Search query to be less fuzzy. However, the user reported the issue again, and the agent discovered Redis was not even running. The issue is likely either in the frontend state management (e.g., debouncing/caching) or the Atlas Search configuration being too broad.
+  - **Next debug checklist**:
+    1.  Focus on the frontend  to trace how the  state is managed and passed to the API.
+    2.  Check for race conditions or state update issues related to the  hook.
+    3.  Further tighten the Atlas Search query by giving a higher score/boost to exact matches on the  field, or using a  clause.
+  - **Why fix this issue and what will be achieved with the fix?**: A working search is fundamental to the candidate bank's usability.
+  - **Status**: NOT STARTED
+  - **Is recurring issue?** Y
+  - **Should Test frontend/backend/both after fix?** Both.
+  - **Blocked on other issue**: None.
+
+- **Issue 4: Broken Inline Candidate Detail View**
+  - **Description**: When a user clicks on a Naukri-sourced profile in the candidate bank, the inline detail view that slides out is empty or broken.
+  - **Attempted fixes**: Agent added  blocks around API calls for audit logs and history, assuming they were failing for new candidates. This did not solve the root cause.
+  - **Next debug checklist**:
+    1.  Use browser developer tools to inspect the network requests made when the inline detail view is opened.
+    2.  Check the browser console for any JavaScript errors on the frontend.
+    3.  Verify that the data structure of a Naukri-sourced candidate record contains all the fields the frontend component expects.
+  - **Why fix this issue and what will be achieved with the fix?**: This will allow users to quickly preview candidate details without leaving the search results page.
+  - **Status**: NOT STARTED
+  - **Is recurring issue?** Y
+  - **Should Test frontend/backend/both after fix?** Frontend.
+  - **Blocked on other issue**: None.
 
 **In progress Task List**:
-*   **Task 1: Improve CV Preview Text Capture for Slow Connections**
-    *   **Where to resume**: In , inside the  function.
-    *   **What will be achieved with this?**: More reliable extraction of crucial contact details (email/phone) which often load late within an embedded CV viewer at the bottom of the page.
-    *   **Next Steps**: After the initial scroll and wait, add a secondary . Inside it, re-read  and check if its length has increased significantly. If so, use this new, more complete text for AI extraction.
-    *   **Status**: IN PROGRESS
-    *   **Should Test frontend/backend/both after fix?**: Frontend.
-    *   **Blocked on something**: None.
+- **Task 1: Implement and Deploy Extension v3.8.0**
+  - **Description**: This involves integrating the user's proposed (but buggy)  script to finally solve the contact extraction problem.
+  - **Where to resume**: The task is blocked. The agent must first fix the  bug in the user's script (see Issue 1). After that, the agent can replace the existing , update the backend AI prompt, rebuild the extension ZIP, and deploy.
+  - **What will be achieved with this?**: A highly accurate Chrome extension that correctly captures candidate contact info from Naukri.
+  - **Status**: BLOCKED
+  - **Should Test frontend/backend/both after fix?** Both.
+  - **Blocked on something**: Blocked on resolving **Issue 1**.
 
 **Upcoming and Future Tasks**
-*   **Upcoming Tasks**:
-    *   **(P0)** Refactor  to make the capture API call directly, bypassing  to fix the silent capture failure.
-    *   **(P1)** Implement a more robust text cleaning mechanism in  to strip header/nav content before sending it to OpenAI.
-    *   **(P2)** Enhance the scroll logic in  to re-read the page and capture late-loading CV content.
-*   **Future Tasks**:
-    *   **(P1)** Improve the frontend UI in  to display a more descriptive message like Hidden on Naukri when email or phone fields are null.
-    *   **(P2)** Investigate and fix the inline detail view in the  that opens when a user clicks the candidate row, as the user reported it was showing an incomplete profile.
-    *   **(P3)** Create a mechanism for an admin to clean up bad data (e.g., profiles named Search candidates) that was created by older, buggy versions of the extension.
+- **Upcoming Tasks**:
+  - **(P2)** Fix the unreliable candidate bank search (Issue 3).
+  - **(P2)** Fix the broken inline candidate detail view (Issue 4).
+  - **(P3)** User verification for the AI Screening shortlist fix (a job selector was added, but needs to be confirmed by the user).
 
 **Completed work in this session**
--   **AI-Powered Extraction Pipeline**: Successfully created a new backend endpoint () that uses OpenAI to parse raw text from Naukri and integrated it with the Chrome extension.
--   **Frontend Crash/Redirect Fix**: Resolved a critical bug where users were redirected to the homepage when clicking the Full Profile button. The fix involved using absolute path navigation in React Router across all three candidate bank pages (, , ).
--   **Robust Profile Viewing**: Made the  page resilient to crashes from malformed or incomplete profile data.
--   **Extension Scraper Logic**: Rewrote the  scraper multiple times to correctly identify the main profile, use the page breadcrumb for name extraction, and improve scrolling to capture CV text.
--   **Extension Stability Fixes**: Resolved CORS errors by updating   and gracefully handled Extension context invalidated errors.
--   **Backend Packaging Fix**: Corrected the extension ZIP creation logic on the backend () to ensure the  file is at the root, allowing for correct installation.
-
-**Earlier issues found/mentioned but not fixed**
-*   **Issue 1: Inline candidate detail view is buggy.**
-    *   **Debug checklist**: Investigate the  function in  and the APIs it calls (, ). These APIs might not be designed to handle Naukri-sourced candidates, which lack certain data points like audit logs.
-    *   **Why to solve this issue and what will be achieved with this?**: To provide a consistent and complete user experience on the candidate bank page.
-    *   **Should Test frontend/backend/both after fix**: Frontend.
-    *   **Is recurring issue?**: N
-
-**Known issue recurrence from previous fork**
-*   N/A
+- **Extension & Backend Fixes**:
+  - Implemented multiple extension versions (up to v3.7.0) with incremental fixes.
+  - Fixed a server-side Pydantic validation error that was crashing the candidate bank list page.
+  - Added  headers to the extension download endpoint to prevent browser caching of old versions.
+  - Improved the AI prompt and added backend validation to clean/reject bad data (e.g., names like Search candidates).
+  - Fixed a JavaScript syntax error in  that prevented the UI from loading.
+  - Implemented team-wide visibility for captured profiles, ensuring they appear in the recruiter's candidate bank.
+- **User Communication**:
+  - Provided a detailed technical analysis of the core scraping problem, outlining the limitations and proposing a multi-layered solution architecture, which the user has approved and provided a script for.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-*   **Frontend**: React, React Router, Axios, TailwindCSS
-*   **Backend**: FastAPI (Python), Pydantic, MongoDB (using  for async)
-*   **Extension**: Chrome Extension Manifest V3, Content Scripts, Background Service Worker
-*   **AI**: OpenAI API (GPT-4) for structured data extraction from raw text.
+- **Frontend**: React
+- **Backend**: Python (FastAPI)
+- **Database**: MongoDB with Atlas Search
+- **Architecture**: Microservices-style architecture with separate services for frontend, candidate management, and the extension backend.
+- **Chrome Extension**: Manifest V3, using  for DOM interaction and direct  calls to the backend, bypassing the service worker for heavy lifting to avoid termination issues.
 
 **key DB schema**
-*   ** (MongoDB collection)**:
-    *   : String (Unique ID from Naukri URL, used for deduplication)
-    *   : String (Hardcoded to Naukri)
-    *   : Object (Contains all raw data from the extension)
-        *   : String (e.g., v3.4.0)
-        *   : String (The full page text sent to the AI)
-        *   : Object (The structured JSON returned by OpenAI)
-    *   Other top-level fields: , , , , , etc., populated from the AI extraction.
-
-**changes in tech stack**
-*   The core data extraction technology was changed from frontend DOM scraping to a backend **OpenAI API integration**.
+- **candidates**: 
+- **users**: 
 
 **All files of reference**
-*   : The main file for the extension's scraping logic. It was heavily modified to implement the AI pipeline and needs to be edited to fix the current silent capture bug.
-*   : Contains the backend logic for the AI extraction () and data capture ().
-*   : The newly created React component for displaying full Naukri profiles.
-*    (and its Recruiter/Employer equivalents): Modified to fix the Full Profile button navigation.
-*   : Updated multiple times to manage permissions and versioning.
-
-**Areas that need refactoring**:
-*   The  file is becoming monolithic. It handles UI injection, user interaction, scrolling, text extraction, and API communication. It could be refactored into smaller, more manageable modules.
-
-**key api endpoints**
-*   : Takes raw page text and uses OpenAI to return a structured JSON profile.
-*   : Saves the structured profile data to the database.
-*   : Retrieves a full candidate profile for the frontend view.
-*   : Provides the downloadable ZIP file for the Chrome extension.
+- : The core logic for the Chrome Extension scraper. The user has provided a new version of this file to be tested and implemented.
+- : Contains the backend endpoints (, ) that the extension communicates with.
+- : Contains the logic for the candidate bank search, including the Atlas Search query pipeline.
+- : The frontend component for the main candidate bank UI, where the search bug is manifesting.
 
 **Critical Info for New Agent**
-*   **Top Priority**: The most critical bug is the **silent capture failure**. The proposed and most likely solution is to modify  to call the  API endpoint directly using , bypassing the potentially unreliable Manifest V3 background service worker messaging.
-*   **User Caching Issue**: The user has consistently struggled with loading the latest version of the extension due to browser and download caching. When providing a new version, explicitly instruct the user to **1. Remove the old extension, 2. Extract the new ZIP to a completely new folder, and 3. Load the new unpacked folder**. Always confirm the version number with them.
-*   **AI is the Source of Truth**: The data extraction strategy is now fully dependent on AI. All efforts to improve data capture should focus on providing cleaner, more complete text to the  endpoint, not on parsing the DOM in the extension itself.
-*   **Logout Bug was a Routing Issue**: A previously reported logout bug was actually an incorrect relative path in React Router. If a similar issue occurs, check the browser console for routing errors before investigating authentication.
+- **Do not use the user's script as-is.** The user provided a new  to be tested. Your predecessor found a critical bug in it: it uses the wrong key () to read from . You must fix this before integrating the script. The correct keys are  and .
+- The user has been frustrated with the recurring data capture issues. The layered solution proposed (blocklisting recruiter credentials, using page title for name, anchoring scans to the name) is the correct path forward. Your priority is to implement this solution correctly.
+- The search bug is the next most critical issue. It's likely an issue with either the frontend state management in React or the Atlas Search configuration being too fuzzy.
 
 **documents and test reports created in this job**
-*   
-*   User-provided artifact: 
+- 
 
 **Last 10 User Messages and any pending HUMAN messages**
-10.  - User instruction to proceed with the pending work. (Pending)
-9.   - User insight that contact info is in the late-loading CV preview. (In Progress)
-8.   - User reported the current P0 bug: AI extraction works, but capture fails silently. (Pending)
-7.   - User feedback on AI version, reporting several issues. (Partially Resolved)
-6.   - User suggested the pivot to an AI-based solution. (Implemented)
-5.   - User requested clear version bumps for each update. (Implemented)
-4.   - User reported poor extraction, which was diagnosed as them using an old extension version. (Resolved)
-3.   - User reported the critical frontend redirect bug. (Resolved)
-2.   - User confirmed scraping worked but viewing the profile caused a logout. (Resolved)
-1.   - User had trouble with the extension ZIP structure. (Resolved)
+1.  **User**: We have a serious issue with contact/email capture. Don't build anything, just discuss the limitations.
+2.  **Agent**: Explained the technical limitations (flattened text losing spatial context) and proposed a layered solution.
+3.  **User**: Give me an elaborated summary to help build the extension considering these limitations.
+4.  **Agent**: Provided a detailed solution architecture (blocklisting, DOM position, AI prompt improvements).
+5.  **User**: What does the current extension stack look like?
+6.  **Agent**: Detailed the full stack and highlighted that the recruiter's email is already available in .
+7.  **User**: OK, paste the full code for  and the backend AI extract endpoint.
+8.  **Agent**: Provided the requested code.
+9.  **User**: (Pastes a brand new  script) Just test this JS script. Do not update the extension yet.
+10. **Agent**: (Analyzes the script internally and identifies a critical bug related to  keys).
+
+**Pending Human Message**: The agent has analyzed the user's script and found a bug but has not yet reported this finding back to the user. The next action should be to explain the bug and propose the fix before proceeding.
 
 **Project Health Check:**
-*   **Broken**: The core functionality of saving a profile from the extension to the application is currently broken due to a silent failure in the capture process.
+- **Broken**:
+  - Core data extraction logic in the Chrome extension.
+  - Candidate bank search functionality.
+  - Inline candidate detail view in the candidate bank.
 
 **3rd Party Integrations**
-*   **OpenAI GPT-4**: Used for parsing candidate profile text. Uses Emergent LLM Key.
+- **OpenAI GPT-4o-mini**: Used for AI-powered parsing of scraped profile text. Uses the Emergent LLM Key.
+- **MongoDB Atlas**: The primary database for the application.
+- **Atlas Search**: The search engine technology used for the candidate bank.
 
 **Testing status**
-*   **Testing agent used after significant changes**: Yes, but not since the latest bug was introduced.
-*   **Troubleshoot agent used after agent stuck in loop**: No.
-*   **Test files created**: None.
-*   **Known regressions**: The profile capture mechanism, which previously worked, is now failing silently.
-
-**Credentials to test flow:**
-Admin and recruiter credentials are known to the agent and available in the environment.
+- **Testing agent used after significant changes**: YES
+- **Troubleshoot agent used after agent stuck in loop**: YES
+- **Test files created**: The testing agent created temporary test files during its runs.
+- **Known regressions**: The search functionality and inline detail view were previously working but are now reported as broken. The core data extraction has been a persistent issue.
 
 **What agent forgot to execute**
-The agent correctly diagnosed the silent capture failure and proposed a solution (making the API call directly from ) but did not implement this fix before the session ended. The user's last message, continue the pending task, refers to implementing this fix and the related improvements to scrolling and text capture.</analysis>
+The agent correctly followed the user's instruction to just test the new script and not implement it. However, the next logical step, which has not been executed, is to report the bug found during the test back to the user and ask for permission to fix it before integration.</analysis>
