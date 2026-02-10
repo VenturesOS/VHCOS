@@ -556,6 +556,9 @@ async def capture_profile(
         
         await db.candidate_bank.insert_one(candidate_data)
         
+        # Invalidate search cache so new profile appears immediately
+        cache.invalidate_search_cache()
+        
         logger.info(f"[Extension] Created new candidate: {profile.name} ({candidate_id})")
         
         return CaptureResponse(
