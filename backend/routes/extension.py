@@ -404,6 +404,14 @@ IMPORTANT: The page text may also contain the logged-in RECRUITER's email. IGNOR
         content = result["choices"][0]["message"]["content"]
         profile_data = json_module.loads(content)
         
+        # Override with DOM-extracted values (most reliable sources)
+        if request.dom_extracted_name and request.dom_extracted_name.strip():
+            profile_data["name"] = request.dom_extracted_name.strip()
+        if request.dom_extracted_email and request.dom_extracted_email.strip():
+            profile_data["email"] = request.dom_extracted_email.strip()
+        if request.dom_extracted_phone and request.dom_extracted_phone.strip():
+            profile_data["phone"] = request.dom_extracted_phone.strip()
+        
         # Add metadata
         profile_data["naukri_profile_id"] = request.naukri_profile_id
         profile_data["naukri_profile_url"] = request.page_url
