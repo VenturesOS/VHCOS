@@ -217,14 +217,16 @@ export default function RecruiterCandidateBankPage() {
   const loadCandidateDetails = async (candidate) => {
     setSelectedCandidate(candidate);
     try {
-      const [historyRes, activityRes] = await Promise.all([
+      const results = await Promise.allSettled([
         candidateBankAPI.getResumeHistory(candidate.id),
         candidateBankAPI.getHistory(candidate.id),
       ]);
-      setResumeHistory(historyRes.data?.resume_versions || []);
-      setActivityHistory(activityRes.data);
+      setResumeHistory(results[0].status === 'fulfilled' ? (results[0].value.data?.resume_versions || []) : []);
+      setActivityHistory(results[1].status === 'fulfilled' ? results[1].value.data : []);
     } catch (error) {
       console.error('Failed to load details');
+      setResumeHistory([]);
+      setActivityHistory([]);
     }
   };
 
