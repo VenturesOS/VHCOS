@@ -453,13 +453,18 @@ async def capture_profile(
             message="Rejected: Invalid candidate name"
         )
     
-    # Clean email: reject naukri/placeholder/support emails
+    # Clean email: reject naukri/placeholder/support emails AND logged-in user's email
     if profile.email:
         email_lower = profile.email.lower().strip()
+        # Reject known bad patterns
         if any(pattern in email_lower for pattern in [
             '@naukri.com', '@placeholder', '@example.com', '@test.com',
             'noreply@', 'support@', 'info@naukri', 'donotreply@'
         ]):
+            profile.email = None
+        # Reject if it matches the logged-in user's email (recruiter's email, not candidate's)
+        elif current_user.get("email") and email_lower == current_user["email"].lower().strip():
+            logger.info(f"[Extension] Stripped recruiter's own email ({profile.email}) from capture for {profile.name}")
             profile.email = None
     
     # Update first/last name from cleaned name
