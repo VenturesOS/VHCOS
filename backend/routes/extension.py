@@ -359,6 +359,18 @@ IMPORTANT:
 Page text:
 {raw_text}"""
 
+    # Add DOM extraction hints if available
+    if request.dom_extracted_email or request.dom_extracted_phone:
+        hint_parts = []
+        if request.dom_extracted_email:
+            hint_parts.append(f"- The candidate's email extracted directly from the page DOM is: {request.dom_extracted_email}")
+        if request.dom_extracted_phone:
+            hint_parts.append(f"- The candidate's phone extracted directly from the page DOM is: {request.dom_extracted_phone}")
+        prompt += f"""
+
+VERIFIED CONTACT INFO FROM PAGE DOM (use these over any other email/phone you find in the text):
+{chr(10).join(hint_parts)}"""
+
     try:
         import httpx
         async with httpx.AsyncClient(timeout=30.0) as client:
