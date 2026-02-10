@@ -1,0 +1,88 @@
+{
+  "summary": "Tested VHC Talent OS v3.6.0 validation logic. All NEW validation features work correctly: invalid name rejection (Search candidates, Decode India, empty, too short, too long), name cleaning (removes appended years like '- 15 Year(s)'), email stripping (@naukri.com, @placeholder.com to null), valid profile acceptance, deduplication, AI extraction from noisy text, extension ZIP download.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "POST /api/extension/capture - rejects 'Search candidates' as invalid name",
+    "POST /api/extension/capture - rejects 'Decode India' as invalid name",
+    "POST /api/extension/capture - rejects empty name",
+    "POST /api/extension/capture - rejects whitespace-only name",
+    "POST /api/extension/capture - rejects too short name (<2 chars)",
+    "POST /api/extension/capture - rejects too long name (>80 chars)",
+    "POST /api/extension/capture - rejects 'profiles found' as invalid name",
+    "POST /api/extension/capture - cleans 'Puja Gupta Basu - 15 Year(s)' to 'Puja Gupta Basu'",
+    "POST /api/extension/capture - cleans 'Vikrant Kumar - 3.5 Years' to 'Vikrant Kumar'",
+    "POST /api/extension/capture - strips @naukri.com emails to null",
+    "POST /api/extension/capture - strips @placeholder.com emails to null",
+    "POST /api/extension/capture - strips support@ emails to null",
+    "POST /api/extension/capture - keeps valid personal/work emails",
+    "POST /api/extension/capture - deduplicates by naukri_profile_id",
+    "POST /api/extension/ai-extract - extracts profile data from noisy text with nav items",
+    "POST /api/extension/ai-extract - name field does not include nav/marketing text",
+    "GET /api/download/naukri-extension - returns valid ZIP file",
+    "GET /api/download/naukri-extension - ZIP contains manifest.json",
+    "GET /api/extension/stats - returns capture statistics",
+    "Admin login works (email=admin@vhc.in, password=VhcAdmin@2024)",
+    "Candidate Bank page loads with 1712+ candidates",
+    "Naukri-sourced candidates display 'Naukri' badge",
+    "Cleaned names display correctly in Candidate Bank (Puja Gupta Basu without years)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_v36_validation.py",
+    "/app/test_reports/pytest/pytest_v36_validation.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Name validation logic at lines 415-440 in extension.py correctly rejects invalid names and cleans appended experience years",
+    "Email stripping at lines 443-449 correctly filters out @naukri.com, @placeholder.com, support@, noreply@ emails",
+    "AI prompt at lines 303-349 includes strict rules for name extraction (no nav text, no marketing text)"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_v36_validation.py - New comprehensive test file for v3.6.0 validation"
+  ],
+
+  "success_rate": {
+    "backend": "100% - All v3.6.0 validation features working correctly",
+    "frontend": "100% - Candidate Bank loads, login works, Naukri candidates display correctly"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "seed_data_creation": "Created test candidates with test_v36_ prefix for validation testing - names like 'Puja Gupta Basu - 15 Year(s)' cleaned to 'Puja Gupta Basu'",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "v3.6.0 validation logic fully tested. Key test file: /app/backend/tests/test_v36_validation.py. All invalid name rejection, name cleaning (removes appended years), email stripping (@naukri.com to null) features are working. Test data with test_v36_ prefix exists in DB. Candidate Bank shows 1712 candidates with Naukri badge for extension-sourced profiles.",
+
+  "features_verified": {
+    "Invalid name rejection (Search candidates, Decode India, empty, short, long)": "WORKING",
+    "Name cleaning (removes '- 15 Year(s)' suffix)": "WORKING", 
+    "Email stripping (@naukri.com, @placeholder.com to null)": "WORKING",
+    "Valid profile capture with clean data": "WORKING",
+    "Deduplication by naukri_profile_id": "WORKING",
+    "AI extraction from noisy nav text": "WORKING - AI correctly extracts only candidate data",
+    "Extension ZIP download": "WORKING - /api/download/naukri-extension returns valid ZIP",
+    "Extension stats endpoint": "WORKING",
+    "Candidate Bank page display": "WORKING - Shows Naukri badge and cleaned names"
+  },
+
+  "mocked_apis": "None - all APIs are real (OpenAI API for ai-extract is real)"
+}
