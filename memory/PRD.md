@@ -5,30 +5,22 @@ Build a Chrome extension to scrape candidate profiles from Naukri.com (Resdex) a
 
 ## Naukri Auto-Sourcing Browser Extension
 
-### Current Version: v3.6.1
+### Current Version: v3.6.2
 
 ### Architecture
-- Extension captures page text + DOM-extracted contacts → Backend AI (OpenAI) → Structured JSON → Capture endpoint → MongoDB
-- Direct API calls from content.js (bypasses Manifest V3 service worker)
+Extension captures: page title (name) + targeted DOM selectors (email/phone) + page text → Backend AI (OpenAI) with DOM hints → Structured JSON → Capture endpoint with validation → MongoDB
 
-### v3.6.1 Changes (Email Fix)
-- **DOM Contact Extraction**: 4-strategy email extraction directly from DOM before AI:
-  1. `mailto:` links
-  2. Contact-area CSS selectors (20+ patterns)
-  3. Sibling elements near "Call candidate" buttons
-  4. Body text regex scan (top 3000 chars)
-- **DOM hints to AI**: `dom_extracted_email` and `dom_extracted_phone` passed to AI endpoint as verified contacts
-- **Recruiter email filter**: Capture endpoint compares email against logged-in user's email and strips if match
-- **Capture payload priority**: DOM-extracted email > AI-extracted email
-
-### v3.6.0 Changes (Data Quality)
-- Multi-strategy text extraction (container selectors, aggressive DOM strip, text post-processing)
-- Strict AI prompt (no years in name, reject nav/marketing text)
-- Backend validation (reject invalid names, clean appended years, strip placeholder emails)
+### v3.6.2 Fixes (Name + Email accuracy)
+- **Name from document.title**: Extracts candidate name from page title (e.g., "Kalim Pathan | Naukri Resdex") — most reliable source, unaffected by DOM stripping
+- **Removed body text scan (Strategy 4)**: Was picking up the logged-in recruiter's email from Naukri header/nav
+- **Simplified postProcessText**: Only removes definite noise lines (nav items), no longer tries to detect "profile start" — preserves full profile text including candidate name
+- **DOM hints to AI**: `dom_extracted_name`, `dom_extracted_email`, `dom_extracted_phone` passed as verified data
+- **Backend override**: AI extract response is overridden with DOM values when available
+- **Priority chain**: DOM name > AI name, DOM email > AI email, DOM phone > AI phone
 
 ### Key Endpoints
 - POST /api/extension/capture (validation + recruiter email filter)
-- POST /api/extension/ai-extract (DOM hints + strict prompt)
+- POST /api/extension/ai-extract (DOM hints + strict prompt + post-override)
 - GET /api/extension/profile/{id}
 - GET /api/extension/stats
 - GET /api/download/naukri-extension (no-cache headers)
@@ -44,7 +36,7 @@ Build a Chrome extension to scrape candidate profiles from Naukri.com (Resdex) a
 - Admin: admin@vhc.in / VhcAdmin@2024
 
 ## Backlog
-- P1: Auto-click "View Contact" button before capture for phone reveal
+- P1: Auto-click "View Contact" button before capture for phone number reveal
 - P1: Fix inline candidate detail view for Naukri candidates
 - P2: Admin tool to clean up bad data
 - P3: Refactor content.js into modules
