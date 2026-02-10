@@ -104,5 +104,5 @@ async def download_naukri_extension():
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-    response.headers["X-Extension-Version"] = "3.5.0"
+    response.headers["X-Extension-Version"] = "3.6.0"
     return response
