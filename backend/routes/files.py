@@ -95,8 +95,14 @@ async def download_naukri_extension():
     if not extension_path.exists():
         raise HTTPException(status_code=404, detail="Extension file not found")
     
-    return FileResponse(
+    import time
+    response = FileResponse(
         path=extension_path,
         filename="vhc-naukri-extension.zip",
-        media_type="application/zip"
+        media_type="application/zip",
     )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["X-Extension-Version"] = "3.5.0"
+    return response
