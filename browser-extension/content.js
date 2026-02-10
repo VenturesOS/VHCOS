@@ -199,6 +199,130 @@
     return result.trim();
   }
 
+  // ===================== DOM CONTACT EXTRACTION =====================
+
+  /**
+   * Directly extract email and phone from the DOM before AI processing.
+   * These are used as "hints" so the AI doesn't confuse the candidate's
+   * contact info with the logged-in recruiter's info.
+   */
+  function extractContactFromDOM() {
+    const contacts = { email: null, phone: null };
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const phoneRegex = /(?:\+91[\s-]?)?(?:\d[\s-]?){10}/g;
+
+    // --- EMAIL ---
+
+    // Strategy 1: Look for mailto: links (most reliable)
+    const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
+    for (const a of mailtoLinks) {
+      const href = a.getAttribute('href');
+      const email = href.replace('mailto:', '').split('?')[0].trim().toLowerCase();
+      if (email && !email.includes('@naukri.com') && !email.includes('support@') && !email.includes('noreply@')) {
+        contacts.email = email;
+        console.log(`[VHC v${VERSION}] DOM email (mailto): ${email}`);
+        break;
+      }
+    }
+
+    // Strategy 2: Look for elements near the candidate info card that contain email patterns
+    if (!contacts.email) {
+      // Look in elements that commonly hold contact info on Resdex
+      const contactSelectors = [
+        '[class*="contact"]', '[class*="Contact"]',
+        '[class*="email"]', '[class*="Email"]', '[class*="mail"]',
+        '[class*="personalInfo"]', '[class*="personal-info"]',
+        '[class*="candidateInfo"]', '[class*="candidate-info"]',
+        '[class*="profileCard"]', '[class*="profile-card"]',
+        '[class*="infoCard"]', '[class*="info-card"]',
+        // Resdex-specific patterns
+        '[class*="topCard"]', '[class*="top-card"]',
+        '[class*="quickInfo"]', '[class*="quick-info"]',
+        '[class*="contactDetail"]', '[class*="contact-detail"]',
+      ];
+
+      for (const sel of contactSelectors) {
+        try {
+          const els = document.querySelectorAll(sel);
+          for (const el of els) {
+            const text = el.innerText || el.textContent || '';
+            const emails = text.match(emailRegex);
+            if (emails) {
+              for (const e of emails) {
+                const eLower = e.toLowerCase();
+                if (!eLower.includes('@naukri.com') && !eLower.includes('support@') && !eLower.includes('noreply@')) {
+                  contacts.email = eLower;
+                  console.log(`[VHC v${VERSION}] DOM email (selector ${sel}): ${eLower}`);
+                  break;
+                }
+              }
+              if (contacts.email) break;
+            }
+          }
+        } catch (_) {}
+        if (contacts.email) break;
+      }
+    }
+
+    // Strategy 3: Scan all visible text near phone numbers / "Call candidate" buttons
+    if (!contacts.email) {
+      // The email is usually near the phone/call button area
+      const callButtons = document.querySelectorAll('[class*="call"], [class*="Call"], [class*="phone"], [class*="Phone"], [class*="whatsapp"], [class*="WhatsApp"]');
+      for (const btn of callButtons) {
+        // Check parent and sibling elements
+        const parent = btn.parentElement?.parentElement || btn.parentElement;
+        if (parent) {
+          const parentText = parent.innerText || '';
+          const emails = parentText.match(emailRegex);
+          if (emails) {
+            for (const e of emails) {
+              const eLower = e.toLowerCase();
+              if (!eLower.includes('@naukri.com') && !eLower.includes('support@') && !eLower.includes('noreply@')) {
+                contacts.email = eLower;
+                console.log(`[VHC v${VERSION}] DOM email (near call btn): ${eLower}`);
+                break;
+              }
+            }
+            if (contacts.email) break;
+          }
+        }
+      }
+    }
+
+    // Strategy 4: Regex scan the top portion of the page (first ~2000 chars of body text)
+    if (!contacts.email) {
+      const bodyText = document.body.innerText || '';
+      // Scan a reasonable portion that would contain the profile card
+      const topText = bodyText.substring(0, 3000);
+      const emails = topText.match(emailRegex);
+      if (emails) {
+        for (const e of emails) {
+          const eLower = e.toLowerCase();
+          if (!eLower.includes('@naukri.com') && !eLower.includes('support@') && !eLower.includes('noreply@')) {
+            contacts.email = eLower;
+            console.log(`[VHC v${VERSION}] DOM email (body scan): ${eLower}`);
+            break;
+          }
+        }
+      }
+    }
+
+    // --- PHONE ---
+    // Look for phone near "Call candidate" or contact area
+    const phoneEls = document.querySelectorAll('[class*="phone"], [class*="Phone"], [class*="mobile"], [class*="Mobile"], [class*="contact"], [class*="Contact"]');
+    for (const el of phoneEls) {
+      const text = el.innerText || el.textContent || '';
+      const phones = text.match(phoneRegex);
+      if (phones) {
+        contacts.phone = phones[0].replace(/[\s-]/g, '');
+        console.log(`[VHC v${VERSION}] DOM phone: ${contacts.phone}`);
+        break;
+      }
+    }
+
+    return contacts;
+  }
+
   function extractNaukriProfileId() {
     const urlParams = new URLSearchParams(window.location.search);
     const sid = urlParams.get('sid');
