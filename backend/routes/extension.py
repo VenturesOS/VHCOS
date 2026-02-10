@@ -275,6 +275,7 @@ class AIExtractRequest(BaseModel):
     page_url: str
     page_title: Optional[str] = None
     naukri_profile_id: Optional[str] = None
+    dom_extracted_name: Optional[str] = None
     dom_extracted_email: Optional[str] = None
     dom_extracted_phone: Optional[str] = None
 
