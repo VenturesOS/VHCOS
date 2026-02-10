@@ -590,12 +590,19 @@ async def get_candidate_bank(
             # Build Atlas Search aggregation pipeline
             pipeline = []
             
-            # Stage 1: Atlas Search with fuzzy matching
+            # Stage 1: Atlas Search with tighter matching
             search_stage = {
                 "$search": {
                     "index": "candidate_search",
                     "compound": {
                         "should": [
+                            {
+                                "text": {
+                                    "query": search,
+                                    "path": "name",
+                                    "score": {"boost": {"value": 5}}
+                                }
+                            },
                             {
                                 "text": {
                                     "query": search,
@@ -615,21 +622,13 @@ async def get_candidate_bank(
                                 "text": {
                                     "query": search,
                                     "path": "skills",
-                                    "fuzzy": {"maxEdits": 1},
-                                    "score": {"boost": {"value": 2.5}}
+                                    "score": {"boost": {"value": 2}}
                                 }
                             },
                             {
                                 "text": {
                                     "query": search,
-                                    "path": "summary",
-                                    "fuzzy": {"maxEdits": 2}
-                                }
-                            },
-                            {
-                                "text": {
-                                    "query": search,
-                                    "path": ["current_employer", "designation", "industry"],
+                                    "path": ["current_employer", "designation"],
                                     "fuzzy": {"maxEdits": 1}
                                 }
                             }
