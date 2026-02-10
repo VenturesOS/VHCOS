@@ -25,6 +25,7 @@ export default function FindCandidatesPage() {
   const [bgProgress, setBgProgress] = useState(0);
   const [shortlistingId, setShortlistingId] = useState(null);
   const [shortlistedCandidates, setShortlistedCandidates] = useState(new Set());
+  const [shortlistJobId, setShortlistJobId] = useState('');
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
 
