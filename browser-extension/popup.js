@@ -1,5 +1,5 @@
 /**
- * VHC Talent OS - Popup Script
+ * VHC Talent OS - Popup Script v3.8.0
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const captureStatus = document.getElementById('captureStatus');
   const statusDot = document.getElementById('statusDot');
   const pageStatusText = document.getElementById('pageStatusText');
+  
+  // Progress bar elements
+  const taskProgress = document.getElementById('taskProgress');
+  const progressFill = document.getElementById('progressFill');
+  const progressStepText = document.getElementById('progressStepText');
+  const progressPercent = document.getElementById('progressPercent');
+  const progressTick = document.getElementById('progressTick');
   
   // Check auth status
   const authStatus = await chrome.runtime.sendMessage({ action: 'checkAuth' });
@@ -62,37 +69,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLogin();
   });
   
+  // Progress bar helpers
+  function setProgress(percent, stepText) {
+    taskProgress.classList.add('visible');
+    progressFill.style.width = percent + '%';
+    progressStepText.textContent = stepText;
+    progressPercent.textContent = percent + '%';
+    
+    if (percent >= 100) {
+      progressTick.classList.add('show');
+    } else {
+      progressTick.classList.remove('show');
+    }
+  }
+  
+  function resetProgress() {
+    taskProgress.classList.remove('visible');
+    progressFill.style.width = '0%';
+    progressStepText.textContent = '';
+    progressPercent.textContent = '0%';
+    progressTick.classList.remove('show');
+  }
+  
   // Manual capture handler
   manualCaptureBtn.addEventListener('click', async () => {
     manualCaptureBtn.disabled = true;
     manualCaptureBtn.innerHTML = '<span class="loading"></span> Capturing...';
-    showCaptureStatus('info', 'AI capture started on page. This takes 10-20 seconds...');
+    hideCaptureStatus();
+    
+    // Start progress animation
+    setProgress(10, 'Scrolling page...');
     
     try {
-      // Get the active tab
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
       if (!tab) {
         showCaptureStatus('error', 'No active tab found');
+        resetProgress();
         manualCaptureBtn.disabled = false;
         manualCaptureBtn.textContent = 'Capture This Profile';
         return;
       }
       
-      // Check if it's a Naukri page
       if (!tab.url.includes('naukri.com')) {
-        showCaptureStatus('error', 'Not a Naukri page. Please open a Naukri profile.');
+        showCaptureStatus('error', 'Not a Naukri page. Open a Naukri profile first.');
+        resetProgress();
         manualCaptureBtn.disabled = false;
         manualCaptureBtn.textContent = 'Capture This Profile';
         return;
       }
       
-      // Fire the capture command — content.js will show a toast on the page
-      // We use a short timeout wrapper because the capture takes 10-30s and the
-      // message channel may close if the popup loses focus.
-      const responsePromise = chrome.tabs.sendMessage(tab.id, { action: 'manualCapture' });
+      // Simulate progress steps while capture runs
+      setProgress(20, 'Loading page content...');
       
-      // Race between response and a 30-second timeout
+      const progressTimer1 = setTimeout(() => setProgress(40, 'Extracting contacts...'), 3000);
+      const progressTimer2 = setTimeout(() => setProgress(60, 'AI analyzing profile...'), 7000);
+      const progressTimer3 = setTimeout(() => setProgress(80, 'Saving to VHC...'), 15000);
+      
+      const responsePromise = chrome.tabs.sendMessage(tab.id, { action: 'manualCapture' });
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('timeout')), 30000)
       );
@@ -100,37 +134,54 @@ document.addEventListener('DOMContentLoaded', async () => {
       try {
         const response = await Promise.race([responsePromise, timeoutPromise]);
         
+        // Clear pending timers
+        clearTimeout(progressTimer1);
+        clearTimeout(progressTimer2);
+        clearTimeout(progressTimer3);
+        
         if (response && response.success) {
+          setProgress(100, 'Complete');
+          
           if (response.action === 'created') {
             showCaptureStatus('success', `${response.name || 'Profile'} added to VHC!`);
           } else if (response.action === 'updated') {
             showCaptureStatus('success', `${response.name || 'Profile'} updated in VHC!`);
           } else if (response.action === 'exists') {
             showCaptureStatus('info', `${response.name || 'Profile'} already up-to-date`);
+            setProgress(100, 'Already captured');
           } else if (response.action === 'queued') {
             showCaptureStatus('info', `${response.name || 'Profile'} queued for sync`);
+            setProgress(100, 'Queued');
           }
-          loadStats();
         } else if (response) {
+          clearTimeout(progressTimer1);
+          clearTimeout(progressTimer2);
+          clearTimeout(progressTimer3);
+          resetProgress();
           showCaptureStatus('error', response.error || 'Capture failed.');
         }
       } catch (raceError) {
+        clearTimeout(progressTimer1);
+        clearTimeout(progressTimer2);
+        clearTimeout(progressTimer3);
+        
         if (raceError.message === 'timeout') {
-          // The capture is likely still running on the page — don't show error
-          showCaptureStatus('info', 'Capture is running on the page. Check the page for results.');
+          setProgress(90, 'Still processing...');
+          showCaptureStatus('info', 'Capture running on page. Check the page for results.');
         } else {
-          throw raceError; // Re-throw non-timeout errors
+          throw raceError;
         }
       }
       
     } catch (error) {
-      console.error('Manual capture error:', error);
+      resetProgress();
+      
       if (error.message && error.message.includes('Receiving end does not exist')) {
-        showCaptureStatus('error', 'Extension not active on this page. Please refresh the Naukri page.');
+        showCaptureStatus('error', 'Extension not active. Please refresh the Naukri page.');
       } else if (error.message && error.message.includes('Could not establish connection')) {
-        showCaptureStatus('error', 'Content script not loaded. Please refresh the Naukri page.');
+        showCaptureStatus('error', 'Content script not loaded. Refresh the Naukri page.');
       } else {
-        showCaptureStatus('info', 'Capture triggered. Check the page for toast notification with results.');
+        showCaptureStatus('info', 'Capture triggered. Check the page for results.');
       }
     } finally {
       manualCaptureBtn.disabled = false;
@@ -152,7 +203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     loginSection.style.display = 'flex';
     dashboardSection.style.display = 'none';
     
-    // Load saved URL if any
     chrome.storage.sync.get(['vhc_api_url'], (result) => {
       if (result.vhc_api_url) {
         document.getElementById('apiUrl').value = result.vhc_api_url;
@@ -164,23 +214,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     loginSection.style.display = 'none';
     dashboardSection.style.display = 'block';
     
-    // Show user info
     document.getElementById('userName').textContent = user.name || 'User';
     document.getElementById('userRole').textContent = user.role || 'Member';
     
-    // Show API URL
     chrome.storage.sync.get(['vhc_api_url'], (result) => {
       document.getElementById('apiUrlDisplay').textContent = result.vhc_api_url || '-';
     });
     
-    // Load settings
     chrome.storage.sync.get(['enabled', 'showNotifications'], (result) => {
       document.getElementById('settingEnabled').checked = result.enabled !== false;
       document.getElementById('settingNotifications').checked = result.showNotifications !== false;
     });
-    
-    // Load stats
-    loadStats();
     
     // Check queue
     chrome.storage.local.get(['offlineQueue'], (result) => {
@@ -195,7 +239,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
     
-    // Check current page status
     checkPageStatus();
   }
   
@@ -212,7 +255,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (tab.url.includes('/profile') || tab.url.includes('viewResume') || 
             tab.url.includes('view-resume') || tab.url.includes('cvPreview') ||
             tab.url.includes('preview') || tab.url.includes('resdex')) {
-          setPageStatus('green', '✓ Naukri profile page detected');
+          setPageStatus('green', 'Naukri profile page detected');
           manualCaptureBtn.disabled = false;
         } else {
           setPageStatus('yellow', 'Naukri page (not a profile)');
@@ -232,15 +275,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     pageStatusText.textContent = text;
   }
   
-  async function loadStats() {
-    const stats = await chrome.runtime.sendMessage({ action: 'getStats' });
-    
-    document.getElementById('statToday').textContent = stats.captured_today || 0;
-    document.getElementById('statWeek').textContent = stats.captured_week || 0;
-    document.getElementById('statTotal').textContent = stats.captured_total || 0;
-    document.getElementById('statUpdated').textContent = stats.updated_total || 0;
-  }
-  
   function showError(message) {
     loginError.textContent = message;
     loginError.style.display = 'block';
@@ -251,13 +285,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   function showCaptureStatus(type, message) {
     captureStatus.textContent = message;
-    captureStatus.className = `capture-status visible ${type}`;
+    captureStatus.className = `capture-result visible ${type}`;
     
-    // Auto-hide after 10 seconds for success/info
     if (type !== 'error') {
       setTimeout(() => {
         captureStatus.classList.remove('visible');
-      }, 10000);
+        // Also hide progress bar after success fades
+        if (type === 'success') {
+          setTimeout(() => resetProgress(), 500);
+        }
+      }, 8000);
     }
+  }
+  
+  function hideCaptureStatus() {
+    captureStatus.className = 'capture-result';
   }
 });
