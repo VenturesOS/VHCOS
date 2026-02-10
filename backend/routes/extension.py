@@ -409,7 +409,50 @@ async def capture_profile(
     Capture and save/update a COMPLETE Naukri profile.
     Stores ALL available data for 1:1 profile matching.
     """
+    import re as re_module
     now = datetime.now(timezone.utc).isoformat()
+    
+    # === DATA VALIDATION & CLEANING ===
+    
+    # Clean name: strip experience years, designations, noise
+    if profile.name:
+        # Remove patterns like " - 15 Year(s)", " - 3.5 Year(s)", " 15 Year(s)"
+        profile.name = re_module.sub(r'\s*[-–]\s*\d+[\.\d]*\s*Year\(?s?\)?\s*$', '', profile.name, flags=re_module.IGNORECASE).strip()
+        # Remove trailing designations that got appended
+        profile.name = re_module.sub(r'\s*[-–]\s*(Senior|Junior|Lead|Manager|Director|Engineer|Developer|Architect|Consultant|Analyst).*$', '', profile.name, flags=re_module.IGNORECASE).strip()
+    
+    # Reject clearly fake/invalid names
+    invalid_names = [
+        'search candidates', 'decode india', 'profiles found', 'naukri.com',
+        'similar profiles', 'save for later', 'download', 'login', 'sign up',
+    ]
+    if profile.name and profile.name.lower().strip() in invalid_names:
+        return CaptureResponse(
+            success=False, action="rejected", candidate_id="",
+            message=f"Rejected: '{profile.name}' is not a valid candidate name"
+        )
+    
+    # Reject names that are too short (< 2 chars) or too long (> 80 chars)
+    if not profile.name or len(profile.name.strip()) < 2 or len(profile.name.strip()) > 80:
+        return CaptureResponse(
+            success=False, action="rejected", candidate_id="",
+            message="Rejected: Invalid candidate name"
+        )
+    
+    # Clean email: reject naukri/placeholder/support emails
+    if profile.email:
+        email_lower = profile.email.lower().strip()
+        if any(pattern in email_lower for pattern in [
+            '@naukri.com', '@placeholder', '@example.com', '@test.com',
+            'noreply@', 'support@', 'info@naukri', 'donotreply@'
+        ]):
+            profile.email = None
+    
+    # Update first/last name from cleaned name
+    if profile.name:
+        name_parts = profile.name.strip().split()
+        profile.first_name = name_parts[0] if name_parts else None
+        profile.last_name = name_parts[-1] if len(name_parts) > 1 else None
     
     # Check for existing profile by naukri_profile_id
     existing = await db.candidate_bank.find_one(
