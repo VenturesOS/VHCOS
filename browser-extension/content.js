@@ -449,6 +449,7 @@
             page_url: window.location.href,
             page_title: document.title,
             naukri_profile_id: naukriId,
+            dom_extracted_name: domName || null,
             dom_extracted_email: domContacts.email || null,
             dom_extracted_phone: domContacts.phone || null
           })
