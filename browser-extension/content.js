@@ -409,9 +409,12 @@
     await scrollToLoadContent();
     await sleep(1000);
     
-    // Extract contacts directly from DOM BEFORE text cleaning (more reliable)
+    // Extract name from page title (most reliable source)
+    const domName = extractNameFromTitle();
+    
+    // Extract contacts from targeted DOM selectors (NOT body scan)
     const domContacts = extractContactFromDOM();
-    console.log(`[VHC v${VERSION}] DOM-extracted contacts:`, domContacts);
+    console.log(`[VHC v${VERSION}] DOM-extracted: name="${domName}", email="${domContacts.email}", phone="${domContacts.phone}"`);
     
     const rawText = getRawPageText();
     console.log(`[VHC v${VERSION}] Raw text captured: ${rawText.length} chars`);
