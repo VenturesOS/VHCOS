@@ -41,38 +41,51 @@
   // ===================== TEXT CAPTURE =====================
 
   /**
-   * Get ALL visible text from the page, excluding sidebar and scripts.
-   * KEY FIX: Use innerText directly on the live DOM element (not a clone).
+   * Get clean profile text from the page.
+   * Strategy: Clone the DOM, remove known noise elements (nav, footer, sidebar),
+   * then extract text from the cleaned clone.
    */
   function getRawPageText() {
-    let text = '';
-    
-    // Try #cap-container first
+    // Try the main content container first
     const container = document.getElementById('cap-container');
-    if (container) {
-      text = container.innerText || '';
-      console.log(`[VHC v${VERSION}] Text from #cap-container: ${text.length} chars`);
-    }
-    
-    // If too short, use body
+    let sourceEl = container || document.body;
+
+    // Clone so we can strip elements without affecting the live page
+    const clone = sourceEl.cloneNode(true);
+
+    // Remove known noise: nav bars, headers, footers, sidebars, script/style tags
+    const noiseSelectors = [
+      'nav', 'header', 'footer',
+      '[class*="naukri-header"]', '[class*="naukri-footer"]',
+      '[class*="similar-profile"]', '[class*="similarProfile"]',
+      '[id*="similar"]', '[class*="aside"]',
+      'script', 'style', 'noscript', 'iframe',
+      '[class*="chatbot"]', '[class*="cookie"]', '[class*="banner-ad"]',
+      '[class*="leftNav"]', '[class*="leftSec"]',
+    ];
+
+    noiseSelectors.forEach(sel => {
+      try { clone.querySelectorAll(sel).forEach(el => el.remove()); } catch (_) {}
+    });
+
+    let text = clone.innerText || '';
+    console.log(`[VHC v${VERSION}] Clean text: ${text.length} chars (from ${container ? '#cap-container' : 'body'})`);
+
+    // Fallback: if clone text is too short, use raw body
     if (text.length < 200) {
       text = document.body.innerText || '';
-      console.log(`[VHC v${VERSION}] Text from body: ${text.length} chars`);
+      console.log(`[VHC v${VERSION}] Fallback to body text: ${text.length} chars`);
     }
-    
+
     if (text.length < 50) return text;
-    
-    // Find where profile content starts (skip nav)
+
+    // Skip leading navigation text (find where profile content starts)
     const profileStart = text.search(/\d+\s*profile[s]?\s*found/i);
     if (profileStart > 0 && profileStart < 500) {
       text = text.substring(profileStart);
     }
-    
-    // DO NOT trim at "AI matched similar profiles" — the CV preview with 
-    // email/phone appears AFTER the main profile but BEFORE or MIXED with sidebar.
-    // Instead, we keep everything and let AI sort it out.
-    // AI prompt already instructs to extract from the candidate's own data only.
-    
+
+    // Keep everything including CV preview — AI will filter out sidebar data
     return text.trim();
   }
 
