@@ -12,6 +12,7 @@ Extension: title (name) + auto-click View Contact + recruiter blocklist (email+p
 - **Recruiter blocklist**: Loads recruiter's email+phone from chrome.storage, excludes them during DOM contact extraction
 - **Backend AI recruiter identity**: AI prompt explicitly receives recruiter's email/phone and instructions to ignore them
 - **Phone storage at login**: background.js now stores recruiter's phone from login response for blocklist use
+- **Popup UI redesign**: Removed scorecard/stats grid, added task progress bar with green branding and tick-mark completion indicator
 - **v3.7.0 preserved**: Backup at `/app/browser-extension/content.v3.7.0.js` for rollback
 
 ### v3.7.0 Changes (Previous)
