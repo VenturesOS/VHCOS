@@ -372,12 +372,26 @@ Page text:
     if request.dom_extracted_phone:
         hint_parts.append(f"- The candidate's phone extracted directly from the page DOM is: {request.dom_extracted_phone}")
     
+    # Add recruiter blocklist to prompt
+    blocklist_parts = []
+    if request.recruiter_email:
+        blocklist_parts.append(f"- RECRUITER'S EMAIL (IGNORE THIS): {request.recruiter_email}")
+    if request.recruiter_phone:
+        blocklist_parts.append(f"- RECRUITER'S PHONE (IGNORE THIS): {request.recruiter_phone}")
+    
+    if blocklist_parts:
+        prompt += f"""
+
+RECRUITER IDENTITY (the person viewing this profile — NOT the candidate):
+{chr(10).join(blocklist_parts)}
+The above contact details belong to the RECRUITER who is logged in. They may appear on the page header/navigation. NEVER return these as the candidate's contact info."""
+    
     if hint_parts:
         prompt += f"""
 
 VERIFIED DATA FROM PAGE DOM (use these values, they are more reliable than anything in the text):
 {chr(10).join(hint_parts)}
-IMPORTANT: The page text may also contain the logged-in RECRUITER's email. IGNORE any email that doesn't match the DOM-extracted email above."""
+IMPORTANT: The page text may also contain the logged-in RECRUITER's email/phone. IGNORE any contact info that matches the recruiter's details listed above."""
 
     try:
         import httpx
