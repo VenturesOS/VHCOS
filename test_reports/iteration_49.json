@@ -1,0 +1,87 @@
+{
+  "summary": "Tested VHC Naukri Extension feature updates including 'Hidden on Naukri' display, ai-extract endpoint, extension download, and fixed a critical bug in CandidateBankRecord model that caused 500 errors when email is null.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/files/download/naukri-extension", "issue": "Returns 404 - correct URL is /api/download/naukri-extension (review request had wrong path)"}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "POST /api/extension/capture - Creates new candidate with full payload",
+    "POST /api/extension/capture - Deduplicates by naukri_profile_id (returns action: updated)",
+    "POST /api/extension/capture - Deduplicates by email match",
+    "POST /api/extension/capture - Handles null email/phone correctly",
+    "POST /api/extension/capture - All array fields captured correctly",
+    "POST /api/extension/ai-extract - Returns structured profile_data from raw text",
+    "POST /api/extension/ai-extract - Rejects insufficient text (<50 chars)",
+    "GET /api/extension/profile/{id} - Returns full candidate profile",
+    "GET /api/extension/profile/{id} - Returns 404 for non-existent",
+    "GET /api/extension/stats - Returns capture statistics",
+    "GET /api/download/naukri-extension - Returns ZIP file (correct URL)",
+    "GET /api/candidate-bank - Now works with null email candidates",
+    "Extension endpoints require authentication (401/403)",
+    "NaukriProfileView - Shows 'Hidden on Naukri' in italic for null email/phone",
+    "NaukriProfileView - All 6 tabs (Overview, Experience, Education, Skills, Personal, Preferences) clickable and load data"
+  ],
+
+  "bug_fixed": {
+    "issue": "CandidateBankRecord model had email field as required (str) but Naukri profiles can have null email",
+    "file": "/app/backend/models/candidate_bank.py",
+    "fix": "Changed 'email: str' to 'email: Optional[str] = None'",
+    "impact": "GET /api/candidate-bank was returning 500 Internal Server Error when any candidate had null email"
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_extension.py",
+    "/app/test_reports/pytest/pytest_naukri_extension_final.xml"
+  ],
+
+  "action_items": [
+    "Update documentation: extension download URL is /api/download/naukri-extension NOT /api/files/download/naukri-extension"
+  ],
+
+  "critical_code_review_comments": [
+    "CandidateBankRecord.email was required but should be Optional for Naukri profiles - FIXED",
+    "Extension download route at /api/download/naukri-extension works correctly"
+  ],
+
+  "updated_files": [
+    "/app/backend/models/candidate_bank.py - Made email field Optional",
+    "/app/backend/tests/test_naukri_extension.py - Added tests for ai-extract, download, null email/phone"
+  ],
+
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (NaukriProfileView loads, all tabs work, Hidden on Naukri displays correctly)"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "seed_data_creation": "Created test candidate 'd79508f7-2760-4010-a50b-cdeb1941c8d9' with null email/phone for Hidden on Naukri testing",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Naukri Extension feature fully tested. Bug fixed: CandidateBankRecord.email is now Optional to support Naukri profiles with hidden contact. Test candidate 'Hidden Contact Test User' (ID: d79508f7-2760-4010-a50b-cdeb1941c8d9) exists with null email/phone. Extension ZIP download works at /api/download/naukri-extension. AI extraction at /api/extension/ai-extract uses OpenAI GPT-4o-mini for profile parsing.",
+
+  "features_verified": {
+    "POST /api/extension/capture with null email/phone": "Works - creates candidate correctly",
+    "Hidden on Naukri display": "Works - shows 'Hidden on Naukri' in muted italic style for null email/phone",
+    "POST /api/extension/ai-extract": "Works - returns structured profile_data",
+    "GET /api/download/naukri-extension": "Works - returns ZIP file",
+    "All 6 NaukriProfileView tabs": "Works - Overview, Experience, Education, Skills, Personal, Preferences"
+  },
+
+  "mocked_apis": ["None - all APIs are real"]
+}
