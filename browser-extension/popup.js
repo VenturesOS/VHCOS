@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   manualCaptureBtn.addEventListener('click', async () => {
     manualCaptureBtn.disabled = true;
     manualCaptureBtn.innerHTML = '<span class="loading"></span> Capturing...';
-    showCaptureStatus('info', 'Sending capture request to active tab...');
+    showCaptureStatus('info', 'AI capture started on page. This takes 10-20 seconds...');
     
     try {
       // Get the active tab
@@ -74,40 +74,63 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       if (!tab) {
         showCaptureStatus('error', 'No active tab found');
+        manualCaptureBtn.disabled = false;
+        manualCaptureBtn.textContent = 'Capture This Profile';
         return;
       }
       
       // Check if it's a Naukri page
       if (!tab.url.includes('naukri.com')) {
         showCaptureStatus('error', 'Not a Naukri page. Please open a Naukri profile.');
+        manualCaptureBtn.disabled = false;
+        manualCaptureBtn.textContent = 'Capture This Profile';
         return;
       }
       
-      // Send message to content script to capture
-      const response = await chrome.tabs.sendMessage(tab.id, { action: 'manualCapture' });
+      // Fire the capture command — content.js will show a toast on the page
+      // We use a short timeout wrapper because the capture takes 10-30s and the
+      // message channel may close if the popup loses focus.
+      const responsePromise = chrome.tabs.sendMessage(tab.id, { action: 'manualCapture' });
       
-      if (response && response.success) {
-        if (response.action === 'created') {
-          showCaptureStatus('success', `✅ ${response.name || 'Profile'} added to VHC!`);
-        } else if (response.action === 'updated') {
-          showCaptureStatus('success', `🔄 ${response.name || 'Profile'} updated!`);
-        } else if (response.action === 'exists') {
-          showCaptureStatus('info', `ℹ️ ${response.name || 'Profile'} already up-to-date`);
-        } else if (response.action === 'queued') {
-          showCaptureStatus('info', `📥 ${response.name || 'Profile'} queued for sync`);
+      // Race between response and a 30-second timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 30000)
+      );
+      
+      try {
+        const response = await Promise.race([responsePromise, timeoutPromise]);
+        
+        if (response && response.success) {
+          if (response.action === 'created') {
+            showCaptureStatus('success', `${response.name || 'Profile'} added to VHC!`);
+          } else if (response.action === 'updated') {
+            showCaptureStatus('success', `${response.name || 'Profile'} updated in VHC!`);
+          } else if (response.action === 'exists') {
+            showCaptureStatus('info', `${response.name || 'Profile'} already up-to-date`);
+          } else if (response.action === 'queued') {
+            showCaptureStatus('info', `${response.name || 'Profile'} queued for sync`);
+          }
+          loadStats();
+        } else if (response) {
+          showCaptureStatus('error', response.error || 'Capture failed.');
         }
-        // Refresh stats
-        loadStats();
-      } else {
-        showCaptureStatus('error', response?.error || 'Capture failed. Check if profile data is visible.');
+      } catch (raceError) {
+        if (raceError.message === 'timeout') {
+          // The capture is likely still running on the page — don't show error
+          showCaptureStatus('info', 'Capture is running on the page. Check the page for results.');
+        } else {
+          throw raceError; // Re-throw non-timeout errors
+        }
       }
       
     } catch (error) {
       console.error('Manual capture error:', error);
-      if (error.message.includes('Receiving end does not exist')) {
+      if (error.message && error.message.includes('Receiving end does not exist')) {
         showCaptureStatus('error', 'Extension not active on this page. Please refresh the Naukri page.');
+      } else if (error.message && error.message.includes('Could not establish connection')) {
+        showCaptureStatus('error', 'Content script not loaded. Please refresh the Naukri page.');
       } else {
-        showCaptureStatus('error', `Error: ${error.message}`);
+        showCaptureStatus('info', 'Capture triggered. Check the page for toast notification with results.');
       }
     } finally {
       manualCaptureBtn.disabled = false;
