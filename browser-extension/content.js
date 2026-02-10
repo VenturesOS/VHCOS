@@ -325,10 +325,6 @@
 
     return contacts;
   }
-    }
-
-    return contacts;
-  }
 
   function extractNaukriProfileId() {
     const urlParams = new URLSearchParams(window.location.search);
