@@ -402,6 +402,10 @@
     await scrollToLoadContent();
     await sleep(1000);
     
+    // Extract contacts directly from DOM BEFORE text cleaning (more reliable)
+    const domContacts = extractContactFromDOM();
+    console.log(`[VHC v${VERSION}] DOM-extracted contacts:`, domContacts);
+    
     const rawText = getRawPageText();
     console.log(`[VHC v${VERSION}] Raw text captured: ${rawText.length} chars`);
     console.log(`[VHC v${VERSION}] First 200 chars: ${rawText.substring(0, 200)}`);
