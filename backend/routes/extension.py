@@ -531,6 +531,9 @@ async def capture_profile(
             {"$set": update_data}
         )
         
+        # Invalidate search cache so new data appears immediately
+        cache.invalidate_search_cache()
+        
         logger.info(f"[Extension] Updated candidate: {profile.name} ({existing['id']})")
         
         return CaptureResponse(
