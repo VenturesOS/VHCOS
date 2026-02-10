@@ -415,7 +415,7 @@ class TestV36ValidProfileCapture:
         assert profile_response.status_code == 200
         
         profile = profile_response.json()
-        assert profile["name"] == "Rajiv Mathur"
+        assert profile["name"] == unique_name
         assert profile["email"] == valid_email.lower()
         assert profile["source"] == "naukri_extension"
         assert len(profile.get("skills", [])) == 4
