@@ -14,7 +14,7 @@ import httpx
 import os
 
 # API Configuration
-API_URL = os.environ.get("API_URL", "https://extension-hub-3.preview.emergentagent.com")
+API_URL = os.environ.get("API_URL", "https://naukri-capture.preview.emergentagent.com")
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}

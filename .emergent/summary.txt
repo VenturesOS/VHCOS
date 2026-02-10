@@ -1,189 +1,180 @@
-<analysis>original_problem_statement:
-The user initially requested to fix a bug where shortlisting a candidate from the AI screening results page did not add them to the job's pipeline. After the bug was fixed, the user requested comprehensive project documentation. Following that, the user proposed and prioritized the development of a browser extension for automatically scraping candidate profiles from Naukri.com. The scope expanded to capturing every single detail from the Naukri profile for a 1:1 data match in the application.
+<analysis>**original_problem_statement**: The user wants to build a Chrome extension to scrape candidate profiles from Naukri.com (a job portal) and save them into their VHC Talent OS application.
 
-PRODUCT REQUIREMENTS:
-- **P0: Naukri Auto-Sourcing Browser Extension:**
-    - Create a browser extension that automatically scrapes candidate profiles when a recruiter views them on Naukri.com.
-    - The scraping should be passive and fully automatic, triggering 2-3 seconds after the page loads.
-    - **Data Capture:** The extension must capture **ALL** available data fields from the Naukri profile, including personal details (DOB, gender, marital status), full work history, complete education details, detailed skills with proficiency, certifications, projects, languages, preferences, and profile metadata.
-    - **Data Handling:** The backend must have a robust duplicate detection mechanism (using , then email, then phone) and perform a  or  operation. Updates should only happen if the Naukri profile is newer than the stored version.
-    - **Frontend:** Add a download button for the extension in the main sidebar. Create a new, dedicated profile page to display the comprehensively scraped data in a format that mirrors the Naukri profile.
-    - **UX:** The extension should pre-fill the portal URL. It should have a manual capture button for testing and provide non-intrusive toast notifications for success/update/exists statuses. It must also handle being offline by queuing captures.
-- **P1: Implement Real Email Notifications:**
-    - Integrate the Resend API to send real email notifications for events like shortlisting, job applications, etc.
-    - The user has created a subdomain  for this purpose. The API key is stored.
-    - This task is currently ON HOLD pending user's DNS verification.
-- **P2: Future Backlog:**
-    - Stripe Integration for payments.
-    - Multi-tenancy Architecture.
-    - Implement real WhatsApp integration with Twilio.
+The key requirements that evolved during the session are:
+1.  **Accurate Profile Scraping**: The extension must capture the main profile on the page, not the similar profiles shown in the sidebar.
+2.  **Complete Data Extraction**: All visible fields from the Naukri profile, including experience, education, skills, and contact details (email/phone) from the attached CV preview, must be extracted.
+3.  **AI-Powered Parsing**: Use OpenAI to reliably extract structured data from the unstructured text of the profile page, making the extension resilient to Naukri's UI changes.
+4.  **Stable Integration**: The captured data must be saved correctly in the backend candidate database. Viewing the captured profiles in the VHC frontend should work seamlessly for all user roles (Admin, Recruiter, Employer) without crashes or incorrect redirects.
+5.  **Deduplication**: The system should avoid creating duplicate profiles, using the unique Naukri profile ID ( from the URL) as the primary key.
+6.  **User-Friendly Experience**: The extension should be easy to use, with clear status indicators (e.g., if it's on a valid profile page) and a simple capture button.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application with a React frontend and a FastAPI backend using MongoDB. The app features AI-powered candidate matching (Quick Match & Full AI Match), match history, and a manual/automated error reporting system.
-
-A browser extension for Naukri has been created with the basic structure, including a backend API for capturing data. A download button for the extension is present in the application's sidebar. The extension has undergone initial bug-fixing for incorrect profile capture and contact detail scraping. The backend can successfully receive and store a basic version of the profile data in the  collection.
+A Chrome extension () and a backend system (VHC Talent OS) are in place. The system has gone through significant iterations:
+- The data extraction method was completely changed from manual DOM-selector-based scraping to an **AI-powered pipeline**. The extension now just grabs all page text and sends it to a backend endpoint (), which uses OpenAI to parse it into structured JSON.
+- The backend correctly handles deduplication based on .
+- The frontend has a dedicated page () to display the rich data from Naukri profiles.
+- A critical bug causing users to be redirected to the homepage when trying to view a profile has been fixed by correcting the relative navigation paths in React Router.
+- The extension packaging and  have been fixed to resolve CORS and installation issues.
 
 **Last working item**:
-- Last item agent was working: The agent was starting to implement the user's request for a complete 1:1 data capture from Naukri profiles. To facilitate this, a new comprehensive Pydantic model was created in  to represent all the detailed fields. The next step is to update the backend API and the extension's scraper to use this new, detailed model.
-- Status: IN PROGRESS
-- Agent Testing Done: N
-- Which testing method agent to use? both
-- User Testing Done: N
+*   **Last item agent was working**: The agent was debugging a critical issue where the extension successfully uses AI to extract a profile's data (visible in the browser console), but the final step of saving this data to the backend fails silently. The profile never appears in the Candidate Bank. The agent's hypothesis was that the message from the content script () to the background script () was failing due to the Manifest V3 service worker being terminated by Chrome. The proposed solution was to bypass the background script and have  call the capture API endpoint directly.
+*   **Status**: IN PROGRESS
+*   **Agent Testing Done**: N
+*   **Which testing method agent to use?**: Frontend testing agent to run the full extension flow, combined with manual verification of the browser console and the candidate bank UI.
+*   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1**: The browser extension does not yet capture all the data fields from a Naukri profile as requested by the user for a 1:1 match.
-  - **Priority**: P0
-  - **Description**: The current implementation only scrapes a subset of fields. The user wants every single piece of information, including full work/education history, detailed skills, personal details, projects, certifications, etc.
-  - **Status**: IN PROGRESS
+*   **Issue 1**: Silent Capture Failure (Priority: P0)
+*   **Issue 2**: Scraped Text Includes Unwanted Navigation/Header Content (Priority: P1)
+*   **Issue 3**: Extension Stops Working After a Few Captures (Priority: P2)
 
-  **Issues Detail**:
-  - **Issue 1**: Incomplete data capture by the Naukri browser extension.
-     - **Attempted fixes**: A new detailed Pydantic model has been created at  to serve as the data structure for the complete profile.
-     - **Next debug checklist**:
-        1.  **Backend**: Modify the  endpoint in  to accept and process the new  model.
-        2.  **Backend**: Enhance the database schema logic in the capture endpoint to correctly store the nested and detailed data (e.g., work history, education arrays) in the  collection.
-        3.  **Browser Extension**: Update the scraper logic in  to find and extract all the new data fields from the Naukri profile page's DOM.
-        4.  **Frontend**: Create a new, dedicated component/page (e.g., ) to display all the captured fields in a detailed view, mirroring the Naukri layout.
-        5.  **Frontend**: Update the main  page to link to this new detailed view for candidates sourced from the extension.
-     - **Why fix this issue and what will be achieved with the fix?**: This will fulfill the user's primary requirement for the extension, which is to create a complete and faithful copy of a candidate's Naukri profile within the VHC Talent OS, providing recruiters with all necessary information without leaving the platform.
-     - **Status**: IN PROGRESS
-     - **Is recurring issue?** N
-     - **Should Test frontend/backend/both after fix?** both
-     - **Blocked on other issue**: None
+**Issues Detail**:
+*   **Issue 1: Silent Capture Failure**
+    *   **Attempted fixes**: Agent checked backend logs and ruled out API errors for similar  requests. The investigation pointed towards a failure in the Chrome extension's internal messaging system ().
+    *   **Next debug checklist**:
+        1.  Modify  in the  function.
+        2.  Replace the  call with a direct  call to the  endpoint.
+        3.  Ensure the  call includes the necessary  header with the auth token and the correct API portal URL, both of which are already available in .
+        4.  Add detailed  statements in the  and  blocks of the new  call to explicitly confirm if the API call succeeded or failed.
+    *   **Why fix this issue and what will be achieved with the fix?**: This is the highest priority bug. Fixing it will make the extension's core functionality work again, allowing users to save profiles to the candidate bank.
+    *   **Status**: IN PROGRESS
+    *   **Is recurring issue?**: N
+    *   **Should Test frontend/backend/both after fix?**: Both.
+    *   **Blocked on other issue**: None.
+
+*   **Issue 2: Scraped Text Includes Unwanted Navigation/Header Content**
+    *   **Attempted fixes**: A simple string trim based on a keyword failed because the keyword wasn't always present.
+    *   **Next debug checklist**:
+        1.  In , locate the text extraction logic within .
+        2.  Instead of , first try to get text from a more specific main content container like .
+        3.  If falling back to , programmatically identify and remove common header/footer/nav elements (e.g., ) from a cloned DOM before extracting the text.
+    *   **Why fix this issue and what will be achieved with the fix?**: This will provide cleaner data to the OpenAI endpoint, improving accuracy, reducing token consumption, and lowering costs.
+    *   **Status**: NOT STARTED
+    *   **Is recurring issue?**: Y
+    *   **Should Test frontend/backend/both after fix?**: Frontend.
+
+*   **Issue 3: Extension Stops Working After a Few Captures**
+    *   **Attempted fixes**: Retry logic was added to the AI endpoint.
+    *   **Next debug checklist**: This issue is likely a symptom of Issue 1 (silent capture failure). The failure of the background service worker would cause all subsequent capture attempts to fail.
+    *   **Why fix this issue and what will be achieved with the fix?**: Enables users to source multiple candidates efficiently in a single session.
+    *   **Status**: BLOCKED
+    *   **Is recurring issue?**: Y
+    *   **Should Test frontend/backend/both after fix?**: Frontend.
+    *   **Blocked on other issue**: Issue 1: Silent Capture Failure.
 
 **In progress Task List**:
-- **Task 1**: Complete the Naukri Auto-Sourcing Extension.
-    - **Where to resume**: The  model is created. Resume by updating the API endpoint in  to use this new model.
-    - **What will be achieved with this?**: A powerful, automated sourcing tool that significantly enhances the application's value proposition for recruiters by saving time and centralizing candidate data.
-    - **Status**: IN PROGRESS
-    - **Should Test frontend/backend/both after fix?** both
-    - **Blocked on something**: None
+*   **Task 1: Improve CV Preview Text Capture for Slow Connections**
+    *   **Where to resume**: In , inside the  function.
+    *   **What will be achieved with this?**: More reliable extraction of crucial contact details (email/phone) which often load late within an embedded CV viewer at the bottom of the page.
+    *   **Next Steps**: After the initial scroll and wait, add a secondary . Inside it, re-read  and check if its length has increased significantly. If so, use this new, more complete text for AI extraction.
+    *   **Status**: IN PROGRESS
+    *   **Should Test frontend/backend/both after fix?**: Frontend.
+    *   **Blocked on something**: None.
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks**:
-    - **P1: Implement Real Email Notifications** (ON HOLD): The Resend API integration is paused, waiting for the user to complete DNS verification for . The API key is already stored in .
-- **Future Tasks**:
-    - P2: Stripe Integration for payments.
-    - P2: Multi-tenancy Architecture.
-    - P2: Implement real WhatsApp integration with Twilio.
-    - P3: Production deployment optimization.
-    - P3: Advanced analytics dashboard.
-    - P3: Candidate deduplication improvements.
+*   **Upcoming Tasks**:
+    *   **(P0)** Refactor  to make the capture API call directly, bypassing  to fix the silent capture failure.
+    *   **(P1)** Implement a more robust text cleaning mechanism in  to strip header/nav content before sending it to OpenAI.
+    *   **(P2)** Enhance the scroll logic in  to re-read the page and capture late-loading CV content.
+*   **Future Tasks**:
+    *   **(P1)** Improve the frontend UI in  to display a more descriptive message like Hidden on Naukri when email or phone fields are null.
+    *   **(P2)** Investigate and fix the inline detail view in the  that opens when a user clicks the candidate row, as the user reported it was showing an incomplete profile.
+    *   **(P3)** Create a mechanism for an admin to clean up bad data (e.g., profiles named Search candidates) that was created by older, buggy versions of the extension.
 
 **Completed work in this session**
-- **Bug Fix**:
-    - Fixed the Shortlist Candidate button functionality on the AI screening page. This involved adding a backend endpoint () and connecting the frontend UI. The fix was verified via curl, manual testing, and the testing agent.
-- **Documentation**:
-    - Created a comprehensive .
-    - Created a .
-    - Created a PDF-ready .
-- **Feature: Naukri Browser Extension (V1)**:
-    - Created the full directory structure and initial files for a Manifest V3 browser extension.
-    - Built the backend API endpoints (, ) to support the extension.
-    - Added a Download Extension button to the main sidebar for all relevant user roles.
-    - Implemented bug fixes based on user feedback (e.g., ignoring sidebar profiles, fixing contact info scraping).
-    - Packaged the extension into a downloadable ZIP file ().
-    - Verified that captured data is correctly stored and visible in the Candidate Bank UI.
+-   **AI-Powered Extraction Pipeline**: Successfully created a new backend endpoint () that uses OpenAI to parse raw text from Naukri and integrated it with the Chrome extension.
+-   **Frontend Crash/Redirect Fix**: Resolved a critical bug where users were redirected to the homepage when clicking the Full Profile button. The fix involved using absolute path navigation in React Router across all three candidate bank pages (, , ).
+-   **Robust Profile Viewing**: Made the  page resilient to crashes from malformed or incomplete profile data.
+-   **Extension Scraper Logic**: Rewrote the  scraper multiple times to correctly identify the main profile, use the page breadcrumb for name extraction, and improve scrolling to capture CV text.
+-   **Extension Stability Fixes**: Resolved CORS errors by updating   and gracefully handled Extension context invalidated errors.
+-   **Backend Packaging Fix**: Corrected the extension ZIP creation logic on the backend () to ensure the  file is at the root, allowing for correct installation.
 
 **Earlier issues found/mentioned but not fixed**
-None.
+*   **Issue 1: Inline candidate detail view is buggy.**
+    *   **Debug checklist**: Investigate the  function in  and the APIs it calls (, ). These APIs might not be designed to handle Naukri-sourced candidates, which lack certain data points like audit logs.
+    *   **Why to solve this issue and what will be achieved with this?**: To provide a consistent and complete user experience on the candidate bank page.
+    *   **Should Test frontend/backend/both after fix**: Frontend.
+    *   **Is recurring issue?**: N
 
 **Known issue recurrence from previous fork**
-- **Issue**:  when connecting to MongoDB Atlas.
-  - **Cause**: Pod IP changes after re-initialization.
-  - **Resolution Status**: RESOLVED previously by user.
-  - **Note for Agent**: If this error occurs, the first step is to ask the user to add the pod's current IP to the MongoDB Atlas IP access list.
+*   N/A
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: React, Material-UI (MUI), Axios
-- **Backend**: FastAPI, Python, Motor (async MongoDB driver)
-- **Database**: MongoDB Atlas
-- **AI**: OpenAI API for embeddings.
-- **Architecture**: REST API, Decoupled Frontend/Backend.
-- **New**: Browser Extension (Manifest V3), DOM Scraping.
+*   **Frontend**: React, React Router, Axios, TailwindCSS
+*   **Backend**: FastAPI (Python), Pydantic, MongoDB (using  for async)
+*   **Extension**: Chrome Extension Manifest V3, Content Scripts, Background Service Worker
+*   **AI**: OpenAI API (GPT-4) for structured data extraction from raw text.
 
 **key DB schema**
-- **candidate_bank**: The schema has been significantly expanded to support the Naukri extension. Key new fields include:
-    - : (string) Unique identifier from Naukri URL, used for deduplication.
-    - : (string)
-    - : (datetime)
-    - : (array of objects) 
-    - : (array of objects) 
-    - : (array of objects) 
-    - , , : (array of objects)
-    - : (object) 
-    - : (object) 
-    - : (array of objects)
+*   ** (MongoDB collection)**:
+    *   : String (Unique ID from Naukri URL, used for deduplication)
+    *   : String (Hardcoded to Naukri)
+    *   : Object (Contains all raw data from the extension)
+        *   : String (e.g., v3.4.0)
+        *   : String (The full page text sent to the AI)
+        *   : Object (The structured JSON returned by OpenAI)
+    *   Other top-level fields: , , , , , etc., populated from the AI extraction.
 
 **changes in tech stack**
--  was installed and added to .
+*   The core data extraction technology was changed from frontend DOM scraping to a backend **OpenAI API integration**.
 
 **All files of reference**
-- ****: **(NEW)** The comprehensive Pydantic model for a full Naukri profile.
-- ****: The API endpoint that needs to be updated to handle the new  model.
-- ****: The scraper script that needs to be updated to extract all the new fields.
-- ****: Contains the Download Extension button.
-- ****: The page that lists candidates and will need to be updated to link to a new detailed profile view.
+*   : The main file for the extension's scraping logic. It was heavily modified to implement the AI pipeline and needs to be edited to fix the current silent capture bug.
+*   : Contains the backend logic for the AI extraction () and data capture ().
+*   : The newly created React component for displaying full Naukri profiles.
+*    (and its Recruiter/Employer equivalents): Modified to fix the Full Profile button navigation.
+*   : Updated multiple times to manage permissions and versioning.
 
 **Areas that need refactoring**:
-- A new dedicated frontend page/component is required to display the detailed Naukri profile data. The existing candidate view is insufficient.
+*   The  file is becoming monolithic. It handles UI injection, user interaction, scrolling, text extraction, and API communication. It could be refactored into smaller, more manageable modules.
 
 **key api endpoints**
-- : **(In Progress)** Receives scraped profile data from the browser extension. Needs to be updated for the comprehensive model.
-- : Retrieves capture statistics for the extension popup.
-- : Serves the  file for download.
-- : **(Completed)** Adds a candidate to a job's pipeline.
+*   : Takes raw page text and uses OpenAI to return a structured JSON profile.
+*   : Saves the structured profile data to the database.
+*   : Retrieves a full candidate profile for the frontend view.
+*   : Provides the downloadable ZIP file for the Chrome extension.
 
 **Critical Info for New Agent**
-- **User's Top Priority is the Extension**: The user has explicitly put the email integration on hold to prioritize the development of the Naukri browser extension.
-- **1:1 Data Match is Crucial**: The user's main requirement is that the extension captures *every single piece of data* from a Naukri profile. The agent must focus on expanding the scraper () and backend model () to be exhaustive.
-- **Create a New Detailed View**: The current UI for viewing candidates is not sufficient for the amount of data being scraped. A new, dedicated, and detailed profile view must be created on the frontend.
-- **Resend Integration is Ready but Paused**: The API key for Resend is in . The task is blocked only by the user's DNS verification. Do not work on it until the user confirms verification is complete.
+*   **Top Priority**: The most critical bug is the **silent capture failure**. The proposed and most likely solution is to modify  to call the  API endpoint directly using , bypassing the potentially unreliable Manifest V3 background service worker messaging.
+*   **User Caching Issue**: The user has consistently struggled with loading the latest version of the extension due to browser and download caching. When providing a new version, explicitly instruct the user to **1. Remove the old extension, 2. Extract the new ZIP to a completely new folder, and 3. Load the new unpacked folder**. Always confirm the version number with them.
+*   **AI is the Source of Truth**: The data extraction strategy is now fully dependent on AI. All efforts to improve data capture should focus on providing cleaner, more complete text to the  endpoint, not on parsing the DOM in the extension itself.
+*   **Logout Bug was a Routing Issue**: A previously reported logout bug was actually an incorrect relative path in React Router. If a similar issue occurs, check the browser console for routing errors before investigating authentication.
 
 **documents and test reports created in this job**
-- 
-- 
-- 
--  (This is the extension package)
+*   
+*   User-provided artifact: 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  - **(IN PROGRESS)** User specified that the extension must capture every single detail from a Naukri profile for a 1:1 match, including AI matching for industry and location.
-2.  - **(Completed)** User asked to verify that scraped data is correctly stored and visible in the UI. The agent confirmed this works for the basic data model.
-3.  - **(Completed)** User reported two bugs with the extension: it was scraping the wrong profile (sidebar) and using the recruiter's own contact details. The agent has fixed this.
-4.  - **(Completed)** User requested a manual capture button in the extension for testing purposes.
-5.  - **(Completed)** User asked to simplify the extension login by removing or pre-filling the VHC Portal URL field.
-6.  - **(Completed)** User requested a download button for the extension to be placed inside the application UI.
-7.  - **(IN PROGRESS)** User elaborated on their vision for a fully automated, passive scraping extension.
-8.  - **(Completed)** User provided the Resend API key and shared the browser extension idea.
-9.  - **(On Hold)** User confirmed the creation of the subdomain for Resend email integration.
-10.  - **(On Hold)** User decided to proceed with email integration ( domain) and put WhatsApp on hold.
+10.  - User instruction to proceed with the pending work. (Pending)
+9.   - User insight that contact info is in the late-loading CV preview. (In Progress)
+8.   - User reported the current P0 bug: AI extraction works, but capture fails silently. (Pending)
+7.   - User feedback on AI version, reporting several issues. (Partially Resolved)
+6.   - User suggested the pivot to an AI-based solution. (Implemented)
+5.   - User requested clear version bumps for each update. (Implemented)
+4.   - User reported poor extraction, which was diagnosed as them using an old extension version. (Resolved)
+3.   - User reported the critical frontend redirect bug. (Resolved)
+2.   - User confirmed scraping worked but viewing the profile caused a logout. (Resolved)
+1.   - User had trouble with the extension ZIP structure. (Resolved)
 
 **Project Health Check:**
-- **Broken**: None
-- **Mocked**:
-    - Email Notifications ( integration is on hold).
-    - WhatsApp Notifications ( integration not started).
-- **In Progress**:
-    - Naukri Auto-Sourcing Browser Extension feature.
+*   **Broken**: The core functionality of saving a profile from the extension to the application is currently broken due to a silent failure in the capture process.
 
 **3rd Party Integrations**
-- **OpenAI GPT-4o**: Uses Emergent LLM Key for text embeddings.
-- **MongoDB Atlas**: Requires User-provided connection string and IP whitelisting.
-- **Resend (Email)**: **(Configured but On Hold)** API key is in . Blocked on user's DNS verification.
+*   **OpenAI GPT-4**: Used for parsing candidate profile text. Uses Emergent LLM Key.
 
 **Testing status**
-- Testing agent used after significant changes: YES (for the shortlist bug fix).
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: []
-- Known regressions: None
+*   **Testing agent used after significant changes**: Yes, but not since the latest bug was introduced.
+*   **Troubleshoot agent used after agent stuck in loop**: No.
+*   **Test files created**: None.
+*   **Known regressions**: The profile capture mechanism, which previously worked, is now failing silently.
 
 **Credentials to test flow:**
-- Admin:  / 
+Admin and recruiter credentials are known to the agent and available in the environment.
 
 **What agent forgot to execute**
-The agent correctly identified the next steps for the comprehensive profile capture but was interrupted after creating the new  model. The crucial work of updating the API endpoint, the scraper logic, and creating the new detailed frontend view remains to be done.</analysis>
+The agent correctly diagnosed the silent capture failure and proposed a solution (making the API call directly from ) but did not implement this fix before the session ended. The user's last message, continue the pending task, refers to implementing this fix and the related improvements to scrolling and text capture.</analysis>
