@@ -300,50 +300,59 @@ async def ai_extract_profile(
     # Truncate to ~12000 chars to stay within token limits
     raw_text = request.raw_text[:12000]
     
-    prompt = f"""Extract ALL candidate profile information from this Naukri Resdex profile page text. 
-The text includes the profile summary at the top AND an attached CV/resume preview at the bottom.
-The CV preview section (after "Attached CV" or "Download CV") often contains the candidate's REAL email and phone number.
+    prompt = f"""You are a data extraction expert parsing a Naukri Resdex candidate profile page.
 
-Return a JSON object with these exact fields (use null for missing data):
+CRITICAL RULES:
+1. The "name" field must be ONLY the person's actual name (e.g., "Rajiv Mathur"). 
+   - NEVER include experience years, designations, page titles, or any other text in the name.
+   - WRONG: "Puja Gupta Basu - 15 Year(s)", "Search candidates", "Vikrant Kumar Senior Manager"
+   - CORRECT: "Puja Gupta Basu", "Vikrant Kumar"
+2. For "email": Return null if no real email is found. 
+   - IGNORE emails like support@naukri.com, placeholder@*, noreply@*, or any @naukri.com address.
+   - Only return a personal/work email that belongs to the candidate.
+3. For "phone": Return null if no real phone number is found. Only return numbers that belong to the candidate.
+4. IGNORE all navigation text (Jobs, Resdex, Reports, Search, Home, Prev, Next, Save for later, etc.)
+5. IGNORE Naukri marketing text ("Decode India's largest talent pool", "AI matched similar profiles", etc.)
+6. If the text contains "AI matched similar profiles" or "Similar profiles" section, ONLY extract the MAIN candidate's data that appears BEFORE that section.
+7. The CV preview at the bottom may contain the candidate's real email and phone — prioritize those.
+
+Return a JSON object with these fields (use null for missing data):
 
 {{
-  "name": "Full name of the candidate",
-  "email": "email address (check CV preview section carefully for real email)",
-  "phone": "phone number with country code (check CV preview section for real number)",
-  "current_company": "current employer name",
-  "current_designation": "current job title/role",
-  "current_industry": "industry",
-  "total_experience_years": number (e.g. 15.5),
+  "name": "Full name only (no titles, no experience, no designations appended)",
+  "email": "candidate's personal/work email or null",
+  "phone": "candidate's phone with country code or null",
+  "current_company": "current employer",
+  "current_designation": "current job title",
+  "current_industry": "industry sector",
+  "total_experience_years": number (e.g., 15.5),
   "headline": "resume headline text",
-  "profile_summary": "full profile summary/about text",
-  "current_salary": number in INR (e.g. 3500000 for 35 Lacs),
+  "profile_summary": "profile summary/about text",
+  "current_salary": number in INR (35 Lacs = 3500000) or null,
   "expected_salary": number in INR or null,
   "notice_period": "e.g. 1 Month, 2 Months, Immediate",
-  "location": "current city/location",
+  "location": "current city",
   "preferred_locations": ["city1", "city2"],
-  "date_of_birth": "DOB string",
-  "gender": "Male/Female/Other",
-  "marital_status": "status",
-  "nationality": "nationality",
-  "category": "General/OBC/SC/ST etc",
-  "key_skills": ["skill1", "skill2", ...],
+  "date_of_birth": "DOB or null",
+  "gender": "Male/Female/Other or null",
+  "marital_status": "status or null",
+  "nationality": "nationality or null",
+  "category": "General/OBC/SC/ST or null",
+  "key_skills": ["skill1", "skill2"],
   "it_skills": [{{"name": "skill", "version": "ver", "experience_years": num}}],
-  "work_experience": [{{"company": "name", "designation": "title", "from_date": "date", "to_date": "date or null if current", "is_current": boolean, "description": "role description"}}],
-  "education": [{{"degree": "degree name", "institution": "university/college", "year_of_passing": "year", "specialization": "field"}}],
+  "work_experience": [{{"company": "name", "designation": "title", "from_date": "date", "to_date": "date or null", "is_current": boolean, "description": "description"}}],
+  "education": [{{"degree": "degree", "institution": "college/university", "year_of_passing": "year", "specialization": "field"}}],
   "certifications": [{{"name": "cert name"}}],
-  "projects": [{{"title": "project title", "description": "desc"}}],
+  "projects": [{{"title": "project", "description": "desc"}}],
   "languages": [{{"language": "name", "proficiency": "level"}}],
-  "online_profiles": [{{"platform": "LinkedIn/GitHub/etc", "url": "url"}}]
+  "online_profiles": [{{"platform": "LinkedIn/GitHub", "url": "url"}}]
 }}
 
-IMPORTANT: 
-- Extract EVERY piece of information available. Be thorough.
-- For salary, convert "X Lacs" to full number (35 Lacs = 3500000)
-- For experience, extract as a decimal number (15 years 6 months = 15.5)
-- Include ALL work experiences, education entries, skills
-- The text may contain data from "AI matched similar profiles" sidebar — IGNORE that. Only extract the MAIN candidate's data.
-- Look for email and phone in the CV/resume preview section at the bottom of the text
-- Return ONLY valid JSON, no markdown or explanation
+IMPORTANT:
+- Convert "X Lacs" to number (35 Lacs = 3500000)
+- Convert experience to decimal (15 years 6 months = 15.5)
+- Extract ALL work experiences, education, skills
+- Return ONLY valid JSON
 
 Page text:
 {raw_text}"""
