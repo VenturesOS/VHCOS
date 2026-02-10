@@ -461,15 +461,18 @@
 
     if (isManual) showToast('Capturing profile with AI...', 'info');
 
-    // Step 1: Scroll and get raw text
+    // Step 1: Scroll and load all content
     await scrollToLoadContent();
     await sleep(1000);
+    
+    // Step 1.5: Auto-click "View Contact" to reveal hidden phone/email
+    await clickViewContactButton();
     
     // Extract name from page title (most reliable source)
     const domName = extractNameFromTitle();
     
-    // Extract contacts from targeted DOM selectors (NOT body scan)
-    const domContacts = extractContactFromDOM();
+    // Extract contacts using name-anchored profile area scan
+    const domContacts = extractContactFromDOM(domName);
     console.log(`[VHC v${VERSION}] DOM-extracted: name="${domName}", email="${domContacts.email}", phone="${domContacts.phone}"`);
     
     const rawText = getRawPageText();
