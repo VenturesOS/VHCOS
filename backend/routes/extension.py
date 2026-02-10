@@ -361,16 +361,20 @@ Page text:
 {raw_text}"""
 
     # Add DOM extraction hints if available
-    if request.dom_extracted_email or request.dom_extracted_phone:
-        hint_parts = []
-        if request.dom_extracted_email:
-            hint_parts.append(f"- The candidate's email extracted directly from the page DOM is: {request.dom_extracted_email}")
-        if request.dom_extracted_phone:
-            hint_parts.append(f"- The candidate's phone extracted directly from the page DOM is: {request.dom_extracted_phone}")
+    hint_parts = []
+    if request.dom_extracted_name:
+        hint_parts.append(f"- The candidate's REAL name extracted from the page title is: {request.dom_extracted_name}. USE THIS as the name.")
+    if request.dom_extracted_email:
+        hint_parts.append(f"- The candidate's email extracted directly from the page DOM is: {request.dom_extracted_email}")
+    if request.dom_extracted_phone:
+        hint_parts.append(f"- The candidate's phone extracted directly from the page DOM is: {request.dom_extracted_phone}")
+    
+    if hint_parts:
         prompt += f"""
 
-VERIFIED CONTACT INFO FROM PAGE DOM (use these over any other email/phone you find in the text):
-{chr(10).join(hint_parts)}"""
+VERIFIED DATA FROM PAGE DOM (use these values, they are more reliable than anything in the text):
+{chr(10).join(hint_parts)}
+IMPORTANT: The page text may also contain the logged-in RECRUITER's email. IGNORE any email that doesn't match the DOM-extracted email above."""
 
     try:
         import httpx
