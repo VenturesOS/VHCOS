@@ -520,6 +520,11 @@ async def capture_profile(
         # Update existing record
         update_data = build_complete_update(profile, current_user, now)
         
+        # Ensure visibility for the capturing user's team
+        visibility_update = await build_team_visibility(current_user)
+        if visibility_update:
+            update_data.update(visibility_update)
+        
         await db.candidate_bank.update_one(
             {"id": existing["id"]},
             {"$set": update_data}
@@ -539,6 +544,11 @@ async def capture_profile(
         candidate_id = str(uuid.uuid4())
         
         candidate_data = build_complete_candidate(profile, candidate_id, current_user, now)
+        
+        # Add team visibility
+        visibility_update = await build_team_visibility(current_user)
+        if visibility_update:
+            candidate_data.update(visibility_update)
         
         await db.candidate_bank.insert_one(candidate_data)
         
