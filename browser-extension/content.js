@@ -14,7 +14,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '3.5.0';
+  const VERSION = '3.6.0';
   const CONFIG = {
     CAPTURE_DELAY: 4000,
     SCROLL_DELAY: 600,
@@ -41,27 +41,87 @@
   // ===================== TEXT CAPTURE =====================
 
   /**
-   * Get clean profile text from the page.
-   * Strategy: Clone the DOM, remove known noise elements (nav, footer, sidebar),
-   * then extract text from the cleaned clone.
+   * Multi-strategy text extraction for Naukri Resdex profiles.
+   *
+   * Strategy A: Try known Resdex content container selectors
+   * Strategy B: Clone body, aggressively strip all non-profile elements
+   * Strategy C: Post-process text to remove known nav/menu line patterns
    */
   function getRawPageText() {
-    // Try the main content container first
-    const container = document.getElementById('cap-container');
-    let sourceEl = container || document.body;
+    // --- Strategy A: Try Resdex-specific content containers ---
+    const containerSelectors = [
+      // Resdex v3 preview containers (common patterns)
+      '[class*="profileContainer"]',
+      '[class*="profile-container"]',
+      '[class*="candidateDetail"]',
+      '[class*="candidate-detail"]',
+      '[class*="profileDetail"]',
+      '[class*="profile-detail"]',
+      '[class*="resumeDetail"]',
+      '[class*="resume-detail"]',
+      '[class*="preview-container"]',
+      '[class*="previewContainer"]',
+      '[class*="mainContent"]',
+      '[class*="main-content"]',
+      '[class*="content-area"]',
+      '[class*="rightSection"]',
+      '[class*="right-section"]',
+      '[class*="detailSection"]',
+      // Generic fallback containers
+      'main',
+      '[role="main"]',
+      '#root > div > div:last-child',
+    ];
 
-    // Clone so we can strip elements without affecting the live page
-    const clone = sourceEl.cloneNode(true);
+    let bestContainerText = '';
+    let bestSelector = '';
+    for (const sel of containerSelectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el) {
+          const t = el.innerText || '';
+          if (t.length > bestContainerText.length) {
+            bestContainerText = t;
+            bestSelector = sel;
+          }
+        }
+      } catch (_) {}
+    }
 
-    // Remove known noise: nav bars, headers, footers, sidebars, script/style tags
+    if (bestContainerText.length > 300) {
+      console.log(`[VHC v${VERSION}] Strategy A: ${bestContainerText.length} chars from "${bestSelector}"`);
+      return postProcessText(bestContainerText);
+    }
+
+    // --- Strategy B: Clone body and aggressively strip noise ---
+    const clone = document.body.cloneNode(true);
+
+    // Remove EVERYTHING that is not profile content
     const noiseSelectors = [
-      'nav', 'header', 'footer',
+      // Standard HTML noise
+      'nav', 'header', 'footer', 'aside', 'script', 'style', 'noscript', 'iframe', 'svg',
+      // Naukri-specific navigation & header
       '[class*="naukri-header"]', '[class*="naukri-footer"]',
-      '[class*="similar-profile"]', '[class*="similarProfile"]',
-      '[id*="similar"]', '[class*="aside"]',
-      'script', 'style', 'noscript', 'iframe',
-      '[class*="chatbot"]', '[class*="cookie"]', '[class*="banner-ad"]',
-      '[class*="leftNav"]', '[class*="leftSec"]',
+      '[class*="topnav"]', '[class*="topNav"]', '[class*="top-nav"]',
+      '[class*="leftNav"]', '[class*="leftSec"]', '[class*="left-nav"]', '[class*="left-panel"]',
+      '[class*="navbar"]', '[class*="navBar"]',
+      '[class*="headerContainer"]', '[class*="header-container"]',
+      '[class*="menuContainer"]', '[class*="menu-container"]',
+      '[class*="sideMenu"]', '[class*="side-menu"]',
+      '[class*="globalNav"]', '[class*="global-nav"]',
+      // Similar profiles sidebar
+      '[class*="similar-profile"]', '[class*="similarProfile"]', '[class*="similar_profile"]',
+      '[class*="related-profile"]', '[class*="relatedProfile"]',
+      '[id*="similar"]', '[id*="related"]',
+      // Chatbot, cookie, ads
+      '[class*="chatbot"]', '[class*="cookie"]', '[class*="banner-ad"]', '[class*="ad-container"]',
+      '[class*="intercom"]', '[class*="helpWidget"]',
+      // Save/folder UI elements
+      '[class*="saveForLater"]', '[class*="save-for-later"]',
+      '[class*="folderList"]', '[class*="folder-list"]',
+      // Search bar & filters (not profile content)
+      '[class*="searchBar"]', '[class*="search-bar"]', '[class*="searchContainer"]',
+      '[class*="filterPanel"]', '[class*="filter-panel"]',
     ];
 
     noiseSelectors.forEach(sel => {
@@ -69,24 +129,74 @@
     });
 
     let text = clone.innerText || '';
-    console.log(`[VHC v${VERSION}] Clean text: ${text.length} chars (from ${container ? '#cap-container' : 'body'})`);
+    console.log(`[VHC v${VERSION}] Strategy B: ${text.length} chars after aggressive DOM strip`);
 
-    // Fallback: if clone text is too short, use raw body
     if (text.length < 200) {
       text = document.body.innerText || '';
-      console.log(`[VHC v${VERSION}] Fallback to body text: ${text.length} chars`);
+      console.log(`[VHC v${VERSION}] Fallback to raw body: ${text.length} chars`);
     }
 
-    if (text.length < 50) return text;
+    return postProcessText(text);
+  }
 
-    // Skip leading navigation text (find where profile content starts)
-    const profileStart = text.search(/\d+\s*profile[s]?\s*found/i);
-    if (profileStart > 0 && profileStart < 500) {
-      text = text.substring(profileStart);
+  /**
+   * Post-process extracted text to remove known navigation/noise patterns.
+   * This catches noise that DOM stripping missed.
+   */
+  function postProcessText(text) {
+    if (!text || text.length < 50) return text;
+
+    // Split into lines and filter out navigation/noise lines
+    const lines = text.split('\n');
+    const noisePatterns = [
+      /^(Jobs & Responses|Resdex|Reports|Recent|Search)$/i,
+      /^(Home|Dashboard|Inbox|Notifications|Settings|Help|Logout)$/i,
+      /^(Profiles saved for later|No profiles saved|Now you can save)$/i,
+      /^(Save for later|Add to folder|Send NVite|Forward|Report profile)$/i,
+      /^(Sort by|Customize|Filters|Clear all|Apply)$/i,
+      /^(Prev|Next|Print|Back to search)$/i,
+      /^(Decode India|Download the app|naukri\.com|recruiter\.naukri)$/i,
+      /^\d+\s*profiles?\s*found$/i,
+    ];
+
+    const cleanLines = [];
+    let profileContentStarted = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Skip short lines that match noise patterns
+      if (trimmed.length < 60 && noisePatterns.some(p => p.test(trimmed))) {
+        continue;
+      }
+
+      // Detect where actual profile content starts:
+      // Usually after "X profiles found" or a candidate name with designation
+      if (!profileContentStarted) {
+        if (/\d+\s*profiles?\s*found/i.test(trimmed)) {
+          profileContentStarted = true;
+          continue; // Skip the "X profiles found" line itself
+        }
+        // If the line looks like a person name + title, start here
+        if (/^[A-Z][a-z]+ [A-Z]/.test(trimmed) && trimmed.length > 5 && trimmed.length < 80) {
+          profileContentStarted = true;
+        }
+      }
+
+      if (profileContentStarted || cleanLines.length > 0) {
+        cleanLines.push(trimmed);
+      }
     }
 
-    // Keep everything including CV preview — AI will filter out sidebar data
-    return text.trim();
+    // If profile content was never detected, use all non-noise lines
+    const result = cleanLines.length > 10 ? cleanLines.join('\n') : lines.filter(l => {
+      const t = l.trim();
+      return t && !noisePatterns.some(p => p.test(t));
+    }).join('\n');
+
+    console.log(`[VHC v${VERSION}] Post-processed: ${text.length} -> ${result.length} chars`);
+    return result.trim();
   }
 
   function extractNaukriProfileId() {
