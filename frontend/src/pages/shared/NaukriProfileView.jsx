@@ -167,15 +167,15 @@ export default function NaukriProfileView() {
         {/* Quick info bar */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-px bg-slate-100">
           {[
-            { icon: Mail, label: p.email || 'N/A' },
-            { icon: Phone, label: p.phone || 'N/A' },
+            { icon: Mail, label: p.email || 'Hidden on Naukri', muted: !p.email },
+            { icon: Phone, label: p.phone || 'Hidden on Naukri', muted: !p.phone },
             { icon: MapPin, label: p.location || p.preferred_locations[0] || 'N/A' },
             { icon: Clock, label: p.experience_years ? `${p.experience_years} yrs exp` : 'N/A' },
             { icon: Briefcase, label: p.notice_period || 'N/A' },
           ].map((item, i) => (
             <div key={i} className="bg-white px-4 py-2.5 flex items-center gap-2 text-sm">
               <item.icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
-              <span className="text-slate-700 truncate">{item.label}</span>
+              <span className={`truncate ${item.muted ? 'text-slate-400 italic' : 'text-slate-700'}`}>{item.label}</span>
             </div>
           ))}
         </div>
