@@ -11,6 +11,7 @@ import logging
 
 from utils.auth import get_current_user
 from config import db
+from services.cache import cache
 
 logger = logging.getLogger(__name__)
 
