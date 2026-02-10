@@ -623,6 +623,53 @@ async def get_naukri_profile(
 
 # ============== HELPER FUNCTIONS ==============
 
+async def build_team_visibility(user: dict) -> dict:
+    """
+    Build visibility fields so captured candidates are visible to 
+    all team members (employer + recruiters in the same team).
+    """
+    user_id = user["id"]
+    user_role = user.get("role", "")
+    
+    employer_ids = []
+    recruiter_ids = []
+    
+    if user_role == "employer":
+        employer_ids.append(user_id)
+        # Find the team and add all recruiters
+        team = await db.teams.find_one({"employer_id": user_id, "status": "active"}, {"_id": 0})
+        if team:
+            recruiter_ids = team.get("recruiter_ids", [])
+    elif user_role == "recruiter":
+        recruiter_ids.append(user_id)
+        # Find which team this recruiter belongs to
+        team = await db.teams.find_one({"recruiter_ids": user_id, "status": "active"}, {"_id": 0})
+        if team:
+            employer_ids.append(team.get("employer_id", ""))
+            # Add other recruiters in the same team
+            for rid in team.get("recruiter_ids", []):
+                if rid not in recruiter_ids:
+                    recruiter_ids.append(rid)
+    elif user_role == "admin":
+        # Admin captures should be visible to all — get all employers and recruiters
+        employer_ids.append(user_id)
+        # Get all active teams
+        async for team in db.teams.find({"status": "active"}, {"_id": 0, "employer_id": 1, "recruiter_ids": 1}):
+            if team.get("employer_id"):
+                employer_ids.append(team["employer_id"])
+            recruiter_ids.extend(team.get("recruiter_ids", []))
+    
+    if not employer_ids and not recruiter_ids:
+        return {}
+    
+    return {
+        "visibility": {
+            "employer_ids": list(set(employer_ids)),
+            "recruiter_ids": list(set(recruiter_ids)),
+        }
+    }
+
+
 def normalize_phone(phone: str) -> str:
     """Normalize phone number for comparison"""
     if not phone:
