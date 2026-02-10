@@ -369,7 +369,7 @@ Page text:
                 json={
                     "model": "gpt-4o-mini",
                     "messages": [
-                        {"role": "system", "content": "You are a data extraction expert. Extract structured profile data from recruitment platform text. Return only valid JSON."},
+                        {"role": "system", "content": "You are a precise data extraction expert. Extract structured candidate profile data from Naukri Resdex recruitment platform text. CRITICAL: The name field must contain ONLY the person's name — never append experience years, job titles, or any other metadata. Return only valid JSON. If the text appears to be navigation/marketing content rather than a real candidate profile, return {\"name\": null}."},
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.1,
