@@ -106,28 +106,26 @@
 
   async function scrollToLoadContent() {
     console.log(`[VHC v${VERSION}] Scrolling to load ALL content including CV preview...`);
-    
-    // First pass: scroll to bottom slowly to trigger lazy loading
-    let lastHeight = 0;
-    let currentHeight = document.documentElement.scrollHeight;
-    let pos = 0;
+
     const step = window.innerHeight * 0.5;
-    
+    let pos = 0;
+    let currentHeight = document.documentElement.scrollHeight;
+
+    // First pass: smooth scroll to bottom to trigger lazy loading
     while (pos < currentHeight) {
       pos += step;
       window.scrollTo({ top: pos, behavior: 'smooth' });
       await sleep(CONFIG.SCROLL_DELAY);
-      currentHeight = document.documentElement.scrollHeight; // May grow as content loads
+      currentHeight = document.documentElement.scrollHeight;
     }
-    
-    // Wait for lazy-loaded content (CV preview) to render
-    await sleep(2000);
-    
-    // Second pass: page may have grown after first scroll, scroll to new bottom
-    const newHeight = document.documentElement.scrollHeight;
-    if (newHeight > currentHeight + 200) {
-      console.log(`[VHC v${VERSION}] Page grew from ${currentHeight} to ${newHeight}, scrolling more...`);
-      pos = currentHeight;
+
+    // Wait for lazy-loaded content (CV preview often takes time)
+    await sleep(2500);
+
+    // Second pass: page may have grown, scroll to the new bottom
+    let newHeight = document.documentElement.scrollHeight;
+    if (newHeight > currentHeight + 100) {
+      console.log(`[VHC v${VERSION}] Page grew ${currentHeight} -> ${newHeight}, scrolling more...`);
       while (pos < newHeight) {
         pos += step;
         window.scrollTo({ top: pos, behavior: 'smooth' });
@@ -135,13 +133,23 @@
       }
       await sleep(2000);
     }
-    
+
+    // Third pass: re-read check — the CV viewer may have rendered additional text
+    const textBefore = (document.body.innerText || '').length;
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+    await sleep(1500);
+    const textAfter = (document.body.innerText || '').length;
+
+    if (textAfter > textBefore + 200) {
+      console.log(`[VHC v${VERSION}] Late content detected (+${textAfter - textBefore} chars), waiting more...`);
+      await sleep(2000);
+    }
+
     // Scroll back to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    await sleep(1000);
-    
-    const finalHeight = document.documentElement.scrollHeight;
-    console.log(`[VHC v${VERSION}] Scroll complete. Final page height: ${finalHeight}px`);
+    await sleep(500);
+
+    console.log(`[VHC v${VERSION}] Scroll complete. Final page height: ${document.documentElement.scrollHeight}px, text: ${(document.body.innerText || '').length} chars`);
   }
 
   /**
