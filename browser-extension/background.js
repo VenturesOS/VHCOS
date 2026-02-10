@@ -294,7 +294,7 @@ async function handleLogin(credentials) {
     
     const data = await response.json();
     
-    // Store auth info
+    // Store auth info (include phone for recruiter blocklist in content.js)
     await new Promise((resolve) => {
       chrome.storage.sync.set({
         vhc_token: data.access_token,
@@ -302,7 +302,8 @@ async function handleLogin(credentials) {
         vhc_user: {
           email: credentials.email,
           name: data.user?.name || credentials.email,
-          role: data.user?.role || 'unknown'
+          role: data.user?.role || 'unknown',
+          phone: data.user?.phone || null
         }
       }, resolve);
     });

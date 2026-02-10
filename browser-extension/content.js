@@ -1,13 +1,14 @@
 /**
- * VHC Talent OS - Naukri Resdex Profile Scraper v3.6.2
+ * VHC Talent OS - Naukri Resdex Profile Scraper v3.8.0
  * 
  * AI-Powered Extraction Pipeline:
  * 1. Scroll page to load all content (including lazy-loaded CV preview)
  * 2. Extract name from page title (most reliable source)
- * 3. Extract email/phone from targeted DOM selectors (not body scan)
- * 4. Capture cleaned text from the page (light noise removal only)
- * 5. Send everything to backend AI endpoint with DOM hints
- * 6. Send extracted data DIRECTLY to capture endpoint
+ * 3. Load recruiter credentials from chrome.storage as BLOCKLIST
+ * 4. Extract email/phone from targeted DOM selectors, excluding recruiter's own
+ * 5. Capture cleaned text from the page (light noise removal only)
+ * 6. Send everything to backend AI endpoint with DOM hints + recruiter identity
+ * 7. Send extracted data DIRECTLY to capture endpoint
  */
 
 (function() {
@@ -16,7 +17,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '3.7.0';
+  const VERSION = '3.8.0';
   const CONFIG = {
     CAPTURE_DELAY: 4000,
     SCROLL_DELAY: 600,
@@ -40,6 +41,49 @@
   function cleanText(t) { return t ? t.replace(/\s+/g, ' ').trim() : null; }
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  // ===================== RECRUITER BLOCKLIST =====================
+
+  /**
+   * Get the logged-in recruiter's email and phone from chrome.storage
+   * so we can EXCLUDE them from candidate contact extraction.
+   */
+  async function getRecruiterCredentials() {
+    if (!isExtensionValid()) return { email: null, phone: null };
+    try {
+      return await new Promise((resolve, reject) => {
+        chrome.storage.sync.get(['vhc_user'], (result) => {
+          if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
+          const user = result.vhc_user || {};
+          resolve({
+            email: (user.email || '').toLowerCase().trim() || null,
+            phone: (user.phone || '').replace(/[\s.-]/g, '') || null,
+          });
+        });
+      });
+    } catch (e) {
+      console.warn(`[VHC v${VERSION}] Could not read recruiter credentials:`, e);
+      return { email: null, phone: null };
+    }
+  }
+
+  /**
+   * Check if an email belongs to the recruiter (should be excluded).
+   */
+  function isRecruiterEmail(email, recruiterEmail) {
+    if (!email || !recruiterEmail) return false;
+    return email.toLowerCase().trim() === recruiterEmail.toLowerCase().trim();
+  }
+
+  /**
+   * Check if a phone number belongs to the recruiter (should be excluded).
+   */
+  function isRecruiterPhone(phone, recruiterPhone) {
+    if (!phone || !recruiterPhone) return false;
+    // Normalize: strip +91, spaces, dashes — compare last 10 digits
+    const clean = (p) => p.replace(/[\s.+\-()]/g, '').slice(-10);
+    return clean(phone) === clean(recruiterPhone);
+  }
+
   // ===================== TEXT CAPTURE =====================
 
   /**
@@ -52,7 +96,6 @@
   function getRawPageText() {
     // --- Strategy A: Try Resdex-specific content containers ---
     const containerSelectors = [
-      // Resdex v3 preview containers (common patterns)
       '[class*="profileContainer"]',
       '[class*="profile-container"]',
       '[class*="candidateDetail"]',
@@ -69,7 +112,6 @@
       '[class*="rightSection"]',
       '[class*="right-section"]',
       '[class*="detailSection"]',
-      // Generic fallback containers
       'main',
       '[role="main"]',
       '#root > div > div:last-child',
@@ -98,11 +140,8 @@
     // --- Strategy B: Clone body and aggressively strip noise ---
     const clone = document.body.cloneNode(true);
 
-    // Remove EVERYTHING that is not profile content
     const noiseSelectors = [
-      // Standard HTML noise
       'nav', 'header', 'footer', 'aside', 'script', 'style', 'noscript', 'iframe', 'svg',
-      // Naukri-specific navigation & header
       '[class*="naukri-header"]', '[class*="naukri-footer"]',
       '[class*="topnav"]', '[class*="topNav"]', '[class*="top-nav"]',
       '[class*="leftNav"]', '[class*="leftSec"]', '[class*="left-nav"]', '[class*="left-panel"]',
@@ -111,17 +150,13 @@
       '[class*="menuContainer"]', '[class*="menu-container"]',
       '[class*="sideMenu"]', '[class*="side-menu"]',
       '[class*="globalNav"]', '[class*="global-nav"]',
-      // Similar profiles sidebar
       '[class*="similar-profile"]', '[class*="similarProfile"]', '[class*="similar_profile"]',
       '[class*="related-profile"]', '[class*="relatedProfile"]',
       '[id*="similar"]', '[id*="related"]',
-      // Chatbot, cookie, ads
       '[class*="chatbot"]', '[class*="cookie"]', '[class*="banner-ad"]', '[class*="ad-container"]',
       '[class*="intercom"]', '[class*="helpWidget"]',
-      // Save/folder UI elements
       '[class*="saveForLater"]', '[class*="save-for-later"]',
       '[class*="folderList"]', '[class*="folder-list"]',
-      // Search bar & filters (not profile content)
       '[class*="searchBar"]', '[class*="search-bar"]', '[class*="searchContainer"]',
       '[class*="filterPanel"]', '[class*="filter-panel"]',
     ];
@@ -151,7 +186,6 @@
 
     const lines = text.split('\n');
 
-    // Only remove lines that are DEFINITELY navigation/noise (exact or near-exact matches)
     const noisePatterns = [
       /^(Jobs & Responses|Resdex|Reports|Recent|Search)$/i,
       /^(Home|Dashboard|Inbox|Notifications|Settings|Help|Logout)$/i,
@@ -168,7 +202,6 @@
     const cleanLines = lines.filter(line => {
       const trimmed = line.trim();
       if (!trimmed) return false;
-      // Only skip short lines that exactly match noise
       if (trimmed.length < 50 && noisePatterns.some(p => p.test(trimmed))) return false;
       return true;
     });
@@ -191,22 +224,13 @@
 
     if (!title || title.length < 3) return null;
 
-    // Common Resdex title patterns:
-    // "Candidate Name | Naukri Resdex"
-    // "Candidate Name - Naukri"
-    // "Preview - Candidate Name"
-    // "Resdex - Candidate Name"
-
-    // Try splitting by common separators
     const separators = [' | ', ' - ', ' – ', ' — '];
     for (const sep of separators) {
       if (title.includes(sep)) {
         const parts = title.split(sep);
         for (const part of parts) {
           const cleaned = part.trim();
-          // Skip parts that are Naukri branding
           if (/naukri|resdex|preview|search|recruiter/i.test(cleaned)) continue;
-          // A name should be 2+ words, 3-60 chars, no digits
           if (cleaned.length >= 3 && cleaned.length <= 60 && /^[A-Za-z]/.test(cleaned) && !/\d/.test(cleaned)) {
             console.log(`[VHC v${VERSION}] DOM name (from title): "${cleaned}"`);
             return cleaned;
@@ -215,7 +239,6 @@
       }
     }
 
-    // If no separator found, try the whole title if it looks like a name
     const trimmedTitle = title.trim();
     if (trimmedTitle.length >= 3 && trimmedTitle.length <= 60 && /^[A-Za-z]/.test(trimmedTitle) && !/\d/.test(trimmedTitle) && !/naukri|resdex|preview|search/i.test(trimmedTitle)) {
       console.log(`[VHC v${VERSION}] DOM name (whole title): "${trimmedTitle}"`);
@@ -235,17 +258,44 @@
    * 
    * Also tries: mailto links, tel links, and auto-clicking "View Contact".
    */
-  function extractContactFromDOM(candidateName) {
+  function extractContactFromDOM(candidateName, recruiterCreds = {}) {
     const contacts = { email: null, phone: null };
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
     const phoneRegex = /(\+91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}/g;
     const indianMobileRegex = /(?:\+91[\s.-]?)?[6-9]\d{9}/;
 
+    const rEmail = recruiterCreds.email || null;
+    const rPhone = recruiterCreds.phone || null;
+    if (rEmail) console.log(`[VHC v${VERSION}] Recruiter email blocklist: ${rEmail}`);
+    if (rPhone) console.log(`[VHC v${VERSION}] Recruiter phone blocklist: ${rPhone}`);
+
+    function skipEmail(e) {
+      if (!e) return true;
+      const eLower = e.toLowerCase().trim();
+      if (eLower.includes('@naukri.com') || eLower.includes('support@') || 
+          eLower.includes('noreply@') || eLower.includes('@example.') ||
+          eLower.includes('info@naukri') || eLower.includes('recruiter@naukri')) return true;
+      if (isRecruiterEmail(eLower, rEmail)) {
+        console.log(`[VHC v${VERSION}] BLOCKED recruiter email: ${eLower}`);
+        return true;
+      }
+      return false;
+    }
+
+    function skipPhone(p) {
+      if (!p) return true;
+      if (isRecruiterPhone(p, rPhone)) {
+        console.log(`[VHC v${VERSION}] BLOCKED recruiter phone: ${p}`);
+        return true;
+      }
+      return false;
+    }
+
     // --- Strategy 1: mailto: and tel: links (most reliable) ---
     const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
     for (const a of mailtoLinks) {
       const email = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
-      if (email && !email.includes('@naukri.com') && !email.includes('support@') && !email.includes('noreply@')) {
+      if (!skipEmail(email)) {
         contacts.email = email;
         console.log(`[VHC v${VERSION}] DOM email (mailto): ${email}`);
         break;
@@ -255,7 +305,7 @@
     const telLinks = document.querySelectorAll('a[href^="tel:"]');
     for (const a of telLinks) {
       const phone = a.getAttribute('href').replace('tel:', '').replace(/[\s.-]/g, '');
-      if (phone && phone.length >= 10) {
+      if (phone && phone.length >= 10 && !skipPhone(phone)) {
         contacts.phone = phone;
         console.log(`[VHC v${VERSION}] DOM phone (tel): ${phone}`);
         break;
@@ -263,13 +313,11 @@
     }
 
     // --- Strategy 2: Profile-area text scan ---
-    // Use candidateName to find the profile section, then scan for contacts AFTER it
     if (!contacts.email || !contacts.phone) {
       const bodyText = document.body.innerText || '';
       
       let profileStartIdx = 0;
       if (candidateName) {
-        // Find the candidate's name in the page text
         const nameIdx = bodyText.indexOf(candidateName);
         if (nameIdx > 0) {
           profileStartIdx = nameIdx;
@@ -277,7 +325,6 @@
         }
       }
       
-      // Scan from the profile start (after candidate name) to end of page
       const profileText = bodyText.substring(profileStartIdx);
       
       if (!contacts.email) {
@@ -285,12 +332,7 @@
         if (emails) {
           for (const e of emails) {
             const eLower = e.toLowerCase();
-            // Skip naukri system emails and common false positives
-            if (eLower.includes('@naukri.com') || eLower.includes('support@') || 
-                eLower.includes('noreply@') || eLower.includes('@example.') ||
-                eLower.includes('info@naukri') || eLower.includes('recruiter@naukri')) {
-              continue;
-            }
+            if (skipEmail(eLower)) continue;
             contacts.email = eLower;
             console.log(`[VHC v${VERSION}] DOM email (profile area scan): ${eLower}`);
             break;
@@ -303,8 +345,7 @@
         if (phones) {
           for (const p of phones) {
             const cleaned = p.replace(/[\s.-]/g, '');
-            // Must be a valid Indian mobile (starts with 6-9, 10+ digits)
-            if (indianMobileRegex.test(cleaned) && cleaned.length >= 10) {
+            if (indianMobileRegex.test(cleaned) && cleaned.length >= 10 && !skipPhone(cleaned)) {
               contacts.phone = cleaned;
               console.log(`[VHC v${VERSION}] DOM phone (profile area scan): ${cleaned}`);
               break;
@@ -323,7 +364,6 @@
    * Waits for the number to appear, then returns the revealed contact info.
    */
   async function clickViewContactButton() {
-    // Common button text patterns for revealing contact info on Naukri
     const buttonTexts = [
       'View Contact', 'View contact', 'view contact',
       'View Phone', 'View phone', 'view phone',
@@ -335,7 +375,6 @@
 
     let clicked = false;
 
-    // Strategy 1: Find by button text
     for (const text of buttonTexts) {
       const buttons = document.querySelectorAll('button, a, span, div');
       for (const btn of buttons) {
@@ -353,7 +392,6 @@
       if (clicked) break;
     }
 
-    // Strategy 2: Find by common class/attribute patterns
     if (!clicked) {
       const selectors = [
         '[class*="viewContact"]', '[class*="view-contact"]', '[class*="ViewContact"]',
@@ -376,7 +414,6 @@
     }
 
     if (clicked) {
-      // Wait for the contact info to load after clicking
       await sleep(2000);
       console.log(`[VHC v${VERSION}] Waited 2s for contact reveal`);
     } else {
@@ -408,7 +445,6 @@
     let pos = 0;
     let currentHeight = document.documentElement.scrollHeight;
 
-    // First pass: smooth scroll to bottom to trigger lazy loading
     while (pos < currentHeight) {
       pos += step;
       window.scrollTo({ top: pos, behavior: 'smooth' });
@@ -416,10 +452,8 @@
       currentHeight = document.documentElement.scrollHeight;
     }
 
-    // Wait for lazy-loaded content (CV preview often takes time)
     await sleep(2500);
 
-    // Second pass: page may have grown, scroll to the new bottom
     let newHeight = document.documentElement.scrollHeight;
     if (newHeight > currentHeight + 100) {
       console.log(`[VHC v${VERSION}] Page grew ${currentHeight} -> ${newHeight}, scrolling more...`);
@@ -431,7 +465,6 @@
       await sleep(2000);
     }
 
-    // Third pass: re-read check — the CV viewer may have rendered additional text
     const textBefore = (document.body.innerText || '').length;
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
     await sleep(1500);
@@ -442,7 +475,6 @@
       await sleep(2000);
     }
 
-    // Scroll back to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
     await sleep(500);
 
@@ -468,11 +500,15 @@
     // Step 1.5: Auto-click "View Contact" to reveal hidden phone/email
     await clickViewContactButton();
     
+    // Load recruiter credentials for blocklist filtering
+    const recruiterCreds = await getRecruiterCredentials();
+    console.log(`[VHC v${VERSION}] Recruiter blocklist loaded: email=${recruiterCreds.email || 'none'}, phone=${recruiterCreds.phone || 'none'}`);
+    
     // Extract name from page title (most reliable source)
     const domName = extractNameFromTitle();
     
-    // Extract contacts using name-anchored profile area scan
-    const domContacts = extractContactFromDOM(domName);
+    // Extract contacts using name-anchored profile area scan + recruiter blocklist
+    const domContacts = extractContactFromDOM(domName, recruiterCreds);
     console.log(`[VHC v${VERSION}] DOM-extracted: name="${domName}", email="${domContacts.email}", phone="${domContacts.phone}"`);
     
     const rawText = getRawPageText();
@@ -495,7 +531,7 @@
       try {
         if (attempt > 0) {
           console.log(`[VHC v${VERSION}] Retry attempt ${attempt}...`);
-          await sleep(2000 * attempt); // Wait 2s, 4s between retries
+          await sleep(2000 * attempt);
         }
         const aiResponse = await fetch(`${auth.apiUrl}/api/extension/ai-extract`, {
           method: 'POST',
@@ -510,20 +546,21 @@
             naukri_profile_id: naukriId,
             dom_extracted_name: domName || null,
             dom_extracted_email: domContacts.email || null,
-            dom_extracted_phone: domContacts.phone || null
+            dom_extracted_phone: domContacts.phone || null,
+            recruiter_email: recruiterCreds.email || null,
+            recruiter_phone: recruiterCreds.phone || null
           })
         });
 
         aiResult = await aiResponse.json();
         
-        if (aiResult.success) break; // Success, exit retry loop
+        if (aiResult.success) break;
         
-        // If rate limited, retry
         if (aiResult.error && (aiResult.error.includes('429') || aiResult.error.includes('rate'))) {
           console.log(`[VHC v${VERSION}] Rate limited, will retry...`);
           continue;
         }
-        break; // Other error, don't retry
+        break;
         
       } catch (e) {
         console.error(`[VHC v${VERSION}] AI extraction error (attempt ${attempt}):`, e);
@@ -603,7 +640,6 @@
     });
 
     // Step 4: Send to capture endpoint DIRECTLY (not via background script)
-    // This avoids service worker termination issues in Manifest V3
     console.log(`[VHC v${VERSION}] Sending capture directly to API...`);
     
     try {

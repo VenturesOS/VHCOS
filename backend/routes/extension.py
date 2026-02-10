@@ -279,6 +279,8 @@ class AIExtractRequest(BaseModel):
     dom_extracted_name: Optional[str] = None
     dom_extracted_email: Optional[str] = None
     dom_extracted_phone: Optional[str] = None
+    recruiter_email: Optional[str] = None
+    recruiter_phone: Optional[str] = None
 
 class AIExtractResponse(BaseModel):
     success: bool
