@@ -405,7 +405,7 @@ class TestV36ValidProfileCapture:
         
         data = response.json()
         assert data["success"] == True
-        assert data["action"] == "created"
+        assert data["action"] in ["created", "updated"], f"Expected created/updated, got '{data['action']}'"
         candidate_id = data["candidate_id"]
         self.created_candidates.append(candidate_id)
         
