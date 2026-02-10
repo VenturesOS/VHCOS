@@ -363,6 +363,116 @@ class TestNaukriExtensionAPI:
         print(f"✅ All array fields captured correctly for candidate: {candidate_id}")
 
 
+class TestNaukriExtensionAdditional:
+    """Additional tests for Naukri Extension API - ai-extract, download, hidden contact"""
+    
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Setup - get auth token for admin"""
+        self.session = requests.Session()
+        self.session.headers.update({"Content-Type": "application/json"})
+        
+        # Login as admin
+        login_response = self.session.post(f"{BASE_URL}/api/auth/login", json={
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
+        })
+        assert login_response.status_code == 200, f"Admin login failed: {login_response.text}"
+        self.token = login_response.json().get("access_token")
+        self.session.headers.update({"Authorization": f"Bearer {self.token}"})
+        
+        # Generate unique test identifiers
+        self.test_id = str(uuid.uuid4())[:8]
+    
+    def test_ai_extract_with_valid_text(self):
+        """Test POST /api/extension/ai-extract returns structured profile data from raw text"""
+        raw_text = """Profile Summary: Senior Software Engineer with 10+ years of experience 
+        in Python, React, and cloud technologies. Currently working at TechCorp as Lead Engineer. 
+        Education: BTech from IIT Delhi 2014. Skills: Python, JavaScript, AWS, Docker, Kubernetes. 
+        Contact: test@example.com, Phone: 9876543210. Current CTC: 25 Lacs. Expected CTC: 35 Lacs. 
+        Notice Period: 30 days. Location: Bangalore."""
+        
+        response = self.session.post(f"{BASE_URL}/api/extension/ai-extract", json={
+            "raw_text": raw_text,
+            "page_url": "https://naukri.com/test-profile"
+        })
+        
+        # Status assertion
+        assert response.status_code == 200, f"AI extract failed: {response.text}"
+        
+        # Data assertions
+        data = response.json()
+        assert data["success"] == True
+        assert data["profile_data"] is not None
+        assert "name" in data["profile_data"] or "email" in data["profile_data"]
+        print(f"✅ AI extraction returned structured data: {data['profile_data'].get('name', 'N/A')}")
+    
+    def test_ai_extract_with_insufficient_text(self):
+        """Test POST /api/extension/ai-extract rejects short text"""
+        response = self.session.post(f"{BASE_URL}/api/extension/ai-extract", json={
+            "raw_text": "short",
+            "page_url": "https://naukri.com/test"
+        })
+        
+        # Status assertion
+        assert response.status_code == 200
+        
+        # Data assertions - should return error for insufficient text
+        data = response.json()
+        assert data["success"] == False
+        assert "Insufficient text" in data.get("error", "")
+        print("✅ AI extraction correctly rejects insufficient text")
+    
+    def test_extension_download_endpoint(self):
+        """Test GET /api/download/naukri-extension returns ZIP file"""
+        # Note: The correct URL is /api/download/naukri-extension (not /api/files/download/...)
+        response = self.session.get(f"{BASE_URL}/api/download/naukri-extension")
+        
+        # Status assertion
+        assert response.status_code == 200, f"Extension download failed: {response.status_code}"
+        
+        # Data assertions - verify it's a ZIP file
+        content_type = response.headers.get("content-type", "")
+        assert "zip" in content_type.lower() or len(response.content) > 10000, "Expected ZIP file"
+        
+        # Check ZIP file signature (PK header)
+        assert response.content[:2] == b'PK', "Response is not a valid ZIP file"
+        print(f"✅ Extension ZIP download works (size: {len(response.content)} bytes)")
+    
+    def test_capture_profile_with_null_email_phone(self):
+        """Test POST /api/extension/capture handles null email/phone correctly"""
+        profile_data = {
+            "naukri_profile_id": f"TEST_NULL_CONTACT_{self.test_id}",
+            "naukri_profile_url": f"https://www.naukri.com/profile/NULL_{self.test_id}",
+            "name": f"Null Contact User {self.test_id}",
+            "email": None,  # Explicitly null
+            "phone": None,  # Explicitly null
+            "headline": "Test user with hidden contact",
+            "total_experience_years": 5,
+            "key_skills": ["Python"],
+            "scraped_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        response = self.session.post(f"{BASE_URL}/api/extension/capture", json=profile_data)
+        
+        # Status assertion
+        assert response.status_code == 200, f"Capture with null contact failed: {response.text}"
+        
+        # Data assertions
+        data = response.json()
+        assert data["success"] == True
+        candidate_id = data["candidate_id"]
+        
+        # Verify profile stored correctly
+        profile_response = self.session.get(f"{BASE_URL}/api/extension/profile/{candidate_id}")
+        assert profile_response.status_code == 200
+        
+        profile = profile_response.json()
+        assert profile["email"] is None, "Email should be null"
+        assert profile["phone"] is None, "Phone should be null"
+        print(f"✅ Profile with null email/phone created correctly: {candidate_id}")
+
+
 class TestNaukriExtensionAuth:
     """Test authentication requirements for extension endpoints"""
     
