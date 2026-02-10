@@ -142,14 +142,16 @@
   }
 
   /**
-   * Post-process extracted text to remove known navigation/noise patterns.
-   * This catches noise that DOM stripping missed.
+   * Light text post-processing: only remove known navigation/noise LINES.
+   * Does NOT try to detect "profile start" — keeps all content intact
+   * so the AI can see the full profile including the candidate's name.
    */
   function postProcessText(text) {
     if (!text || text.length < 50) return text;
 
-    // Split into lines and filter out navigation/noise lines
     const lines = text.split('\n');
+
+    // Only remove lines that are DEFINITELY navigation/noise (exact or near-exact matches)
     const noisePatterns = [
       /^(Jobs & Responses|Resdex|Reports|Recent|Search)$/i,
       /^(Home|Dashboard|Inbox|Notifications|Settings|Help|Logout)$/i,
@@ -158,46 +160,21 @@
       /^(Sort by|Customize|Filters|Clear all|Apply)$/i,
       /^(Prev|Next|Print|Back to search)$/i,
       /^(Decode India|Download the app|naukri\.com|recruiter\.naukri)$/i,
+      /^(AI matched similar profiles?)$/i,
       /^\d+\s*profiles?\s*found$/i,
+      /^(Call candidate|WhatsApp)$/i,
     ];
 
-    const cleanLines = [];
-    let profileContentStarted = false;
-
-    for (const line of lines) {
+    const cleanLines = lines.filter(line => {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) return false;
+      // Only skip short lines that exactly match noise
+      if (trimmed.length < 50 && noisePatterns.some(p => p.test(trimmed))) return false;
+      return true;
+    });
 
-      // Skip short lines that match noise patterns
-      if (trimmed.length < 60 && noisePatterns.some(p => p.test(trimmed))) {
-        continue;
-      }
-
-      // Detect where actual profile content starts:
-      // Usually after "X profiles found" or a candidate name with designation
-      if (!profileContentStarted) {
-        if (/\d+\s*profiles?\s*found/i.test(trimmed)) {
-          profileContentStarted = true;
-          continue; // Skip the "X profiles found" line itself
-        }
-        // If the line looks like a person name + title, start here
-        if (/^[A-Z][a-z]+ [A-Z]/.test(trimmed) && trimmed.length > 5 && trimmed.length < 80) {
-          profileContentStarted = true;
-        }
-      }
-
-      if (profileContentStarted || cleanLines.length > 0) {
-        cleanLines.push(trimmed);
-      }
-    }
-
-    // If profile content was never detected, use all non-noise lines
-    const result = cleanLines.length > 10 ? cleanLines.join('\n') : lines.filter(l => {
-      const t = l.trim();
-      return t && !noisePatterns.some(p => p.test(t));
-    }).join('\n');
-
-    console.log(`[VHC v${VERSION}] Post-processed: ${text.length} -> ${result.length} chars`);
+    const result = cleanLines.join('\n');
+    console.log(`[VHC v${VERSION}] Post-processed: ${text.length} -> ${result.length} chars (removed ${lines.length - cleanLines.length} noise lines)`);
     return result.trim();
   }
 
