@@ -227,21 +227,24 @@
   }
 
   /**
-   * Extract email and phone from TARGETED DOM selectors only.
-   * Does NOT scan body text (that picks up the logged-in recruiter's info).
+   * Extract email and phone from the PROFILE AREA of the page.
+   * 
+   * Strategy: Use the candidate's name (from title) to find where the profile
+   * content starts in the page text. Then scan for email/phone patterns ONLY
+   * in that area, skipping the header/nav where the recruiter's info lives.
+   * 
+   * Also tries: mailto links, tel links, and auto-clicking "View Contact".
    */
-  function extractContactFromDOM() {
+  function extractContactFromDOM(candidateName) {
     const contacts = { email: null, phone: null };
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const phoneRegex = /(?:\+91[\s-]?)?(?:\d[\s-]?){10}/g;
+    const phoneRegex = /(\+91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}/g;
+    const indianMobileRegex = /(?:\+91[\s.-]?)?[6-9]\d{9}/;
 
-    // --- EMAIL ---
-
-    // Strategy 1: Look for mailto: links (most reliable)
+    // --- Strategy 1: mailto: and tel: links (most reliable) ---
     const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
     for (const a of mailtoLinks) {
-      const href = a.getAttribute('href');
-      const email = href.replace('mailto:', '').split('?')[0].trim().toLowerCase();
+      const email = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
       if (email && !email.includes('@naukri.com') && !email.includes('support@') && !email.includes('noreply@')) {
         contacts.email = email;
         console.log(`[VHC v${VERSION}] DOM email (mailto): ${email}`);
@@ -249,81 +252,138 @@
       }
     }
 
-    // Strategy 2: Look in contact-area DOM elements only
-    if (!contacts.email) {
-      const contactSelectors = [
-        '[class*="contact"]', '[class*="Contact"]',
-        '[class*="email"]', '[class*="Email"]', '[class*="mail"]',
-        '[class*="personalInfo"]', '[class*="personal-info"]',
-        '[class*="candidateInfo"]', '[class*="candidate-info"]',
-        '[class*="profileCard"]', '[class*="profile-card"]',
-        '[class*="infoCard"]', '[class*="info-card"]',
-        '[class*="topCard"]', '[class*="top-card"]',
-        '[class*="quickInfo"]', '[class*="quick-info"]',
-        '[class*="contactDetail"]', '[class*="contact-detail"]',
-      ];
-
-      for (const sel of contactSelectors) {
-        try {
-          const els = document.querySelectorAll(sel);
-          for (const el of els) {
-            const text = el.innerText || el.textContent || '';
-            const emails = text.match(emailRegex);
-            if (emails) {
-              for (const e of emails) {
-                const eLower = e.toLowerCase();
-                if (!eLower.includes('@naukri.com') && !eLower.includes('support@') && !eLower.includes('noreply@')) {
-                  contacts.email = eLower;
-                  console.log(`[VHC v${VERSION}] DOM email (selector ${sel}): ${eLower}`);
-                  break;
-                }
-              }
-              if (contacts.email) break;
-            }
-          }
-        } catch (_) {}
-        if (contacts.email) break;
+    const telLinks = document.querySelectorAll('a[href^="tel:"]');
+    for (const a of telLinks) {
+      const phone = a.getAttribute('href').replace('tel:', '').replace(/[\s.-]/g, '');
+      if (phone && phone.length >= 10) {
+        contacts.phone = phone;
+        console.log(`[VHC v${VERSION}] DOM phone (tel): ${phone}`);
+        break;
       }
     }
 
-    // Strategy 3: Look near "Call candidate" / WhatsApp buttons
-    if (!contacts.email) {
-      const callButtons = document.querySelectorAll('[class*="call"], [class*="Call"], [class*="phone"], [class*="Phone"], [class*="whatsapp"], [class*="WhatsApp"]');
-      for (const btn of callButtons) {
-        const parent = btn.parentElement?.parentElement || btn.parentElement;
-        if (parent) {
-          const parentText = parent.innerText || '';
-          const emails = parentText.match(emailRegex);
-          if (emails) {
-            for (const e of emails) {
-              const eLower = e.toLowerCase();
-              if (!eLower.includes('@naukri.com') && !eLower.includes('support@') && !eLower.includes('noreply@')) {
-                contacts.email = eLower;
-                console.log(`[VHC v${VERSION}] DOM email (near call btn): ${eLower}`);
-                break;
-              }
+    // --- Strategy 2: Profile-area text scan ---
+    // Use candidateName to find the profile section, then scan for contacts AFTER it
+    if (!contacts.email || !contacts.phone) {
+      const bodyText = document.body.innerText || '';
+      
+      let profileStartIdx = 0;
+      if (candidateName) {
+        // Find the candidate's name in the page text
+        const nameIdx = bodyText.indexOf(candidateName);
+        if (nameIdx > 0) {
+          profileStartIdx = nameIdx;
+          console.log(`[VHC v${VERSION}] Profile text starts at char ${nameIdx} (name: "${candidateName}")`);
+        }
+      }
+      
+      // Scan from the profile start (after candidate name) to end of page
+      const profileText = bodyText.substring(profileStartIdx);
+      
+      if (!contacts.email) {
+        const emails = profileText.match(emailRegex);
+        if (emails) {
+          for (const e of emails) {
+            const eLower = e.toLowerCase();
+            // Skip naukri system emails and common false positives
+            if (eLower.includes('@naukri.com') || eLower.includes('support@') || 
+                eLower.includes('noreply@') || eLower.includes('@example.') ||
+                eLower.includes('info@naukri') || eLower.includes('recruiter@naukri')) {
+              continue;
             }
-            if (contacts.email) break;
+            contacts.email = eLower;
+            console.log(`[VHC v${VERSION}] DOM email (profile area scan): ${eLower}`);
+            break;
+          }
+        }
+      }
+
+      if (!contacts.phone) {
+        const phones = profileText.match(phoneRegex);
+        if (phones) {
+          for (const p of phones) {
+            const cleaned = p.replace(/[\s.-]/g, '');
+            // Must be a valid Indian mobile (starts with 6-9, 10+ digits)
+            if (indianMobileRegex.test(cleaned) && cleaned.length >= 10) {
+              contacts.phone = cleaned;
+              console.log(`[VHC v${VERSION}] DOM phone (profile area scan): ${cleaned}`);
+              break;
+            }
           }
         }
       }
     }
 
-    // NO Strategy 4 (body text scan) — it picks up the recruiter's email from the nav/header
+    console.log(`[VHC v${VERSION}] Final DOM contacts: email=${contacts.email || 'none'}, phone=${contacts.phone || 'none'}`);
+    return contacts;
+  }
 
-    // --- PHONE ---
-    const phoneEls = document.querySelectorAll('[class*="phone"], [class*="Phone"], [class*="mobile"], [class*="Mobile"], [class*="contact"], [class*="Contact"]');
-    for (const el of phoneEls) {
-      const text = el.innerText || el.textContent || '';
-      const phones = text.match(phoneRegex);
-      if (phones) {
-        contacts.phone = phones[0].replace(/[\s-]/g, '');
-        console.log(`[VHC v${VERSION}] DOM phone: ${contacts.phone}`);
-        break;
+  /**
+   * Auto-click "View Contact" / "View Phone" buttons to reveal hidden numbers.
+   * Waits for the number to appear, then returns the revealed contact info.
+   */
+  async function clickViewContactButton() {
+    // Common button text patterns for revealing contact info on Naukri
+    const buttonTexts = [
+      'View Contact', 'View contact', 'view contact',
+      'View Phone', 'View phone', 'view phone',
+      'View Number', 'View number',
+      'Show Contact', 'Show Phone', 'Show Number',
+      'Reveal Contact', 'Reveal Phone',
+      'View mobile', 'View Mobile',
+    ];
+
+    let clicked = false;
+
+    // Strategy 1: Find by button text
+    for (const text of buttonTexts) {
+      const buttons = document.querySelectorAll('button, a, span, div');
+      for (const btn of buttons) {
+        const btnText = (btn.innerText || btn.textContent || '').trim();
+        if (btnText === text || btnText.toLowerCase().includes('view contact') || 
+            btnText.toLowerCase().includes('view phone') || btnText.toLowerCase().includes('view number')) {
+          try {
+            btn.click();
+            clicked = true;
+            console.log(`[VHC v${VERSION}] Clicked "${btnText}" button`);
+            break;
+          } catch (_) {}
+        }
+      }
+      if (clicked) break;
+    }
+
+    // Strategy 2: Find by common class/attribute patterns
+    if (!clicked) {
+      const selectors = [
+        '[class*="viewContact"]', '[class*="view-contact"]', '[class*="ViewContact"]',
+        '[class*="viewPhone"]', '[class*="view-phone"]', '[class*="ViewPhone"]',
+        '[class*="revealContact"]', '[class*="reveal-contact"]',
+        '[class*="showPhone"]', '[class*="show-phone"]',
+        '[data-action*="contact"]', '[data-action*="phone"]',
+      ];
+      for (const sel of selectors) {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.click();
+            clicked = true;
+            console.log(`[VHC v${VERSION}] Clicked view contact via selector: ${sel}`);
+            break;
+          }
+        } catch (_) {}
       }
     }
 
-    return contacts;
+    if (clicked) {
+      // Wait for the contact info to load after clicking
+      await sleep(2000);
+      console.log(`[VHC v${VERSION}] Waited 2s for contact reveal`);
+    } else {
+      console.log(`[VHC v${VERSION}] No "View Contact" button found (contact may already be visible)`);
+    }
+
+    return clicked;
   }
 
   function extractNaukriProfileId() {
