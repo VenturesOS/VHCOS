@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Users, Database, Zap, Clock, Activity,
-  RotateCcw, Filter, Layers,
+  RotateCcw, Filter, Layers, FileDown,
 } from 'lucide-react';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
