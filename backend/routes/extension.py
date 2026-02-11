@@ -503,26 +503,46 @@ async def capture_profile(
         profile.first_name = name_parts[0] if name_parts else None
         profile.last_name = name_parts[-1] if len(name_parts) > 1 else None
     
-    # Check for existing profile by naukri_profile_id
+    # Check for existing profile by naukri_profile_id (strongest match — same Naukri profile)
     existing = await db.candidate_bank.find_one(
         {"naukri_profile_id": profile.naukri_profile_id},
         {"_id": 0}
     )
     
-    # If not found, try email
+    # If not found, try email — but ONLY if the name is similar
+    # This prevents overwriting Person A's record when Person B is captured with a stale email
     if not existing and profile.email:
-        existing = await db.candidate_bank.find_one(
+        email_candidate = await db.candidate_bank.find_one(
             {"email": profile.email.lower()},
             {"_id": 0}
         )
+        if email_candidate and _names_are_similar(profile.name, email_candidate.get("name", "")):
+            existing = email_candidate
+        elif email_candidate:
+            # Email matches but names are completely different — likely stale/wrong email from extension
+            logger.warning(
+                f"[Extension] Email match ({profile.email}) but name mismatch: "
+                f"incoming='{profile.name}' vs existing='{email_candidate.get('name')}'. "
+                f"Clearing stale email, will create new profile."
+            )
+            profile.email = None  # Don't trust this email
     
-    # If not found, try phone
+    # If not found, try phone — but ONLY if the name is similar
     if not existing and profile.phone:
         phone_normalized = normalize_phone(profile.phone)
-        existing = await db.candidate_bank.find_one(
+        phone_candidate = await db.candidate_bank.find_one(
             {"phone_normalized": phone_normalized},
             {"_id": 0}
         )
+        if phone_candidate and _names_are_similar(profile.name, phone_candidate.get("name", "")):
+            existing = phone_candidate
+        elif phone_candidate:
+            logger.warning(
+                f"[Extension] Phone match ({profile.phone}) but name mismatch: "
+                f"incoming='{profile.name}' vs existing='{phone_candidate.get('name')}'. "
+                f"Clearing stale phone, will create new profile."
+            )
+            profile.phone = None  # Don't trust this phone
     
     # If not found, try exact name match (case-insensitive) for naukri-sourced candidates
     if not existing and profile.name:
