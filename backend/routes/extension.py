@@ -509,6 +509,18 @@ async def capture_profile(
         {"_id": 0}
     )
     
+    # HIGH PRIORITY: Check by name + source (prevents duplicates from same person captured multiple times)
+    # This runs BEFORE email/phone checks to prevent creating duplicates with stale contact info
+    if not existing and profile.name:
+        import re
+        name_regex = re.compile(f"^{re.escape(profile.name.strip())}$", re.IGNORECASE)
+        existing = await db.candidate_bank.find_one(
+            {"name": name_regex, "source": "naukri_extension"},
+            {"_id": 0}
+        )
+        if existing:
+            logger.info(f"[Extension] Dedup by name+source: '{profile.name}' matches existing '{existing.get('name')}' ({existing['id'][:12]})")
+    
     # If not found, try email — but ONLY if the name is similar
     # This prevents overwriting Person A's record when Person B is captured with a stale email
     if not existing and profile.email:
@@ -519,13 +531,12 @@ async def capture_profile(
         if email_candidate and _names_are_similar(profile.name, email_candidate.get("name", "")):
             existing = email_candidate
         elif email_candidate:
-            # Email matches but names are completely different — likely stale/wrong email from extension
             logger.warning(
                 f"[Extension] Email match ({profile.email}) but name mismatch: "
                 f"incoming='{profile.name}' vs existing='{email_candidate.get('name')}'. "
                 f"Clearing stale email, will create new profile."
             )
-            profile.email = None  # Don't trust this email
+            profile.email = None
     
     # If not found, try phone — but ONLY if the name is similar
     if not existing and profile.phone:
@@ -542,16 +553,7 @@ async def capture_profile(
                 f"incoming='{profile.name}' vs existing='{phone_candidate.get('name')}'. "
                 f"Clearing stale phone, will create new profile."
             )
-            profile.phone = None  # Don't trust this phone
-    
-    # If not found, try exact name match (case-insensitive) for naukri-sourced candidates
-    if not existing and profile.name:
-        import re
-        name_regex = re.compile(f"^{re.escape(profile.name.strip())}$", re.IGNORECASE)
-        existing = await db.candidate_bank.find_one(
-            {"name": name_regex, "source": "naukri_extension"},
-            {"_id": 0}
-        )
+            profile.phone = None
     
     if existing:
         # Update existing record
