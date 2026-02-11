@@ -583,6 +583,274 @@
     return `naukri_${Date.now()}`;
   }
 
+  // ===================== MULTI-SOURCE CONTACT EXTRACTION =====================
+
+  const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const PHONE_REGEX = /(?:\+91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}/g;
+  const INDIAN_MOBILE = /(?:\+91[\s.-]?)?[6-9]\d{9}/;
+
+  function cleanPhone(p) { return p.replace(/[\s.+\-()]/g, '').slice(-10); }
+
+  function isNaukriSystemEmail(e) {
+    const lower = (e || '').toLowerCase();
+    return lower.includes('@naukri.com') || lower.includes('support@') ||
+           lower.includes('noreply@') || lower.includes('@example.') ||
+           lower.includes('info@naukri') || lower.includes('recruiter@naukri');
+  }
+
+  /**
+   * Snapshot all emails and phones currently visible on the page.
+   * Returns { emails: Set, phones: Set }
+   */
+  function snapshotPageContacts() {
+    const text = document.body.innerText || '';
+    const emails = new Set();
+    const phones = new Set();
+
+    const emailMatches = text.match(EMAIL_REGEX) || [];
+    emailMatches.forEach(e => {
+      const lower = e.toLowerCase().trim();
+      if (!isNaukriSystemEmail(lower)) emails.add(lower);
+    });
+
+    const phoneMatches = text.match(PHONE_REGEX) || [];
+    phoneMatches.forEach(p => {
+      const cleaned = cleanPhone(p);
+      if (cleaned.length === 10 && INDIAN_MOBILE.test(cleaned)) phones.add(cleaned);
+    });
+
+    // Also check mailto/tel links
+    document.querySelectorAll('a[href^="mailto:"]').forEach(a => {
+      const e = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
+      if (e && !isNaukriSystemEmail(e)) emails.add(e);
+    });
+    document.querySelectorAll('a[href^="tel:"]').forEach(a => {
+      const p = cleanPhone(a.getAttribute('href').replace('tel:', ''));
+      if (p.length === 10) phones.add(p);
+    });
+
+    return { emails, phones };
+  }
+
+  /**
+   * Diff two contact snapshots. Returns NEW contacts that appeared in `after`.
+   */
+  function diffContacts(before, after) {
+    const newEmails = [...after.emails].filter(e => !before.emails.has(e));
+    const newPhones = [...after.phones].filter(p => !before.phones.has(p));
+    return { emails: newEmails, phones: newPhones };
+  }
+
+  /**
+   * Scan the CV preview iframe for email, phone, and text content.
+   * The CV only contains candidate data — no recruiter contamination.
+   */
+  function scanCVIframe(candidateName) {
+    const result = { email: null, phone: null, text: '', isValid: false };
+
+    try {
+      // Find the CV iframe
+      const iframeEl = document.querySelector('iframe#cv-iframe') ||
+                       document.querySelector('iframe[name="cv-iframe"]') ||
+                       document.querySelector('#cv-iframe iframe') ||
+                       document.querySelector('.iframe-cv-iframe iframe') ||
+                       document.querySelector('iframe[src*="cv/view"]');
+
+      if (!iframeEl) {
+        console.log(`[VHC v${VERSION}] CV iframe not found`);
+        return result;
+      }
+
+      // Access iframe content
+      let iframeDoc;
+      try {
+        iframeDoc = iframeEl.contentDocument || iframeEl.contentWindow?.document;
+      } catch (e) {
+        console.warn(`[VHC v${VERSION}] Cannot access CV iframe (cross-origin?):`, e.message);
+        return result;
+      }
+
+      if (!iframeDoc || !iframeDoc.body) {
+        console.log(`[VHC v${VERSION}] CV iframe document empty`);
+        return result;
+      }
+
+      const cvText = iframeDoc.body.innerText || iframeDoc.body.textContent || '';
+      result.text = cvText.substring(0, 10000);
+      console.log(`[VHC v${VERSION}] CV iframe text: ${cvText.length} chars`);
+
+      if (cvText.length < 50) {
+        console.log(`[VHC v${VERSION}] CV text too short, likely not loaded`);
+        return result;
+      }
+
+      // Sanity check: does CV contain the candidate's name?
+      if (candidateName) {
+        const nameParts = candidateName.split(/\s+/).filter(w => w.length > 2);
+        const nameFound = nameParts.some(part =>
+          cvText.toLowerCase().includes(part.toLowerCase())
+        );
+        if (!nameFound) {
+          console.warn(`[VHC v${VERSION}] CV does NOT contain candidate name "${candidateName}". May be a bad upload. Ignoring CV contacts.`);
+          result.text = cvText.substring(0, 10000); // Still send text for AI to check
+          return result;
+        }
+        result.isValid = true;
+        console.log(`[VHC v${VERSION}] CV sanity check PASSED: contains name "${candidateName}"`);
+      } else {
+        result.isValid = true; // No name to check against, trust it
+      }
+
+      // Extract emails from CV
+      const cvEmails = cvText.match(EMAIL_REGEX) || [];
+      for (const e of cvEmails) {
+        const lower = e.toLowerCase().trim();
+        if (!isNaukriSystemEmail(lower)) {
+          result.email = lower;
+          console.log(`[VHC v${VERSION}] CV email: ${lower}`);
+          break;
+        }
+      }
+
+      // Extract phones from CV
+      const cvPhones = cvText.match(PHONE_REGEX) || [];
+      for (const p of cvPhones) {
+        const cleaned = cleanPhone(p);
+        if (cleaned.length === 10 && INDIAN_MOBILE.test(cleaned)) {
+          result.phone = cleaned;
+          console.log(`[VHC v${VERSION}] CV phone: ${cleaned}`);
+          break;
+        }
+      }
+
+      // Also try mailto/tel links inside iframe
+      if (!result.email) {
+        const mailtoLinks = iframeDoc.querySelectorAll('a[href^="mailto:"]');
+        for (const a of mailtoLinks) {
+          const e = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
+          if (e && !isNaukriSystemEmail(e)) { result.email = e; break; }
+        }
+      }
+
+    } catch (err) {
+      console.warn(`[VHC v${VERSION}] CV iframe scan error:`, err.message);
+    }
+
+    return result;
+  }
+
+  /**
+   * Extract contacts using Naukri's DOM selectors as a fallback.
+   * i.naukri-icon-email → parent title, and [title*="@"] in #rdxRoot
+   */
+  function extractFromDOMSelectors(recruiterCreds = {}) {
+    const contacts = { email: null, phone: null };
+    const rEmail = recruiterCreds.email || null;
+
+    function isRecruiterOrSystem(e) {
+      if (!e) return true;
+      if (isNaukriSystemEmail(e)) return true;
+      if (rEmail && e.toLowerCase().trim() === rEmail.toLowerCase().trim()) return true;
+      return false;
+    }
+
+    // Email via naukri icon
+    const emailIcon = document.querySelector('#rdxRoot i.naukri-icon-email') ||
+                      document.querySelector('i.naukri-icon-email') ||
+                      document.querySelector('i[title="Email"]');
+    if (emailIcon) {
+      const parent = emailIcon.closest('[title]') || emailIcon.parentElement;
+      if (parent) {
+        const titleVal = (parent.getAttribute('title') || '').trim().toLowerCase();
+        if (titleVal.includes('@') && !isRecruiterOrSystem(titleVal)) {
+          contacts.email = titleVal;
+          console.log(`[VHC v${VERSION}] DOM selector email: ${contacts.email}`);
+        }
+        if (!contacts.email) {
+          const span = parent.querySelector('span.hlite-inherit') || parent.querySelector('span');
+          if (span) {
+            const spanText = (span.textContent || '').trim().toLowerCase();
+            if (spanText.includes('@') && !isRecruiterOrSystem(spanText)) {
+              contacts.email = spanText;
+              console.log(`[VHC v${VERSION}] DOM selector email (span): ${contacts.email}`);
+            }
+          }
+        }
+      }
+    }
+
+    // Email via title attribute containing @
+    if (!contacts.email) {
+      const profileRoot = document.querySelector('#rdxRoot .pages') || document.querySelector('#rdxRoot');
+      if (profileRoot) {
+        const titledEls = profileRoot.querySelectorAll('[title*="@"]');
+        for (const el of titledEls) {
+          const t = el.getAttribute('title').trim().toLowerCase();
+          if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(t) && !isRecruiterOrSystem(t)) {
+            contacts.email = t;
+            console.log(`[VHC v${VERSION}] DOM selector email (rdxRoot title): ${contacts.email}`);
+            break;
+          }
+        }
+      }
+    }
+
+    return contacts;
+  }
+
+  /**
+   * MERGE contacts from all sources using trust hierarchy:
+   * CV iframe > Before/After Diff > DOM selectors > AI
+   */
+  function mergeContacts(cvData, diffData, domData, recruiterCreds) {
+    const rEmail = (recruiterCreds.email || '').toLowerCase().trim();
+    const rPhone = cleanPhone(recruiterCreds.phone || '');
+
+    function isRecruiterContact(email, phone) {
+      if (email && rEmail && email.toLowerCase().trim() === rEmail) return true;
+      if (phone && rPhone && cleanPhone(phone) === rPhone) return true;
+      return false;
+    }
+
+    // Email: CV > Diff > DOM
+    let finalEmail = null;
+    if (cvData.isValid && cvData.email && !isRecruiterContact(cvData.email, null)) {
+      finalEmail = cvData.email;
+      console.log(`[VHC v${VERSION}] MERGE email: from CV iframe ✓`);
+    } else if (diffData.emails.length > 0) {
+      // Pick the first non-recruiter diff email
+      for (const e of diffData.emails) {
+        if (!isRecruiterContact(e, null) && !isNaukriSystemEmail(e)) {
+          finalEmail = e;
+          console.log(`[VHC v${VERSION}] MERGE email: from Before/After diff ✓`);
+          break;
+        }
+      }
+    }
+    if (!finalEmail && domData.email && !isRecruiterContact(domData.email, null)) {
+      finalEmail = domData.email;
+      console.log(`[VHC v${VERSION}] MERGE email: from DOM selectors ✓`);
+    }
+
+    // Phone: CV > Diff > (no DOM phone strategy yet)
+    let finalPhone = null;
+    if (cvData.isValid && cvData.phone && !isRecruiterContact(null, cvData.phone)) {
+      finalPhone = cvData.phone;
+      console.log(`[VHC v${VERSION}] MERGE phone: from CV iframe ✓`);
+    } else if (diffData.phones.length > 0) {
+      for (const p of diffData.phones) {
+        if (!isRecruiterContact(null, p)) {
+          finalPhone = p;
+          console.log(`[VHC v${VERSION}] MERGE phone: from Before/After diff ✓`);
+          break;
+        }
+      }
+    }
+
+    console.log(`[VHC v${VERSION}] MERGE result: email=${finalEmail || 'none'}, phone=${finalPhone || 'none'}`);
+    return { email: finalEmail, phone: finalPhone };
+  }
+
   // ===================== CAPTURE FLOW =====================
 
   function isProfilePage() {
