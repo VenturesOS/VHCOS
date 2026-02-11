@@ -301,7 +301,59 @@
       return false;
     }
 
-    // --- Strategy 1: mailto: and tel: links (most reliable) ---
+    // --- Strategy 0: NAUKRI DIRECT DOM SELECTORS (most reliable) ---
+    // Target Naukri's own email icon + title attribute structure:
+    //   <div class="rL5xY ellipsis" title="email@example.com">
+    //     <i title="Email" class="ico ico-email naukri-icon naukri-icon-email"></i>
+    //     <span class="hlite-inherit">email@example.com</span>
+    //   </div>
+    if (!contacts.email) {
+      // Method 0a: Find email icon by class, read sibling/parent title
+      const emailIcon = document.querySelector('#rdxRoot i.naukri-icon-email') ||
+                        document.querySelector('i.naukri-icon-email') ||
+                        document.querySelector('i[title="Email"]');
+      if (emailIcon) {
+        const parent = emailIcon.closest('[title]') || emailIcon.parentElement;
+        if (parent) {
+          // Try title attribute first (most reliable — contains full email)
+          const titleVal = parent.getAttribute('title') || '';
+          if (titleVal.includes('@') && !skipEmail(titleVal.toLowerCase())) {
+            contacts.email = titleVal.toLowerCase().trim();
+            console.log(`[VHC v${VERSION}] DOM email (naukri icon parent title): ${contacts.email}`);
+          }
+          // Fallback: read the span.hlite-inherit text
+          if (!contacts.email) {
+            const span = parent.querySelector('span.hlite-inherit') || parent.querySelector('span');
+            if (span) {
+              const spanText = (span.textContent || '').trim().toLowerCase();
+              if (spanText.includes('@') && !skipEmail(spanText)) {
+                contacts.email = spanText;
+                console.log(`[VHC v${VERSION}] DOM email (naukri icon sibling span): ${contacts.email}`);
+              }
+            }
+          }
+        }
+      }
+      
+      // Method 0b: Find any element inside #rdxRoot profile area with title containing @
+      if (!contacts.email) {
+        const profileRoot = document.querySelector('#rdxRoot .pages') || document.querySelector('#rdxRoot');
+        if (profileRoot) {
+          const titledEls = profileRoot.querySelectorAll('[title*="@"]');
+          for (const el of titledEls) {
+            const t = el.getAttribute('title').trim().toLowerCase();
+            // Validate it looks like an email
+            if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(t) && !skipEmail(t)) {
+              contacts.email = t;
+              console.log(`[VHC v${VERSION}] DOM email (rdxRoot title attr): ${contacts.email}`);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // --- Strategy 1: mailto: and tel: links ---
     const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
     for (const a of mailtoLinks) {
       const email = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
