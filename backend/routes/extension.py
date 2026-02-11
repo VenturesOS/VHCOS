@@ -508,8 +508,6 @@ async def capture_profile(
         {"naukri_profile_id": profile.naukri_profile_id},
         {"_id": 0}
     )
-    if existing:
-        logger.info(f"[Extension] DEDUP HIT: naukri_profile_id={profile.naukri_profile_id} -> {existing.get('name')} ({existing.get('id','?')[:12]})")
     
     # HIGH PRIORITY: Check by name + source (prevents duplicates from same person captured multiple times)
     if not existing and profile.name:
@@ -520,9 +518,7 @@ async def capture_profile(
             {"_id": 0}
         )
         if existing:
-            logger.info(f"[Extension] DEDUP HIT: name+source '{profile.name}' -> {existing.get('name')} ({existing.get('id','?')[:12]})")
-        else:
-            logger.info(f"[Extension] DEDUP MISS: name+source '{profile.name}' not found")
+            logger.warning(f"[Extension] Dedup: name+source match for '{profile.name}' -> updating {existing.get('id','?')[:12]}")
     
     # If not found, try email — but ONLY if the name is similar
     if not existing and profile.email:
@@ -532,16 +528,12 @@ async def capture_profile(
         )
         if email_candidate and _names_are_similar(profile.name, email_candidate.get("name", "")):
             existing = email_candidate
-            logger.info(f"[Extension] DEDUP HIT: email={profile.email} + name match -> {existing.get('name')}")
         elif email_candidate:
             logger.warning(
-                f"[Extension] Email match ({profile.email}) but name mismatch: "
-                f"incoming='{profile.name}' vs existing='{email_candidate.get('name')}'. "
-                f"Clearing stale email, will create new profile."
+                f"[Extension] STALE EMAIL blocked: '{profile.email}' belongs to '{email_candidate.get('name')}' "
+                f"not '{profile.name}'. Email cleared."
             )
             profile.email = None
-        else:
-            logger.info(f"[Extension] DEDUP MISS: email={profile.email} not found")
     
     # If not found, try phone — but ONLY if the name is similar
     if not existing and profile.phone:
@@ -552,18 +544,12 @@ async def capture_profile(
         )
         if phone_candidate and _names_are_similar(profile.name, phone_candidate.get("name", "")):
             existing = phone_candidate
-            logger.info(f"[Extension] DEDUP HIT: phone={profile.phone} + name match -> {existing.get('name')}")
         elif phone_candidate:
             logger.warning(
-                f"[Extension] Phone match ({profile.phone}) but name mismatch: "
-                f"incoming='{profile.name}' vs existing='{phone_candidate.get('name')}'. "
-                f"Clearing stale phone, will create new profile."
+                f"[Extension] STALE PHONE blocked: '{profile.phone}' belongs to '{phone_candidate.get('name')}' "
+                f"not '{profile.name}'. Phone cleared."
             )
             profile.phone = None
-        else:
-            logger.info(f"[Extension] DEDUP MISS: phone={profile.phone} not found")
-    
-    logger.info(f"[Extension] Final dedup result: existing={'YES: ' + existing.get('id','?')[:12] if existing else 'NO (will create)'}")
     
     if existing:
         # Update existing record
