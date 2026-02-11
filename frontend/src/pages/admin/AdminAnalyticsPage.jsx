@@ -74,14 +74,6 @@ export default function AdminAnalyticsPage() {
 
   const resetFilters = () => setFilters({ employer_id: '', team_id: '', recruiter_id: '', date_from: '', date_to: '' });
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center h-64" data-testid="analytics-loading">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2563eb]" />
-      </div>
-    );
-  }
-
   const [exporting, setExporting] = useState(false);
 
   const exportPdf = async () => {
@@ -107,6 +99,14 @@ export default function AdminAnalyticsPage() {
       setExporting(false);
     }
   };
+
+  if (loading && !data) {
+    return (
+      <div className="flex items-center justify-center h-64" data-testid="analytics-loading">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2563eb]" />
+      </div>
+    );
+  }
 
   const kpis = data?.kpis || {};
   const sourceDist = data?.source_distribution || [];
