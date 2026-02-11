@@ -511,6 +511,24 @@
     const domContacts = extractContactFromDOM(domName, recruiterCreds);
     console.log(`[VHC v${VERSION}] DOM-extracted: name="${domName}", email="${domContacts.email}", phone="${domContacts.phone}"`);
     
+    // CROSS-VALIDATION: If we have both a name and email, verify they co-exist on this page.
+    // If the candidate's name doesn't appear within ~2000 chars of the email in the page text,
+    // the email is likely stale (left over from a previous profile in SPA navigation).
+    if (domName && domContacts.email) {
+      const bodyText = document.body.innerText || '';
+      const emailIdx = bodyText.indexOf(domContacts.email);
+      const nameIdx = bodyText.indexOf(domName);
+      if (emailIdx >= 0 && nameIdx >= 0) {
+        const distance = Math.abs(emailIdx - nameIdx);
+        if (distance > 3000) {
+          console.warn(`[VHC v${VERSION}] STALE EMAIL DETECTED: "${domContacts.email}" is ${distance} chars away from name "${domName}". Clearing.`);
+          domContacts.email = null;
+        }
+      } else if (emailIdx < 0) {
+        // Email not found in visible text at all — might be from a cached DOM element
+        console.warn(`[VHC v${VERSION}] Email "${domContacts.email}" not found in visible text. Might be stale. Keeping for AI to verify.`);
+      }
+    }
     const rawText = getRawPageText();
     console.log(`[VHC v${VERSION}] Raw text captured: ${rawText.length} chars`);
     console.log(`[VHC v${VERSION}] First 200 chars: ${rawText.substring(0, 200)}`);
