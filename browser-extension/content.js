@@ -881,9 +881,9 @@
     const recruiterCreds = await getRecruiterCredentials();
     const domSelectorData = extractFromDOMSelectors(recruiterCreds);
 
-    // Step 9: MERGE all sources (CV > Diff > DOM > AI)
+    // Step 9: MERGE all sources (CV > Diff > Already-visible > DOM > AI)
     updateProgress(55, 'Cross-validating contacts...');
-    const merged = mergeContacts(cvData, diff, domSelectorData, recruiterCreds);
+    const merged = mergeContacts(cvData, diff, domSelectorData, recruiterCreds, beforeSnapshot);
     console.log(`[VHC v${VERSION}] === FINAL: email=${merged.email || 'NONE'}, phone=${merged.phone || 'NONE'} ===`);
 
     // Step 10: Capture text and send to AI
