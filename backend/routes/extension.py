@@ -589,8 +589,7 @@ async def capture_profile(
             candidate_data.update(visibility_update)
         
         try:
-            insert_result = await db.candidate_bank.insert_one(candidate_data)
-            logger.info(f"[Extension] Insert acknowledged={insert_result.acknowledged}, id={insert_result.inserted_id}")
+            await db.candidate_bank.insert_one(candidate_data)
         except Exception as insert_err:
             logger.error(f"[Extension] Insert FAILED for {profile.name}: {insert_err}")
             raise
