@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class VHCTalentOSAPITester:
-    def __init__(self, base_url="https://naukri-scraper-fix.preview.emergentagent.com"):
+    def __init__(self, base_url="https://performance-dash-22.preview.emergentagent.com"):
         self.base_url = base_url
         self.admin_token = None
         self.candidate_token = None
@@ -420,7 +420,7 @@ class VHCTalentOSAPITester:
 
 def main():
     print("🚀 Starting VHC Talent OS API Testing...")
-    print(f"🌐 Backend URL: https://naukri-scraper-fix.preview.emergentagent.com")
+    print(f"🌐 Backend URL: https://performance-dash-22.preview.emergentagent.com")
     
     tester = VHCTalentOSAPITester()
     
