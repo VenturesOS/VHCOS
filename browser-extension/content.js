@@ -26,8 +26,18 @@
 
   let isCapturing = false;
   let lastCapturedUrl = null;
+  let lastPageUrl = window.location.href;
 
   console.log(`[VHC v${VERSION}] Content script loaded on:`, window.location.href);
+
+  // SPA navigation detection: reset state when URL changes
+  setInterval(() => {
+    if (window.location.href !== lastPageUrl) {
+      console.log(`[VHC v${VERSION}] URL changed: ${lastPageUrl} -> ${window.location.href}`);
+      lastPageUrl = window.location.href;
+      lastCapturedUrl = null; // Allow re-capture on new page
+    }
+  }, 1000);
 
   // ===================== EXTENSION CONTEXT GUARD =====================
   function isExtensionValid() {
