@@ -81,6 +81,12 @@ Chrome extension to scrape candidate profiles from Naukri.com (Resdex) and save 
 - 15/15 backend tests passed, all frontend components verified
 - Test file: `/app/backend/tests/test_admin_analytics.py`
 
+### PDF Export (Added Feb 11, 2026)
+- `GET /api/analytics/admin/export-pdf` — generates downloadable PDF with same filter params
+- Uses ReportLab: KPI table, source effectiveness table, recruiter performance (top 15), funnel velocity, stage distribution, capture trends
+- Frontend: "Export PDF" button in dashboard header, respects active filters
+- Files: `/app/backend/services/analytics_pdf.py`, `/app/backend/routes/analytics.py`
+
 ## Backlog
 - P2: Admin cleanup tool for bad/test data
 - P2: Mobile number extraction without "View Contact" click
