@@ -433,7 +433,8 @@
     const lower = (e || '').toLowerCase();
     return lower.includes('@naukri.com') || lower.includes('support@') ||
            lower.includes('noreply@') || lower.includes('@example.') ||
-           lower.includes('info@naukri') || lower.includes('recruiter@naukri');
+           lower.includes('info@naukri') || lower.includes('recruiter@naukri') ||
+           lower.endsWith('@vhc.in');
   }
 
   /**
