@@ -60,8 +60,29 @@ Chrome extension to scrape candidate profiles from Naukri.com (Resdex) and save 
 - P2: Inline candidate detail view empty for Naukri-sourced profiles
 - P3: AI Screening shortlist disabled when using Paste/Upload JD
 
+## Advanced Analytics Dashboard (COMPLETED — Feb 11, 2026)
+### Backend
+- `GET /api/analytics/admin` — admin-only endpoint with full analytics data
+- Filters: `employer_id`, `team_id`, `recruiter_id`, `date_from`, `date_to`
+- MongoDB aggregation pipelines for KPIs, source distribution, capture trends, recruiter performance, stage distribution, funnel velocity
+- Filter cascading: employer → teams → recruiters
+- Files: `/app/backend/services/analytics_service.py`, `/app/backend/routes/analytics.py`
+
+### Frontend
+- Recharts: LineChart (capture trends), PieChart (source effectiveness), BarChart (recruiter performance)
+- KPI scorecards: Total Captures, Today/Week/Month, Avg Daily Rate, Active Sources
+- Funnel velocity card: Avg days to Shortlisted/Interview/Offered/Hired
+- Stage distribution: Horizontal bar breakdown
+- Recruiter details table
+- Cascading filter dropdowns (Employer → Team → Recruiter) + date range
+- File: `/app/frontend/src/pages/admin/AdminAnalyticsPage.jsx`
+
+### Testing
+- 15/15 backend tests passed, all frontend components verified
+- Test file: `/app/backend/tests/test_admin_analytics.py`
+
 ## Backlog
 - P2: Admin cleanup tool for bad/test data
-- P3: Mobile number extraction improvements
+- P2: Mobile number extraction without "View Contact" click
+- P3: AI Screening Shortlist fix
 - P3: Refactor content.js into modules
-- P3: Advanced analytics dashboard
