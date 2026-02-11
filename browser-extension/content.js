@@ -824,7 +824,8 @@
         const errorData = await captureResponse.json().catch(() => ({}));
         const errorMsg = errorData.detail || `HTTP ${captureResponse.status}`;
         console.error(`[VHC v${VERSION}] Capture API error:`, errorMsg);
-        if (isManual) showToast(`Error: ${errorMsg}`, 'error');
+        updateProgress(0, `Error: ${errorMsg}`);
+        hideProgressBar(3000);
         return { success: false, error: errorMsg };
       }
 
@@ -833,11 +834,14 @@
       
       lastCapturedUrl = window.location.href;
       const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'up-to-date' };
-      if (isManual) showToast(`${capturePayload.name} ${msgs[result.action] || 'captured'}`, 'success');
+      const statusMsg = `${capturePayload.name} ${msgs[result.action] || 'captured'}`;
+      updateProgress(100, statusMsg);
+      hideProgressBar(4000);
       return { success: true, action: result.action, name: capturePayload.name };
     } catch (captureError) {
       console.error(`[VHC v${VERSION}] Capture fetch error:`, captureError);
-      if (isManual) showToast(`Capture failed: ${captureError.message}`, 'error');
+      updateProgress(0, `Failed: ${captureError.message}`);
+      hideProgressBar(3000);
       return { success: false, error: captureError.message };
     }
   }
