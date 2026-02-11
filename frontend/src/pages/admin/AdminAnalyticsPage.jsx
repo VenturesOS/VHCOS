@@ -82,6 +82,32 @@ export default function AdminAnalyticsPage() {
     );
   }
 
+  const [exporting, setExporting] = useState(false);
+
+  const exportPdf = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => { if (v) params.append(k, v); });
+      const res = await fetch(`${API_BASE}/analytics/admin/export-pdf?${params}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = res.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'VHC_Analytics.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('PDF exported successfully');
+    } catch {
+      toast.error('Failed to export PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const kpis = data?.kpis || {};
   const sourceDist = data?.source_distribution || [];
   const trends = data?.capture_trends || [];
