@@ -486,15 +486,16 @@ async def capture_profile(
     # Clean email: reject naukri/placeholder/support emails AND logged-in user's email
     if profile.email:
         email_lower = profile.email.lower().strip()
-        # Reject known bad patterns
+        # Reject known bad patterns AND company domain emails
         if any(pattern in email_lower for pattern in [
             '@naukri.com', '@placeholder', '@example.com', '@test.com',
-            'noreply@', 'support@', 'info@naukri', 'donotreply@'
+            'noreply@', 'support@', 'info@naukri', 'donotreply@', '@vhc.in'
         ]):
+            logger.warning(f"[Extension] Blocked system/company email: {profile.email} for {profile.name}")
             profile.email = None
         # Reject if it matches the logged-in user's email (recruiter's email, not candidate's)
         elif current_user.get("email") and email_lower == current_user["email"].lower().strip():
-            logger.info(f"[Extension] Stripped recruiter's own email ({profile.email}) from capture for {profile.name}")
+            logger.warning(f"[Extension] Stripped recruiter's own email ({profile.email}) from capture for {profile.name}")
             profile.email = None
     
     # Update first/last name from cleaned name
