@@ -723,6 +723,22 @@ def normalize_phone(phone: str) -> str:
     return digits[-10:] if len(digits) >= 10 else digits
 
 
+def _names_are_similar(name_a: str, name_b: str) -> bool:
+    """
+    Check if two names likely refer to the same person.
+    Returns True if names share at least one significant word (>2 chars).
+    This prevents overwriting Person A's record when Person B is captured
+    with a stale/wrong email or phone from the extension.
+    """
+    if not name_a or not name_b:
+        return False
+    words_a = {w.lower() for w in name_a.strip().split() if len(w) > 2}
+    words_b = {w.lower() for w in name_b.strip().split() if len(w) > 2}
+    if not words_a or not words_b:
+        return False
+    return bool(words_a & words_b)
+
+
 def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: str, user: dict, now: str) -> dict:
     """Build complete candidate document with ALL Naukri data"""
     
