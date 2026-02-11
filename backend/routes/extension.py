@@ -1015,10 +1015,6 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
         if value is not None:
             update[key] = value
     
-    # Update phone normalized
-    if profile.phone:
-        update["phone_normalized"] = normalize_phone(profile.phone)
-    
     # Update arrays
     if profile.work_experience:
         update["experience"] = [exp.model_dump() for exp in profile.work_experience]
