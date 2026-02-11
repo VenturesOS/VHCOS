@@ -508,9 +508,10 @@ async def capture_profile(
         {"naukri_profile_id": profile.naukri_profile_id},
         {"_id": 0}
     )
+    if existing:
+        logger.info(f"[Extension] DEDUP HIT: naukri_profile_id={profile.naukri_profile_id} -> {existing.get('name')} ({existing.get('id','?')[:12]})")
     
     # HIGH PRIORITY: Check by name + source (prevents duplicates from same person captured multiple times)
-    # This runs BEFORE email/phone checks to prevent creating duplicates with stale contact info
     if not existing and profile.name:
         import re
         name_regex = re.compile(f"^{re.escape(profile.name.strip())}$", re.IGNORECASE)
@@ -519,10 +520,11 @@ async def capture_profile(
             {"_id": 0}
         )
         if existing:
-            logger.info(f"[Extension] Dedup by name+source: '{profile.name}' matches existing '{existing.get('name')}' ({existing['id'][:12]})")
+            logger.info(f"[Extension] DEDUP HIT: name+source '{profile.name}' -> {existing.get('name')} ({existing.get('id','?')[:12]})")
+        else:
+            logger.info(f"[Extension] DEDUP MISS: name+source '{profile.name}' not found")
     
     # If not found, try email — but ONLY if the name is similar
-    # This prevents overwriting Person A's record when Person B is captured with a stale email
     if not existing and profile.email:
         email_candidate = await db.candidate_bank.find_one(
             {"email": profile.email.lower()},
@@ -530,6 +532,7 @@ async def capture_profile(
         )
         if email_candidate and _names_are_similar(profile.name, email_candidate.get("name", "")):
             existing = email_candidate
+            logger.info(f"[Extension] DEDUP HIT: email={profile.email} + name match -> {existing.get('name')}")
         elif email_candidate:
             logger.warning(
                 f"[Extension] Email match ({profile.email}) but name mismatch: "
@@ -537,6 +540,8 @@ async def capture_profile(
                 f"Clearing stale email, will create new profile."
             )
             profile.email = None
+        else:
+            logger.info(f"[Extension] DEDUP MISS: email={profile.email} not found")
     
     # If not found, try phone — but ONLY if the name is similar
     if not existing and profile.phone:
@@ -547,6 +552,7 @@ async def capture_profile(
         )
         if phone_candidate and _names_are_similar(profile.name, phone_candidate.get("name", "")):
             existing = phone_candidate
+            logger.info(f"[Extension] DEDUP HIT: phone={profile.phone} + name match -> {existing.get('name')}")
         elif phone_candidate:
             logger.warning(
                 f"[Extension] Phone match ({profile.phone}) but name mismatch: "
@@ -554,6 +560,10 @@ async def capture_profile(
                 f"Clearing stale phone, will create new profile."
             )
             profile.phone = None
+        else:
+            logger.info(f"[Extension] DEDUP MISS: phone={profile.phone} not found")
+    
+    logger.info(f"[Extension] Final dedup result: existing={'YES: ' + existing.get('id','?')[:12] if existing else 'NO (will create)'}")
     
     if existing:
         # Update existing record
