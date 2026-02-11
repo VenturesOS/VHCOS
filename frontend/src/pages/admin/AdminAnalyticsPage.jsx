@@ -1,354 +1,422 @@
-import { useState, useEffect } from 'react';
-import { analyticsAPI, userAPI, companyAPI } from '../../lib/api';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
-import { 
-  TrendingUp, DollarSign, Clock, Users, Briefcase, 
-  Target, Building2, BarChart3, PieChart, UserCircle
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, Legend,
+} from 'recharts';
+import {
+  TrendingUp, Users, Database, Zap, Clock, Activity,
+  RotateCcw, Filter, Layers,
 } from 'lucide-react';
 
+const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2'];
+
+const SOURCE_LABELS = {
+  naukri_extension: 'Naukri Extension',
+  bulk_import: 'Bulk Import',
+  public_application: 'Public Application',
+  admin: 'Admin',
+  recruiter: 'Recruiter',
+  employer: 'Employer',
+};
+
+const STAGE_COLORS = {
+  applied: '#64748b',
+  shortlisted: '#2563eb',
+  interview: '#7c3aed',
+  offered: '#d97706',
+  hired: '#059669',
+  rejected: '#dc2626',
+  removed: '#94a3b8',
+  on_hold: '#f59e0b',
+};
+
+function getToken() {
+  return localStorage.getItem('vhc_token');
+}
+
 export default function AdminAnalyticsPage() {
-  const [analytics, setAnalytics] = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [employers, setEmployers] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  
-  // Filters
   const [filters, setFilters] = useState({
-    employer_id: 'all',
-    company_id: 'all',
+    employer_id: '',
+    team_id: '',
+    recruiter_id: '',
     date_from: '',
     date_to: '',
   });
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  useEffect(() => {
-    loadAnalytics();
-  }, [filters]);
-
-  const loadInitialData = async () => {
+  const fetchAnalytics = useCallback(async () => {
+    setLoading(true);
     try {
-      const [employersRes, companiesRes] = await Promise.all([
-        userAPI.getEmployers(),
-        companyAPI.getAll(),
-      ]);
-      setEmployers(employersRes.data);
-      setCompanies(companiesRes.data);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    }
-  };
-
-  const loadAnalytics = async () => {
-    try {
-      const params = {};
-      if (filters.employer_id && filters.employer_id !== 'all') params.employer_id = filters.employer_id;
-      if (filters.company_id && filters.company_id !== 'all') params.company_id = filters.company_id;
-      if (filters.date_from) params.date_from = filters.date_from;
-      if (filters.date_to) params.date_to = filters.date_to;
-      
-      const res = await analyticsAPI.getAdmin(params);
-      setAnalytics(res.data);
-    } catch (error) {
-      toast.error('Failed to load analytics');
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => { if (v) params.append(k, v); });
+      const res = await fetch(`${API_BASE}/analytics/admin?${params}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) throw new Error('Failed to load');
+      setData(await res.json());
+    } catch {
+      toast.error('Failed to load analytics data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  const formatCurrency = (value) => {
-    if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)}Cr`;
-    if (value >= 100000) return `₹${(value / 100000).toFixed(2)}L`;
-    return `₹${value.toLocaleString('en-IN')}`;
-  };
+  useEffect(() => { fetchAnalytics(); }, [fetchAnalytics]);
 
-  if (loading) {
+  const resetFilters = () => setFilters({ employer_id: '', team_id: '', recruiter_id: '', date_from: '', date_to: '' });
+
+  if (loading && !data) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7CB342]" />
+      <div className="flex items-center justify-center h-64" data-testid="analytics-loading">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2563eb]" />
       </div>
     );
   }
 
-  const kpis = analytics?.kpis || {};
-  const stageDistribution = analytics?.stage_distribution || {};
-  const revenueFunnel = analytics?.revenue_funnel || {};
-  const companyRevenue = analytics?.company_revenue || [];
-  const recruiterPerformance = analytics?.recruiter_performance || [];
+  const kpis = data?.kpis || {};
+  const sourceDist = data?.source_distribution || [];
+  const trends = data?.capture_trends || [];
+  const recruiters = data?.recruiter_performance || [];
+  const stageDist = data?.stage_distribution || {};
+  const funnel = data?.funnel_velocity || {};
+  const filterOpts = data?.filters || {};
+
+  const stageData = Object.entries(stageDist).map(([name, value]) => ({ name, value }));
+  const pieData = sourceDist.map(s => ({ name: SOURCE_LABELS[s.source] || s.source, value: s.count }));
+
+  const hasActiveFilter = Object.values(filters).some(v => v);
 
   return (
     <div className="space-y-6" data-testid="admin-analytics-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Business Analytics</h1>
-          <p className="text-slate-500 mt-1">Revenue pipeline and performance insights</p>
+          <h1 className="font-heading text-3xl font-bold text-slate-900">Advanced Analytics</h1>
+          <p className="text-slate-500 mt-1 text-sm">Capture metrics, source effectiveness, team performance & funnel velocity</p>
         </div>
-        
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="w-40">
-            <Select
-              value={filters.company_id}
-              onValueChange={(v) => setFilters({ ...filters, company_id: v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All Companies" />
+        {loading && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#2563eb]" />}
+      </div>
+
+      {/* Filters */}
+      <Card className="border-slate-200 bg-slate-50/50" data-testid="analytics-filters">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-medium text-slate-700">Filters</span>
+            {hasActiveFilter && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="ml-auto text-xs h-7" data-testid="reset-filters-btn">
+                <RotateCcw className="w-3 h-3 mr-1" /> Reset
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <Select value={filters.employer_id || "all"} onValueChange={(v) => setFilters(f => ({ ...f, employer_id: v === 'all' ? '' : v, team_id: '', recruiter_id: '' }))}>
+              <SelectTrigger data-testid="filter-employer">
+                <SelectValue placeholder="All Employers" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Companies</SelectItem>
-                {companies.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                <SelectItem value="all">All Employers</SelectItem>
+                {(filterOpts.employers || []).map(e => (
+                  <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="w-40">
+
+            <Select value={filters.team_id || "all"} onValueChange={(v) => setFilters(f => ({ ...f, team_id: v === 'all' ? '' : v }))}>
+              <SelectTrigger data-testid="filter-team">
+                <SelectValue placeholder="All Teams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                {(filterOpts.teams || [])
+                  .filter(t => !filters.employer_id || t.employer_id === filters.employer_id)
+                  .map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filters.recruiter_id || "all"} onValueChange={(v) => setFilters(f => ({ ...f, recruiter_id: v === 'all' ? '' : v }))}>
+              <SelectTrigger data-testid="filter-recruiter">
+                <SelectValue placeholder="All Recruiters" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Recruiters</SelectItem>
+                {(filterOpts.recruiters || []).map(r => (
+                  <SelectItem key={r.id} value={r.id}>{r.name} ({r.role})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Input
               type="date"
               value={filters.date_from}
-              onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
-              placeholder="From"
+              onChange={(e) => setFilters(f => ({ ...f, date_from: e.target.value }))}
+              className="bg-white"
+              data-testid="filter-date-from"
             />
-          </div>
-          <div className="w-40">
             <Input
               type="date"
               value={filters.date_to}
-              onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
-              placeholder="To"
+              onChange={(e) => setFilters(f => ({ ...f, date_to: e.target.value }))}
+              className="bg-white"
+              data-testid="filter-date-to"
             />
           </div>
-        </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Scorecards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="kpi-scorecards">
+        <KpiCard icon={Database} label="Total Captures" value={kpis.total_captures || 0} color="text-blue-600" bg="bg-blue-50" testId="kpi-total-captures" />
+        <KpiCard icon={TrendingUp} label="Today" value={kpis.captures_today || 0} sub={`Week: ${kpis.captures_this_week || 0} | Month: ${kpis.captures_this_month || 0}`} color="text-emerald-600" bg="bg-emerald-50" testId="kpi-captures-today" />
+        <KpiCard icon={Zap} label="Avg Daily (30d)" value={kpis.avg_daily_rate || 0} color="text-amber-600" bg="bg-amber-50" testId="kpi-avg-daily" />
+        <KpiCard icon={Activity} label="Active Sources" value={kpis.active_sources || 0} sub={`${kpis.total_applications || 0} applications`} color="text-violet-600" bg="bg-violet-50" testId="kpi-active-sources" />
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <Card className="border-slate-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Briefcase className="w-4 h-4 text-[#7CB342]" />
-              <span className="text-xs text-slate-500">Active Mandates</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-900">{kpis.total_active_mandates || 0}</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-amber-200 bg-amber-50/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-amber-600" />
-              <span className="text-xs text-amber-700">Pipeline Revenue</span>
-            </div>
-            <p className="text-2xl font-bold text-amber-700">{formatCurrency(kpis.total_pipeline_revenue || 0)}</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-green-200 bg-green-50/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-4 h-4 text-green-600" />
-              <span className="text-xs text-green-700">Closed Revenue</span>
-            </div>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(kpis.closed_revenue || 0)}</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-slate-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-blue-600" />
-              <span className="text-xs text-slate-500">Avg Time to Close</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-900">{kpis.avg_time_to_close_days || 0} days</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-slate-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="w-4 h-4 text-purple-600" />
-              <span className="text-xs text-slate-500">Offer-to-Join</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-900">{kpis.offer_to_join_ratio || 0}%</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-slate-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <UserCircle className="w-4 h-4 text-blue-600" />
-              <span className="text-xs text-slate-500">Employers</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-900">{kpis.active_employers || 0}</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-slate-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="w-4 h-4 text-purple-600" />
-              <span className="text-xs text-slate-500">Recruiters</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-900">{kpis.active_recruiters || 0}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Funnel */}
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="font-heading flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-[#7CB342]" />
-              Revenue Funnel by Stage
+      {/* Charts Row 1: Line + Pie */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Capture Trends — Line Chart */}
+        <Card className="lg:col-span-2 border-slate-200" data-testid="capture-trends-chart">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-blue-600" />
+              Capture Trends (Last 30 Days)
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <FunnelBar label="Offered" value={revenueFunnel.offered || 0} maxValue={Math.max(revenueFunnel.offered || 0, revenueFunnel.hired || 0) || 1} color="bg-amber-500" />
-              <FunnelBar label="Hired (Closed)" value={revenueFunnel.hired || 0} maxValue={Math.max(revenueFunnel.offered || 0, revenueFunnel.hired || 0) || 1} color="bg-green-500" />
-            </div>
+          <CardContent className="pt-0">
+            {trends.length === 0 ? (
+              <EmptyState msg="No capture data for selected period" />
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={trends}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(5)} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip labelFormatter={d => `Date: ${d}`} />
+                  <Line type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Captures" />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
-        {/* Stage Distribution */}
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="font-heading flex items-center gap-2">
-              <PieChart className="w-5 h-5 text-[#7CB342]" />
-              Application Stage Distribution
+        {/* Source Distribution — Pie Chart */}
+        <Card className="border-slate-200" data-testid="source-distribution-chart">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-600" />
+              Source Effectiveness
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(stageDistribution).map(([stage, count]) => (
-                <div key={stage} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <span className="text-sm text-slate-600 capitalize">{stage.replace('_', ' ')}</span>
-                  <Badge variant="secondary">{count}</Badge>
+          <CardContent className="pt-0">
+            {pieData.length === 0 ? (
+              <EmptyState msg="No source data" />
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {pieData.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val) => [val, 'Captures']} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-1.5 mt-2">
+                  {pieData.map((s, i) => (
+                    <div key={s.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                        <span className="text-slate-600">{s.name}</span>
+                      </div>
+                      <span className="font-medium text-slate-900">{s.value}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Tables Row */}
+      {/* Charts Row 2: Bar + Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Company Revenue */}
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="font-heading flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-[#7CB342]" />
-              Company-wise Revenue
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Company</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Pipeline</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Closed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {companyRevenue.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="text-center py-8 text-slate-400">No revenue data</td>
-                    </tr>
-                  ) : (
-                    companyRevenue.map((company, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 px-4 font-medium text-slate-900">{company.name || 'Unknown'}</td>
-                        <td className="py-3 px-4 text-right text-amber-600">{formatCurrency(company.pipeline || 0)}</td>
-                        <td className="py-3 px-4 text-right text-green-600">{formatCurrency(company.closed || 0)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recruiter Performance */}
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="font-heading flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#7CB342]" />
+        {/* Team/Recruiter Performance — Bar Chart */}
+        <Card className="border-slate-200" data-testid="recruiter-performance-chart">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Users className="w-4 h-4 text-violet-600" />
               Recruiter Performance
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="text-left py-3 px-4 font-medium text-slate-600">Recruiter</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Apps</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Shortlisted</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Hired</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recruiterPerformance.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-8 text-slate-400">No recruiter data</td>
-                    </tr>
-                  ) : (
-                    recruiterPerformance.map((rec, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 px-4 font-medium text-slate-900">{rec.name || 'Unknown'}</td>
-                        <td className="py-3 px-4 text-right text-slate-600">{rec.applications || 0}</td>
-                        <td className="py-3 px-4 text-right text-slate-600">{rec.shortlisted || 0}</td>
-                        <td className="py-3 px-4 text-right text-green-600">{rec.hired || 0}</td>
-                        <td className="py-3 px-4 text-right text-[#7CB342]">{formatCurrency(rec.revenue || 0)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="pt-0">
+            {recruiters.length === 0 ? (
+              <EmptyState msg="No recruiter data" />
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={recruiters.slice(0, 10)} layout="vertical" margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload;
+                      return (
+                        <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-lg text-xs">
+                          <p className="font-semibold text-slate-900">{d.name}</p>
+                          {d.team && <p className="text-slate-500">Team: {d.team}</p>}
+                          <p className="text-blue-600 mt-1">Captures: {d.captures}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="captures" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
+
+        {/* Funnel Velocity + Stage Distribution */}
+        <div className="space-y-6">
+          {/* Funnel Velocity */}
+          <Card className="border-slate-200" data-testid="funnel-velocity-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                Funnel Velocity (Avg Days)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-4 gap-3">
+                {['shortlisted', 'interview', 'offered', 'hired'].map(stage => (
+                  <div key={stage} className="text-center p-3 bg-slate-50 rounded-lg" data-testid={`funnel-${stage}`}>
+                    <p className="text-2xl font-bold text-slate-900">{funnel[stage] || 0}</p>
+                    <p className="text-[10px] text-slate-500 capitalize mt-1">{stage}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Stage Distribution */}
+          <Card className="border-slate-200" data-testid="stage-distribution-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-600" />
+                Application Stages
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {stageData.length === 0 ? (
+                <EmptyState msg="No application data" />
+              ) : (
+                <div className="space-y-2">
+                  {stageData.sort((a, b) => b.value - a.value).map(s => {
+                    const max = stageData[0]?.value || 1;
+                    const pct = Math.round((s.value / max) * 100);
+                    return (
+                      <div key={s.name} className="flex items-center gap-3" data-testid={`stage-${s.name}`}>
+                        <span className="text-xs text-slate-600 capitalize w-20 text-right">{s.name}</span>
+                        <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                          <div
+                            className="h-full rounded transition-all duration-500"
+                            style={{ width: `${Math.max(pct, 4)}%`, background: STAGE_COLORS[s.name] || '#64748b' }}
+                          />
+                        </div>
+                        <Badge variant="secondary" className="min-w-[36px] justify-center text-xs">{s.value}</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Recruiter Details Table */}
+      <Card className="border-slate-200" data-testid="recruiter-details-table">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-600" />
+            Recruiter Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left py-3 px-4 font-medium text-slate-600">Name</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-600">Role</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-600">Team</th>
+                  <th className="text-right py-3 px-4 font-medium text-slate-600">Captures</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recruiters.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-8 text-slate-400">No data</td></tr>
+                ) : (
+                  recruiters.map((r, i) => (
+                    <tr key={r.user_id || i} className="border-b border-slate-100 hover:bg-slate-50/50">
+                      <td className="py-3 px-4 font-medium text-slate-900">{r.name}</td>
+                      <td className="py-3 px-4">
+                        <Badge variant="outline" className="text-xs capitalize">{r.role}</Badge>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">{r.team || '—'}</td>
+                      <td className="py-3 px-4 text-right font-semibold text-blue-600">{r.captures}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// Funnel Bar Component
-function FunnelBar({ label, value, maxValue, color }) {
-  const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
-  
-  const formatCurrency = (val) => {
-    if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)}Cr`;
-    if (val >= 100000) return `₹${(val / 100000).toFixed(2)}L`;
-    return `₹${val.toLocaleString('en-IN')}`;
-  };
-  
+function KpiCard({ icon: Icon, label, value, sub, color, bg, testId }) {
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-sm">
-        <span className="text-slate-600">{label}</span>
-        <span className="font-medium text-slate-900">{formatCurrency(value)}</span>
-      </div>
-      <div className="h-8 bg-slate-100 rounded-lg overflow-hidden">
-        <div 
-          className={`h-full ${color} transition-all duration-500`}
-          style={{ width: `${Math.max(percentage, 5)}%` }}
-        />
-      </div>
-    </div>
+    <Card className="border-slate-200 hover:shadow-sm transition-shadow" data-testid={testId}>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2.5 mb-2">
+          <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center`}>
+            <Icon className={`w-4 h-4 ${color}`} />
+          </div>
+          <span className="text-xs text-slate-500 font-medium">{label}</span>
+        </div>
+        <p className="text-2xl font-bold text-slate-900">{typeof value === 'number' ? value.toLocaleString() : value}</p>
+        {sub && <p className="text-[10px] text-slate-400 mt-1">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({ msg }) {
+  return (
+    <div className="flex items-center justify-center h-32 text-sm text-slate-400">{msg}</div>
   );
 }
