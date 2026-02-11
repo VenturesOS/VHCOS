@@ -481,11 +481,12 @@
   }
 
   /**
-   * Scan the CV preview iframe for email, phone, and text content.
+   * Scan the CV preview iframe for email, phone, and FULL structured content.
    * The CV only contains candidate data — no recruiter contamination.
+   * Deep scan extracts: email, phone, skills, education, experience sections.
    */
   function scanCVIframe(candidateName) {
-    const result = { email: null, phone: null, text: '', isValid: false };
+    const result = { email: null, phone: null, text: '', isValid: false, sections: {} };
 
     try {
       // Find the CV iframe
@@ -515,7 +516,7 @@
       }
 
       const cvText = iframeDoc.body.innerText || iframeDoc.body.textContent || '';
-      result.text = cvText.substring(0, 10000);
+      result.text = cvText.substring(0, 12000);
       console.log(`[VHC v${VERSION}] CV iframe text: ${cvText.length} chars`);
 
       if (cvText.length < 50) {
@@ -531,16 +532,18 @@
         );
         if (!nameFound) {
           console.warn(`[VHC v${VERSION}] CV does NOT contain candidate name "${candidateName}". May be a bad upload. Ignoring CV contacts.`);
-          result.text = cvText.substring(0, 10000); // Still send text for AI to check
+          result.text = cvText.substring(0, 12000);
           return result;
         }
         result.isValid = true;
         console.log(`[VHC v${VERSION}] CV sanity check PASSED: contains name "${candidateName}"`);
       } else {
-        result.isValid = true; // No name to check against, trust it
+        result.isValid = true;
       }
 
-      // Extract emails from CV
+      // ===== DEEP EXTRACTION FROM CV =====
+
+      // Extract emails
       const cvEmails = cvText.match(EMAIL_REGEX) || [];
       for (const e of cvEmails) {
         const lower = e.toLowerCase().trim();
@@ -551,7 +554,7 @@
         }
       }
 
-      // Extract phones from CV
+      // Extract phones
       const cvPhones = cvText.match(PHONE_REGEX) || [];
       for (const p of cvPhones) {
         const cleaned = cleanPhone(p);
@@ -569,6 +572,68 @@
           const e = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
           if (e && !isNaukriSystemEmail(e)) { result.email = e; break; }
         }
+      }
+
+      // ===== DEEP SECTION EXTRACTION =====
+      // Extract structured sections from CV text for richer AI input
+      const lines = cvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      // Detect section headers and group content
+      const sectionHeaders = {
+        objective: /^(career\s*objective|objective|summary|profile\s*summary|professional\s*summary|about\s*me)/i,
+        experience: /^(work\s*experience|experience|employment|professional\s*experience|work\s*history)/i,
+        education: /^(education|academic|qualification|educational\s*qualification)/i,
+        skills: /^(skills|technical\s*skills|key\s*skills|core\s*competencies|competencies|it\s*skills)/i,
+        certifications: /^(certifications?|certificates?|courses?|training)/i,
+        projects: /^(projects?|key\s*projects?|notable\s*projects?)/i,
+        languages: /^(languages?|language\s*known|languages\s*known)/i,
+        personal: /^(personal\s*details|personal\s*information|personal\s*data|personal)/i,
+        achievements: /^(achievements?|awards?|accomplishments?|honors?)/i,
+      };
+
+      let currentSection = 'header';
+      const sections = { header: [] };
+
+      for (const line of lines) {
+        let matched = false;
+        for (const [key, pattern] of Object.entries(sectionHeaders)) {
+          if (pattern.test(line) && line.length < 60) {
+            currentSection = key;
+            if (!sections[currentSection]) sections[currentSection] = [];
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          if (!sections[currentSection]) sections[currentSection] = [];
+          sections[currentSection].push(line);
+        }
+      }
+
+      result.sections = sections;
+
+      // Log what we found
+      const foundSections = Object.keys(sections).filter(k => sections[k].length > 0);
+      console.log(`[VHC v${VERSION}] CV deep scan: found sections [${foundSections.join(', ')}]`);
+
+      // Extract LinkedIn URL from CV
+      const linkedinMatch = cvText.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+/i);
+      if (linkedinMatch) {
+        result.sections.linkedin = linkedinMatch[0];
+        console.log(`[VHC v${VERSION}] CV LinkedIn: ${linkedinMatch[0]}`);
+      }
+
+      // Extract additional emails (all unique, non-system emails)
+      const allCvEmails = cvEmails.map(e => e.toLowerCase().trim()).filter(e => !isNaukriSystemEmail(e));
+      if (allCvEmails.length > 1) {
+        result.sections.additionalEmails = allCvEmails.slice(1);
+      }
+
+      // Extract additional phone numbers
+      const allCvPhones = cvPhones.map(p => cleanPhone(p)).filter(p => p.length === 10 && INDIAN_MOBILE.test(p));
+      const uniquePhones = [...new Set(allCvPhones)];
+      if (uniquePhones.length > 1) {
+        result.sections.additionalPhones = uniquePhones.slice(1);
       }
 
     } catch (err) {
