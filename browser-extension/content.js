@@ -901,51 +901,61 @@
   }
 
   /**
-   * MAIN CAPTURE: 
-   * 1. Get raw text
-   * 2. Send to AI extraction endpoint
-   * 3. Send extracted data to capture endpoint
+   * MAIN CAPTURE — Multi-Source Cross-Validation Pipeline v3.8.2
    */
   async function performCapture(isManual) {
     const auth = await getAuthToken();
     if (!auth) return { success: false, error: 'Not logged in. Login via extension popup.' };
 
-    // Show progress bar for BOTH manual and auto captures
     showProgressBar();
     updateProgress(5, 'Waiting for page to settle...');
 
-    // Step 0: DOM stability check — ensure SPA navigation is complete
+    // Step 1: DOM stability check
     const stableTitle = await waitForDOMStability();
-    updateProgress(10, 'Scrolling page...');
+    updateProgress(8, 'Scrolling page...');
 
-    // Step 1: Scroll and load all content
+    // Step 2: Scroll to load ALL content including CV iframe
     await scrollToLoadContent();
     await sleep(1000);
-    updateProgress(25, 'Revealing contact info...');
-    
-    // Step 1.5: Auto-click "View Contact" to reveal hidden phone/email
-    await clickViewContactButton();
-    updateProgress(35, 'Loading recruiter blocklist...');
-    
-    // Load recruiter credentials for blocklist filtering
-    const recruiterCreds = await getRecruiterCredentials();
-    console.log(`[VHC v${VERSION}] Recruiter blocklist loaded: email=${recruiterCreds.email || 'none'}, phone=${recruiterCreds.phone || 'none'}`);
-    
-    updateProgress(40, 'Extracting candidate name...');
-    
-    // Extract name from page title (most reliable source)
+
+    // Step 3: Extract name from title
+    updateProgress(15, 'Extracting candidate name...');
     const domName = extractNameFromTitle();
-    
-    updateProgress(50, 'Extracting email from page...');
-    
-    // Extract contacts using Naukri DOM selectors + recruiter blocklist
-    const domContacts = extractContactFromDOM(domName, recruiterCreds);
-    console.log(`[VHC v${VERSION}] DOM-extracted: name="${domName}", email="${domContacts.email}", phone="${domContacts.phone}"`);
-    
+    console.log(`[VHC v${VERSION}] Candidate name: "${domName}"`);
+
+    // Step 4: SNAPSHOT contacts BEFORE "View Contact" click
+    updateProgress(20, 'Scanning page contacts...');
+    const beforeSnapshot = snapshotPageContacts();
+    console.log(`[VHC v${VERSION}] BEFORE: ${beforeSnapshot.emails.size} emails [${[...beforeSnapshot.emails].join(', ')}], ${beforeSnapshot.phones.size} phones [${[...beforeSnapshot.phones].join(', ')}]`);
+
+    // Step 5: Click "View Contact"
+    updateProgress(30, 'Revealing contact info...');
+    await clickViewContactButton();
+
+    // Step 6: SNAPSHOT AFTER and compute DIFF
+    updateProgress(40, 'Analyzing revealed contacts...');
+    const afterSnapshot = snapshotPageContacts();
+    const diff = diffContacts(beforeSnapshot, afterSnapshot);
+    console.log(`[VHC v${VERSION}] AFTER: ${afterSnapshot.emails.size} emails, ${afterSnapshot.phones.size} phones`);
+    console.log(`[VHC v${VERSION}] DIFF: new emails=[${diff.emails.join(', ')}], new phones=[${diff.phones.join(', ')}]`);
+
+    // Step 7: Scan CV iframe
+    updateProgress(50, 'Scanning CV preview...');
+    const cvData = scanCVIframe(domName);
+    console.log(`[VHC v${VERSION}] CV: email=${cvData.email || 'none'}, phone=${cvData.phone || 'none'}, valid=${cvData.isValid}, text=${cvData.text.length}chars`);
+
+    // Step 8: DOM selector fallback
+    const recruiterCreds = await getRecruiterCredentials();
+    const domSelectorData = extractFromDOMSelectors(recruiterCreds);
+
+    // Step 9: MERGE all sources (CV > Diff > DOM > AI)
+    updateProgress(55, 'Cross-validating contacts...');
+    const merged = mergeContacts(cvData, diff, domSelectorData, recruiterCreds);
+    console.log(`[VHC v${VERSION}] === FINAL: email=${merged.email || 'NONE'}, phone=${merged.phone || 'NONE'} ===`);
+
+    // Step 10: Capture text and send to AI
     updateProgress(60, 'Capturing page text...');
-    
     const rawText = getRawPageText();
-    console.log(`[VHC v${VERSION}] Raw text captured: ${rawText.length} chars`);
 
     if (rawText.length < 100) {
       updateProgress(0, 'Error: page text too short');
@@ -954,73 +964,58 @@
     }
 
     const naukriId = extractNaukriProfileId();
-
     updateProgress(70, 'AI analyzing profile...');
 
-    // Step 2: Send to AI extraction endpoint — include stable page_title for backend validation
-    console.log(`[VHC v${VERSION}] Sending ${rawText.length} chars to AI extraction...`);
+    // Combine page text + CV text for richer AI extraction
+    let combinedText = rawText.substring(0, 12000);
+    if (cvData.text.length > 100) {
+      combinedText += '\n\n=== CANDIDATE CV CONTENT ===\n' + cvData.text.substring(0, 5000);
+    }
 
     let aiResult;
-    const maxRetries = 2;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= 2; attempt++) {
       try {
-        if (attempt > 0) {
-          console.log(`[VHC v${VERSION}] Retry attempt ${attempt}...`);
-          await sleep(2000 * attempt);
-        }
+        if (attempt > 0) await sleep(2000 * attempt);
         const aiResponse = await fetch(`${auth.apiUrl}/api/extension/ai-extract`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${auth.token}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.token}` },
           body: JSON.stringify({
-            raw_text: rawText.substring(0, 15000),
+            raw_text: combinedText.substring(0, 15000),
             page_url: window.location.href,
             page_title: stableTitle,
             naukri_profile_id: naukriId,
             dom_extracted_name: domName || null,
-            dom_extracted_email: domContacts.email || null,
-            dom_extracted_phone: domContacts.phone || null,
+            dom_extracted_email: merged.email || null,
+            dom_extracted_phone: merged.phone || null,
             recruiter_email: recruiterCreds.email || null,
             recruiter_phone: recruiterCreds.phone || null
           })
         });
-
         aiResult = await aiResponse.json();
         if (aiResult.success) break;
-        if (aiResult.error && (aiResult.error.includes('429') || aiResult.error.includes('rate'))) continue;
+        if (aiResult.error?.includes('429') || aiResult.error?.includes('rate')) continue;
         break;
       } catch (e) {
-        console.error(`[VHC v${VERSION}] AI extraction error (attempt ${attempt}):`, e);
-        if (attempt === maxRetries) {
-          updateProgress(0, 'AI extraction failed');
-          hideProgressBar(2000);
-          return { success: false, error: `AI extraction failed: ${e.message}` };
-        }
+        if (attempt === 2) { updateProgress(0, 'AI failed'); hideProgressBar(2000); return { success: false, error: e.message }; }
       }
     }
-    
-    console.log(`[VHC v${VERSION}] AI extraction result:`, aiResult?.success ? 'SUCCESS' : 'FAILED', aiResult?.error || '');
 
-    if (!aiResult.success || !aiResult.profile_data) {
+    if (!aiResult?.success || !aiResult?.profile_data) {
       updateProgress(0, 'AI extraction failed');
       hideProgressBar(2000);
-      return { success: false, error: aiResult.error || 'AI extraction returned no data' };
+      return { success: false, error: aiResult?.error || 'AI extraction returned no data' };
     }
 
     const profileData = aiResult.profile_data;
-    console.log(`[VHC v${VERSION}] AI extracted name: ${profileData.name}`);
-
     if (!profileData.name) {
       updateProgress(0, 'Could not find candidate name');
       hideProgressBar(2000);
-      return { success: false, error: 'AI could not find candidate name in the text.' };
+      return { success: false, error: 'AI could not find candidate name.' };
     }
 
     updateProgress(85, 'Saving to VHC...');
 
-    // Step 3: Build capture payload — prefer DOM-extracted values over AI
+    // Step 11: Build capture payload — MERGED contacts override AI
     const finalName = domName || profileData.name;
     const capturePayload = {
       naukri_profile_id: naukriId,
@@ -1028,8 +1023,8 @@
       name: finalName,
       first_name: finalName?.split(/[\s.]+/)[0] || null,
       last_name: finalName?.split(/[\s.]+/).slice(-1)[0] || null,
-      email: domContacts.email || profileData.email || null,
-      phone: domContacts.phone || profileData.phone || null,
+      email: merged.email || profileData.email || null,
+      phone: merged.phone || profileData.phone || null,
       headline: profileData.headline || null,
       resume_headline: profileData.headline || null,
       profile_summary: profileData.profile_summary || null,
@@ -1068,47 +1063,31 @@
       extension_version: VERSION
     };
 
-    console.log(`[VHC v${VERSION}] Sending capture with:`, {
-      name: capturePayload.name,
-      email: capturePayload.email,
-      skills: capturePayload.key_skills?.length,
-      experience: capturePayload.work_experience?.length,
-      education: capturePayload.education?.length,
-    });
+    console.log(`[VHC v${VERSION}] Capture payload:`, { name: capturePayload.name, email: capturePayload.email, phone: capturePayload.phone, skills: capturePayload.key_skills?.length });
 
-    // Step 4: Send to capture endpoint DIRECTLY (not via background script)
-    console.log(`[VHC v${VERSION}] Sending capture directly to API...`);
-    
+    // Step 12: Send to capture endpoint
     try {
       const captureResponse = await fetch(`${auth.apiUrl}/api/extension/capture`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${auth.token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.token}` },
         body: JSON.stringify(capturePayload)
       });
 
       if (!captureResponse.ok) {
         const errorData = await captureResponse.json().catch(() => ({}));
         const errorMsg = errorData.detail || `HTTP ${captureResponse.status}`;
-        console.error(`[VHC v${VERSION}] Capture API error:`, errorMsg);
         updateProgress(0, `Error: ${errorMsg}`);
         hideProgressBar(3000);
         return { success: false, error: errorMsg };
       }
 
       const result = await captureResponse.json();
-      console.log(`[VHC v${VERSION}] Capture result:`, result);
-      
       lastCapturedUrl = window.location.href;
       const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'up-to-date' };
-      const statusMsg = `${capturePayload.name} ${msgs[result.action] || 'captured'}`;
-      updateProgress(100, statusMsg);
+      updateProgress(100, `${capturePayload.name} ${msgs[result.action] || 'captured'}`);
       hideProgressBar(4000);
       return { success: true, action: result.action, name: capturePayload.name };
     } catch (captureError) {
-      console.error(`[VHC v${VERSION}] Capture fetch error:`, captureError);
       updateProgress(0, `Failed: ${captureError.message}`);
       hideProgressBar(3000);
       return { success: false, error: captureError.message };
