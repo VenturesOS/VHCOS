@@ -52,6 +52,93 @@
   function cleanText(t) { return t ? t.replace(/\s+/g, ' ').trim() : null; }
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  // ===================== FLOATING PROGRESS BAR (shown on page for both manual & auto capture) =====================
+  
+  function showProgressBar() {
+    let bar = document.getElementById('vhc-progress-bar');
+    if (bar) bar.remove();
+    
+    bar = document.createElement('div');
+    bar.id = 'vhc-progress-bar';
+    bar.innerHTML = `
+      <style>
+        #vhc-progress-bar {
+          position: fixed; bottom: 20px; right: 20px; z-index: 999999;
+          background: white; border-radius: 12px; padding: 14px 18px; width: 280px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.15); font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          animation: vhcSlideIn 0.3s ease;
+        }
+        @keyframes vhcSlideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        #vhc-progress-bar .vhc-pb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        #vhc-progress-bar .vhc-pb-title { font-size: 13px; font-weight: 600; color: #1e293b; }
+        #vhc-progress-bar .vhc-pb-percent { font-size: 12px; font-weight: 600; color: #7CB342; }
+        #vhc-progress-bar .vhc-pb-step { font-size: 11px; color: #64748b; margin-bottom: 6px; }
+        #vhc-progress-bar .vhc-pb-track { width: 100%; height: 6px; background: #e8f5e9; border-radius: 100px; overflow: visible; position: relative; }
+        #vhc-progress-bar .vhc-pb-fill { height: 100%; background: linear-gradient(90deg, #AED581, #7CB342, #558B2F); border-radius: 100px; transition: width 0.5s ease; width: 0%; position: relative; }
+        #vhc-progress-bar .vhc-pb-tick { position: absolute; right: -10px; top: 50%; transform: translateY(-50%) scale(0); width: 20px; height: 20px; background: #43A047; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(67,160,71,0.4); transition: transform 0.3s ease; }
+        #vhc-progress-bar .vhc-pb-tick.show { transform: translateY(-50%) scale(1); }
+        #vhc-progress-bar .vhc-pb-tick svg { width: 12px; height: 12px; stroke: white; stroke-width: 3; fill: none; }
+      </style>
+      <div class="vhc-pb-header">
+        <span class="vhc-pb-title">VHC Capture</span>
+        <span class="vhc-pb-percent" id="vhcPbPercent">0%</span>
+      </div>
+      <div class="vhc-pb-step" id="vhcPbStep">Starting...</div>
+      <div class="vhc-pb-track">
+        <div class="vhc-pb-fill" id="vhcPbFill">
+          <div class="vhc-pb-tick" id="vhcPbTick">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(bar);
+  }
+  
+  function updateProgress(percent, stepText) {
+    const fill = document.getElementById('vhcPbFill');
+    const step = document.getElementById('vhcPbStep');
+    const pct = document.getElementById('vhcPbPercent');
+    const tick = document.getElementById('vhcPbTick');
+    if (!fill) return;
+    fill.style.width = percent + '%';
+    if (step) step.textContent = stepText;
+    if (pct) pct.textContent = percent + '%';
+    if (tick) {
+      if (percent >= 100) tick.classList.add('show');
+      else tick.classList.remove('show');
+    }
+  }
+  
+  function hideProgressBar(delay = 3000) {
+    setTimeout(() => {
+      const bar = document.getElementById('vhc-progress-bar');
+      if (bar) { bar.style.opacity = '0'; bar.style.transition = 'opacity 0.3s'; setTimeout(() => bar.remove(), 300); }
+    }, delay);
+  }
+
+  // ===================== DOM STABILITY CHECK =====================
+  
+  /**
+   * Wait for the page DOM to stabilize after SPA navigation.
+   * Reads the page title twice with a gap — if it changes, waits more.
+   * Returns the stable title.
+   */
+  async function waitForDOMStability() {
+    const title1 = document.title;
+    console.log(`[VHC v${VERSION}] DOM stability check: title1="${title1}"`);
+    await sleep(1500);
+    const title2 = document.title;
+    if (title1 !== title2) {
+      console.log(`[VHC v${VERSION}] Title changed during wait: "${title1}" -> "${title2}", waiting more...`);
+      await sleep(2000);
+      const title3 = document.title;
+      console.log(`[VHC v${VERSION}] Final title: "${title3}"`);
+      return title3;
+    }
+    return title2;
+  }
+
   // ===================== RECRUITER BLOCKLIST =====================
 
   /**
