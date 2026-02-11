@@ -866,14 +866,7 @@
     isCapturing = true;
     console.log(`[VHC v${VERSION}] Auto-capture starting...`);
     try {
-      const result = await performCapture(false);
-      if (result.success) {
-        const settings = await getSettings();
-        if (settings.showNotifications) {
-          showToast(`${result.name} ${result.action === 'created' ? 'added to VHC' : 'updated'}`, 
-                    result.action === 'created' ? 'success' : 'info');
-        }
-      }
+      await performCapture(false);
     } catch (e) {
       if (!e.message?.includes('Extension context')) console.error(`[VHC v${VERSION}]`, e);
     } finally { isCapturing = false; }
