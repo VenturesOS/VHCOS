@@ -641,56 +641,54 @@
     const auth = await getAuthToken();
     if (!auth) return { success: false, error: 'Not logged in. Login via extension popup.' };
 
-    if (isManual) showToast('Capturing profile with AI...', 'info');
+    // Show progress bar for BOTH manual and auto captures
+    showProgressBar();
+    updateProgress(5, 'Waiting for page to settle...');
+
+    // Step 0: DOM stability check — ensure SPA navigation is complete
+    const stableTitle = await waitForDOMStability();
+    updateProgress(10, 'Scrolling page...');
 
     // Step 1: Scroll and load all content
     await scrollToLoadContent();
     await sleep(1000);
+    updateProgress(25, 'Revealing contact info...');
     
     // Step 1.5: Auto-click "View Contact" to reveal hidden phone/email
     await clickViewContactButton();
+    updateProgress(35, 'Loading recruiter blocklist...');
     
     // Load recruiter credentials for blocklist filtering
     const recruiterCreds = await getRecruiterCredentials();
     console.log(`[VHC v${VERSION}] Recruiter blocklist loaded: email=${recruiterCreds.email || 'none'}, phone=${recruiterCreds.phone || 'none'}`);
     
+    updateProgress(40, 'Extracting candidate name...');
+    
     // Extract name from page title (most reliable source)
     const domName = extractNameFromTitle();
     
-    // Extract contacts using name-anchored profile area scan + recruiter blocklist
+    updateProgress(50, 'Extracting email from page...');
+    
+    // Extract contacts using Naukri DOM selectors + recruiter blocklist
     const domContacts = extractContactFromDOM(domName, recruiterCreds);
     console.log(`[VHC v${VERSION}] DOM-extracted: name="${domName}", email="${domContacts.email}", phone="${domContacts.phone}"`);
     
-    // CROSS-VALIDATION: If we have both a name and email, verify they co-exist on this page.
-    // If the candidate's name doesn't appear within ~2000 chars of the email in the page text,
-    // the email is likely stale (left over from a previous profile in SPA navigation).
-    if (domName && domContacts.email) {
-      const bodyText = document.body.innerText || '';
-      const emailIdx = bodyText.indexOf(domContacts.email);
-      const nameIdx = bodyText.indexOf(domName);
-      if (emailIdx >= 0 && nameIdx >= 0) {
-        const distance = Math.abs(emailIdx - nameIdx);
-        if (distance > 3000) {
-          console.warn(`[VHC v${VERSION}] STALE EMAIL DETECTED: "${domContacts.email}" is ${distance} chars away from name "${domName}". Clearing.`);
-          domContacts.email = null;
-        }
-      } else if (emailIdx < 0) {
-        // Email not found in visible text at all — might be from a cached DOM element
-        console.warn(`[VHC v${VERSION}] Email "${domContacts.email}" not found in visible text. Might be stale. Keeping for AI to verify.`);
-      }
-    }
+    updateProgress(60, 'Capturing page text...');
+    
     const rawText = getRawPageText();
     console.log(`[VHC v${VERSION}] Raw text captured: ${rawText.length} chars`);
-    console.log(`[VHC v${VERSION}] First 200 chars: ${rawText.substring(0, 200)}`);
 
     if (rawText.length < 100) {
+      updateProgress(0, 'Error: page text too short');
+      hideProgressBar(2000);
       return { success: false, error: 'Page text too short. Make sure profile is fully loaded.' };
     }
 
     const naukriId = extractNaukriProfileId();
 
-    // Step 2: Send to AI extraction endpoint
-    if (isManual) showToast('AI analyzing profile...', 'info');
+    updateProgress(70, 'AI analyzing profile...');
+
+    // Step 2: Send to AI extraction endpoint — include stable page_title for backend validation
     console.log(`[VHC v${VERSION}] Sending ${rawText.length} chars to AI extraction...`);
 
     let aiResult;
@@ -710,7 +708,7 @@
           body: JSON.stringify({
             raw_text: rawText.substring(0, 15000),
             page_url: window.location.href,
-            page_title: document.title,
+            page_title: stableTitle,
             naukri_profile_id: naukriId,
             dom_extracted_name: domName || null,
             dom_extracted_email: domContacts.email || null,
@@ -721,18 +719,14 @@
         });
 
         aiResult = await aiResponse.json();
-        
         if (aiResult.success) break;
-        
-        if (aiResult.error && (aiResult.error.includes('429') || aiResult.error.includes('rate'))) {
-          console.log(`[VHC v${VERSION}] Rate limited, will retry...`);
-          continue;
-        }
+        if (aiResult.error && (aiResult.error.includes('429') || aiResult.error.includes('rate'))) continue;
         break;
-        
       } catch (e) {
         console.error(`[VHC v${VERSION}] AI extraction error (attempt ${attempt}):`, e);
         if (attempt === maxRetries) {
+          updateProgress(0, 'AI extraction failed');
+          hideProgressBar(2000);
           return { success: false, error: `AI extraction failed: ${e.message}` };
         }
       }
@@ -741,6 +735,8 @@
     console.log(`[VHC v${VERSION}] AI extraction result:`, aiResult?.success ? 'SUCCESS' : 'FAILED', aiResult?.error || '');
 
     if (!aiResult.success || !aiResult.profile_data) {
+      updateProgress(0, 'AI extraction failed');
+      hideProgressBar(2000);
       return { success: false, error: aiResult.error || 'AI extraction returned no data' };
     }
 
@@ -748,8 +744,12 @@
     console.log(`[VHC v${VERSION}] AI extracted name: ${profileData.name}`);
 
     if (!profileData.name) {
+      updateProgress(0, 'Could not find candidate name');
+      hideProgressBar(2000);
       return { success: false, error: 'AI could not find candidate name in the text.' };
     }
+
+    updateProgress(85, 'Saving to VHC...');
 
     // Step 3: Build capture payload — prefer DOM-extracted values over AI
     const finalName = domName || profileData.name;
