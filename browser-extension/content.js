@@ -364,16 +364,17 @@
 
     let clicked = false;
 
+    // Strategy 1: Find by EXACT button text match only (strict)
     for (const text of buttonTexts) {
-      const buttons = document.querySelectorAll('button, a, span, div');
+      const buttons = document.querySelectorAll('button, a, span[role="button"], div[role="button"]');
       for (const btn of buttons) {
         const btnText = (btn.innerText || btn.textContent || '').trim();
-        if (btnText === text || btnText.toLowerCase().includes('view contact') || 
-            btnText.toLowerCase().includes('view phone') || btnText.toLowerCase().includes('view number')) {
+        // EXACT match only — prevents clicking "Similar profiles" or other unrelated elements
+        if (btnText === text) {
           try {
             btn.click();
             clicked = true;
-            console.log(`[VHC v${VERSION}] Clicked "${btnText}" button`);
+            console.log(`[VHC v${VERSION}] Clicked "${btnText}" button (exact match)`);
             break;
           } catch (_) {}
         }
@@ -381,6 +382,7 @@
       if (clicked) break;
     }
 
+    // Strategy 2: Find by class/attribute patterns (more targeted)
     if (!clicked) {
       const selectors = [
         '[class*="viewContact"]', '[class*="view-contact"]', '[class*="ViewContact"]',
