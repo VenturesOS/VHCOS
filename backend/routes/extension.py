@@ -592,7 +592,12 @@ async def capture_profile(
         if visibility_update:
             candidate_data.update(visibility_update)
         
-        await db.candidate_bank.insert_one(candidate_data)
+        try:
+            insert_result = await db.candidate_bank.insert_one(candidate_data)
+            logger.info(f"[Extension] Insert acknowledged={insert_result.acknowledged}, id={insert_result.inserted_id}")
+        except Exception as insert_err:
+            logger.error(f"[Extension] Insert FAILED for {profile.name}: {insert_err}")
+            raise
         
         # Invalidate search cache so new profile appears immediately
         cache.invalidate_search_cache()
