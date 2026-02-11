@@ -706,54 +706,81 @@
 
   /**
    * MERGE contacts from all sources using trust hierarchy:
-   * CV iframe > Before/After Diff > DOM selectors > AI
+   * CV iframe > Before/After Diff > Already-visible (BEFORE snapshot filtered) > DOM selectors > AI
    */
-  function mergeContacts(cvData, diffData, domData, recruiterCreds) {
+  function mergeContacts(cvData, diffData, domData, recruiterCreds, beforeSnapshot) {
     const rEmail = (recruiterCreds.email || '').toLowerCase().trim();
     const rPhone = cleanPhone(recruiterCreds.phone || '');
 
-    function isRecruiterContact(email, phone) {
-      if (email && rEmail && email.toLowerCase().trim() === rEmail) return true;
+    function isRecruiterOrSystemContact(email, phone) {
+      if (email) {
+        const eLower = email.toLowerCase().trim();
+        if (isNaukriSystemEmail(eLower)) return true;
+        if (rEmail && eLower === rEmail) return true;
+      }
       if (phone && rPhone && cleanPhone(phone) === rPhone) return true;
       return false;
     }
 
-    // Email: CV > Diff > DOM
+    // Email: CV > Diff > Already-visible > DOM
     let finalEmail = null;
-    if (cvData.isValid && cvData.email && !isRecruiterContact(cvData.email, null)) {
+    let emailSource = 'none';
+
+    if (cvData.isValid && cvData.email && !isRecruiterOrSystemContact(cvData.email, null)) {
       finalEmail = cvData.email;
-      console.log(`[VHC v${VERSION}] MERGE email: from CV iframe ✓`);
+      emailSource = 'CV iframe';
     } else if (diffData.emails.length > 0) {
-      // Pick the first non-recruiter diff email
       for (const e of diffData.emails) {
-        if (!isRecruiterContact(e, null) && !isNaukriSystemEmail(e)) {
+        if (!isRecruiterOrSystemContact(e, null)) {
           finalEmail = e;
-          console.log(`[VHC v${VERSION}] MERGE email: from Before/After diff ✓`);
+          emailSource = 'Before/After diff';
           break;
         }
       }
     }
-    if (!finalEmail && domData.email && !isRecruiterContact(domData.email, null)) {
+    // NEW: If diff found nothing, check BEFORE snapshot for already-visible candidate emails
+    if (!finalEmail && beforeSnapshot) {
+      for (const e of beforeSnapshot.emails) {
+        if (!isRecruiterOrSystemContact(e, null)) {
+          finalEmail = e;
+          emailSource = 'Already-visible (BEFORE snapshot)';
+          break;
+        }
+      }
+    }
+    if (!finalEmail && domData.email && !isRecruiterOrSystemContact(domData.email, null)) {
       finalEmail = domData.email;
-      console.log(`[VHC v${VERSION}] MERGE email: from DOM selectors ✓`);
+      emailSource = 'DOM selectors';
     }
 
-    // Phone: CV > Diff > (no DOM phone strategy yet)
+    // Phone: CV > Diff > Already-visible > DOM
     let finalPhone = null;
-    if (cvData.isValid && cvData.phone && !isRecruiterContact(null, cvData.phone)) {
+    let phoneSource = 'none';
+
+    if (cvData.isValid && cvData.phone && !isRecruiterOrSystemContact(null, cvData.phone)) {
       finalPhone = cvData.phone;
-      console.log(`[VHC v${VERSION}] MERGE phone: from CV iframe ✓`);
+      phoneSource = 'CV iframe';
     } else if (diffData.phones.length > 0) {
       for (const p of diffData.phones) {
-        if (!isRecruiterContact(null, p)) {
+        if (!isRecruiterOrSystemContact(null, p)) {
           finalPhone = p;
-          console.log(`[VHC v${VERSION}] MERGE phone: from Before/After diff ✓`);
+          phoneSource = 'Before/After diff';
+          break;
+        }
+      }
+    }
+    if (!finalPhone && beforeSnapshot) {
+      for (const p of beforeSnapshot.phones) {
+        if (!isRecruiterOrSystemContact(null, p)) {
+          finalPhone = p;
+          phoneSource = 'Already-visible (BEFORE snapshot)';
           break;
         }
       }
     }
 
-    console.log(`[VHC v${VERSION}] MERGE result: email=${finalEmail || 'none'}, phone=${finalPhone || 'none'}`);
+    console.log(`[VHC v${VERSION}] MERGE email: ${finalEmail || 'NONE'} [source: ${emailSource}]`);
+    console.log(`[VHC v${VERSION}] MERGE phone: ${finalPhone || 'NONE'} [source: ${phoneSource}]`);
     return { email: finalEmail, phone: finalPhone };
   }
 
