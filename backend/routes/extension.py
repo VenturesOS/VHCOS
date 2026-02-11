@@ -726,17 +726,23 @@ def normalize_phone(phone: str) -> str:
 def _names_are_similar(name_a: str, name_b: str) -> bool:
     """
     Check if two names likely refer to the same person.
-    Returns True if names share at least one significant word (>2 chars).
+    Requires FIRST NAMES to match (first significant word in each name).
     This prevents overwriting Person A's record when Person B is captured
     with a stale/wrong email or phone from the extension.
+    
+    Examples:
+      "Shikha Sibal Singh" vs "Natashaa Boparai" → False (different first names)
+      "Rahul Sharma" vs "Priya Sharma" → False (different first names)
+      "Rahul Sharma" vs "Rahul Kumar Sharma" → True (same first name)
     """
     if not name_a or not name_b:
         return False
-    words_a = {w.lower() for w in name_a.strip().split() if len(w) > 2}
-    words_b = {w.lower() for w in name_b.strip().split() if len(w) > 2}
+    words_a = [w.lower() for w in name_a.strip().split() if len(w) > 1]
+    words_b = [w.lower() for w in name_b.strip().split() if len(w) > 1]
     if not words_a or not words_b:
         return False
-    return bool(words_a & words_b)
+    # First names must match
+    return words_a[0] == words_b[0]
 
 
 def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: str, user: dict, now: str) -> dict:
