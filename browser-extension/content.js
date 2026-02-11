@@ -1,14 +1,15 @@
 /**
- * VHC Talent OS - Naukri Resdex Profile Scraper v3.8.0
+ * VHC Talent OS - Naukri Resdex Profile Scraper v3.8.1
  * 
  * AI-Powered Extraction Pipeline:
- * 1. Scroll page to load all content (including lazy-loaded CV preview)
- * 2. Extract name from page title (most reliable source)
- * 3. Load recruiter credentials from chrome.storage as BLOCKLIST
- * 4. Extract email/phone from targeted DOM selectors, excluding recruiter's own
- * 5. Capture cleaned text from the page (light noise removal only)
- * 6. Send everything to backend AI endpoint with DOM hints + recruiter identity
- * 7. Send extracted data DIRECTLY to capture endpoint
+ * 1. Wait for DOM to stabilize (title check) after SPA navigation
+ * 2. Scroll page to load all content (including lazy-loaded CV preview)
+ * 3. Extract name from page title (most reliable source)
+ * 4. Load recruiter credentials from chrome.storage as BLOCKLIST
+ * 5. Extract email directly from Naukri's DOM (i.naukri-icon-email)
+ * 6. Capture cleaned text from the page (light noise removal only)
+ * 7. Send everything to backend AI endpoint with DOM hints + recruiter identity + page title
+ * 8. Send extracted data DIRECTLY to capture endpoint
  */
 
 (function() {
