@@ -129,7 +129,13 @@ export default function AdminAnalyticsPage() {
           <h1 className="font-heading text-3xl font-bold text-slate-900">Advanced Analytics</h1>
           <p className="text-slate-500 mt-1 text-sm">Capture metrics, source effectiveness, team performance & funnel velocity</p>
         </div>
-        {loading && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#2563eb]" />}
+        <div className="flex items-center gap-3">
+          {loading && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#2563eb]" />}
+          <Button onClick={exportPdf} disabled={exporting || loading} variant="outline" size="sm" data-testid="export-pdf-btn" className="gap-1.5">
+            <FileDown className="w-4 h-4" />
+            {exporting ? 'Exporting...' : 'Export PDF'}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
