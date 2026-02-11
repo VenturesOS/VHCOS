@@ -871,9 +871,18 @@
     updateProgress(70, 'AI analyzing profile...');
 
     // Combine page text + CV text for richer AI extraction
-    let combinedText = rawText.substring(0, 12000);
+    // CV text is the PRIMARY source — it's the candidate's actual resume
+    let combinedText = '';
     if (cvData.text.length > 100) {
-      combinedText += '\n\n=== CANDIDATE CV CONTENT ===\n' + cvData.text.substring(0, 5000);
+      combinedText += '=== CANDIDATE CV/RESUME (PRIMARY SOURCE - most reliable) ===\n';
+      combinedText += cvData.text.substring(0, 8000);
+      if (cvData.sections.linkedin) {
+        combinedText += `\nLinkedIn: ${cvData.sections.linkedin}`;
+      }
+      combinedText += '\n\n=== NAUKRI PROFILE PAGE TEXT (secondary source) ===\n';
+      combinedText += rawText.substring(0, 7000);
+    } else {
+      combinedText = rawText.substring(0, 15000);
     }
 
     let aiResult;
