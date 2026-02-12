@@ -81,6 +81,15 @@ Chrome extension to scrape candidate profiles from Naukri.com (Resdex) and save 
 - 15/15 backend tests passed, all frontend components verified
 - Test file: `/app/backend/tests/test_admin_analytics.py`
 
+## Data Cleanup (Completed — Feb 12, 2026)
+- Removed 205 test records: 54 test users, 35 test candidates, 35 test applications, 10 test jobs, 11 test companies, 6 test teams, 36 audit logs, 16 system errors
+- Remaining real data: 8 users, 1671 candidates, 22 applications, 6 jobs, 5 companies, 5 teams
+
+## Inline Candidate Detail Fix for Naukri Profiles (Completed — Feb 12, 2026)
+- Fixed `loadCandidateDetails` in CandidateDataBankPage.jsx and CandidateProfileDialog.jsx to fetch full record via `getById()` instead of relying on filtered list data
+- Added Naukri Sourced Profile banner showing "Captured by" and "View on Naukri" link
+- Fixed Experience/Education tabs to handle Naukri field naming (designation vs title, university vs institution, specialization, from_date/to_date)
+
 ### PDF Export (Added Feb 11, 2026)
 - `GET /api/analytics/admin/export-pdf` — generates downloadable PDF with same filter params
 - Uses ReportLab: KPI table, source effectiveness table, recruiter performance (top 15), funnel velocity, stage distribution, capture trends
