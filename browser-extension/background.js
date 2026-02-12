@@ -287,12 +287,17 @@ async function handleLogin(credentials) {
       })
     });
     
-    if (!response.ok) {
-      const error = await response.json();
-      return { success: false, error: error.detail || 'Login failed' };
+    // Check content type before parsing — non-JSON means wrong URL or server error
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { success: false, error: 'Invalid Portal URL. Please check the URL and try again.' };
     }
     
     const data = await response.json();
+    
+    if (!response.ok) {
+      return { success: false, error: data.detail || 'Login failed' };
+    }
     
     // Store auth info (include phone for recruiter blocklist in content.js)
     await new Promise((resolve) => {
@@ -311,6 +316,12 @@ async function handleLogin(credentials) {
     return { success: true, user: data.user };
     
   } catch (error) {
+    if (error.message.includes('JSON') || error.name === 'SyntaxError') {
+      return { success: false, error: 'Invalid Portal URL. Please check the URL and try again.' };
+    }
+    if (error.name === 'TypeError' || error.message.includes('fetch')) {
+      return { success: false, error: 'Cannot reach server. Please check the Portal URL.' };
+    }
     return { success: false, error: error.message };
   }
 }
