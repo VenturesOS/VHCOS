@@ -319,14 +319,19 @@ export default function CandidateDataBankPage() {
   const loadCandidateDetails = async (candidate) => {
     setSelectedCandidate(candidate);
     try {
-      const results = await Promise.allSettled([
+      // Fetch full record (includes Naukri-specific fields not in list model)
+      const [fullRes, ...detailResults] = await Promise.all([
+        candidateBankAPI.getById(candidate.id),
         candidateBankAPI.getAuditLog(candidate.id),
         candidateBankAPI.getResumeHistory(candidate.id),
         candidateBankAPI.getHistory(candidate.id),
       ]);
-      setAuditLog(results[0].status === 'fulfilled' ? results[0].value.data : []);
-      setResumeHistory(results[1].status === 'fulfilled' ? results[1].value.data : []);
-      setActivityHistory(results[2].status === 'fulfilled' ? results[2].value.data : []);
+      if (fullRes.data) {
+        setSelectedCandidate(fullRes.data);
+      }
+      setAuditLog(detailResults[0].status !== undefined ? (detailResults[0].status === 'fulfilled' ? detailResults[0].value.data : []) : (detailResults[0].data || []));
+      setResumeHistory(detailResults[1].status !== undefined ? (detailResults[1].status === 'fulfilled' ? detailResults[1].value.data : []) : (detailResults[1].data || []));
+      setActivityHistory(detailResults[2].status !== undefined ? (detailResults[2].status === 'fulfilled' ? detailResults[2].value.data : []) : (detailResults[2].data || []));
     } catch (error) {
       console.error('Failed to load details');
       setAuditLog([]);
