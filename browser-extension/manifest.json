@@ -14,6 +14,8 @@
     "https://*.naukri.com/*",
     "https://*.emergentagent.com/*",
     "https://*.vhc.in/*",
+    "https://*.ventureshrd.com/*",
+    "https://*.emergent.host/*",
     "<all_urls>"
   ],
   "action": {
