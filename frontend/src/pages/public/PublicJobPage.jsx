@@ -427,7 +427,7 @@ export default function PublicJobPage() {
                     data-testid="consent-checkbox"
                   />
                   <Label htmlFor="consent" className="text-sm text-gray-600 leading-relaxed cursor-pointer">
-                    I consent to VHC Talent collecting and processing my personal and professional 
+                    I consent to Ventures HRD collecting and processing my personal and professional 
                     data for recruitment purposes. I understand I can withdraw consent at any time.
                   </Label>
                 </div>
