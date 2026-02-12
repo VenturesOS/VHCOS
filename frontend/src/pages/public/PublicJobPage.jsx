@@ -466,7 +466,7 @@ export default function PublicJobPage() {
       {/* Footer */}
       <footer className="bg-white border-t mt-12 py-6">
         <div className="max-w-4xl mx-auto px-4 text-center text-gray-500 text-sm">
-          <p>© {new Date().getFullYear()} VHC Talent Advisory. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Ventures HRD. All rights reserved.</p>
         </div>
       </footer>
     </div>
