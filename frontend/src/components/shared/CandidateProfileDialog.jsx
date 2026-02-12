@@ -108,11 +108,16 @@ export default function CandidateProfileDialog({
   const loadCandidateDetails = async () => {
     if (!candidate?.id) return;
     try {
-      const [auditRes, historyRes, activityRes] = await Promise.all([
+      const [fullRes, auditRes, historyRes, activityRes] = await Promise.all([
+        candidateBankAPI.getById(candidate.id),
         candidateBankAPI.getAuditLog(candidate.id),
         candidateBankAPI.getResumeHistory(candidate.id),
         candidateBankAPI.getHistory(candidate.id)
       ]);
+      // Merge full record into candidate for Naukri-specific fields
+      if (fullRes.data) {
+        Object.assign(candidate, fullRes.data);
+      }
       setAuditLog(auditRes.data || []);
       setResumeHistory(historyRes.data || {});
       setActivityHistory(activityRes.data || null);
