@@ -32,12 +32,17 @@
 
   console.log(`[VHC v${VERSION}] Content script loaded on:`, window.location.href);
 
-  // SPA navigation detection: reset state when URL changes
+  // SPA navigation detection: reset state when URL changes and re-trigger capture on profile pages
   setInterval(() => {
     if (window.location.href !== lastPageUrl) {
       console.log(`[VHC v${VERSION}] URL changed: ${lastPageUrl} -> ${window.location.href}`);
       lastPageUrl = window.location.href;
       lastCapturedUrl = null; // Allow re-capture on new page
+      // Re-trigger auto-capture if navigated to a profile page
+      if (isProfilePage() && !isCapturing) {
+        console.log(`[VHC v${VERSION}] Navigated to profile page, scheduling auto-capture`);
+        setTimeout(() => autoCapture(), CONFIG.CAPTURE_DELAY);
+      }
     }
   }, 1000);
 
