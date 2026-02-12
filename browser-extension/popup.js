@@ -252,9 +252,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       
       if (tab.url.includes('naukri.com')) {
-        if (tab.url.includes('/profile') || tab.url.includes('viewResume') || 
-            tab.url.includes('view-resume') || tab.url.includes('cvPreview') ||
-            tab.url.includes('preview') || tab.url.includes('resdex')) {
+        if ((tab.url.includes('/v3/preview') && tab.url.includes('tabKey=profile')) ||
+            tab.url.includes('viewResume') || tab.url.includes('view-resume') || 
+            tab.url.includes('cvPreview')) {
           setPageStatus('green', 'Naukri profile page detected');
           manualCaptureBtn.disabled = false;
         } else {
