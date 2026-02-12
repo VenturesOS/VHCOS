@@ -787,7 +787,13 @@
   // ===================== CAPTURE FLOW =====================
 
   function isProfilePage() {
-    return /resdex|profile|viewResume|view-resume|cvPreview|preview/i.test(window.location.href);
+    const pathname = window.location.pathname;
+    const search = window.location.search;
+    // Only match individual profile pages, NOT search/index pages
+    if (pathname.includes('/v3/preview') && search.includes('tabKey=profile')) return true;
+    // Legacy Naukri profile URL patterns
+    if (/viewResume|view-resume|cvPreview/i.test(pathname)) return true;
+    return false;
   }
 
   async function scrollToLoadContent() {
