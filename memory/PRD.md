@@ -81,6 +81,12 @@ Chrome extension to scrape candidate profiles from Naukri.com (Resdex) and save 
 - 15/15 backend tests passed, all frontend components verified
 - Test file: `/app/backend/tests/test_admin_analytics.py`
 
+## Extension URL Gate Fix v3.8.3 (Completed — Feb 12, 2026)
+- Fixed `isProfilePage()` in content.js — was matching ALL `resdex.naukri.com` pages (including search index) due to broad regex containing `resdex`
+- New check: Only activates on `/v3/preview?tabKey=profile` (individual profiles) + legacy patterns
+- Added SPA navigation re-trigger: auto-capture now fires when navigating from search → profile within the SPA
+- Zero changes to capture flow, popup, background script, or backend
+
 ## Data Cleanup (Completed — Feb 12, 2026)
 - Removed 205 test records: 54 test users, 35 test candidates, 35 test applications, 10 test jobs, 11 test companies, 6 test teams, 36 audit logs, 16 system errors
 - Remaining real data: 8 users, 1671 candidates, 22 applications, 6 jobs, 5 companies, 5 teams
