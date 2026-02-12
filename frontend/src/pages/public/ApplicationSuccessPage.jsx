@@ -52,7 +52,7 @@ export default function ApplicationSuccessPage() {
 
       {/* Footer */}
       <div className="absolute bottom-4 text-center text-gray-400 text-sm">
-        <p>© {new Date().getFullYear()} VHC Talent Advisory</p>
+        <p>© {new Date().getFullYear()} Ventures HRD</p>
       </div>
     </div>
   );
