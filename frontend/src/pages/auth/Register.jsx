@@ -40,7 +40,7 @@ export default function Register() {
 
     try {
       const userData = await register(formData);
-      toast.success(`Welcome to VHC Talent OS, ${userData.name}!`);
+      toast.success(`Welcome to Ventures HRD, ${userData.name}!`);
       // Use window.location for a clean navigation to avoid React Router race conditions
       window.location.href = `/${userData.role}`;
     } catch (error) {
