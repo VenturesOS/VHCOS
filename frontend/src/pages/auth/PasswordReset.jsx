@@ -59,7 +59,7 @@ export default function PasswordReset() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <img src={LOGO_URL} alt="VHC Talent OS" className="h-16 w-auto mb-4" />
-          <h1 className="font-heading text-2xl font-bold text-slate-900">VHC Talent OS</h1>
+          <h1 className="font-heading text-2xl font-bold text-slate-900">Ventures HRD</h1>
         </div>
 
         <Card className="border-slate-200 shadow-lg">
