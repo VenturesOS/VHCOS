@@ -425,7 +425,7 @@ export default function MandateApplyPage() {
                     data-testid="apply-consent-checkbox"
                   />
                   <label htmlFor="consent" className="text-sm text-slate-600 cursor-pointer">
-                    I consent to VHC Talent collecting and processing my personal and professional data for recruitment purposes. 
+                    I consent to Ventures HRD collecting and processing my personal and professional data for recruitment purposes. 
                     I understand I can withdraw consent at any time by contacting the recruitment team.
                   </label>
                 </div>
