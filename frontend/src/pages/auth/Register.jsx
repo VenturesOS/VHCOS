@@ -149,7 +149,7 @@ export default function Register() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-slate-400">
-          © 2026 VHC Talent OS. All rights reserved.
+          © 2026 Ventures HRD. All rights reserved.
         </p>
       </div>
     </div>
