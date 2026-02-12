@@ -193,7 +193,7 @@ export default function PublicJobPage() {
           </Link>
           <img 
             src="/website/images/logo.svg" 
-            alt="VHC Talent" 
+            alt="Ventures HRD" 
             className="h-8"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
