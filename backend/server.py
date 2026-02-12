@@ -1439,10 +1439,20 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
+# CORS: combine hardcoded production origins with env overrides
+_hardcoded_origins = [
+    "https://ventureshrd.com",
+    "https://www.ventureshrd.com",
+    "https://candidate-flow-5.emergent.host",
+    "https://candidate-flow-5.preview.emergentagent.com",
+]
+_env_origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()]
+_all_origins = list(set(_hardcoded_origins + _env_origins))
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
