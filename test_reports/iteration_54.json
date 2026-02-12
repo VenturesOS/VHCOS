@@ -1,0 +1,87 @@
+{
+  "summary": "Verified data cleanup and Naukri inline candidate detail fix. All 14 backend tests passed (100%). Frontend UI verified - Naukri candidate dialog correctly shows 'Naukri Sourced Profile' banner, 'Captured by' info, 'View on Naukri' link, full skills, summary, experience, and education data. Analytics dashboard regression test passed.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Data Cleanup: No test users with @test.vhc.in, @vhctalent.com, @example.com emails",
+    "Data Cleanup: 8 real users preserved (ajit@vhc.in, yamini@vhc.in, admin@vhc.in, etc.)",
+    "Data Cleanup: No TEST_ prefixed companies",
+    "Data Cleanup: 5 real companies preserved (Volvo, Tech M, JSW, Hero motocorp, JSW steel sanjeex)",
+    "Data Cleanup: No TEST_ prefixed teams",
+    "Data Cleanup: 5 real teams preserved (Gurgaon Team, faridabad team, VHC Talent Team, Delhi Team, Bengaluru team)",
+    "Data Cleanup: No TEST_ prefixed or 'Test Job' titled jobs",
+    "Data Cleanup: 6 real jobs preserved",
+    "Naukri Detail: Naukri-sourced candidates exist (7 found)",
+    "Naukri Detail: GET /api/candidate-bank/{id} returns full Naukri details (experience, education, skills, summary, naukri_profile_url, source_details)",
+    "Naukri Detail: source_details contains captured_by_name (Ajit Yadav)",
+    "Search: Candidate bank search by name works (Ravi returned 16 results)",
+    "Search: Pagination works correctly (page, total_pages, total)",
+    "Analytics: GET /api/analytics/admin returns data (1671 captures, 5 sources)",
+    "Frontend: Naukri candidate dialog shows 'Naukri Sourced Profile' banner",
+    "Frontend: Naukri candidate dialog shows 'Captured by: Ajit Yadav'",
+    "Frontend: Naukri candidate dialog shows 'View on Naukri' link",
+    "Frontend: Full candidate data displayed (6 yrs exp, ₹4,92,000 CTC, Ahmedabad, etc.)",
+    "Frontend: Skills section shows 8 skills (talent acquisition, recruitment, etc.)",
+    "Frontend: Summary section displays full professional summary",
+    "Frontend: Analytics dashboard loads with KPIs, charts, filters"
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_data_cleanup_verification.py",
+    "/app/test_reports/pytest/pytest_data_cleanup.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [
+    "CandidateDataBankPage.jsx lines 319-340: loadCandidateDetails now correctly fetches full record via candidateBankAPI.getById() before setting selectedCandidate",
+    "CandidateDataBankPage.jsx lines 844-870: Naukri Sourced Profile banner correctly displays source_details.captured_by_name and naukri_profile_url link",
+    "CandidateProfileDialog.jsx lines 108-122: loadCandidateDetails also fetches full record via getById() and merges into candidate object"
+  ],
+  
+  "updated_files": [
+    "/app/backend/tests/test_data_cleanup_verification.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% - All features verified"
+  },
+  
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+  
+  "seed_data_creation": "No seed data created - tested against existing production data",
+  
+  "retest_needed": false,
+  
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "Data cleanup verified: 8 users, 5 companies, 5 teams, 6 jobs, 1671 candidates remain. All test data removed. Naukri inline detail fix verified - clicking a Naukri candidate in Candidate Bank opens dialog with full data including 'Naukri Sourced Profile' banner, 'Captured by', 'View on Naukri' link. The fix was to fetch full record via getById() instead of using list data.",
+  
+  "features_verified": {
+    "Data Cleanup - Users": "VERIFIED - 8 real users, no test emails",
+    "Data Cleanup - Companies": "VERIFIED - 5 real companies, no TEST_ prefix",
+    "Data Cleanup - Teams": "VERIFIED - 5 real teams, no TEST_ prefix",
+    "Data Cleanup - Jobs": "VERIFIED - 6 real jobs, no test titles",
+    "Naukri Inline Detail - Banner": "VERIFIED - 'Naukri Sourced Profile' banner shows",
+    "Naukri Inline Detail - Captured By": "VERIFIED - Shows 'Captured by: Ajit Yadav'",
+    "Naukri Inline Detail - View Link": "VERIFIED - 'View on Naukri' link present",
+    "Naukri Inline Detail - Full Data": "VERIFIED - experience, education, skills, summary all populated",
+    "Search Functionality": "VERIFIED - Search by name returns results with pagination",
+    "Analytics Dashboard": "VERIFIED - KPIs, charts, filters all working (regression test passed)"
+  },
+  
+  "mocked_apis": "None - all APIs are real MongoDB data"
+}
