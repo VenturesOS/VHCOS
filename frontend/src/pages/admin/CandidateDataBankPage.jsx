@@ -846,6 +846,31 @@ export default function CandidateDataBankPage() {
                     </div>
                   )}
 
+                  {/* Naukri Extension Banner */}
+                  {selectedCandidate.source === 'naukri_extension' && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <FileText className="w-5 h-5 text-orange-600 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-medium text-orange-800 text-sm">Naukri Sourced Profile</p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                            {selectedCandidate.source_details?.captured_by_name && (
+                              <Badge variant="outline" className="border-orange-300">
+                                Captured by: {selectedCandidate.source_details.captured_by_name}
+                              </Badge>
+                            )}
+                            {selectedCandidate.naukri_profile_url && (
+                              <a href={selectedCandidate.naukri_profile_url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-orange-300 text-orange-700 hover:bg-orange-100">
+                                View on Naukri <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Header with Avatar */}
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
