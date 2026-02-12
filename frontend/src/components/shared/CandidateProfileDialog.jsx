@@ -573,8 +573,9 @@ export default function CandidateProfileDialog({
                   {candidate.education.map((edu, i) => (
                     <div key={i} className="p-4 bg-slate-50 rounded-lg border-l-4 border-blue-500">
                       <p className="font-semibold text-slate-900">{edu.degree || 'Degree'}</p>
-                      <p className="text-sm text-slate-600">{edu.institution || edu.school || ''}</p>
-                      {edu.year && <p className="text-xs text-slate-400 mt-1">{edu.year}</p>}
+                      {edu.specialization && <p className="text-sm text-slate-500">{edu.specialization}</p>}
+                      <p className="text-sm text-slate-600">{edu.institution || edu.university || edu.school || ''}</p>
+                      {(edu.year || edu.pass_out_year) && <p className="text-xs text-slate-400 mt-1">{edu.year || edu.pass_out_year}</p>}
                     </div>
                   ))}
                 </div>
