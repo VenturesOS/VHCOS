@@ -81,6 +81,14 @@ Chrome extension to scrape candidate profiles from Naukri.com (Resdex) and save 
 - 15/15 backend tests passed, all frontend components verified
 - Test file: `/app/backend/tests/test_admin_analytics.py`
 
+## Production Readiness (Completed — Feb 12, 2026)
+- CORS locked to: portal.vhc.in, vhc.in, www.vhc.in, preview URL
+- DB indexes added: candidate_bank (created_by, source, created_at, name, email, name+source compound), users (employer_id), applications (candidate_email, created_at), jobs (posted_by), teams (employer_id), audit_logs (entity_id, created_at)
+- Extension default URL updated to https://portal.vhc.in
+- Extension popup page detection fixed to match content.js URL gate
+- Full regression test: 19/19 backend, all frontend verified — zero issues
+- Production domain: portal.vhc.in (hosted on Emergent)
+
 ## Extension URL Gate Fix v3.8.3 (Completed — Feb 12, 2026)
 - Fixed `isProfilePage()` in content.js — was matching ALL `resdex.naukri.com` pages (including search index) due to broad regex containing `resdex`
 - New check: Only activates on `/v3/preview?tabKey=profile` (individual profiles) + legacy patterns
