@@ -424,6 +424,7 @@ export default function UsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="employer">Employer</SelectItem>
                   <SelectItem value="recruiter">Recruiter</SelectItem>
                   <SelectItem value="candidate">Candidate</SelectItem>
