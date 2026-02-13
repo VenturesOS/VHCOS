@@ -1353,7 +1353,7 @@ async def validate_r2_connection():
 @app.on_event("startup")
 async def seed_admin():
     """
-    Seeds admin user from environment variables on first run.
+    Seeds admin user from environment variables. Always syncs password with env.
     """
     admin_email = os.environ.get('ADMIN_EMAIL')
     admin_password = os.environ.get('ADMIN_PASSWORD')
@@ -1377,12 +1377,19 @@ async def seed_admin():
                 "phone": None,
                 "company_id": None,
                 "is_active": True,
-                "requires_password_reset": True,
+                "requires_password_reset": False,
                 "created_at": now
             }
             
             await db.users.insert_one(admin_doc)
-            logging.info(f"Admin user seeded (requires password reset): {admin_email}")
+            logging.info(f"Admin user seeded: {admin_email}")
+        else:
+            # Always sync admin password with env
+            await db.users.update_one(
+                {"email": admin_email},
+                {"$set": {"password": hash_password(admin_password), "requires_password_reset": False}}
+            )
+            logging.info(f"Admin password synced from env: {admin_email}")
         
         test_result = await db.users.delete_many({"email": {"$regex": "@test\\.com$"}})
         if test_result.deleted_count > 0:
