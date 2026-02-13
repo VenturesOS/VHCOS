@@ -1601,7 +1601,7 @@ export default function CandidateDataBankPage() {
       <CVUploadDialog 
         open={showCVUpload} 
         onOpenChange={setShowCVUpload} 
-        onProfileSaved={fetchCandidates} 
+        onProfileSaved={() => loadCandidates(currentPage)} 
       />
     </div>
   );
