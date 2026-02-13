@@ -30,7 +30,7 @@ import {
   Lock
 } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = '';
 
 export default function MandateApplyPage() {
   const { jobId } = useParams();
