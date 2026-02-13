@@ -14,7 +14,7 @@ import {
   RotateCcw, Filter, Layers, FileDown,
 } from 'lucide-react';
 
-const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API_BASE = '/api';
 
 const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2'];
 
