@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { captureApiError } from './errorCapture';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API_BASE = `${BACKEND_URL}/api`;
+// Use relative URL to avoid CORS issues on custom domains
+const API_BASE = '/api';
 
 // Create axios instance
 const api = axios.create({
