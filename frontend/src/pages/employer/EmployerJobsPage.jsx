@@ -12,7 +12,7 @@ import { Switch } from '../../components/ui/switch';
 import { toast } from 'sonner';
 import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeLock, AlertTriangle, History, UserPlus, UserCheck, Link2, Copy, ExternalLink } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = '';
 
 export default function EmployerJobsPage() {
   const [jobs, setJobs] = useState([]);
