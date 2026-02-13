@@ -156,7 +156,7 @@ export const Sidebar = () => {
             className="w-full justify-start text-slate-600 hover:text-[#7CB342] hover:bg-[#DCFCE7] mb-1"
             onClick={() => {
               const link = document.createElement('a');
-              link.href = `${process.env.REACT_APP_BACKEND_URL}/api/download/naukri-extension`;
+              link.href = `/api/download/naukri-extension`;
               link.download = 'vhc-naukri-extension.zip';
               link.click();
             }}
