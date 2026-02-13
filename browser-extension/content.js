@@ -929,22 +929,29 @@
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
         if (attempt > 0) await sleep(2000 * attempt);
-        const aiResponse = await fetch(`${auth.apiUrl}/api/extension/ai-extract`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.token}` },
-          body: JSON.stringify({
-            raw_text: combinedText.substring(0, 15000),
-            page_url: window.location.href,
-            page_title: stableTitle,
-            naukri_profile_id: naukriId,
-            dom_extracted_name: domName || null,
-            dom_extracted_email: merged.email || null,
-            dom_extracted_phone: merged.phone || null,
-            recruiter_email: recruiterCreds.email || null,
-            recruiter_phone: recruiterCreds.phone || null
-          })
+        aiResult = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({
+            action: 'apiProxy',
+            data: {
+              path: '/api/extension/ai-extract',
+              method: 'POST',
+              body: {
+                raw_text: combinedText.substring(0, 15000),
+                page_url: window.location.href,
+                page_title: stableTitle,
+                naukri_profile_id: naukriId,
+                dom_extracted_name: domName || null,
+                dom_extracted_email: merged.email || null,
+                dom_extracted_phone: merged.phone || null,
+                recruiter_email: recruiterCreds.email || null,
+                recruiter_phone: recruiterCreds.phone || null
+              }
+            }
+          }, response => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(response);
+          });
         });
-        aiResult = await aiResponse.json();
         if (aiResult.success) break;
         if (aiResult.error?.includes('429') || aiResult.error?.includes('rate')) continue;
         break;
