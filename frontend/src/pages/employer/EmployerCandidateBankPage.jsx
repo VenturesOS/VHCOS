@@ -33,6 +33,7 @@ export default function EmployerCandidateBankPage() {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showCVUpload, setShowCVUpload] = useState(false);
   const [auditLog, setAuditLog] = useState([]);
   const [resumeHistory, setResumeHistory] = useState([]);
   const [activityHistory, setActivityHistory] = useState(null);
