@@ -35,7 +35,7 @@ import {
   History
 } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = '';
 
 // Chunked upload configuration
 const CHUNK_SIZE = 512 * 1024; // 512KB chunks (matches backend)
