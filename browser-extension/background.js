@@ -78,6 +78,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
+ * Generic API proxy for content script - bypasses CORS
+ */
+async function handleApiProxy(data) {
+  try {
+    const auth = await getAuth();
+    if (!auth) return { success: false, error: 'Not logged in' };
+
+    const response = await fetch(`${auth.apiUrl}${data.path}`, {
+      method: data.method || 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${auth.token}`
+      },
+      body: data.body ? JSON.stringify(data.body) : undefined
+    });
+
+    if (response.status === 401) {
+      await handleLogout();
+      return { success: false, error: 'Session expired. Please login again.' };
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('[VHC Extension] API proxy error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Handle profile capture from content script
  */
 async function handleProfileCapture(profileData) {
