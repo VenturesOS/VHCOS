@@ -514,9 +514,9 @@ async def capture_profile(
             {"_id": 0}
         )
         if existing:
-            logger.info(f"[Extension] MATCH by naukri_id: '{profile.name}' -> existing '{existing.get('name')}' ({existing.get('id','?')[:12]})")
+            logger.warning(f"[Extension] MATCH by naukri_id: '{profile.name}' -> existing '{existing.get('name')}' ({existing.get('id','?')[:12]})")
     else:
-        logger.info(f"[Extension] SKIP MATCH: naukri_profile_id is null/empty for '{profile.name}' -> will force insert if no name/email/phone match")
+        logger.warning(f"[Extension] SKIP MATCH: naukri_profile_id is null/empty for '{profile.name}' -> will force insert if no name/email/phone match")
     
     # HIGH PRIORITY: Check by name + source (prevents duplicates from same person captured multiple times)
     if not existing and profile.name:
@@ -579,7 +579,7 @@ async def capture_profile(
         
         # Safety log: count total profiles
         total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
-        logger.info(f"[Extension] UPDATE: '{profile.name}' -> existing record {existing['id'][:12]}. Total naukri profiles: {total}")
+        logger.warning(f"[Extension] UPDATE: '{profile.name}' -> existing record {existing['id'][:12]}. Total naukri profiles: {total}")
         
         return CaptureResponse(
             success=True,
@@ -610,7 +610,7 @@ async def capture_profile(
         
         # Safety log: count total profiles
         total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
-        logger.info(f"[Extension] INSERT: New profile '{profile.name}' ({candidate_id[:12]}). Total naukri profiles: {total}")
+        logger.warning(f"[Extension] INSERT: New profile '{profile.name}' ({candidate_id[:12]}). Total naukri profiles: {total}")
         
         return CaptureResponse(
             success=True,
