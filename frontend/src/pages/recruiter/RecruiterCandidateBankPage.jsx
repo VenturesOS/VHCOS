@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
 import { Search, Upload, Database, Mail, Phone, MapPin, FileText, Clock, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download, Info } from 'lucide-react';
+import { CVUploadDialog } from '../../components/dialogs/CVUploadDialog';
 
 const NOTICE_PERIODS = [
   "Immediate",
