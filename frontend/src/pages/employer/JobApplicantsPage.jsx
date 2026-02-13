@@ -704,7 +704,7 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage, onR
                     size="sm"
                     onClick={() => {
                       // Open resume in new tab for preview
-                      const previewUrl = `${process.env.REACT_APP_BACKEND_URL}${applicant.resume_url}`;
+                      const previewUrl = `${applicant.resume_url}`;
                       window.open(previewUrl, '_blank');
                     }}
                     data-testid="preview-resume-btn"
