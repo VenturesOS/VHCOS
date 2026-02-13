@@ -242,13 +242,22 @@ export default function RecruiterCandidateBankPage() {
             View candidates you have parsed and applicants to your assigned mandates
           </p>
         </div>
-        <Button 
-          onClick={() => setShowUpload(true)}
-          className="bg-[#7CB342] hover:bg-[#689F38]"
-          data-testid="upload-resume-btn"
-        >
-          <Upload className="w-4 h-4 mr-2" /> Add Candidate
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => setShowCVUpload(true)}
+            data-testid="cv-upload-btn"
+          >
+            <Upload className="w-4 h-4 mr-2" /> Upload CV
+          </Button>
+          <Button 
+            onClick={() => setShowUpload(true)}
+            className="bg-[#7CB342] hover:bg-[#689F38]"
+            data-testid="upload-resume-btn"
+          >
+            <Upload className="w-4 h-4 mr-2" /> Add Candidate
+          </Button>
+        </div>
       </div>
 
       {/* Access Control Info */}
