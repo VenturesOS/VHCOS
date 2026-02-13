@@ -123,6 +123,16 @@ export const candidateAPI = {
   downloadResume: (id) => `${API_BASE}/candidates/${id}/resume`,
 };
 
+// CV Upload APIs
+export const cvUploadAPI = {
+  parse: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/cv-upload/parse', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
+  },
+  save: (data) => api.post('/cv-upload/save', data),
+};
+
 // Company APIs
 export const companyAPI = {
   create: (data) => api.post('/companies', data),
