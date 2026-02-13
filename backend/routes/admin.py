@@ -263,7 +263,7 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_role(["
 async def admin_create_user(user_data: AdminUserCreate, current_user: dict = Depends(require_role(["admin"]))):
     """Admin-only endpoint to create users with any role"""
     # Validate role
-    allowed_roles = ["employer", "recruiter", "candidate"]
+    allowed_roles = ["admin", "employer", "recruiter", "candidate"]
     if user_data.role not in allowed_roles:
         raise HTTPException(status_code=400, detail=f"Role must be one of: {', '.join(allowed_roles)}")
     
