@@ -428,6 +428,13 @@ export default function CandidateDataBankPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            onClick={() => setShowCVUpload(true)}
+            data-testid="cv-upload-btn"
+          >
+            <Upload className="w-4 h-4 mr-2" /> Upload CV
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => navigate('batch-upload')}
             data-testid="batch-upload-btn"
           >
