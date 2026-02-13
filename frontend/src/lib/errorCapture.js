@@ -4,7 +4,7 @@
  * Sends them to POST /api/system-errors/frontend.
  */
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = '';
 
 let errorQueue = [];
 let flushTimer = null;
