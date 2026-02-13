@@ -513,6 +513,10 @@ async def capture_profile(
             {"naukri_profile_id": profile.naukri_profile_id},
             {"_id": 0}
         )
+        if existing:
+            logger.info(f"[Extension] MATCH by naukri_id: '{profile.name}' -> existing '{existing.get('name')}' ({existing.get('id','?')[:12]})")
+    else:
+        logger.info(f"[Extension] SKIP MATCH: naukri_profile_id is null/empty for '{profile.name}' -> will force insert if no name/email/phone match")
     
     # HIGH PRIORITY: Check by name + source (prevents duplicates from same person captured multiple times)
     if not existing and profile.name:
