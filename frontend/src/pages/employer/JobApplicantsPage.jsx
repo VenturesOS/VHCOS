@@ -718,7 +718,7 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage, onR
                     onClick={() => {
                       // Download with proper naming
                       const token = localStorage.getItem('vhc_token');
-                      const downloadUrl = `${process.env.REACT_APP_BACKEND_URL}/api/applications/${applicant.id}/resume`;
+                      const downloadUrl = `/api/applications/${applicant.id}/resume`;
                       
                       // Create a temporary link to trigger download with auth
                       fetch(downloadUrl, {
