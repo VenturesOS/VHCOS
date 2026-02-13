@@ -260,6 +260,7 @@ class CompleteNaukriProfileInput(BaseModel):
     
     # Scrape metadata
     scraped_at: str
+    extension_version: Optional[str] = None
 
 
 class CaptureResponse(BaseModel):
