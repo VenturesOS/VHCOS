@@ -1025,23 +1025,28 @@
 
     console.log(`[VHC v${VERSION}] Capture payload:`, { name: capturePayload.name, email: capturePayload.email, phone: capturePayload.phone, skills: capturePayload.key_skills?.length });
 
-    // Step 12: Send to capture endpoint
+    // Step 12: Send to capture endpoint via background script (bypasses CORS)
     try {
-      const captureResponse = await fetch(`${auth.apiUrl}/api/extension/capture`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.token}` },
-        body: JSON.stringify(capturePayload)
+      const result = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          action: 'apiProxy',
+          data: {
+            path: '/api/extension/capture',
+            method: 'POST',
+            body: capturePayload
+          }
+        }, response => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(response);
+        });
       });
 
-      if (!captureResponse.ok) {
-        const errorData = await captureResponse.json().catch(() => ({}));
-        const errorMsg = errorData.detail || `HTTP ${captureResponse.status}`;
-        updateProgress(0, `Error: ${errorMsg}`);
+      if (result.error) {
+        updateProgress(0, `Error: ${result.error}`);
         hideProgressBar(3000);
-        return { success: false, error: errorMsg };
+        return { success: false, error: result.error };
       }
 
-      const result = await captureResponse.json();
       lastCapturedUrl = window.location.href;
       const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'up-to-date' };
       updateProgress(100, `${capturePayload.name} ${msgs[result.action] || 'captured'}`);
