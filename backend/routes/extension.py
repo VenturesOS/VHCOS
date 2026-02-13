@@ -577,7 +577,9 @@ async def capture_profile(
         # Invalidate search cache so new data appears immediately
         cache.invalidate_search_cache()
         
-        logger.info(f"[Extension] Updated candidate: {profile.name} ({existing['id']})")
+        # Safety log: count total profiles
+        total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
+        logger.info(f"[Extension] UPDATE: '{profile.name}' -> existing record {existing['id'][:12]}. Total naukri profiles: {total}")
         
         return CaptureResponse(
             success=True,
@@ -606,7 +608,9 @@ async def capture_profile(
         # Invalidate search cache so new profile appears immediately
         cache.invalidate_search_cache()
         
-        logger.info(f"[Extension] Created new candidate: {profile.name} ({candidate_id})")
+        # Safety log: count total profiles
+        total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
+        logger.info(f"[Extension] INSERT: New profile '{profile.name}' ({candidate_id[:12]}). Total naukri profiles: {total}")
         
         return CaptureResponse(
             success=True,
