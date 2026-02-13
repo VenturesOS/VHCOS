@@ -805,7 +805,7 @@ export default function RecruiterCandidateBankPage() {
       <CVUploadDialog 
         open={showCVUpload} 
         onOpenChange={setShowCVUpload} 
-        onProfileSaved={fetchCandidates} 
+        onProfileSaved={loadCandidates} 
       />
     </div>
   );
