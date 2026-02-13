@@ -976,6 +976,12 @@
     updateProgress(85, 'Saving to VHC...');
 
     // Step 11: Build capture payload — MERGED contacts override AI
+    // Safety: filter recruiter's own phone/email from AI fallback too
+    const rPhone = cleanPhone(recruiterCreds.phone || '');
+    const rEmail = (recruiterCreds.email || '').toLowerCase().trim();
+    const aiFallbackEmail = profileData.email && profileData.email.toLowerCase().trim() !== rEmail ? profileData.email : null;
+    const aiFallbackPhone = profileData.phone && cleanPhone(profileData.phone) !== rPhone ? profileData.phone : null;
+
     const finalName = domName || profileData.name;
     const capturePayload = {
       naukri_profile_id: naukriId,
@@ -983,8 +989,8 @@
       name: finalName,
       first_name: finalName?.split(/[\s.]+/)[0] || null,
       last_name: finalName?.split(/[\s.]+/).slice(-1)[0] || null,
-      email: merged.email || profileData.email || null,
-      phone: merged.phone || profileData.phone || null,
+      email: merged.email || aiFallbackEmail || null,
+      phone: merged.phone || aiFallbackPhone || null,
       headline: profileData.headline || null,
       resume_headline: profileData.headline || null,
       profile_summary: profileData.profile_summary || null,
