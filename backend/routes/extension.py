@@ -505,10 +505,13 @@ async def capture_profile(
         profile.last_name = name_parts[-1] if len(name_parts) > 1 else None
     
     # Check for existing profile by naukri_profile_id (strongest match — same Naukri profile)
-    existing = await db.candidate_bank.find_one(
-        {"naukri_profile_id": profile.naukri_profile_id},
-        {"_id": 0}
-    )
+    # CRITICAL: Skip lookup when naukri_profile_id is None/empty to prevent overwriting unrelated records
+    existing = None
+    if profile.naukri_profile_id:
+        existing = await db.candidate_bank.find_one(
+            {"naukri_profile_id": profile.naukri_profile_id},
+            {"_id": 0}
+        )
     
     # HIGH PRIORITY: Check by name + source (prevents duplicates from same person captured multiple times)
     if not existing and profile.name:
