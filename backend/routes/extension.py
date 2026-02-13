@@ -919,7 +919,7 @@ def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: 
             "captured_by_name": user.get("name", user.get("email")),
             "captured_by_role": user.get("role"),
             "captured_at": profile.scraped_at,
-            "extension_version": "2.0.0"
+            "extension_version": profile.extension_version or "unknown"
         },
         
         # === TIMESTAMPS ===
@@ -967,7 +967,7 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
             "captured_by_name": user.get("name", user.get("email")),
             "captured_by_role": user.get("role"),
             "captured_at": profile.scraped_at,
-            "extension_version": "2.0.0"
+            "extension_version": profile.extension_version or "unknown"
         },
     }
     
