@@ -11,7 +11,7 @@ import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
 import { Search, Briefcase, MapPin, Clock, Users, Eye, Trash2, Globe, GlobeLock, History, AlertTriangle, Link2, Copy, ExternalLink } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = '';
 
 export default function AdminJobsPage() {
   const [jobs, setJobs] = useState([]);
