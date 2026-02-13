@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from config import db
 from utils import require_role
 
-profile_router = APIRouter()
+profile_router = APIRouter(prefix="/api", tags=["Profile & Messages"])
 
 
 # --- Profile Routes ---
