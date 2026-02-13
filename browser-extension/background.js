@@ -70,6 +70,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     checkAuth().then(sendResponse);
     return true;
   }
+
+  if (request.action === 'apiProxy') {
+    handleApiProxy(request.data).then(sendResponse).catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
 
 /**
