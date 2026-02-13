@@ -1596,6 +1596,13 @@ export default function CandidateDataBankPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* CV Upload Dialog */}
+      <CVUploadDialog 
+        open={showCVUpload} 
+        onOpenChange={setShowCVUpload} 
+        onProfileSaved={fetchCandidates} 
+      />
     </div>
   );
 }
