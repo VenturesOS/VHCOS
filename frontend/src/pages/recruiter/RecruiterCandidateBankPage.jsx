@@ -32,6 +32,7 @@ export default function RecruiterCandidateBankPage() {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showCVUpload, setShowCVUpload] = useState(false);
   const [resumeHistory, setResumeHistory] = useState([]);
   const [activityHistory, setActivityHistory] = useState(null);
   const fileInputRef = useRef(null);
