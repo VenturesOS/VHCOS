@@ -758,7 +758,7 @@
       emailSource = 'DOM selectors';
     }
 
-    // Phone: CV > Diff > Already-visible > DOM
+    // Phone: CV > Diff > DOM (SKIP BEFORE snapshot - contains recruiter's phone)
     let finalPhone = null;
     let phoneSource = 'none';
 
@@ -774,15 +774,9 @@
         }
       }
     }
-    if (!finalPhone && beforeSnapshot) {
-      for (const p of beforeSnapshot.phones) {
-        if (!isRecruiterOrSystemContact(null, p)) {
-          finalPhone = p;
-          phoneSource = 'Already-visible (BEFORE snapshot)';
-          break;
-        }
-      }
-    }
+    // NOTE: BEFORE snapshot phones are intentionally skipped here
+    // Naukri pages display the logged-in recruiter's phone in the BEFORE snapshot
+    // Only phones from CV, Diff (after View Contact click), or DOM selectors are trusted
 
     console.log(`[VHC v${VERSION}] MERGE email: ${finalEmail || 'NONE'} [source: ${emailSource}]`);
     console.log(`[VHC v${VERSION}] MERGE phone: ${finalPhone || 'NONE'} [source: ${phoneSource}]`);
