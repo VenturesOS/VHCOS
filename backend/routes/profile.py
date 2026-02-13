@@ -26,7 +26,7 @@ class ProfileUpdate(BaseModel):
 
 
 @profile_router.get("/profile")
-async def get_profile(current_user: dict = Depends(require_role(["candidate"]))):
+async def get_profile(current_user: dict = Depends(require_role(["candidate", "employer", "recruiter", "admin"]))):
     user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -35,7 +35,7 @@ async def get_profile(current_user: dict = Depends(require_role(["candidate"])))
 
 
 @profile_router.put("/profile")
-async def update_profile(data: ProfileUpdate, current_user: dict = Depends(require_role(["candidate"]))):
+async def update_profile(data: ProfileUpdate, current_user: dict = Depends(require_role(["candidate", "employer", "recruiter", "admin"]))):
     update_fields = {k: v for k, v in data.dict().items() if v is not None}
     if not update_fields:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -46,7 +46,7 @@ async def update_profile(data: ProfileUpdate, current_user: dict = Depends(requi
 
 
 @profile_router.post("/profile/resume")
-async def upload_resume(file: UploadFile = File(...), current_user: dict = Depends(require_role(["candidate"]))):
+async def upload_resume(file: UploadFile = File(...), current_user: dict = Depends(require_role(["candidate", "employer", "recruiter"]))):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
