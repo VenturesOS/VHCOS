@@ -455,20 +455,41 @@ def calculate_fast_match_score(
 ) -> Dict:
     """
     Calculate a match score between candidate and job WITHOUT an LLM call.
-    Uses keyword overlap, experience matching, and optional semantic similarity.
+    Searches skills array, it_skills, summary, headline, and designation.
     """
     candidate_skills = [s.lower() for s in (candidate_data.get("skills") or [])]
+
+    # Also extract skill names from it_skills objects
+    for it_skill in (candidate_data.get("it_skills") or []):
+        if isinstance(it_skill, dict) and it_skill.get("name"):
+            candidate_skills.append(it_skill["name"].lower())
+        elif isinstance(it_skill, str):
+            candidate_skills.append(it_skill.lower())
+    candidate_skills = list(set(candidate_skills))
+
+    # Build a text blob from summary/headline/designation for text-based matching
+    text_fields = " ".join(filter(None, [
+        candidate_data.get("summary", ""),
+        candidate_data.get("headline", ""),
+        candidate_data.get("designation", ""),
+    ])).lower()
+
     job_skills_required = [s.lower() for s in (job_data.get("required_skills") or [])]
     job_skills_preferred = [s.lower() for s in (job_data.get("preferred_skills") or [])]
     all_job_skills = list(set(job_skills_required + job_skills_preferred))
 
-    # --- Skill matching (fuzzy: substring check) ---
+    # --- Skill matching (fuzzy: substring check in skills + text fields) ---
     matched_skills = []
     for js in all_job_skills:
+        # Check in skills array
         for cs in candidate_skills:
             if js in cs or cs in js:
                 matched_skills.append(js)
                 break
+        else:
+            # Check in text fields (summary, headline, designation)
+            if js in text_fields:
+                matched_skills.append(js)
     matched_skills = list(set(matched_skills))
     missing_skills = [s for s in job_skills_required if s not in matched_skills][:5]
 
