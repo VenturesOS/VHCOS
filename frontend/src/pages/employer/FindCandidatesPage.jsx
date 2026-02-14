@@ -29,6 +29,15 @@ export default function FindCandidatesPage() {
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
 
+  // AI Search state
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiResults, setAiResults] = useState([]);
+  const [aiFilters, setAiFilters] = useState(null);
+  const [aiLog, setAiLog] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showFilterPreview, setShowFilterPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState('job');
+
   const [filters, setFilters] = useState({
     location: '', qualification: '', skills: '',
     minExperience: '', maxExperience: '', keyword: '',
