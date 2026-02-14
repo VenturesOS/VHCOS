@@ -19,7 +19,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '3.9.0';
+  const VERSION = '3.9.1';
   const CONFIG = {
     CAPTURE_DELAY: 4000,
     SCROLL_DELAY: 600,
