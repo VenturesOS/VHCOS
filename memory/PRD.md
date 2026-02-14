@@ -78,6 +78,9 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
 
 ## Backlog (P3)
 1. AI Screening Shortlist Fix — disabled when JD via "Paste/Upload JD"
+2. Forgot Password Feature (P2) — deferred until post-deploy verified
+3. Refactor `content.js` in Chrome Extension
+4. AI Search Phase 2 — Hybrid routing (GPT-4o-mini default + GPT-4o for complex prompts), conversational follow-ups
 2. Refactor content.js into smaller modules
 3. Password Reset (external/forgot password flow)
 
