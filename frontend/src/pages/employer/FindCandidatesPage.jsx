@@ -31,7 +31,7 @@ export default function FindCandidatesPage() {
 
   const [filters, setFilters] = useState({
     location: '', qualification: '', skills: '',
-    minExperience: '', maxExperience: '',
+    minExperience: '', maxExperience: '', keyword: '',
   });
 
   useEffect(() => { loadJobs(); }, []);
