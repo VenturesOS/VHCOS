@@ -426,6 +426,67 @@ export default function AdminAnalyticsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Search Analytics */}
+      {data?.ai_search?.total_searches > 0 && (
+        <Card className="col-span-full border-slate-200" data-testid="ai-search-analytics">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-[#7CB342]" /> AI Search Analytics
+              <Badge variant="outline" className="text-xs ml-2">{data.ai_search.total_searches} searches</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Top Searched Skills */}
+              <div>
+                <h4 className="text-sm font-medium text-slate-600 mb-3">Top Searched Skills</h4>
+                {data.ai_search.top_searched_skills?.length > 0 ? (
+                  <div className="space-y-2">
+                    {data.ai_search.top_searched_skills.map((s, i) => (
+                      <div key={s.skill} className="flex items-center gap-3">
+                        <span className="text-xs text-slate-400 w-5">{i + 1}.</span>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-slate-700 capitalize">{s.skill}</span>
+                            <span className="text-xs text-slate-500">{s.count}x</span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-1.5">
+                            <div className="bg-[#7CB342] h-1.5 rounded-full" style={{
+                              width: `${(s.count / (data.ai_search.top_searched_skills[0]?.count || 1)) * 100}%`
+                            }} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-slate-400">No skill data yet</p>}
+              </div>
+
+              {/* Demand Gaps */}
+              <div>
+                <h4 className="text-sm font-medium text-slate-600 mb-3">Demand Gaps (Zero-Result Searches)</h4>
+                {data.ai_search.zero_result_prompts?.length > 0 ? (
+                  <div className="space-y-2">
+                    {data.ai_search.zero_result_prompts.map((z, i) => (
+                      <div key={i} className="p-2.5 bg-amber-50 border border-amber-100 rounded-lg">
+                        <p className="text-xs text-amber-800 line-clamp-2">"{z.raw_prompt}"</p>
+                        {z.extracted_filters?.skills?.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {z.extracted_filters.skills.slice(0, 4).map(sk => (
+                              <span key={sk} className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded">{sk}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-slate-400">No demand gaps detected yet</p>}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
