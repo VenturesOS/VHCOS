@@ -277,6 +277,10 @@ export const matchingAPI = {
     api.post('/matching/shortlist', { candidate_id: candidateId, job_id: jobId, notes }),
 };
 
+export const aiSearchAPI = {
+  search: (params) => api.post('/ai-search', params),
+};
+
 // Bug Reports APIs
 export const bugReportsAPI = {
   create: (data) => api.post('/bug-reports', data),
