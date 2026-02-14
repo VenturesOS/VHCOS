@@ -91,6 +91,7 @@ from routes.system_errors import system_errors_router, log_system_error
 from routes.extension import extension_router
 from routes.profile import profile_router
 from routes.cv_upload import cv_upload_router
+from routes.ai_search import ai_search_router
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
