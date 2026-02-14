@@ -295,8 +295,10 @@ export default function FindCandidatesPage() {
               </div>
             )}
           </div>
+          )}
 
-          {/* Match Mode Toggle & Search */}
+          {/* Match Mode Toggle & Search — only for JD-based tabs */}
+          {activeTab !== 'ai' && (
           <div className="mt-6 flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-3" data-testid="match-mode-toggle">
               <Label className="text-sm text-slate-600 font-medium">Match Mode:</Label>
