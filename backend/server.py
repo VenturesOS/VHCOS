@@ -1448,7 +1448,7 @@ _hardcoded_origins = [
     "https://ventureshrd.com",
     "https://www.ventureshrd.com",
     "https://candidate-flow-5.emergent.host",
-    "https://candidate-flow-5.preview.emergentagent.com",
+    "https://fix-validation-1.preview.emergentagent.com",
 ]
 _env_origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()]
 _all_origins = list(set(_hardcoded_origins + _env_origins))
