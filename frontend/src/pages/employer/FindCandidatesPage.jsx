@@ -349,8 +349,68 @@ export default function FindCandidatesPage() {
         </Card>
       )}
 
+      {/* AI Search Results */}
+      {aiResults.length > 0 && activeTab === 'ai' && (
+        <Card className="border-slate-200" data-testid="ai-search-results">
+          <CardHeader>
+            <CardTitle className="font-heading text-lg flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-[#7CB342]" />
+              AI Search Results ({aiResults.length} candidates)
+              {aiLog && <span className="text-xs font-normal text-slate-400 ml-2">{aiLog.model} &middot; {aiLog.time_s}s</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100">
+              {aiResults.map((c, idx) => (
+                <div key={c.id || idx} data-testid={`ai-result-${c.id || idx}`}
+                  className="p-4 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0">
+                        <span className="text-[#7CB342] font-semibold">{c.name?.charAt(0)?.toUpperCase() || '?'}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{c.name}</p>
+                        <p className="text-sm text-slate-500 truncate">
+                          {c.designation}{c.designation && c.current_employer ? ' at ' : ''}{c.current_employer}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {c.experience_years > 0 && (
+                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">{c.experience_years} yrs</span>
+                      )}
+                      {c.location && (
+                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">{c.location}</span>
+                      )}
+                      {c.notice_period && (
+                        <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">{c.notice_period}</span>
+                      )}
+                    </div>
+                  </div>
+                  {(c.skills || []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {c.skills.slice(0, 6).map((s) => (
+                        <span key={s} className="px-2 py-0.5 bg-[#DCFCE7] text-[#7CB342] text-xs rounded-full">{s}</span>
+                      ))}
+                      {c.skills.length > 6 && <span className="text-xs text-slate-400">+{c.skills.length - 6} more</span>}
+                    </div>
+                  )}
+                  {c.ai_explanation && (
+                    <div className="mt-2 flex items-start gap-1.5" data-testid={`ai-explanation-${c.id || idx}`}>
+                      <Brain className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-600 leading-relaxed">{c.ai_explanation}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Results */}
-      {results.length > 0 && (
+      {results.length > 0 && activeTab !== 'ai' && (
         <Card className="border-slate-200" data-testid="match-results">
           <CardHeader>
             <CardTitle className="font-heading text-lg">
