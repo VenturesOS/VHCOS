@@ -12,7 +12,7 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
 ## Production Domain
 - **Domain:** ventureshrd.com
 - **Deployment:** Emergent Platform
-- **Extension:** v3.9.0 (Ventures HRD branded)
+- **Extension:** v3.9.1 (Ventures HRD branded)
 
 ## Current Architecture
 ```
@@ -58,8 +58,9 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
 ### Session: Feb 14, 2026
 14. **CRITICAL: Profile Overwrite Bug Fix v2** — `extractNaukriProfileId()` was using `sid` (search session ID, shared across all profiles in a search) instead of `id` (unique profile identifier). Fixed priority: `id` first, `sid` as fallback with timestamp.
 15. **Backend Safety Net** — Even if `naukri_profile_id` matches, backend now verifies names match before allowing update. Different names = different person = new record.
-16. **Extension v3.9.0** — Updated extension version with the profile ID fix.
+16. **Extension v3.9.1** — Updated with `uresid` and `storageKey` support for Naukri v3 preview URLs.
 17. **Dynamic ZIP Build** — Download endpoint now builds ZIP from source every time, ensuring latest code is always served.
+18. **AI Screening Broadened Search** — Matching pipeline now searches across `summary`, `headline`, `designation`, `it_skills`, and `raw_profile_text` (not just `skills` array). Fixed `candidate_email=None` crash. Added keyword search filter.
 
 ## Admin Credentials (Deployed)
 - admin@vhc.in / VhcAdmin@2024
