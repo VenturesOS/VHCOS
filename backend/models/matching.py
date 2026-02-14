@@ -8,6 +8,7 @@ from typing import List, Optional
 class MatchRequest(BaseModel):
     job_id: Optional[str] = None
     jd_text: Optional[str] = None
+    keyword: Optional[str] = None
     must_have_location: Optional[str] = None
     must_have_qualification: Optional[str] = None
     must_have_skills: Optional[List[str]] = None
