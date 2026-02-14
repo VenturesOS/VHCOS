@@ -54,6 +54,32 @@ export default function FindCandidatesPage() {
     catch { /* silently fail */ }
   };
 
+  const handleAISearch = async () => {
+    if (!aiPrompt.trim() || aiPrompt.trim().length < 5) {
+      toast.error('Please enter a more detailed search prompt.');
+      return;
+    }
+    setAiLoading(true);
+    setAiResults([]);
+    setAiFilters(null);
+    setAiLog(null);
+    try {
+      const res = await aiSearchAPI.search({ prompt: aiPrompt, limit: 50, generate_explanations: true });
+      setAiResults(res.data.candidates || []);
+      setAiFilters(res.data.filters_used || null);
+      setAiLog(res.data.log || null);
+      if ((res.data.candidates || []).length === 0) {
+        toast.info('No candidates matched your criteria. Try broadening your search.');
+      } else {
+        toast.success(`Found ${res.data.total} matching candidates`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'AI Search failed. Please try again.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const pollMatchJob = useCallback((jobId) => {
     setBgJobId(jobId);
     setBgProgress(0);
