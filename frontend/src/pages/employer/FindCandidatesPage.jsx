@@ -206,6 +206,9 @@ export default function FindCandidatesPage() {
             </Button>
             {showFilters && (
               <div className="mt-4 p-4 bg-slate-50 rounded-lg grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="col-span-full space-y-2"><Label>Keyword Search</Label>
+                  <Input value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })} 
+                    placeholder="Search across summary, headline, designation..." data-testid="keyword-filter-input" /></div>
                 <div className="space-y-2"><Label>Location (Required)</Label>
                   <Input value={filters.location} onChange={(e) => setFilters({ ...filters, location: e.target.value })} placeholder="e.g., New York" /></div>
                 <div className="space-y-2"><Label>Qualification (Required)</Label>
