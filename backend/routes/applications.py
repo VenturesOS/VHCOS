@@ -1255,7 +1255,7 @@ async def find_matching_candidates(
         )
         quick_results.append(MatchResult(
             candidate_id=cand["id"], candidate_name=cand["name"],
-            candidate_email=cand["email"],
+            candidate_email=cand.get("email") or "",
             score=fs["score"],
             skill_match_score=fs.get("skill_match_score"),
             experience_match_score=fs.get("experience_match_score"),
