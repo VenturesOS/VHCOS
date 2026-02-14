@@ -12,7 +12,7 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
 ## Production Domain
 - **Domain:** ventureshrd.com
 - **Deployment:** Emergent Platform
-- **Extension:** v3.8.5 (Ventures HRD branded)
+- **Extension:** v3.9.0 (Ventures HRD branded)
 
 ## Current Architecture
 ```
@@ -35,7 +35,7 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
 │   │   └── CVUploadDialog.jsx   # NEW: CV Upload dialog
 │   ├── lib/api.js
 │   └── pages/
-└── browser-extension/           # v3.8.5
+└── browser-extension/           # v3.9.0
 ```
 
 ## What's Been Implemented
@@ -54,6 +54,12 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
 11. **Extension phone fix** — BEFORE snapshot phones skipped (recruiter's phone)
 12. **Extension version fix** — source_details uses actual version instead of hardcoded "2.0.0"
 13. **NEW: CV Upload Feature** — Upload PDF/DOCX → AI parses → editable profile → save to Candidate Bank
+
+### Session: Feb 14, 2026
+14. **CRITICAL: Profile Overwrite Bug Fix v2** — `extractNaukriProfileId()` was using `sid` (search session ID, shared across all profiles in a search) instead of `id` (unique profile identifier). Fixed priority: `id` first, `sid` as fallback with timestamp.
+15. **Backend Safety Net** — Even if `naukri_profile_id` matches, backend now verifies names match before allowing update. Different names = different person = new record.
+16. **Extension v3.9.0** — Updated extension version with the profile ID fix.
+17. **Dynamic ZIP Build** — Download endpoint now builds ZIP from source every time, ensuring latest code is always served.
 
 ## Admin Credentials (Deployed)
 - admin@vhc.in / VhcAdmin@2024
