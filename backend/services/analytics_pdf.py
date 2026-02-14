@@ -241,7 +241,7 @@ def build_analytics_pdf(data: dict, date_from: str = None, date_to: str = None) 
     if ai_data.get("total_searches", 0) > 0:
         story.append(Paragraph("AI Search Analytics", styles["Section"]))
         ai_rows = [
-            [Paragraph("<b>Metric</b>", styles["CellHeader"]), Paragraph("<b>Value</b>", styles["CellHeader"])],
+            [Paragraph("<b>Metric</b>", styles["CellBold"]), Paragraph("<b>Value</b>", styles["CellBold"])],
             [Paragraph("Total AI Searches", styles["Cell"]), Paragraph(str(ai_data["total_searches"]), styles["Cell"])],
         ]
         cost = ai_data.get("cost_data", {})
@@ -266,7 +266,7 @@ def build_analytics_pdf(data: dict, date_from: str = None, date_to: str = None) 
         if skills:
             story.append(Spacer(1, 3 * mm))
             story.append(Paragraph("Top Searched Skills", styles["Section"]))
-            skill_rows = [[Paragraph("<b>Skill</b>", styles["CellHeader"]), Paragraph("<b>Search Count</b>", styles["CellHeader"])]]
+            skill_rows = [[Paragraph("<b>Skill</b>", styles["CellBold"]), Paragraph("<b>Search Count</b>", styles["CellBold"])]]
             for s in skills:
                 skill_rows.append([Paragraph(s["skill"], styles["Cell"]), Paragraph(str(s["count"]), styles["Cell"])])
             st = Table(skill_rows, colWidths=[120 * mm, 50 * mm])
