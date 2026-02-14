@@ -514,7 +514,17 @@ async def capture_profile(
             {"_id": 0}
         )
         if existing:
-            logger.warning(f"[Extension] MATCH by naukri_id: '{profile.name}' -> existing '{existing.get('name')}' ({existing.get('id','?')[:12]})")
+            # SAFETY: If naukri_profile_id matched but names are completely different,
+            # this is a different person (e.g. stale/shared session ID). Do NOT overwrite.
+            if not _names_are_similar(profile.name, existing.get("name", "")):
+                logger.warning(
+                    f"[Extension] BLOCKED OVERWRITE: naukri_id match but names differ! "
+                    f"Incoming='{profile.name}' vs Existing='{existing.get('name')}' ({existing.get('id','?')[:12]}). "
+                    f"Treating as new profile."
+                )
+                existing = None
+            else:
+                logger.warning(f"[Extension] MATCH by naukri_id: '{profile.name}' -> existing '{existing.get('name')}' ({existing.get('id','?')[:12]})")
     else:
         logger.warning(f"[Extension] SKIP MATCH: naukri_profile_id is null/empty for '{profile.name}' -> will force insert if no name/email/phone match")
     

@@ -421,10 +421,12 @@
 
   function extractNaukriProfileId() {
     const urlParams = new URLSearchParams(window.location.search);
-    const sid = urlParams.get('sid');
-    if (sid) return `naukri_${sid}`;
+    // Profile ID (unique per candidate) must be checked FIRST
     const pid = urlParams.get('profile_id') || urlParams.get('profileId') || urlParams.get('id');
     if (pid) return `naukri_${pid}`;
+    // sid is a search SESSION id (shared across all profiles in one search) — NOT unique per profile
+    const sid = urlParams.get('sid');
+    if (sid) return `naukri_sid_${sid}_${Date.now()}`;
     return `naukri_${Date.now()}`;
   }
 
