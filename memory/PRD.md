@@ -70,6 +70,7 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
     - Frontend: New "AI Search" tab on Find Candidates page
     - Search logging: raw prompt, extracted JSON, model, tokens, time
     - Testing: 100% backend (14/14), 100% frontend — all verified
+20. **AI Search Analytics** — Dashboard shows total searches, top searched skills (bar chart), demand gaps (zero-result prompts). Cost data (avg cost/search, total tokens, total USD) only appears in the admin PDF report — not on the dashboard.
 
 ## Admin Credentials (Deployed)
 - admin@vhc.in / VhcAdmin@2024
