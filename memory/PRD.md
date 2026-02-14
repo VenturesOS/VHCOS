@@ -61,6 +61,15 @@ Build a recruitment operating system (formerly VHC Talent OS) with:
 16. **Extension v3.9.1** — Updated with `uresid` and `storageKey` support for Naukri v3 preview URLs.
 17. **Dynamic ZIP Build** — Download endpoint now builds ZIP from source every time, ensuring latest code is always served.
 18. **AI Screening Broadened Search** — Matching pipeline now searches across `summary`, `headline`, `designation`, `it_skills`, and `raw_profile_text` (not just `skills` array). Fixed `candidate_email=None` crash. Added keyword search filter.
+19. **AI Search (Phase 1)** — Natural language candidate search using GPT-4o-mini.
+    - Architecture: LLM (Structured Extraction) → Deterministic DB Filter Engine → Results → LLM (Explanation)
+    - System prompt for extraction handles: skills, experience, industry, company type, location, notice period, CTC, degree, stability logic, negation/exclusion
+    - Filter preview toggle, per-candidate AI explanation badges
+    - Model-agnostic architecture ready for Phase 2 hybrid routing (GPT-4o for complex prompts)
+    - New files: `/app/backend/services/ai_search.py`, `/app/backend/routes/ai_search.py`
+    - Frontend: New "AI Search" tab on Find Candidates page
+    - Search logging: raw prompt, extracted JSON, model, tokens, time
+    - Testing: 100% backend (14/14), 100% frontend — all verified
 
 ## Admin Credentials (Deployed)
 - admin@vhc.in / VhcAdmin@2024
