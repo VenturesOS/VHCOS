@@ -139,6 +139,7 @@ app.include_router(bug_reports_router)
 app.include_router(system_errors_router)
 app.include_router(profile_router)
 app.include_router(cv_upload_router)
+app.include_router(ai_search_router)
 app.include_router(extension_router)
 app.include_router(analytics_router)
 
