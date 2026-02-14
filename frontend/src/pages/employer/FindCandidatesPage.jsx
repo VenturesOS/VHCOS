@@ -97,6 +97,7 @@ export default function FindCandidatesPage() {
       if (filters.skills) params.must_have_skills = filters.skills.split(',').map(s => s.trim());
       if (filters.minExperience) params.min_experience = parseInt(filters.minExperience);
       if (filters.maxExperience) params.max_experience = parseInt(filters.maxExperience);
+      if (filters.keyword) params.keyword = filters.keyword;
 
       const res = await matchingAPI.findCandidates(params);
       const data = res.data;
