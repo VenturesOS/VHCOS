@@ -421,10 +421,19 @@
 
   function extractNaukriProfileId() {
     const urlParams = new URLSearchParams(window.location.search);
-    // Profile ID (unique per candidate) must be checked FIRST
+    // 1. Naukri v3 preview: uresid is the unique resume/profile ID per candidate
+    const uresid = urlParams.get('uresid');
+    if (uresid) return `naukri_${uresid}`;
+    // 2. storageKey often has format "sid-tupleIndex" making it unique per profile in a search
+    const storageKey = urlParams.get('storageKey');
+    if (storageKey) return `naukri_sk_${storageKey}`;
+    // 3. Classic Naukri URL params
     const pid = urlParams.get('profile_id') || urlParams.get('profileId') || urlParams.get('id');
     if (pid) return `naukri_${pid}`;
-    // sid is a search SESSION id (shared across all profiles in one search) — NOT unique per profile
+    // 4. uniqId is another candidate-specific param in v3 URLs
+    const uniqId = urlParams.get('uniqId');
+    if (uniqId) return `naukri_uq_${uniqId}`;
+    // 5. sid is a search SESSION id (shared across profiles) — combine with timestamp as last resort
     const sid = urlParams.get('sid');
     if (sid) return `naukri_sid_${sid}_${Date.now()}`;
     return `naukri_${Date.now()}`;
