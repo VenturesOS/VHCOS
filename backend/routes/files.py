@@ -88,21 +88,35 @@ async def get_upload(filename: str, redirect: bool = True):
 async def download_naukri_extension():
     """
     Download the VHC Naukri Auto-Capture browser extension.
-    Returns the extension ZIP file for installation in Chrome/Edge.
+    Dynamically builds ZIP from source to always serve the latest version.
     """
-    extension_path = UPLOAD_DIR / "vhc-naukri-extension.zip"
+    import zipfile, json as json_mod
     
-    if not extension_path.exists():
-        raise HTTPException(status_code=404, detail="Extension file not found")
+    ext_source = Path("/app/browser-extension")
+    if not ext_source.exists():
+        raise HTTPException(status_code=404, detail="Extension source not found")
     
-    import time
+    # Read version from manifest
+    manifest_path = ext_source / "manifest.json"
+    version = "unknown"
+    if manifest_path.exists():
+        with open(manifest_path) as f:
+            version = json_mod.load(f).get("version", "unknown")
+    
+    # Build ZIP from source
+    zip_path = UPLOAD_DIR / "vhc-naukri-extension.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path in ext_source.rglob("*"):
+            if file_path.is_file() and not file_path.name.startswith("."):
+                zf.write(file_path, file_path.relative_to(ext_source))
+    
     response = FileResponse(
-        path=extension_path,
+        path=zip_path,
         filename="vhc-naukri-extension.zip",
         media_type="application/zip",
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-    response.headers["X-Extension-Version"] = "3.8.5"
+    response.headers["X-Extension-Version"] = version
     return response
