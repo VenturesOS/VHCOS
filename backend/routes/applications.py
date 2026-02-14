@@ -983,8 +983,10 @@ async def find_matching_candidates(
                     "compound": {
                         "should": [
                             {"text": {"query": search_query, "path": "skills", "fuzzy": {"maxEdits": 1}, "score": {"boost": {"value": 3}}}},
-                            {"text": {"query": search_query, "path": "summary", "fuzzy": {"maxEdits": 2}, "score": {"boost": {"value": 1.5}}}},
-                            {"text": {"query": search_query, "path": ["designation", "current_employer"], "fuzzy": {"maxEdits": 1}}},
+                            {"text": {"query": search_query, "path": "summary", "fuzzy": {"maxEdits": 2}, "score": {"boost": {"value": 2}}}},
+                            {"text": {"query": search_query, "path": "headline", "fuzzy": {"maxEdits": 1}, "score": {"boost": {"value": 2}}}},
+                            {"text": {"query": search_query, "path": ["designation", "current_employer", "industry"], "fuzzy": {"maxEdits": 1}, "score": {"boost": {"value": 1.5}}}},
+                            {"text": {"query": search_query, "path": "raw_profile_text", "fuzzy": {"maxEdits": 2}, "score": {"boost": {"value": 1}}}},
                         ],
                         "minimumShouldMatch": 1,
                     },
@@ -1005,7 +1007,8 @@ async def find_matching_candidates(
                 {"$limit": MAX_CANDIDATES},
                 {"$project": {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1,
                               "experience_years": 1, "education": 1, "location": 1,
-                              "summary": 1, "source": 1, "created_by": 1,
+                              "summary": 1, "headline": 1, "designation": 1,
+                              "it_skills": 1, "source": 1, "created_by": 1,
                               "search_score": 1, "embedding": 1}},
             ]
             pre_filtered = await db.candidate_bank.aggregate(atlas_pipeline).to_list(MAX_CANDIDATES)
@@ -1014,7 +1017,7 @@ async def find_matching_candidates(
             logger.warning(f"[MATCH] Atlas Search failed, using fallback: {e}")
             pre_filtered = []
 
-    # Fallback: regex-based query
+    # Fallback: regex-based query — searches across ALL text fields
     if not pre_filtered:
         pipeline = []
         match_cond = {}
@@ -1031,9 +1034,13 @@ async def find_matching_candidates(
         if match_cond:
             pipeline.append({"$match": match_cond})
         if all_skills:
+            skills_pattern = "|".join(all_skills[:8])
             pipeline.append({"$match": {"$or": [
-                {"skills": {"$regex": "|".join(all_skills[:5]), "$options": "i"}},
-                {"summary": {"$regex": "|".join(all_skills[:3]), "$options": "i"}},
+                {"skills": {"$regex": skills_pattern, "$options": "i"}},
+                {"summary": {"$regex": skills_pattern, "$options": "i"}},
+                {"headline": {"$regex": skills_pattern, "$options": "i"}},
+                {"designation": {"$regex": skills_pattern, "$options": "i"}},
+                {"raw_profile_text": {"$regex": skills_pattern, "$options": "i"}},
             ]}})
         pipeline += [
             {"$addFields": {"skill_match_count": {"$size": {"$ifNull": [{"$setIntersection": [
@@ -1044,7 +1051,8 @@ async def find_matching_candidates(
             {"$limit": MAX_CANDIDATES},
             {"$project": {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1,
                           "experience_years": 1, "education": 1, "location": 1,
-                          "summary": 1, "source": 1, "created_by": 1,
+                          "summary": 1, "headline": 1, "designation": 1,
+                          "it_skills": 1, "source": 1, "created_by": 1,
                           "skill_match_count": 1, "embedding": 1}},
         ]
         try:
@@ -1057,7 +1065,8 @@ async def find_matching_candidates(
             pre_filtered = await db.candidate_bank.find(
                 simple_q, {"_id": 0, "id": 1, "name": 1, "email": 1, "skills": 1,
                             "experience_years": 1, "education": 1, "location": 1,
-                            "summary": 1, "source": 1, "created_by": 1, "embedding": 1}
+                            "summary": 1, "headline": 1, "designation": 1,
+                            "it_skills": 1, "source": 1, "created_by": 1, "embedding": 1}
             ).sort("experience_years", -1).limit(MAX_CANDIDATES).to_list(MAX_CANDIDATES)
 
     stage1_time = time.time() - stage1_start
