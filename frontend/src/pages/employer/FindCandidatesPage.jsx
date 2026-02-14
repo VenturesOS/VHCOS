@@ -199,11 +199,14 @@ export default function FindCandidatesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="job" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="job">Select Existing Job</TabsTrigger>
               <TabsTrigger value="text">Paste JD Text</TabsTrigger>
               <TabsTrigger value="file">Upload JD File</TabsTrigger>
+              <TabsTrigger value="ai" data-testid="ai-search-tab" className="gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> AI Search
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="job">
               <Select value={selectedJobId} onValueChange={setSelectedJobId}>
@@ -228,6 +231,40 @@ export default function FindCandidatesPage() {
                 <Upload className="w-10 h-10 text-slate-400 mx-auto mb-2" />
                 <p className="text-sm text-slate-500 mb-2">{jdFile ? jdFile.name : 'Upload PDF, DOC, or TXT file'}</p>
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()}>Choose File</Button>
+              </div>
+            </TabsContent>
+            <TabsContent value="ai">
+              <div className="space-y-4">
+                <div className="relative">
+                  <Textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder={"Describe the candidate you're looking for in natural language...\n\nExamples:\n• Find HR managers with payroll and statutory compliance, 5-10 years, from Pune or Mumbai\n• CA with GST auditing experience, not from Big 4, stable profile\n• Plant HR with union negotiation experience in manufacturing OEM, not dealership"}
+                    rows={5} className="resize-none pr-4" data-testid="ai-search-input" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Button variant="ghost" size="sm" className="text-slate-500 text-xs"
+                      onClick={() => setShowFilterPreview(!showFilterPreview)} data-testid="toggle-filter-preview">
+                      <Filter className="w-3.5 h-3.5 mr-1.5" />
+                      {showFilterPreview ? 'Hide' : 'Show'} Filter Preview
+                    </Button>
+                    {aiLog && (
+                      <span className="text-xs text-slate-400">
+                        {aiLog.model} &middot; {aiLog.time_s}s &middot; {aiLog.tokens?.total_tokens || 0} tokens
+                      </span>
+                    )}
+                  </div>
+                  <Button onClick={handleAISearch} disabled={aiLoading} className="bg-[#7CB342] hover:bg-[#689F38]"
+                    data-testid="ai-search-btn">
+                    {aiLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                    {aiLoading ? 'Searching...' : 'AI Search'}
+                  </Button>
+                </div>
+                {showFilterPreview && aiFilters && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono overflow-auto max-h-48"
+                    data-testid="filter-preview">
+                    <pre className="whitespace-pre-wrap text-slate-600">{JSON.stringify(aiFilters, null, 2)}</pre>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>
