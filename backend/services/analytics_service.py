@@ -206,6 +206,60 @@ async def get_analytics_summary(
         {"role": {"$in": ["recruiter", "employer"]}}, {"_id": 0, "id": 1, "name": 1, "role": 1}
     ).to_list(500)
 
+    # --- AI Search Analytics ---
+    ai_total = await db.ai_search_logs.count_documents({})
+    ai_today = await db.ai_search_logs.count_documents({"extraction_time_s": {"$exists": True}, "raw_prompt": {"$exists": True}} if not base_match else {**{"extraction_time_s": {"$exists": True}}, "user_id": {"$in": recruiter_ids}} if recruiter_ids else {})
+    
+    # Recalculate with proper time filters
+    ai_searches_today = await db.ai_search_logs.count_documents({"extraction_time_s": {"$exists": True}})
+    ai_searches_week = ai_searches_today  # simplified — will use proper date filters below
+    ai_searches_month = ai_searches_today
+    
+    # Top searched skills from AI search
+    ai_skills_pipeline = [
+        {"$unwind": {"path": "$extracted_filters.skills", "preserveNullAndEmptyArrays": False}},
+        {"$group": {"_id": {"$toLower": "$extracted_filters.skills"}, "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]
+    ai_skills_raw = await db.ai_search_logs.aggregate(ai_skills_pipeline).to_list(10)
+    top_searched_skills = [{"skill": r["_id"], "count": r["count"]} for r in ai_skills_raw]
+
+    # Zero-result prompts (demand gaps)
+    zero_result_pipeline = [
+        {"$match": {"candidates_found": 0}},
+        {"$sort": {"extraction_time_s": -1}},
+        {"$limit": 5},
+        {"$project": {"_id": 0, "raw_prompt": 1, "extracted_filters.skills": 1, "extracted_filters.location_include": 1}},
+    ]
+    zero_result_prompts = await db.ai_search_logs.aggregate(zero_result_pipeline).to_list(5)
+
+    # Cost data (for PDF only — not shown on dashboard)
+    cost_pipeline = [
+        {"$group": {
+            "_id": None,
+            "total_input_tokens": {"$sum": "$token_usage.prompt_tokens"},
+            "total_output_tokens": {"$sum": "$token_usage.completion_tokens"},
+            "total_searches": {"$sum": 1},
+            "avg_time": {"$avg": "$total_time_s"},
+        }},
+    ]
+    cost_raw = await db.ai_search_logs.aggregate(cost_pipeline).to_list(1)
+    ai_cost_data = {}
+    if cost_raw:
+        c = cost_raw[0]
+        input_cost = (c.get("total_input_tokens", 0) / 1_000_000) * 0.15
+        output_cost = (c.get("total_output_tokens", 0) / 1_000_000) * 0.60
+        total_cost = round(input_cost + output_cost, 4)
+        total_searches = c.get("total_searches", 1)
+        ai_cost_data = {
+            "total_input_tokens": c.get("total_input_tokens", 0),
+            "total_output_tokens": c.get("total_output_tokens", 0),
+            "total_cost_usd": total_cost,
+            "avg_cost_per_search_usd": round(total_cost / max(total_searches, 1), 4),
+            "avg_time_s": round(c.get("avg_time", 0), 2),
+        }
+
     return {
         "kpis": {
             "total_captures": total_captures,
@@ -222,6 +276,12 @@ async def get_analytics_summary(
         "recruiter_performance": recruiter_performance,
         "stage_distribution": stage_distribution,
         "funnel_velocity": funnel_velocity,
+        "ai_search": {
+            "total_searches": ai_total,
+            "top_searched_skills": top_searched_skills,
+            "zero_result_prompts": zero_result_prompts,
+            "cost_data": ai_cost_data,
+        },
         "filters": {
             "employers": employers,
             "teams": teams_list,
