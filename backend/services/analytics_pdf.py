@@ -235,6 +235,56 @@ def build_analytics_pdf(data: dict, date_from: str = None, date_to: str = None) 
 
     # Footer
     story.append(Spacer(1, 10 * mm))
+
+    # AI Search Analytics (includes cost data — PDF only)
+    ai_data = data.get("ai_search", {})
+    if ai_data.get("total_searches", 0) > 0:
+        story.append(Paragraph("AI Search Analytics", styles["Section"]))
+        ai_rows = [
+            [Paragraph("<b>Metric</b>", styles["CellHeader"]), Paragraph("<b>Value</b>", styles["CellHeader"])],
+            [Paragraph("Total AI Searches", styles["Cell"]), Paragraph(str(ai_data["total_searches"]), styles["Cell"])],
+        ]
+        cost = ai_data.get("cost_data", {})
+        if cost:
+            ai_rows.extend([
+                [Paragraph("Total Input Tokens", styles["Cell"]), Paragraph(f'{cost.get("total_input_tokens", 0):,}', styles["Cell"])],
+                [Paragraph("Total Output Tokens", styles["Cell"]), Paragraph(f'{cost.get("total_output_tokens", 0):,}', styles["Cell"])],
+                [Paragraph("Total Cost (USD)", styles["Cell"]), Paragraph(f'${cost.get("total_cost_usd", 0):.4f}', styles["Cell"])],
+                [Paragraph("Avg Cost per Search (USD)", styles["Cell"]), Paragraph(f'${cost.get("avg_cost_per_search_usd", 0):.4f}', styles["Cell"])],
+                [Paragraph("Avg Response Time", styles["Cell"]), Paragraph(f'{cost.get("avg_time_s", 0)}s', styles["Cell"])],
+            ])
+        t = Table(ai_rows, colWidths=[120 * mm, 50 * mm])
+        t.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        story.append(t)
+
+        # Top Searched Skills
+        skills = ai_data.get("top_searched_skills", [])
+        if skills:
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph("Top Searched Skills", styles["Section"]))
+            skill_rows = [[Paragraph("<b>Skill</b>", styles["CellHeader"]), Paragraph("<b>Search Count</b>", styles["CellHeader"])]]
+            for s in skills:
+                skill_rows.append([Paragraph(s["skill"], styles["Cell"]), Paragraph(str(s["count"]), styles["Cell"])])
+            st = Table(skill_rows, colWidths=[120 * mm, 50 * mm])
+            st.setStyle(TableStyle([
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+            ]))
+            story.append(st)
+
+        # Zero Result Prompts (Demand Gaps)
+        zeros = ai_data.get("zero_result_prompts", [])
+        if zeros:
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph("Demand Gaps (Zero-Result Searches)", styles["Section"]))
+            for z in zeros:
+                story.append(Paragraph(f'&bull; "{z.get("raw_prompt", "")}"', styles["Cell"]))
+
+    story.append(Spacer(1, 5 * mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e2e8f0")))
     story.append(Paragraph("Confidential — VHC Talent OS", styles["CellGrey"]))
 
