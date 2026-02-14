@@ -87,11 +87,20 @@ async def ai_search(
 
     # Store search log
     try:
-        await db.ai_search_logs.insert_one({
-            **extraction_log,
+        log_doc = {
+            "raw_prompt": extraction_log.get("raw_prompt", ""),
+            "extracted_filters": extraction_log.get("extracted_filters", {}),
+            "model": extraction_log.get("model", ""),
+            "token_usage": extraction_log.get("token_usage", {}),
+            "extraction_time_s": extraction_log.get("extraction_time_s", 0),
+            "total_time_s": elapsed,
+            "candidates_found": total,
             "user_id": current_user.get("id"),
             "user_email": current_user.get("email"),
-        })
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.ai_search_logs.insert_one(log_doc)
+        logger.info(f"[AI Search] Log saved successfully")
     except Exception as e:
         logger.warning(f"[AI Search] Failed to log search: {e}")
 
