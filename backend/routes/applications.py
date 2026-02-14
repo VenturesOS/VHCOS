@@ -966,6 +966,11 @@ async def find_matching_candidates(
     preferred_skills = job_data.get("preferred_skills") or []
     all_skills = required_skills + preferred_skills
 
+    # Merge keyword into the search if provided
+    if match_req.keyword:
+        keyword_terms = [k.strip() for k in match_req.keyword.split(",") if k.strip()]
+        all_skills = list(set(all_skills + keyword_terms))
+
     min_exp = job_data.get("experience_min") or match_req.min_experience
     max_exp = job_data.get("experience_max") or match_req.max_experience
     location = match_req.must_have_location or job_data.get("location")
