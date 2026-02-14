@@ -1109,7 +1109,7 @@ async def find_matching_candidates(
             if not fr["passed"]:
                 filtered_out_results.append(MatchResult(
                     candidate_id=cand["id"], candidate_name=cand["name"],
-                    candidate_email=cand["email"], score=0, filtered_out=True,
+                    candidate_email=cand.get("email") or "", score=0, filtered_out=True,
                     filter_reason=fr["reason"], explanation=f"Excluded: {fr['reason']}",
                     source=cand.get("source", "unknown"),
                     source_role=creator_roles.get(cand.get("created_by")),
