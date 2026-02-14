@@ -326,6 +326,7 @@ export default function FindCandidatesPage() {
               Find Matching Candidates
             </Button>
           </div>
+          )}
         </CardContent>
       </Card>
 
