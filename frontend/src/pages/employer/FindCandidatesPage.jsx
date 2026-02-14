@@ -269,7 +269,8 @@ export default function FindCandidatesPage() {
             </TabsContent>
           </Tabs>
 
-          {/* Filters Toggle */}
+          {/* Filters Toggle — only for JD-based tabs */}
+          {activeTab !== 'ai' && (
           <div className="mt-4">
             <Button variant="ghost" className="text-slate-600" onClick={() => setShowFilters(!showFilters)}
               data-testid="toggle-filters-btn">
