@@ -53,6 +53,7 @@ const navItems = {
     { icon: Bug, label: 'Bug Reports', path: '/admin/bug-reports' },
     { icon: Activity, label: 'System Health', path: '/admin/system-health' },
     { icon: Mail, label: 'Contact Leads', path: '/admin/contact-submissions' },
+    { icon: FileText, label: 'Blog Engine', path: '/admin/blog-engine' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
   recruiter: [
