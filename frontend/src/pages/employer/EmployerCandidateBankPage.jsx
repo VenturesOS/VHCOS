@@ -305,24 +305,24 @@ export default function EmployerCandidateBankPage() {
               {candidates.map((candidate) => (
                 <div
                   key={candidate.id}
-                  className="p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="p-3 sm:p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => loadCandidateDetails(candidate)}
                   data-testid={`candidate-row-${candidate.id}`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-                        <span className="text-[#7CB342] font-semibold">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0">
+                        <span className="text-[#7CB342] font-semibold text-sm sm:text-base">
                           {candidate.name?.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-900">{candidate.name}</p>
-                        <p className="text-sm text-slate-500">{candidate.headline || candidate.email}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{candidate.name}</p>
+                        <p className="text-sm text-slate-500 truncate">{candidate.headline || candidate.email}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="hidden md:flex flex-wrap gap-1 max-w-xs">
+                    <div className="flex items-center gap-2 flex-wrap ml-13 sm:ml-0">
+                      <div className="hidden lg:flex flex-wrap gap-1 max-w-xs">
                         {candidate.skills?.slice(0, 4).map((skill) => (
                           <span
                             key={skill}
@@ -343,13 +343,12 @@ export default function EmployerCandidateBankPage() {
                             e.stopPropagation();
                             downloadResume(candidate);
                           }}
-                          className="text-slate-600 hover:text-[#7CB342]"
+                          className="text-slate-600 hover:text-[#7CB342] p-1 sm:p-2"
                           title="Download Resume"
                         >
                           <Download className="w-4 h-4" />
                         </Button>
                       )}
-                      {/* Naukri source badge + view full profile */}
                       {candidate.source === 'naukri_extension' && (
                         <>
                           <span className="px-2 py-1 text-xs rounded-full font-medium bg-orange-50 text-orange-600">Naukri</span>
@@ -360,10 +359,10 @@ export default function EmployerCandidateBankPage() {
                               e.stopPropagation();
                               navigate(`../naukri-profile/${candidate.id}`);
                             }}
-                            className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                            className="text-orange-600 border-orange-300 hover:bg-orange-50 hidden sm:inline-flex"
                             data-testid={`view-naukri-profile-${candidate.id}`}
                           >
-                            <FileText className="w-4 h-4 mr-1" /> Full Profile
+                            <FileText className="w-4 h-4 sm:mr-1" /> <span className="hidden md:inline">Full Profile</span>
                           </Button>
                         </>
                       )}
@@ -374,9 +373,9 @@ export default function EmployerCandidateBankPage() {
                           e.stopPropagation();
                           openAddApplicantDialog(candidate);
                         }}
-                        className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
+                        className="text-[#7CB342] border-[#7CB342] hover:bg-green-50 text-xs sm:text-sm"
                       >
-                        <Briefcase className="w-4 h-4 mr-1" /> Add as Applicant
+                        <Briefcase className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Add</span>
                       </Button>
                     </div>
                   </div>
