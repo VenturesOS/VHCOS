@@ -105,6 +105,9 @@ export default function Login() {
                   </button>
                 </div>
               </div>
+              <div className="flex justify-end">
+                <Link to="/forgot-password" className="text-xs text-slate-500 hover:text-[#7CB342]" data-testid="forgot-password-link">Forgot password?</Link>
+              </div>
               <Button
                 type="submit"
                 className="w-full bg-[#7CB342] hover:bg-[#689F38] text-white"
