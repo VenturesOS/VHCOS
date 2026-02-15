@@ -192,6 +192,27 @@ export default function FindCandidatesPage() {
     }
   };
 
+  const handleViewProfile = (candidateId) => {
+    const basePath = user?.role === 'recruiter' ? '/recruiter' : user?.role === 'employer' ? '/employer' : '/admin';
+    navigate(`${basePath}/naukri-profile/${candidateId}`);
+  };
+
+  const handleAddAsApplicant = async () => {
+    if (!addApplicantJobId || !addApplicantCandidate) return;
+    setAddingApplicant(true);
+    try {
+      const res = await matchingAPI.shortlistCandidate(addApplicantCandidate.id, addApplicantJobId);
+      toast.success(`${addApplicantCandidate.name} added as applicant for ${res.data.job_title}`);
+      setShortlistedCandidates(prev => new Set([...prev, addApplicantCandidate.id]));
+      setAddApplicantCandidate(null);
+      setAddApplicantJobId('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to add as applicant');
+    } finally {
+      setAddingApplicant(false);
+    }
+  };
+
   return (
     <div className="space-y-6" data-testid="find-candidates-page">
       <div>
