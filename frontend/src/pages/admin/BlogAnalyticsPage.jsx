@@ -24,6 +24,7 @@ export default function BlogAnalyticsPage() {
   const [scheduleLog, setScheduleLog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState('');
+  const [sendingDigest, setSendingDigest] = useState(false);
 
   const loadAnalytics = async () => {
     setLoading(true);
