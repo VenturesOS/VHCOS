@@ -49,6 +49,8 @@ export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   getMe: () => api.get('/auth/me'),
   resetPassword: (currentPassword, newPassword) => api.post('/auth/reset-password', { current_password: currentPassword, new_password: newPassword }),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  forgotPasswordReset: (token, newPassword) => api.post('/auth/forgot-password/reset', { token, new_password: newPassword }),
 };
 
 // User APIs (Admin)
