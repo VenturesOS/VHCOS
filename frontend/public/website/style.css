@@ -603,6 +603,8 @@ p {
   }
 
   /* Inline grid overrides for pages with inline styles */
+  [style*="grid-template-columns: repeat(2"],
+  [style*="grid-template-columns:repeat(2"],
   [style*="grid-template-columns: repeat(3"],
   [style*="grid-template-columns:repeat(3"],
   [style*="grid-template-columns: repeat(4"],
@@ -616,6 +618,15 @@ p {
   [style*="grid-template-columns: 2fr 1fr 1fr 1fr"],
   [style*="grid-template-columns:2fr 1fr 1fr 1fr"] {
     grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  /* Inline flex row overrides */
+  [style*="display:flex"][style*="gap:60px"],
+  [style*="display: flex"][style*="gap: 60px"],
+  [style*="display:flex"][style*="gap:40px"],
+  [style*="display: flex"][style*="gap: 40px"] {
+    flex-direction: column !important;
     gap: 24px !important;
   }
 
