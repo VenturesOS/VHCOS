@@ -122,7 +122,7 @@ export default function RecruiterDashboard() {
           <CardTitle className="font-heading text-lg">Daily Workflow</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <Link to="/recruiter/jobs" className="block">
               <div className="p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors text-center">
                 <FileText className="w-8 h-8 text-[#7CB342] mx-auto mb-2" />
@@ -167,7 +167,7 @@ export default function RecruiterDashboard() {
           </Link>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
             {pipelineStages.map((stage) => (
               <div
                 key={stage.id}
