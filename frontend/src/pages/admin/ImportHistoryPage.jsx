@@ -99,25 +99,25 @@ export default function ImportHistoryPage() {
       <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-slate-900">{totalBatches}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-slate-900">{totalBatches}</p>
             <p className="text-sm text-slate-500">Total Batches</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-green-600">{completedBatches}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-green-600">{completedBatches}</p>
             <p className="text-sm text-slate-500">Completed</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-blue-600">{totalImported}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-blue-600">{totalImported}</p>
             <p className="text-sm text-slate-500">Total Imported</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-purple-600">{totalMerged}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-purple-600">{totalMerged}</p>
             <p className="text-sm text-slate-500">Duplicates Merged</p>
           </CardContent>
         </Card>

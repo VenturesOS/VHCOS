@@ -77,7 +77,7 @@ export default function AnalyticsPage() {
         <Card className="border-slate-200">
           <CardContent className="p-6">
             <p className="text-sm text-slate-500">Hired Candidates</p>
-            <p className="font-heading text-3xl font-bold text-[#7CB342] mt-1">
+            <p className="font-heading text-2xl sm:text-3xl font-bold text-[#7CB342] mt-1">
               {stats?.stage_stats?.hired || 0}
             </p>
           </CardContent>

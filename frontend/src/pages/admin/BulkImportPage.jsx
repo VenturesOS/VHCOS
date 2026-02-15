@@ -975,19 +975,19 @@ export default function BulkImportPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-4 gap-4">
                 <div className="p-4 bg-white rounded-lg text-center">
-                  <p className="text-3xl font-bold text-slate-900">{saveResults.total_attempted}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-slate-900">{saveResults.total_attempted}</p>
                   <p className="text-sm text-slate-500">Total Attempted</p>
                 </div>
                 <div className="p-4 bg-white rounded-lg text-center">
-                  <p className="text-3xl font-bold text-green-600">{saveResults.successful}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-green-600">{saveResults.successful}</p>
                   <p className="text-sm text-slate-500">Successful</p>
                 </div>
                 <div className="p-4 bg-white rounded-lg text-center">
-                  <p className="text-3xl font-bold text-blue-600">{saveResults.duplicates_merged}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-blue-600">{saveResults.duplicates_merged}</p>
                   <p className="text-sm text-slate-500">Merged</p>
                 </div>
                 <div className="p-4 bg-white rounded-lg text-center">
-                  <p className="text-3xl font-bold text-red-600">{saveResults.failed}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-red-600">{saveResults.failed}</p>
                   <p className="text-sm text-slate-500">Failed</p>
                 </div>
               </div>
