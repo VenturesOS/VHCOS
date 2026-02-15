@@ -8,6 +8,7 @@ import { Toaster } from "./components/ui/sonner";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import PasswordReset from "./pages/auth/PasswordReset";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 
 // Public Website Redirect
 import PublicWebsiteRedirect from "./pages/PublicWebsite";
@@ -88,6 +89,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/reset-password" element={<PasswordReset />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           
           {/* Public Job Pages - Shareable Links */}
           <Route path="/jobs/:jobId" element={<PublicJobPage />} />
