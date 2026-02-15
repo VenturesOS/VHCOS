@@ -27,6 +27,48 @@ img {
   display: block;
 }
 
+/* ========== VIEW SWITCH ========== */
+.view-switch-container {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  padding: 12px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-switch {
+  display: flex;
+  background: rgba(255,255,255,0.1);
+  border-radius: 30px;
+  padding: 4px;
+}
+
+.view-switch button {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 26px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.view-switch button.active {
+  background: #9acd32;
+  color: #111827;
+}
+
+.view-switch button:not(.active) {
+  background: transparent;
+  color: white;
+}
+
+.view-switch button:not(.active):hover {
+  background: rgba(255,255,255,0.15);
+}
+
 /* ========== HEADER & NAVIGATION ========== */
 .header {
   padding: 16px 24px;
@@ -40,10 +82,15 @@ img {
   z-index: 1000;
 }
 
-.logo {
-  font-weight: 800;
-  font-size: 20px;
-  color: #111827;
+.logo-link {
+  text-decoration: none;
+  margin-left: 16px;
+  flex-shrink: 0;
+}
+
+.logo-img {
+  height: 56px;
+  width: auto;
 }
 
 .nav {
@@ -55,6 +102,8 @@ img {
 
 .nav a {
   color: #111827;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav a:hover {
@@ -65,20 +114,69 @@ img {
   color: #9acd32 !important;
 }
 
-.btn-primary {
-  background: #9acd32;
-  color: #111827;
-  padding: 8px 20px;
-  border-radius: 6px;
-  font-weight: 700;
-  border: none;
-  cursor: pointer;
+/* Login Dropdown */
+.login-dropdown {
+  position: relative;
 }
 
-.btn-primary:hover {
-  background: #8bbd2a;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(154,205,50,0.3);
+.login-btn {
+  background: #111827;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.login-btn:hover {
+  background: #1f2937;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  min-width: 200px;
+  margin-top: 8px;
+  overflow: hidden;
+  z-index: 200;
+}
+
+.dropdown-menu.show {
+  display: block;
+}
+
+.dropdown-menu a {
+  display: block;
+  padding: 14px 20px;
+  color: #111827;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dropdown-menu a:last-child {
+  border-bottom: none;
+}
+
+.dropdown-menu a:hover {
+  background: #f0fdf4;
+  color: #9acd32;
+}
+
+.dropdown-menu .role-icon {
+  margin-right: 10px;
 }
 
 /* Mobile Menu Toggle */
@@ -89,6 +187,48 @@ img {
   font-size: 28px;
   cursor: pointer;
   color: #111827;
+  padding: 4px 8px;
+  line-height: 1;
+  z-index: 1001;
+}
+
+/* ========== BUTTONS ========== */
+.btn-primary {
+  background: #9acd32;
+  color: #111827;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.btn-primary:hover {
+  background: #8bbd2a;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(154,205,50,0.3);
+}
+
+.btn-secondary {
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  padding: 12px 30px;
+  border-radius: 8px;
+  font-weight: 600;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.btn-secondary:hover {
+  background: white;
+  color: #111827;
+}
+
+.btn-large {
+  padding: 16px 40px;
+  font-size: 18px;
 }
 
 /* ========== HERO SECTIONS ========== */
@@ -113,26 +253,6 @@ img {
   max-width: 800px;
   margin: 0 auto 32px;
   animation: fadeInUp 1s ease;
-}
-
-/* ========== BUTTONS ========== */
-.btn-secondary {
-  border: 2px solid #ffffff;
-  color: #ffffff;
-  padding: 12px 30px;
-  border-radius: 8px;
-  font-weight: 600;
-  display: inline-block;
-}
-
-.btn-secondary:hover {
-  background: white;
-  color: #111827;
-}
-
-.btn-large {
-  padding: 16px 40px;
-  font-size: 18px;
 }
 
 /* ========== SECTIONS ========== */
@@ -337,53 +457,128 @@ p {
   margin-bottom: 60px;
 }
 
-/* ========== RESPONSIVE BREAKPOINTS ========== */
-
-/* Tablets (768px and below) */
+/* ========== RESPONSIVE - TABLETS (768px and below) ========== */
 @media (max-width: 768px) {
   .header {
     padding: 12px 16px;
   }
 
-  .nav {
-    position: fixed;
-    top: 60px;
-    right: -100%;
-    background: white;
-    width: 70%;
-    height: calc(100vh - 60px);
-    flex-direction: column;
-    padding: 40px 24px;
-    box-shadow: -2px 0 8px rgba(0,0,0,0.1);
-    transition: right 0.3s ease;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .nav.active {
-    right: 0;
+  .logo-img {
+    height: 40px;
   }
 
   .mobile-menu-toggle {
     display: block;
   }
 
+  .nav {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    background: white;
+    width: 75%;
+    max-width: 320px;
+    height: 100vh;
+    flex-direction: column;
+    padding: 80px 24px 40px;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    transition: right 0.3s ease;
+    gap: 0;
+    align-items: stretch;
+    z-index: 1000;
+    overflow-y: auto;
+  }
+
+  .nav.active {
+    right: 0;
+  }
+
+  .nav a {
+    padding: 14px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 16px;
+  }
+
+  .nav .login-dropdown {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 2px solid #e5e7eb;
+  }
+
+  .nav .login-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nav .dropdown-menu {
+    position: static;
+    box-shadow: none;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  /* Mobile overlay when menu is open */
+  .mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+  }
+
+  .mobile-overlay.active {
+    display: block;
+  }
+
+  /* View Switch */
+  .view-switch-container {
+    padding: 8px 16px;
+  }
+
+  .view-switch button {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  /* Hero */
+  .hero {
+    padding: 60px 16px;
+  }
+
   .hero h1 {
-    font-size: 36px;
+    font-size: 32px;
   }
 
   .hero p {
     font-size: 16px;
   }
 
-  h2 {
+  /* Typography */
+  h1 {
     font-size: 32px;
+  }
+
+  h2 {
+    font-size: 28px;
   }
 
   h3 {
     font-size: 22px;
   }
 
+  h4 {
+    font-size: 18px;
+  }
+
+  p {
+    font-size: 16px;
+  }
+
+  /* Grids */
   .grid-2,
   .grid-3,
   .grid-4 {
@@ -391,36 +586,86 @@ p {
     gap: 24px;
   }
 
+  /* Footer */
   .footer-grid {
     grid-template-columns: 1fr 1fr;
     gap: 32px;
   }
 
+  /* Sections */
   .section {
-    padding: 60px 16px;
+    padding: 48px 16px;
   }
 
+  /* Cards */
   .card {
     padding: 24px;
   }
+
+  /* Inline grid overrides for pages with inline styles */
+  [style*="grid-template-columns: repeat(3"],
+  [style*="grid-template-columns:repeat(3"],
+  [style*="grid-template-columns: repeat(4"],
+  [style*="grid-template-columns:repeat(4"],
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  [style*="grid-template-columns: 2fr 1fr 1fr 1fr"],
+  [style*="grid-template-columns:2fr 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  /* Inline hero overrides */
+  [style*="font-size:56px"],
+  [style*="font-size: 56px"],
+  [style*="font-size:52px"],
+  [style*="font-size: 52px"],
+  [style*="font-size:48px"],
+  [style*="font-size: 48px"] {
+    font-size: 32px !important;
+  }
+
+  /* Inline section padding overrides */
+  [style*="padding:120px"],
+  [style*="padding: 120px"],
+  [style*="padding:100px"],
+  [style*="padding: 100px"] {
+    padding: 60px 16px !important;
+  }
+
+  /* Inline h2 size overrides */
+  section h2[style*="font-size:42px"],
+  section h2[style*="font-size: 42px"],
+  section h2[style*="font-size:36px"],
+  section h2[style*="font-size: 36px"] {
+    font-size: 28px !important;
+  }
 }
 
-/* Mobile (480px and below) */
+/* ========== RESPONSIVE - MOBILE (480px and below) ========== */
 @media (max-width: 480px) {
   .hero {
-    padding: 60px 16px;
+    padding: 48px 16px;
   }
 
   .hero h1 {
-    font-size: 28px;
+    font-size: 26px;
   }
 
   .hero p {
     font-size: 14px;
   }
 
-  h2 {
+  h1 {
     font-size: 26px;
+  }
+
+  h2 {
+    font-size: 24px;
   }
 
   .footer-grid {
@@ -432,9 +677,41 @@ p {
     padding: 10px 20px;
     font-size: 14px;
   }
+
+  .view-switch button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  /* More aggressive inline overrides for small screens */
+  [style*="font-size:56px"],
+  [style*="font-size: 56px"],
+  [style*="font-size:52px"],
+  [style*="font-size: 52px"],
+  [style*="font-size:48px"],
+  [style*="font-size: 48px"] {
+    font-size: 26px !important;
+  }
+
+  section h2[style*="font-size:42px"],
+  section h2[style*="font-size: 42px"],
+  section h2[style*="font-size:36px"],
+  section h2[style*="font-size: 36px"] {
+    font-size: 24px !important;
+  }
+
+  [style*="font-size:28px"],
+  [style*="font-size: 28px"] {
+    font-size: 20px !important;
+  }
+
+  section[style*="padding:80px"],
+  section[style*="padding: 80px"] {
+    padding: 40px 16px !important;
+  }
 }
 
-/* Large screens optimization */
+/* ========== LARGE SCREENS ========== */
 @media (min-width: 1400px) {
   .container {
     max-width: 1400px;
