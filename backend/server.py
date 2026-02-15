@@ -93,6 +93,7 @@ from routes.profile import profile_router
 from routes.cv_upload import cv_upload_router
 from routes.ai_search import ai_search_router
 from routes.contact import router as contact_router
+from routes.blog import router as blog_router
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
@@ -144,6 +145,7 @@ app.include_router(ai_search_router)
 app.include_router(extension_router)
 app.include_router(analytics_router)
 app.include_router(contact_router)
+app.include_router(blog_router)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
