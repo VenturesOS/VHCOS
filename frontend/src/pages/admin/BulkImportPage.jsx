@@ -542,13 +542,13 @@ export default function BulkImportPage() {
       {/* Mode Selection Tabs */}
       <Tabs value={activeMode} onValueChange={(v) => { setActiveMode(v); handleReset(); }} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="excel" data-testid="mode-excel-tab">
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            Mode A: Excel-Only
+          <TabsTrigger value="excel" data-testid="mode-excel-tab" className="text-xs sm:text-sm">
+            <FileSpreadsheet className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Mode A: </span>Excel
           </TabsTrigger>
-          <TabsTrigger value="cv_zip" data-testid="mode-cvzip-tab">
-            <FolderArchive className="w-4 h-4 mr-2" />
-            Mode B: CV/ZIP
+          <TabsTrigger value="cv_zip" data-testid="mode-cvzip-tab" className="text-xs sm:text-sm">
+            <FolderArchive className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Mode B: </span>CV/ZIP
           </TabsTrigger>
         </TabsList>
 
