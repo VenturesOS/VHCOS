@@ -55,8 +55,8 @@ export default function CandidateDashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 stagger-children">
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-[#DCFCE7] flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#DCFCE7] flex items-center justify-center mb-4">
               <FileText className="w-6 h-6 text-[#7CB342]" />
             </div>
             <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.my_applications || 0}</p>
@@ -64,8 +64,8 @@ export default function CandidateDashboard() {
           </CardContent>
         </Card>
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
               <Briefcase className="w-6 h-6 text-blue-600" />
             </div>
             <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.active_jobs || 0}</p>
@@ -73,8 +73,8 @@ export default function CandidateDashboard() {
           </CardContent>
         </Card>
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-50 flex items-center justify-center mb-4">
               <Clock className="w-6 h-6 text-amber-600" />
             </div>
             <p className="font-heading text-3xl font-bold text-slate-900">
@@ -84,8 +84,8 @@ export default function CandidateDashboard() {
           </CardContent>
         </Card>
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-50 flex items-center justify-center mb-4">
               <Mail className="w-6 h-6 text-purple-600" />
             </div>
             <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.unread_messages || 0}</p>

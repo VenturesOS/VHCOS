@@ -70,8 +70,8 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 stagger-children">
         {statCards.map((stat) => (
           <Card key={stat.label} className="border-slate-200 hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className={`w-12 h-12 rounded-xl ${stat.color} flex items-center justify-center mb-4`}>
+            <CardContent className="p-4 sm:p-6">
+              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${stat.color} flex items-center justify-center mb-4`}>
                 <stat.icon className="w-6 h-6" />
               </div>
               <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stat.value}</p>

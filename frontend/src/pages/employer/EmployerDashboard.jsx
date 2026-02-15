@@ -65,7 +65,7 @@ export default function EmployerDashboard() {
       {/* Quick Start Flow - Only show when no jobs */}
       {!hasJobs && (
         <Card className="border-[#7CB342] bg-gradient-to-r from-[#DCFCE7] to-white">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <h2 className="font-heading text-xl font-bold text-slate-900 mb-4">
               Get Started in 3 Simple Steps
             </h2>
@@ -106,8 +106,8 @@ export default function EmployerDashboard() {
       {/* Stats Cards - Clean without pipeline breakdown */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 stagger-children">
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-[#DCFCE7] flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#DCFCE7] flex items-center justify-center mb-4">
               <Briefcase className="w-6 h-6 text-[#7CB342]" />
             </div>
             <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.my_jobs || 0}</p>
@@ -115,8 +115,8 @@ export default function EmployerDashboard() {
           </CardContent>
         </Card>
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
               <Users className="w-6 h-6 text-blue-600" />
             </div>
             <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.total_applicants || 0}</p>
@@ -124,8 +124,8 @@ export default function EmployerDashboard() {
           </CardContent>
         </Card>
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-50 flex items-center justify-center mb-4">
               <TrendingUp className="w-6 h-6 text-purple-600" />
             </div>
             <p className="font-heading text-3xl font-bold text-slate-900">{totalInPipeline}</p>
@@ -133,8 +133,8 @@ export default function EmployerDashboard() {
           </CardContent>
         </Card>
         <Card className="border-slate-200">
-          <CardContent className="p-6">
-            <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center mb-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-green-50 flex items-center justify-center mb-4">
               <CheckCircle className="w-6 h-6 text-green-600" />
             </div>
             <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.stage_stats?.hired || 0}</p>
@@ -148,7 +148,7 @@ export default function EmployerDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Pipeline CTA */}
           <Card className="border-[#7CB342] bg-gradient-to-r from-[#DCFCE7] to-white hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-xl bg-[#7CB342] flex items-center justify-center">
                   <LayoutGrid className="w-7 h-7 text-white" />
@@ -168,7 +168,7 @@ export default function EmployerDashboard() {
 
           {/* Find Candidates */}
           <Card className="border-slate-200 hover:border-purple-300 hover:shadow-md transition-all">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-xl bg-purple-50 flex items-center justify-center">
                   <Sparkles className="w-7 h-7 text-purple-600" />
@@ -188,7 +188,7 @@ export default function EmployerDashboard() {
 
           {/* My Team */}
           <Card className="border-slate-200 hover:border-blue-300 hover:shadow-md transition-all">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-xl bg-blue-50 flex items-center justify-center">
                   <Building2 className="w-7 h-7 text-blue-600" />
