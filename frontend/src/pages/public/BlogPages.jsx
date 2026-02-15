@@ -189,7 +189,8 @@ export function EmployerBlogArticle() {
           <span>{fmtDate(blog.published_at)}</span>
           <span>{blog.word_count_estimate ? `${Math.ceil(blog.word_count_estimate / 200)} min read` : ''}</span>
         </div>
-        <div className="prose prose-lg prose-slate max-w-none" style={{ fontSize: '17px', lineHeight: 1.8, color: '#374151' }} dangerouslySetInnerHTML={{ __html: blog.content }} />
+        <ShareButtons title={blog.title} url={window.location.href} />
+        <div className="prose prose-lg prose-slate max-w-none" style={{ fontSize: '17px', lineHeight: 1.8, color: '#374151', marginTop: '32px' }} dangerouslySetInnerHTML={{ __html: blog.content }} />
         {blog.keywords?.length > 0 && (
           <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid #E5E7EB' }}>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
