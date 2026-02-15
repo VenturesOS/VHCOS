@@ -81,22 +81,22 @@ export default function ImportHistoryPage() {
   return (
     <div className="space-y-6" data-testid="import-history-page">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Button variant="ghost" size="sm" onClick={() => navigate('/admin/bulk-import')}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Import
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back
           </Button>
           <div>
             <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Import History</h1>
-            <p className="text-slate-500 mt-1">
-              View past bulk import batches and their results
+            <p className="text-slate-500 mt-1 text-sm">
+              View past bulk import batches
             </p>
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl sm:text-3xl font-bold text-slate-900">{totalBatches}</p>
