@@ -262,7 +262,7 @@ export default function EmployerCandidateBankPage() {
       {/* Search */}
       <Card className="border-slate-200">
         <CardContent className="p-4">
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <div className="flex-1">
               <Input
                 value={search}
@@ -280,7 +280,7 @@ export default function EmployerCandidateBankPage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
             </div>
-            <Button onClick={handleSearch} variant="outline">
+            <Button onClick={handleSearch} variant="outline" className="w-full sm:w-auto">
               <Search className="w-4 h-4 mr-2" /> Search
             </Button>
           </div>
