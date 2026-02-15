@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Sparkles, FileText, Globe, MapPin, Trash2, Eye, Pencil, Send, Loader2, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Sparkles, FileText, Globe, MapPin, Trash2, Eye, Pencil, Send, Loader2, ArrowLeft, RotateCcw, Search } from 'lucide-react';
 import { blogAPI } from '../../lib/api';
 
 const STATUS_BADGE = {
