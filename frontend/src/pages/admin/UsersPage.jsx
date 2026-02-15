@@ -252,7 +252,7 @@ export default function UsersPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[700px]">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
                   <th className="text-left py-3 px-4 font-medium text-slate-600">User</th>
