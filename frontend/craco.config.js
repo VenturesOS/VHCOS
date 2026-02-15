@@ -100,6 +100,35 @@ webpackConfig.devServer = (devServerConfig) => {
     };
   }
 
+  // SEO-friendly URL rewrites for static website pages
+  const originalSetup = devServerConfig.setupMiddlewares;
+  devServerConfig.setupMiddlewares = (middlewares, devServer) => {
+    if (originalSetup) {
+      middlewares = originalSetup(middlewares, devServer);
+    }
+
+    const urlMap = {
+      '/': 'Index.html',
+      '/about': 'about.html',
+      '/services': 'services.html',
+      '/industries': 'industries.html',
+      '/careers': 'careers.html',
+      '/contact': 'contact.html',
+      '/global-hiring': 'global-hiring.html',
+      '/sitemap': 'sitemap.html',
+    };
+
+    devServer.app.get(Object.keys(urlMap), (req, res, next) => {
+      const file = urlMap[req.path];
+      if (file) {
+        return res.sendFile(path.join(__dirname, 'public', 'website', file));
+      }
+      next();
+    });
+
+    return middlewares;
+  };
+
   return devServerConfig;
 };
 
