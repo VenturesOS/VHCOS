@@ -126,7 +126,7 @@ export default function AdminAnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Advanced Analytics</h1>
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Advanced Analytics</h1>
           <p className="text-slate-500 mt-1 text-sm">Capture metrics, source effectiveness, team performance & funnel velocity</p>
         </div>
         <div className="flex items-center gap-3">
