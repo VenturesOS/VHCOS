@@ -155,3 +155,87 @@ async def reset_password(reset_data: PasswordReset, current_user: dict = Depends
     )
     
     return {"message": "Password reset successfully"}
+
+
+# ── Forgot Password (No Auth) ──
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ForgotPasswordResetRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@auth_router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest, request: Request):
+    """Public: send a password reset link to the user's email."""
+    rate_limiter.check_rate_limit(request, "auth")
+    user = await db.users.find_one({"email": req.email}, {"_id": 0, "id": 1, "name": 1, "email": 1})
+    # Always return success to prevent email enumeration
+    if not user:
+        return {"message": "If an account with that email exists, a reset link has been sent."}
+
+    import secrets
+    token = secrets.token_urlsafe(48)
+    expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+    await db.password_reset_tokens.delete_many({"user_id": user["id"]})
+    await db.password_reset_tokens.insert_one({
+        "user_id": user["id"],
+        "token": token,
+        "expires_at": expires.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    import os
+    frontend_url = os.environ.get("FRONTEND_URL", "https://ventureshrd.com")
+    reset_link = f"{frontend_url}/forgot-password?token={token}"
+
+    from services.email_service import send_email
+    await send_email(
+        recipient_email=user["email"],
+        subject="Reset Your Password — Ventures HRD",
+        html_content=f"""
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;">
+          <h2 style="color:#111827;">Password Reset</h2>
+          <p>Hi {user.get('name', '')},</p>
+          <p>We received a request to reset your password. Click the button below to set a new one. This link expires in 1 hour.</p>
+          <a href="{reset_link}" style="display:inline-block;background:#7CB342;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Reset Password</a>
+          <p style="color:#6B7280;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+          <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
+          <p style="color:#9CA3AF;font-size:12px;">Ventures HRD Centre Pvt Ltd</p>
+        </div>
+        """,
+    )
+
+    return {"message": "If an account with that email exists, a reset link has been sent."}
+
+
+@auth_router.post("/forgot-password/reset")
+async def forgot_password_reset(req: ForgotPasswordResetRequest, request: Request):
+    """Public: reset password using the emailed token."""
+    rate_limiter.check_rate_limit(request, "auth")
+
+    record = await db.password_reset_tokens.find_one({"token": req.token})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    expires = datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires:
+        await db.password_reset_tokens.delete_one({"token": req.token})
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    await db.users.update_one(
+        {"id": record["user_id"]},
+        {"$set": {
+            "password": hash_password(req.new_password),
+            "requires_password_reset": False,
+        }},
+    )
+    await db.password_reset_tokens.delete_many({"user_id": record["user_id"]})
+
+    return {"message": "Password has been reset successfully. You can now log in."}
