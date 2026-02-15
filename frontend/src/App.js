@@ -79,6 +79,7 @@ import NotificationSettingsPage from "./pages/candidate/NotificationSettingsPage
 
 function App() {
   return (
+    <HelmetProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
