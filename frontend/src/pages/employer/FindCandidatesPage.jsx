@@ -618,6 +618,47 @@ export default function FindCandidatesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Add as Applicant Dialog */}
+      <Dialog open={!!addApplicantCandidate} onOpenChange={() => { setAddApplicantCandidate(null); setAddApplicantJobId(''); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="font-heading">Add as Applicant</DialogTitle></DialogHeader>
+          {addApplicantCandidate && (
+            <div className="space-y-4" data-testid="add-applicant-dialog">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0">
+                  <span className="text-[#7CB342] font-semibold">{addApplicantCandidate.name?.charAt(0)?.toUpperCase() || '?'}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900 truncate">{addApplicantCandidate.name}</p>
+                  <p className="text-sm text-slate-500 truncate">{addApplicantCandidate.designation}</p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Select Job Mandate *</Label>
+                <Select value={addApplicantJobId} onValueChange={setAddApplicantJobId}>
+                  <SelectTrigger data-testid="add-applicant-job-select">
+                    <SelectValue placeholder="Choose a job mandate..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobs.map((job) => (
+                      <SelectItem key={job.id} value={job.id}>{job.title} - {job.location}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1" onClick={() => { setAddApplicantCandidate(null); setAddApplicantJobId(''); }}>Cancel</Button>
+                <Button className="flex-1 bg-[#7CB342] hover:bg-[#689F38]" disabled={!addApplicantJobId || addingApplicant}
+                  onClick={handleAddAsApplicant} data-testid="confirm-add-applicant-btn">
+                  {addingApplicant ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                  Add to Pipeline
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
