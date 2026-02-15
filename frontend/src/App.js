@@ -97,10 +97,10 @@ function App() {
           <Route path="/application-success" element={<ApplicationSuccessPage />} />
 
           {/* Public Blog Routes */}
-          <Route path="/website/industrial-hiring-insights" element={<EmployerBlogList />} />
-          <Route path="/website/industrial-hiring-insights/:slug" element={<EmployerBlogArticle />} />
-          <Route path="/website/career-insights" element={<CandidateBlogList />} />
-          <Route path="/website/career-insights/:slug" element={<CandidateBlogArticle />} />
+          <Route path="/industrial-hiring-insights" element={<EmployerBlogList />} />
+          <Route path="/industrial-hiring-insights/:slug" element={<EmployerBlogArticle />} />
+          <Route path="/career-insights" element={<CandidateBlogList />} />
+          <Route path="/career-insights/:slug" element={<CandidateBlogArticle />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<DashboardLayout allowedRoles={["admin"]} />}>
