@@ -3,8 +3,9 @@ VHC Talent OS - Authentication Routes
 Handles user registration, login, and password management.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel
 
 # Import configuration
 from config import db
