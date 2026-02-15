@@ -116,12 +116,15 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - Refactor FindCandidatesPage.jsx
 
 ## Key Files
-- `/app/backend/server.py` — Main FastAPI app
+- `/app/backend/server.py` — Main FastAPI app (includes APScheduler startup)
 - `/app/backend/services/blog_generator.py` — LLM abstraction for blog content
-- `/app/backend/routes/blog.py` — Blog CRUD + public endpoints
+- `/app/backend/services/blog_scheduler.py` — Auto-scheduling logic
+- `/app/backend/services/blog_analytics.py` — Analytics tracking & aggregation
+- `/app/backend/routes/blog.py` — Blog CRUD + public + RSS + analytics + schedule endpoints
 - `/app/backend/routes/contact.py` — Contact form endpoints
 - `/app/frontend/src/pages/admin/BlogEnginePage.jsx` — Admin blog management
-- `/app/frontend/src/pages/public/BlogPages.jsx` — Public blog pages
+- `/app/frontend/src/pages/admin/BlogAnalyticsPage.jsx` — Admin analytics dashboard
+- `/app/frontend/src/pages/public/BlogPages.jsx` — Public blog pages (with view tracking)
 - `/app/frontend/src/lib/api.js` — API client with blogAPI module
 
 ## Test Credentials
