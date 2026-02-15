@@ -1,10 +1,10 @@
 # VHC Talent OS - Product Requirements Document
 
 ## Original Problem Statement
-A full-stack recruitment application (React, FastAPI, MongoDB) with a public-facing static website and an internal portal for Admin, Employer, Recruiter, and Candidate roles. The platform supports AI-powered candidate matching, job management, pipeline tracking, and analytics.
+A full-stack recruitment application (React, FastAPI, MongoDB) with a public-facing static website and an internal portal for Admin, Employer, Recruiter, and Candidate roles. The platform supports AI-powered candidate matching, job management, pipeline tracking, analytics, and now dual blog engines for recruitment leads and candidate engagement.
 
 ## Core Requirements
-1. **Public Website** — Responsive static site (7+ pages) with contact form, careers page, SEO
+1. **Public Website** — Responsive static site (7+ pages) with contact form, careers, SEO
 2. **Authentication** — JWT-based multi-role auth (Admin, Employer, Recruiter, Candidate)
 3. **Job Management** — CRUD, JD parsing, career page, shareable links
 4. **Candidate Management** — Candidate bank, CV parsing, profile management
@@ -12,64 +12,98 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 6. **Pipeline** — Kanban-style application tracking with stage transitions
 7. **Analytics** — Admin and employer dashboards with revenue tracking
 8. **Chrome Extension** — Naukri profile scraping integration
+9. **Blog Engine** — Dual AI-powered blog engines (Employer + Candidate)
 
 ## Architecture
 - **Frontend:** React + Tailwind + Shadcn/UI (port 3000)
 - **Backend:** FastAPI + Motor (async MongoDB) (port 8001)
 - **Database:** MongoDB Atlas (vhc_talent_os)
 - **Storage:** Cloudflare R2 for files
-- **AI:** OpenAI GPT-4o-mini for screening/matching
+- **AI:** OpenAI GPT-4o-mini (screening, matching, blog generation)
 
 ## What's Been Implemented
 
 ### Phase 1 (Previous Sessions)
-- Full authentication system with role-based access
-- Job CRUD with JD parsing and career pages
-- Candidate bank with CV upload/parsing
-- AI matching (quick + full AI modes)
-- Pipeline management with stage transitions
-- Analytics dashboards (Admin + Employer)
-- Chrome extension for Naukri profile scraping
-- Teams, referrals, commercials management
-- Bug reporting and system health monitoring
+- Full auth system, Job CRUD, Candidate bank, AI matching, Pipeline, Analytics
+- Chrome extension, Teams, Referrals, Commercials, Bug reporting
 
 ### Phase 2 (Previous Fork)
-- MongoDB Atlas SSL connection fix (pymongo[srv] + certifi)
-- Static website full responsiveness (7 pages)
-- Hamburger menu for mobile
-- Comprehensive UI/UX audit and fixes
-- Micro-animations (fade-in-on-scroll, hover effects, back-to-top)
+- MongoDB Atlas SSL fix, Static site responsiveness, UI/UX audit, Micro-animations
 - AI Screening shortlist bug fix
 
-### Phase 3 (Current Session - Feb 15, 2026)
-- **Contact Form Backend** — `/api/contact-submission` stores submissions in MongoDB; admin dashboard page at `/admin/contact-submissions` with view/filter/status update/delete
-- **AI Screening Actions** — "View Full Profile" and "Add as Applicant" buttons on AI search results in FindCandidatesPage
-- **SEO Meta Tags Audit** — Added Open Graph and Twitter Card meta tags to all static pages (about, services, industries, careers, global-hiring, sitemap, contact)
+### Phase 3 (Feb 15, 2026)
+- Contact Form Backend with admin dashboard
+- AI Screening "View Full Profile" and "Add as Applicant" actions
+- SEO Meta Tags audit across all static pages
+- Mobile responsive fix for About page leadership cards
+
+### Phase 4 (Feb 15, 2026 - Current)
+- **Employer Blog Engine** — AI-generated 1500-2000 word recruitment articles
+  - Public listing at `/website/industrial-hiring-insights`
+  - Single article pages with SEO meta tags and Article schema markup
+  - India/Global region tagging, recruitment-focused CTAs
+  - Footer-only link (not in header nav), SEO indexable
+- **Candidate Blog Engine** — AI-generated 1200-1800 word career advice articles
+  - Public listing at `/website/career-insights` with category filters
+  - Soft CTAs for profile creation/resume upload
+  - Linked from "Career Insights & Advice" section on homepage
+- **Admin Blog Management Panel** at `/admin/blog-engine`
+  - One-click AI generation with topic/industry/keywords/region/category inputs
+  - Full content editor with metadata editing
+  - Preview mode, publish/unpublish workflow
+  - Generation logging (topic, keywords, model, region, type)
+- **LLM Service Layer** — Abstracted blog_generator.py with configurable model
+  - Currently uses GPT-4o-mini, upgradeable via env vars
+  - Controlled temperature for consistent SEO structure
+
+## Blog Engine Schema
+```json
+{
+  "id": "uuid",
+  "title": "string",
+  "slug": "string",
+  "meta_description": "string",
+  "content": "HTML string",
+  "blog_type": "employer|candidate",
+  "region": "india|global (employer only)",
+  "category": "career-growth|job-switching|... (candidate only)",
+  "industry": "string",
+  "keywords": ["array"],
+  "internal_links": ["array"],
+  "cta_type": "string",
+  "word_count_estimate": "number",
+  "status": "draft|published",
+  "generation_log": { "topic_source", "model_used", "generated_at", ... },
+  "created_at": "ISO datetime",
+  "published_at": "ISO datetime"
+}
+```
 
 ## Prioritized Backlog
 
-### P0 — None (all critical items resolved)
-
 ### P1
-- Password Reset Feature — "Forgot Password" flow
+- Forgot Password flow
+- Blog auto-scheduling (3/week employer, 2-3/week candidate)
 
 ### P2
-- Refactor Chrome extension `content.js` into smaller modules
-- AI Search Phase 2 — hybrid routing, configurable model selection
-- Refactor `FindCandidatesPage.jsx` — break into smaller components
+- Refactor Chrome extension `content.js`
+- AI Search Phase 2 (hybrid routing, configurable models)
+- Blog analytics dashboard
+- RSS feed generation for blogs
 
 ### P3
-- Email notifications for contact form submissions (integrate Resend/SendGrid)
-- Advanced analytics with date range filtering
-- Candidate portal enhancements
+- Email notifications for contact form
+- Social sharing for blog articles
+- Refactor FindCandidatesPage.jsx
 
 ## Key Files
-- `/app/backend/server.py` — Main FastAPI app with route registration
-- `/app/backend/config.py` — MongoDB, R2, JWT configuration
-- `/app/backend/routes/contact.py` — Contact form API endpoints
-- `/app/frontend/src/pages/employer/FindCandidatesPage.jsx` — AI screening with action buttons
-- `/app/frontend/src/pages/admin/ContactSubmissionsPage.jsx` — Admin contact submissions page
-- `/app/public-website/vhc-website/` — Static website files
+- `/app/backend/server.py` — Main FastAPI app
+- `/app/backend/services/blog_generator.py` — LLM abstraction for blog content
+- `/app/backend/routes/blog.py` — Blog CRUD + public endpoints
+- `/app/backend/routes/contact.py` — Contact form endpoints
+- `/app/frontend/src/pages/admin/BlogEnginePage.jsx` — Admin blog management
+- `/app/frontend/src/pages/public/BlogPages.jsx` — Public blog pages
+- `/app/frontend/src/lib/api.js` — API client with blogAPI module
 
 ## Test Credentials
 - Admin: `admin@vhc.in` / `VhcAdmin@2024`
