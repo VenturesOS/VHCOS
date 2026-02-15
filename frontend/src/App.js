@@ -1,5 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "./lib/auth";
 import { Toaster } from "./components/ui/sonner";
 
@@ -15,6 +16,7 @@ import PublicWebsiteRedirect from "./pages/PublicWebsite";
 import PublicJobPage from "./pages/public/PublicJobPage";
 import ApplicationSuccessPage from "./pages/public/ApplicationSuccessPage";
 import MandateApplyPage from "./pages/public/MandateApplyPage";
+import { EmployerBlogList, EmployerBlogArticle, CandidateBlogList, CandidateBlogArticle } from "./pages/public/BlogPages";
 
 // Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -57,6 +59,7 @@ import NaukriProfileView from "./pages/shared/NaukriProfileView";
 import BugReportsPage from "./pages/admin/BugReportsPage";
 import SystemHealthPage from "./pages/admin/SystemHealthPage";
 import ContactSubmissionsPage from "./pages/admin/ContactSubmissionsPage";
+import BlogEnginePage from "./pages/admin/BlogEnginePage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
 import EmployerCandidateBankPage from "./pages/employer/EmployerCandidateBankPage";
 
