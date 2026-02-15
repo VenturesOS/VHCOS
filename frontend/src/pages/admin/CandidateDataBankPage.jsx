@@ -884,9 +884,9 @@ export default function CandidateDataBankPage() {
                   )}
 
                   {/* Header with Avatar */}
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
-                      <span className="text-[#7CB342] font-bold text-2xl">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center flex-shrink-0">
+                      <span className="text-[#7CB342] font-bold text-xl sm:text-2xl">
                         {(isEditingProfile ? editProfileForm.name : selectedCandidate.name)?.charAt(0).toUpperCase() || '?'}
                       </span>
                     </div>
