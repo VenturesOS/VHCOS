@@ -117,6 +117,25 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - Properly encoded URLs and titles
   - Added to both employer and candidate blog article pages
 
+### Phase 7 (Feb 15, 2026)
+- **SEO-Friendly Clean URLs** — All website pages use clean paths
+  - Removed /website/ prefix and .html extensions from all URLs
+  - craco devServer middleware rewrites: /, /about, /services, /industries, /careers, /contact, /global-hiring, /sitemap
+  - Blog routes: /industrial-hiring-insights, /career-insights (no /website/ prefix)
+  - Updated all internal navigation links across 8 static HTML pages
+  - Asset paths made absolute: /website/style.css, /website/mobile-menu.js
+- **AI Topic & Keyword Research** — OpenAI-powered blog research
+  - POST /api/blog/research-topics generates trending topic suggestions with SEO keywords
+  - Integrated into Blog Engine generate dialog with "Research Topics" button
+  - Clicking a suggestion auto-fills topic, keywords, and region
+- **Blog Sitemap.xml** — Dynamic XML sitemap at /api/blog/sitemap.xml
+  - Includes all static pages with clean URLs and priorities
+  - Includes all published blog posts with lastmod dates
+- **Weekly Blog Digest Email** — Candidate engagement emails
+  - POST /api/blog/send-digest sends digest to all registered candidates
+  - Includes blogs published in last 7 days with links
+  - Admin trigger from Blog Analytics dashboard
+
 ## Prioritized Backlog
 
 ### P2
