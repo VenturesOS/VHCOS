@@ -11,7 +11,7 @@ import statistics
 import os
 from collections import defaultdict
 
-API_URL = os.environ.get("API_URL", "https://ai-candidate-hub.preview.emergentagent.com")
+API_URL = os.environ.get("API_URL", "https://rss-feed-engine.preview.emergentagent.com")
 ADMIN_EMAIL = "admin@vhc.in"
 ADMIN_PASSWORD = "VhcAdmin@2024"
 
