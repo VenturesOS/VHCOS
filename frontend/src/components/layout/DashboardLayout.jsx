@@ -27,7 +27,7 @@ export const DashboardLayout = ({ allowedRoles }) => {
     <div className="min-h-screen bg-[#F8FAFC]">
       <Sidebar />
       <main className="lg:pl-64 min-h-screen">
-        <div className="p-6 lg:p-8">
+        <div className="px-4 pb-6 pt-16 lg:px-8 lg:pb-8 lg:pt-8">
           <Outlet />
         </div>
       </main>

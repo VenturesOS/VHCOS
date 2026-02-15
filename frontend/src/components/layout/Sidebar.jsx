@@ -104,11 +104,11 @@ export const Sidebar = () => {
   const SidebarContent = () => (
     <>
       {/* Logo */}
-      <div className="p-6 border-b border-slate-200">
-        <div className="flex items-center gap-4">
-          <img src={LOGO_URL} alt="Ventures HRD" className="h-14 w-auto" />
+      <div className="p-4 lg:p-6 border-b border-slate-200">
+        <div className="flex items-center gap-3">
+          <img src={LOGO_URL} alt="Ventures HRD" className="h-10 lg:h-14 w-auto" />
           <div>
-            <h1 className="font-heading font-bold text-lg text-slate-900">Ventures HRD</h1>
+            <h1 className="font-heading font-bold text-base lg:text-lg text-slate-900">Ventures HRD</h1>
             <p className="text-xs text-slate-500 capitalize">{user?.role} Portal</p>
           </div>
         </div>
@@ -193,11 +193,11 @@ export const Sidebar = () => {
     <>
       {/* Mobile menu button */}
       <button
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md"
+        className="lg:hidden fixed top-3 left-3 z-50 p-2.5 bg-white rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 transition-colors"
         onClick={() => setMobileOpen(!mobileOpen)}
         data-testid="mobile-menu-btn"
       >
-        {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        {mobileOpen ? <X className="w-5 h-5 text-slate-700" /> : <Menu className="w-5 h-5 text-slate-700" />}
       </button>
 
       {/* Mobile overlay */}
