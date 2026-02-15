@@ -272,27 +272,45 @@ export default function BlogAnalyticsPage() {
                 </Card>
               </div>
 
-              {/* RSS Feed Card */}
+              {/* RSS Feed & Sitemap Card */}
               <Card data-testid="rss-feed-card">
                 <CardContent className="p-5">
                   <div className="flex items-center gap-3 mb-3">
                     <Rss className="w-5 h-5 text-orange-500" />
-                    <h3 className="font-semibold text-slate-800">RSS Feeds</h3>
+                    <h3 className="font-semibold text-slate-800">RSS Feeds & Sitemap</h3>
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <span className="text-slate-700">All Blogs</span>
+                      <span className="text-slate-700">All Blogs RSS</span>
                       <a href={`${API_URL}/api/blog/rss`} target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium" data-testid="rss-link-all">{API_URL}/api/blog/rss</a>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <span className="text-slate-700">Employer Only</span>
+                      <span className="text-slate-700">Employer RSS</span>
                       <a href={`${API_URL}/api/blog/rss?blog_type=employer`} target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium" data-testid="rss-link-employer">{API_URL}/api/blog/rss?blog_type=employer</a>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <span className="text-slate-700">Candidate Only</span>
+                      <span className="text-slate-700">Candidate RSS</span>
                       <a href={`${API_URL}/api/blog/rss?blog_type=candidate`} target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline font-medium" data-testid="rss-link-candidate">{API_URL}/api/blog/rss?blog_type=candidate</a>
                     </div>
+                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                      <span className="text-slate-700 flex items-center gap-1.5"><Map className="w-3.5 h-3.5 text-blue-500" />XML Sitemap</span>
+                      <a href={`${API_URL}/api/blog/sitemap.xml`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium" data-testid="sitemap-link">{API_URL}/api/blog/sitemap.xml</a>
+                    </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Weekly Digest Card */}
+              <Card data-testid="digest-card">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Mail className="w-5 h-5 text-violet-500" />
+                    <h3 className="font-semibold text-slate-800">Weekly Blog Digest</h3>
+                  </div>
+                  <p className="text-sm text-slate-500 mb-3">Send a digest email of this week's published blogs to all registered candidates.</p>
+                  <Button variant="outline" size="sm" onClick={handleSendDigest} disabled={sendingDigest} data-testid="send-digest-btn">
+                    {sendingDigest ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Sending...</> : <><Mail className="w-3.5 h-3.5 mr-1.5" />Send Digest Now</>}
+                  </Button>
                 </CardContent>
               </Card>
 
