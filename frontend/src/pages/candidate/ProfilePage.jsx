@@ -108,16 +108,16 @@ export default function ProfilePage() {
 
       {/* Profile Header */}
       <Card className="border-slate-200">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-              <span className="text-[#7CB342] font-bold text-4xl">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0">
+              <span className="text-[#7CB342] font-bold text-3xl sm:text-4xl">
                 {profile?.name?.charAt(0).toUpperCase()}
               </span>
             </div>
-            <div className="flex-1">
-              <h2 className="font-heading text-2xl font-bold text-slate-900">{profile?.name}</h2>
-              <p className="text-slate-500">{profile?.email}</p>
+            <div className="flex-1 text-center sm:text-left">
+              <h2 className="font-heading text-xl sm:text-2xl font-bold text-slate-900">{profile?.name}</h2>
+              <p className="text-slate-500 text-sm sm:text-base truncate">{profile?.email}</p>
             </div>
           </div>
         </CardContent>
