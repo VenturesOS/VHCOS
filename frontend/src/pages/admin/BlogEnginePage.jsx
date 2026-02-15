@@ -33,6 +33,9 @@ export default function BlogEnginePage() {
   const [showGenerate, setShowGenerate] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [genForm, setGenForm] = useState({ topic: '', industry: '', keywords: '', region: 'india', category: 'career-growth' });
+  // AI Topic Research
+  const [researching, setResearching] = useState(false);
+  const [topicSuggestions, setTopicSuggestions] = useState([]);
   // Edit/Preview
   const [editBlog, setEditBlog] = useState(null);
   const [previewBlog, setPreviewBlog] = useState(null);
