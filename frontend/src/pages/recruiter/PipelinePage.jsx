@@ -127,9 +127,9 @@ export default function PipelinePage() {
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
           {STAGES.map((stage) => (
-            <div key={stage.id} className="flex-shrink-0 w-72">
+            <div key={stage.id} className="flex-shrink-0 w-[260px] sm:w-72">
               <div className={`rounded-t-lg px-4 py-3 ${stage.color} border-t-4`}>
                 <div className="flex items-center justify-between">
                   <div>
