@@ -634,19 +634,18 @@
       });
     }
 
-    function goToSlide(index, instant = false) {
+    function goToSlide(index, instant) {
       if (isTransitioning && !instant) return;
 
       currentSlide = index;
 
-      // Calculate the exact percentage based on card width (50% per card)
-      const cardWidth = 50; // Each card is 50% of viewport
-      const percentage = currentSlide * cardWidth;
+      // Calculate the percentage based on card width (100% on mobile, 50% on desktop)
+      var cardWidth = cardsPerView === 1 ? 100 : 50;
+      var percentage = currentSlide * cardWidth;
 
       if (instant) {
         slider.style.transition = 'none';
         slider.style.transform = 'translateX(-' + percentage + '%)';
-        // Force reflow
         slider.offsetHeight;
       } else {
         slider.style.transition = 'transform 0.5s ease-in-out';
@@ -655,13 +654,12 @@
 
       updateDots();
 
-      // Handle infinite loop reset - after slide 7, jump back to slide 0
       if (currentSlide === totalCards && !instant) {
         isTransitioning = true;
-        setTimeout(() => {
+        setTimeout(function() {
           currentSlide = 0;
           goToSlide(0, true);
-          setTimeout(() => {
+          setTimeout(function() {
             isTransitioning = false;
           }, 50);
         }, 500);
