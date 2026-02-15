@@ -764,72 +764,73 @@ export default function CandidateDataBankPage() {
 
       {/* Candidate Detail Dialog */}
       <Dialog open={!!selectedCandidate} onOpenChange={() => { setSelectedCandidate(null); cancelEditingProfile(); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-auto">
           <DialogHeader>
-            <DialogTitle className="font-heading flex items-center justify-between">
-              <span>Candidate Profile</span>
-              <div className="flex items-center gap-2">
-                {selectedCandidate?.resume_url && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => downloadResume(selectedCandidate)}
-                    className="text-[#7CB342] border-[#7CB342] hover:bg-green-50"
-                  >
-                    <Download className="w-4 h-4 mr-1" /> Download CV
-                  </Button>
-                )}
-                {selectedCandidate?.source === 'bulk_import' && selectedCandidate?.cv_attached === false && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openAttachCVDialog(selectedCandidate)}
-                    className="text-amber-600 border-amber-400 hover:bg-amber-50"
-                  >
-                    <Paperclip className="w-4 h-4 mr-1" /> Attach CV
-                  </Button>
-                )}
-                {/* Edit/Save/Cancel buttons */}
-                {!isEditingProfile ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={startEditingProfile}
-                    data-testid="edit-profile-btn"
-                  >
-                    <Activity className="w-4 h-4 mr-1" /> Edit
-                  </Button>
-                ) : (
-                  <>
+            <DialogTitle className="font-heading">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span>Candidate Profile</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {selectedCandidate?.resume_url && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={cancelEditingProfile}
+                      onClick={() => downloadResume(selectedCandidate)}
+                      className="text-[#7CB342] border-[#7CB342] hover:bg-green-50 text-xs"
                     >
-                      Cancel
+                      <Download className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Download CV</span>
                     </Button>
+                  )}
+                  {selectedCandidate?.source === 'bulk_import' && selectedCandidate?.cv_attached === false && (
                     <Button
+                      variant="outline"
                       size="sm"
-                      onClick={saveProfileChanges}
-                      disabled={savingProfile}
-                      className="bg-[#7CB342] hover:bg-[#689F38]"
-                      data-testid="save-profile-btn"
+                      onClick={() => openAttachCVDialog(selectedCandidate)}
+                      className="text-amber-600 border-amber-400 hover:bg-amber-50 text-xs"
                     >
-                      {savingProfile ? 'Saving...' : 'Save'}
+                      <Paperclip className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Attach CV</span>
                     </Button>
-                  </>
-                )}
+                  )}
+                  {!isEditingProfile ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={startEditingProfile}
+                      data-testid="edit-profile-btn"
+                    >
+                      <Activity className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Edit</span>
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={cancelEditingProfile}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={saveProfileChanges}
+                        disabled={savingProfile}
+                        className="bg-[#7CB342] hover:bg-[#689F38]"
+                        data-testid="save-profile-btn"
+                      >
+                        {savingProfile ? 'Saving...' : 'Save'}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </DialogTitle>
           </DialogHeader>
           {selectedCandidate && (
             <Tabs defaultValue="profile" className="w-full">
-              <TabsList className="mb-4">
-                <TabsTrigger value="profile">Profile</TabsTrigger>
-                <TabsTrigger value="experience">Experience</TabsTrigger>
-                <TabsTrigger value="education">Education</TabsTrigger>
-                <TabsTrigger value="activity" data-testid="activity-history-tab">Activity</TabsTrigger>
-                <TabsTrigger value="audit">Audit Log</TabsTrigger>
+              <TabsList className="mb-4 w-full flex overflow-x-auto">
+                <TabsTrigger value="profile" className="flex-1 text-xs sm:text-sm">Profile</TabsTrigger>
+                <TabsTrigger value="experience" className="flex-1 text-xs sm:text-sm">Experience</TabsTrigger>
+                <TabsTrigger value="education" className="flex-1 text-xs sm:text-sm">Education</TabsTrigger>
+                <TabsTrigger value="activity" data-testid="activity-history-tab" className="flex-1 text-xs sm:text-sm">Activity</TabsTrigger>
+                <TabsTrigger value="audit" className="flex-1 text-xs sm:text-sm">Audit</TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile">
