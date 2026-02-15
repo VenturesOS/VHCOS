@@ -1342,6 +1342,37 @@ async def validate_mongodb_connection():
                 await asyncio.sleep(5)
     logging.warning("MongoDB not available at startup. Motor will auto-reconnect on first request.")
 
+
+@app.on_event("startup")
+async def start_blog_scheduler():
+    """Start the APScheduler background jobs for blog auto-publishing."""
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from services.blog_scheduler import auto_publish_blog, get_schedule_config
+
+        scheduler = AsyncIOScheduler()
+
+        async def run_employer_publish():
+            config = await get_schedule_config()
+            if config.get("employer", {}).get("enabled"):
+                await auto_publish_blog("employer")
+
+        async def run_candidate_publish():
+            config = await get_schedule_config()
+            if config.get("candidate", {}).get("enabled"):
+                await auto_publish_blog("candidate")
+
+        # Employer: Mon, Wed, Fri at 03:30 UTC (9:00 AM IST)
+        scheduler.add_job(run_employer_publish, 'cron', day_of_week='mon,wed,fri', hour=3, minute=30, id='employer_blog')
+        # Candidate: Tue, Thu at 04:30 UTC (10:00 AM IST)
+        scheduler.add_job(run_candidate_publish, 'cron', day_of_week='tue,thu', hour=4, minute=30, id='candidate_blog')
+
+        scheduler.start()
+        app.state.blog_scheduler = scheduler
+        logging.info("[BlogScheduler] Auto-publish scheduler started (Employer: Mon/Wed/Fri 9AM IST, Candidate: Tue/Thu 10AM IST)")
+    except Exception as e:
+        logging.warning(f"[BlogScheduler] Failed to start scheduler: {e}")
+
 @app.on_event("startup")
 async def validate_r2_connection():
     """
