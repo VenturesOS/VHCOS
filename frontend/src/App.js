@@ -176,6 +176,7 @@ function App() {
       </BrowserRouter>
       <Toaster position="top-right" richColors />
     </AuthProvider>
+    </HelmetProvider>
   );
 }
 
