@@ -54,6 +54,7 @@ const navItems = {
     { icon: Activity, label: 'System Health', path: '/admin/system-health' },
     { icon: Mail, label: 'Contact Leads', path: '/admin/contact-submissions' },
     { icon: FileText, label: 'Blog Engine', path: '/admin/blog-engine' },
+    { icon: BarChart3, label: 'Blog Analytics', path: '/admin/blog-analytics' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
   recruiter: [

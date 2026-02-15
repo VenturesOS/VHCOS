@@ -60,6 +60,7 @@ import BugReportsPage from "./pages/admin/BugReportsPage";
 import SystemHealthPage from "./pages/admin/SystemHealthPage";
 import ContactSubmissionsPage from "./pages/admin/ContactSubmissionsPage";
 import BlogEnginePage from "./pages/admin/BlogEnginePage";
+import BlogAnalyticsPage from "./pages/admin/BlogAnalyticsPage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
 import EmployerCandidateBankPage from "./pages/employer/EmployerCandidateBankPage";
 
@@ -122,6 +123,7 @@ function App() {
             <Route path="system-health" element={<SystemHealthPage />} />
             <Route path="contact-submissions" element={<ContactSubmissionsPage />} />
             <Route path="blog-engine" element={<BlogEnginePage />} />
+            <Route path="blog-analytics" element={<BlogAnalyticsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
