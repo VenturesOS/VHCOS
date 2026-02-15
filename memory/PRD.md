@@ -1,57 +1,77 @@
 # VHC Talent OS - Product Requirements Document
 
 ## Original Problem Statement
-Full-stack recruitment application (React, FastAPI, MongoDB) for candidate sourcing, screening, and management. Features include candidate data bank, standard/AI-powered search, admin analytics dashboard, and Chrome extension for profile sourcing.
+A full-stack recruitment application (React, FastAPI, MongoDB) with a public-facing static website and an internal portal for Admin, Employer, Recruiter, and Candidate roles. The platform supports AI-powered candidate matching, job management, pipeline tracking, and analytics.
+
+## Core Requirements
+1. **Public Website** — Responsive static site (7+ pages) with contact form, careers page, SEO
+2. **Authentication** — JWT-based multi-role auth (Admin, Employer, Recruiter, Candidate)
+3. **Job Management** — CRUD, JD parsing, career page, shareable links
+4. **Candidate Management** — Candidate bank, CV parsing, profile management
+5. **AI Matching** — Quick match, full AI match, AI search with natural language
+6. **Pipeline** — Kanban-style application tracking with stage transitions
+7. **Analytics** — Admin and employer dashboards with revenue tracking
+8. **Chrome Extension** — Naukri profile scraping integration
 
 ## Architecture
-- **Frontend:** React + Tailwind CSS + Shadcn UI (port 3000)
-- **Backend:** FastAPI (port 8001)
-- **Database:** MongoDB Atlas
-- **Static Website:** HTML/CSS/JS at `/frontend/public/website/`
-- **Integrations:** OpenAI GPT-4o-mini, Cloudflare R2, Resend email, Upstash Redis
+- **Frontend:** React + Tailwind + Shadcn/UI (port 3000)
+- **Backend:** FastAPI + Motor (async MongoDB) (port 8001)
+- **Database:** MongoDB Atlas (vhc_talent_os)
+- **Storage:** Cloudflare R2 for files
+- **AI:** OpenAI GPT-4o-mini for screening/matching
 
 ## What's Been Implemented
-- Full candidate CRUD and data bank
-- Job mandate management
-- AI-powered candidate search and screening
-- Admin analytics dashboard
-- Chrome extension for sourcing profiles
-- Email/WhatsApp notifications
-- Full responsive design (mobile/tablet/desktop) - React dashboard + static website
-- Authentication (JWT-based)
-- Scroll animations & micro-interactions on static website (Feb 2026)
-- P1 Shortlist bug fix (Feb 2026)
 
-## Session Changes (Feb 15, 2026)
-1. MongoDB Atlas Connection: RESOLVED (transient SSL issue)
-2. Static website mobile responsiveness: FIXED (7 pages, hamburger menu, CSS overrides)
-3. UI/UX Audit: FIXED (services grid, candidate bank search, tab-content breakpoint)
-4. Scroll Animations: ADDED (reveal-on-scroll, stagger, parallax, back-to-top, hover effects)
-5. P1 Shortlist Bug: FIXED (button no longer disabled, highlighted job picker in modal)
+### Phase 1 (Previous Sessions)
+- Full authentication system with role-based access
+- Job CRUD with JD parsing and career pages
+- Candidate bank with CV upload/parsing
+- AI matching (quick + full AI modes)
+- Pipeline management with stage transitions
+- Analytics dashboards (Admin + Employer)
+- Chrome extension for Naukri profile scraping
+- Teams, referrals, commercials management
+- Bug reporting and system health monitoring
+
+### Phase 2 (Previous Fork)
+- MongoDB Atlas SSL connection fix (pymongo[srv] + certifi)
+- Static website full responsiveness (7 pages)
+- Hamburger menu for mobile
+- Comprehensive UI/UX audit and fixes
+- Micro-animations (fade-in-on-scroll, hover effects, back-to-top)
+- AI Screening shortlist bug fix
+
+### Phase 3 (Current Session - Feb 15, 2026)
+- **Contact Form Backend** — `/api/contact-submission` stores submissions in MongoDB; admin dashboard page at `/admin/contact-submissions` with view/filter/status update/delete
+- **AI Screening Actions** — "View Full Profile" and "Add as Applicant" buttons on AI search results in FindCandidatesPage
+- **SEO Meta Tags Audit** — Added Open Graph and Twitter Card meta tags to all static pages (about, services, industries, careers, global-hiring, sitemap, contact)
 
 ## Prioritized Backlog
+
+### P0 — None (all critical items resolved)
+
+### P1
+- Password Reset Feature — "Forgot Password" flow
+
 ### P2
-- External Password Reset Feature ("Forgot Password" flow)
+- Refactor Chrome extension `content.js` into smaller modules
+- AI Search Phase 2 — hybrid routing, configurable model selection
+- Refactor `FindCandidatesPage.jsx` — break into smaller components
 
 ### P3
-- Refactor `content.js` (Chrome extension maintainability)
-- AI Search Phase 2 Upgrade (hybrid routing, configurable model)
-
-## Credentials
-- Admin: admin@vhc.in / VhcAdmin@2024
-- Employer: ajit@vhc.in / 12345678
-- Recruiter: jatin@vhc.in / 12345678
+- Email notifications for contact form submissions (integrate Resend/SendGrid)
+- Advanced analytics with date range filtering
+- Candidate portal enhancements
 
 ## Key Files
-- `/frontend/public/website/style.css` - Master responsive CSS + animations
-- `/frontend/public/website/scroll-animations.js` - Scroll reveal, back-to-top, parallax
-- `/frontend/public/website/mobile-menu.js` - Hamburger menu functionality
-- `/frontend/public/website/*.html` - 7 static HTML pages
-- `/frontend/src/pages/employer/FindCandidatesPage.jsx` - AI matching + shortlist (P1 fix)
-- `/frontend/src/pages/employer/EmployerCandidateBankPage.jsx` - Employer candidate bank
-- `/frontend/src/pages/recruiter/RecruiterCandidateBankPage.jsx` - Recruiter candidate bank
-- `/frontend/src/components/layout/Sidebar.jsx` - React dashboard hamburger menu
+- `/app/backend/server.py` — Main FastAPI app with route registration
+- `/app/backend/config.py` — MongoDB, R2, JWT configuration
+- `/app/backend/routes/contact.py` — Contact form API endpoints
+- `/app/frontend/src/pages/employer/FindCandidatesPage.jsx` — AI screening with action buttons
+- `/app/frontend/src/pages/admin/ContactSubmissionsPage.jsx` — Admin contact submissions page
+- `/app/public-website/vhc-website/` — Static website files
 
-## Test Reports
-- `/app/test_reports/iteration_58.json` - Mobile responsiveness (32/32 passed)
-- `/app/test_reports/iteration_59.json` - UI/UX audit fixes (17/17 passed)
+## Test Credentials
+- Admin: `admin@vhc.in` / `VhcAdmin@2024`
+- Employer: `ajit@vhc.in` / `12345678`
+- Recruiter: `jatin@vhc.in` / `12345678`
