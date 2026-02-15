@@ -39,6 +39,36 @@ async def submit_contact_form(data: ContactSubmission):
     }
     await db.contact_submissions.insert_one(doc)
     logger.info(f"Contact form submission from {data.email}")
+
+    # Send email notification to admin
+    try:
+        from services.email_service import send_email
+        admin_email = os.environ.get("ADMIN_EMAIL", "admin@vhc.in")
+        await send_email(
+            recipient_email=admin_email,
+            subject=f"New Contact Lead: {data.full_name} — {data.service_interest}",
+            html_content=f"""
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
+              <h2 style="color:#111827;margin-bottom:16px;">New Contact Form Submission</h2>
+              <table style="width:100%;border-collapse:collapse;">
+                <tr><td style="padding:8px 0;color:#6B7280;width:130px;">Name</td><td style="padding:8px 0;font-weight:600;">{data.full_name}</td></tr>
+                <tr><td style="padding:8px 0;color:#6B7280;">Company</td><td style="padding:8px 0;">{data.company_name or '—'}</td></tr>
+                <tr><td style="padding:8px 0;color:#6B7280;">Email</td><td style="padding:8px 0;"><a href="mailto:{data.email}">{data.email}</a></td></tr>
+                <tr><td style="padding:8px 0;color:#6B7280;">Phone</td><td style="padding:8px 0;">{data.phone or '—'}</td></tr>
+                <tr><td style="padding:8px 0;color:#6B7280;">Service</td><td style="padding:8px 0;font-weight:600;">{data.service_interest}</td></tr>
+              </table>
+              <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-top:16px;">
+                <p style="color:#6B7280;font-size:13px;margin-bottom:4px;">Message:</p>
+                <p style="color:#111827;">{data.message}</p>
+              </div>
+              <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
+              <p style="color:#9CA3AF;font-size:12px;">VHC Talent OS — Auto-generated notification</p>
+            </div>
+            """,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send contact notification email: {e}")
+
     return {"message": "Thank you! Your message has been received. We'll get back to you within 24 hours."}
 
 
