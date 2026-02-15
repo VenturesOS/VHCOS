@@ -519,10 +519,12 @@ export default function FindCandidatesPage() {
                   <AlertCircle className="w-3 h-3" />AI recommendation is advisory. Final decision requires human approval.
                 </p>
                 {!selectedJobId && (
-                  <div className="mb-3">
-                    <Label className="text-xs text-slate-500 mb-1 block">Select job mandate to shortlist for:</Label>
+                  <div className={`mb-3 p-3 rounded-lg ${shortlistJobId ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                    <Label className={`text-xs font-medium mb-1.5 block ${shortlistJobId ? 'text-green-700' : 'text-amber-700'}`}>
+                      {shortlistJobId ? 'Job mandate selected' : 'Select a job mandate to shortlist for:'}
+                    </Label>
                     <Select value={shortlistJobId} onValueChange={setShortlistJobId}>
-                      <SelectTrigger data-testid="shortlist-job-select" className="h-8 text-sm">
+                      <SelectTrigger data-testid="shortlist-job-select" className="h-9 text-sm bg-white">
                         <SelectValue placeholder="Choose a job mandate..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -548,8 +550,15 @@ export default function FindCandidatesPage() {
                   ) : (
                     <Button className="flex-1 bg-[#7CB342] hover:bg-[#689F38]"
                       data-testid="shortlist-candidate-btn"
-                      disabled={(!selectedJobId && !shortlistJobId) || shortlistingId === selectedCandidate.candidate_id}
-                      onClick={() => handleShortlist(selectedCandidate)}>
+                      disabled={shortlistingId === selectedCandidate.candidate_id}
+                      onClick={() => {
+                        const jobId = selectedJobId || shortlistJobId;
+                        if (!jobId) {
+                          toast.error('Please select a job mandate above to shortlist this candidate');
+                          return;
+                        }
+                        handleShortlist(selectedCandidate);
+                      }}>
                       {shortlistingId === selectedCandidate.candidate_id ? (
                         <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Shortlisting...</>
                       ) : (
