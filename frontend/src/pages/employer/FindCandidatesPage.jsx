@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { Search, Upload, Sparkles, Filter, ChevronDown, ChevronUp, AlertCircle, Star, Zap, Brain, Loader2, CheckCircle, ExternalLink, UserPlus } from 'lucide-react';
 
 export default function FindCandidatesPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState('');
   const [jdText, setJdText] = useState('');
@@ -39,6 +41,10 @@ export default function FindCandidatesPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [showFilterPreview, setShowFilterPreview] = useState(false);
   const [activeTab, setActiveTab] = useState('job');
+  // Add as Applicant dialog state
+  const [addApplicantCandidate, setAddApplicantCandidate] = useState(null);
+  const [addApplicantJobId, setAddApplicantJobId] = useState('');
+  const [addingApplicant, setAddingApplicant] = useState(false);
 
   const [filters, setFilters] = useState({
     location: '', qualification: '', skills: '',
