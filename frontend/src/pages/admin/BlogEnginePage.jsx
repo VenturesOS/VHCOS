@@ -286,10 +286,43 @@ export default function BlogEnginePage() {
       </Tabs>
 
       {/* Generate Dialog */}
-      <Dialog open={showGenerate} onOpenChange={setShowGenerate}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={showGenerate} onOpenChange={(v) => { setShowGenerate(v); if (!v) setTopicSuggestions([]); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="font-heading flex items-center gap-2"><Sparkles className="w-5 h-5 text-[#7CB342]" />Generate {activeTab === 'employer' ? 'Employer' : 'Candidate'} Blog</DialogTitle></DialogHeader>
           <div className="space-y-4" data-testid="generate-dialog">
+            {/* AI Topic Research Section */}
+            <Card className="border-dashed border-blue-200 bg-blue-50/30">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-blue-800">AI Topic & Keyword Research</p>
+                  <Button variant="outline" size="sm" onClick={handleResearchTopics} disabled={researching} data-testid="research-topics-btn" className="border-blue-300 text-blue-700 hover:bg-blue-100">
+                    {researching ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Researching...</> : <><Search className="w-3.5 h-3.5 mr-1.5" />Research Topics</>}
+                  </Button>
+                </div>
+                <p className="text-xs text-blue-600">Let AI suggest trending topics and SEO keywords{genForm.industry ? ` for ${genForm.industry}` : ''}. Fill industry first for better results.</p>
+                {topicSuggestions.length > 0 && (
+                  <div className="space-y-2 mt-2" data-testid="topic-suggestions">
+                    {topicSuggestions.map((t, i) => (
+                      <div key={i} className="bg-white rounded-lg p-3 border border-blue-100 hover:border-blue-300 cursor-pointer transition-colors" onClick={() => applyTopicSuggestion(t)} data-testid={`topic-suggestion-${i}`}>
+                        <p className="font-medium text-sm text-slate-900">{t.topic}</p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">{t.primary_keyword}</span>
+                          {(t.secondary_keywords || []).slice(0, 3).map((k, j) => (
+                            <span key={j} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{k}</span>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">{t.rationale}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${t.difficulty === 'easy' ? 'bg-green-50 text-green-600' : t.difficulty === 'medium' ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>{t.difficulty}</span>
+                          <span className="text-[10px] text-slate-400">{t.region}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <div>
               <Label>Topic / Title Idea *</Label>
               <Input placeholder={activeTab === 'employer' ? 'e.g. How to hire plant managers in Gujarat' : 'e.g. 5 signs it is time to switch jobs in manufacturing'} value={genForm.topic} onChange={e => setGenForm(p => ({ ...p, topic: e.target.value }))} data-testid="gen-topic" />
