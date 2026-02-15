@@ -297,6 +297,13 @@ export const systemErrorsAPI = {
   clear: (days) => api.delete('/system-errors/clear', { params: { days } }),
 };
 
+// Contact Form APIs (Admin)
+export const contactAPI = {
+  getAll: (status) => api.get('/contact-submissions', { params: status ? { status } : {} }),
+  updateStatus: (id, status) => api.put(`/contact-submissions/${id}/status`, null, { params: { new_status: status } }),
+  delete: (id) => api.delete(`/contact-submissions/${id}`),
+};
+
 // Candidate Data Bank APIs
 export const candidateBankAPI = {
   add: (file, email, name) => {
