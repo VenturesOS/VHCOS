@@ -42,7 +42,7 @@ export default function CandidateDashboard() {
     <div className="space-y-8" data-testid="candidate-dashboard">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Welcome back!</h1>
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Welcome back!</h1>
           <p className="text-slate-500 mt-1">Find your dream job today</p>
         </div>
         <Link to="/candidate/jobs">
