@@ -56,6 +56,7 @@ import MatchHistoryPage from "./pages/shared/MatchHistoryPage";
 import NaukriProfileView from "./pages/shared/NaukriProfileView";
 import BugReportsPage from "./pages/admin/BugReportsPage";
 import SystemHealthPage from "./pages/admin/SystemHealthPage";
+import ContactSubmissionsPage from "./pages/admin/ContactSubmissionsPage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
 import EmployerCandidateBankPage from "./pages/employer/EmployerCandidateBankPage";
 
@@ -109,6 +110,7 @@ function App() {
             <Route path="import-history" element={<ImportHistoryPage />} />
             <Route path="bug-reports" element={<BugReportsPage />} />
             <Route path="system-health" element={<SystemHealthPage />} />
+            <Route path="contact-submissions" element={<ContactSubmissionsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
