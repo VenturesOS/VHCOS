@@ -431,6 +431,23 @@ export default function FindCandidatesPage() {
                       <p className="text-xs text-slate-600 leading-relaxed">{c.ai_explanation}</p>
                     </div>
                   )}
+                  {/* Action buttons */}
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" onClick={() => handleViewProfile(c.id)}
+                      data-testid={`view-profile-btn-${c.id || idx}`}>
+                      <ExternalLink className="w-3.5 h-3.5 mr-1.5" />View Full Profile
+                    </Button>
+                    {shortlistedCandidates.has(c.id) ? (
+                      <Button size="sm" disabled className="bg-green-600 text-white" data-testid={`added-applicant-${c.id || idx}`}>
+                        <CheckCircle className="w-3.5 h-3.5 mr-1.5" />Added
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" className="border-[#7CB342] text-[#7CB342] hover:bg-[#DCFCE7]"
+                        onClick={() => setAddApplicantCandidate(c)} data-testid={`add-applicant-btn-${c.id || idx}`}>
+                        <UserPlus className="w-3.5 h-3.5 mr-1.5" />Add as Applicant
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
