@@ -216,19 +216,40 @@
 /* Kanban Board */
 .kanban-board {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
   overflow-x: auto;
-  padding: 1.5rem;
+  padding: 1rem;
   min-height: calc(100vh - 200px);
+  -webkit-overflow-scrolling: touch;
 }
 
 .kanban-column {
   flex-shrink: 0;
-  width: 320px;
+  width: 280px;
   background: var(--vhc-background);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  .kanban-board {
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+  .kanban-column {
+    width: 320px;
+  }
+}
+
+/* Mobile table wrapper */
+.mobile-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-table-wrap table {
+  min-width: 700px;
 }
 
 .kanban-column-header {
