@@ -364,7 +364,7 @@ export default function FindCandidatesPage() {
               {aiResults.map((c, idx) => (
                 <div key={c.id || idx} data-testid={`ai-result-${c.id || idx}`}
                   className="p-4 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0">
                         <span className="text-[#7CB342] font-semibold">{c.name?.charAt(0)?.toUpperCase() || '?'}</span>
@@ -376,7 +376,7 @@ export default function FindCandidatesPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 flex-wrap ml-0 sm:ml-auto shrink-0">
                       {c.experience_years > 0 && (
                         <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">{c.experience_years} yrs</span>
                       )}
@@ -423,14 +423,14 @@ export default function FindCandidatesPage() {
                 <div key={result.candidate_id} data-testid={`candidate-result-${result.candidate_id}`}
                   className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${result.filtered_out ? 'opacity-50 bg-slate-50' : ''}`}
                   onClick={() => setSelectedCandidate(result)}>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-[#DCFCE7] flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0">
                         <span className="text-[#7CB342] font-semibold">{result.candidate_name?.charAt(0).toUpperCase()}</span>
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-900">{result.candidate_name}</p>
-                        <p className="text-sm text-slate-500">{result.candidate_email}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{result.candidate_name}</p>
+                        <p className="text-sm text-slate-500 truncate">{result.candidate_email}</p>
                         {result.filtered_out && (
                           <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
                             <AlertCircle className="w-3 h-3" />{result.filter_reason}
@@ -438,7 +438,7 @@ export default function FindCandidatesPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 flex-wrap">
                       {result.matched_skills?.length > 0 && (
                         <div className="hidden md:flex flex-wrap gap-1 max-w-xs">
                           {result.matched_skills.slice(0, 3).map((skill) => (
@@ -446,7 +446,7 @@ export default function FindCandidatesPage() {
                           ))}
                         </div>
                       )}
-                      <div className={`px-4 py-2 rounded-lg font-bold border ${getScoreColor(result.score)}`}>{result.score}%</div>
+                      <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-bold border ${getScoreColor(result.score)}`}>{result.score}%</div>
                     </div>
                   </div>
                   <p className="mt-2 text-sm text-slate-600 line-clamp-2">{result.explanation}</p>
