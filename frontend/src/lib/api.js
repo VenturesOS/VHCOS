@@ -304,6 +304,23 @@ export const contactAPI = {
   delete: (id) => api.delete(`/contact-submissions/${id}`),
 };
 
+// Blog Engine APIs
+export const blogAPI = {
+  // Admin
+  generate: (data) => api.post('/blog/generate', data),
+  adminList: (params) => api.get('/blog/admin/list', { params }),
+  adminGet: (id) => api.get(`/blog/admin/${id}`),
+  adminUpdate: (id, data) => api.put(`/blog/admin/${id}`, data),
+  publish: (id) => api.put(`/blog/admin/${id}/publish`),
+  unpublish: (id) => api.put(`/blog/admin/${id}/unpublish`),
+  adminDelete: (id) => api.delete(`/blog/admin/${id}`),
+  // Public
+  employerList: (page) => api.get('/blog/employer', { params: { page } }),
+  employerBySlug: (slug) => api.get(`/blog/employer/${slug}`),
+  candidateList: (page, category) => api.get('/blog/candidate', { params: { page, category } }),
+  candidateBySlug: (slug) => api.get(`/blog/candidate/${slug}`),
+};
+
 // Candidate Data Bank APIs
 export const candidateBankAPI = {
   add: (file, email, name) => {
