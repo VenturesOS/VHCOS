@@ -256,7 +256,7 @@ async def public_candidate_blog_by_slug(slug: str):
 
 def _build_rss_item(blog: dict, base_url: str) -> str:
     path = "industrial-hiring-insights" if blog.get("blog_type") == "employer" else "career-insights"
-    link = f"{base_url}/website/{path}/{blog.get('slug', '')}"
+    link = f"{base_url}/{path}/{blog.get('slug', '')}"
     pub_date = blog.get("published_at", blog.get("created_at", ""))
     return f"""<item>
   <title>{xml_escape(blog.get('title', ''))}</title>
