@@ -7,7 +7,7 @@ import { Label } from '../../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { BarChart3, Eye, MousePointerClick, FileText, Clock, Rss, Play, Loader2, TrendingUp } from 'lucide-react';
+import { BarChart3, Eye, MousePointerClick, FileText, Clock, Rss, Play, Loader2, TrendingUp, Mail, Map } from 'lucide-react';
 import { blogAPI } from '../../lib/api';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
