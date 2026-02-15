@@ -2,20 +2,16 @@ import { useEffect } from 'react';
 
 /**
  * PublicWebsiteRedirect Component
- * 
- * Performs a hard redirect to the static website
- * This bypasses React Router to serve static HTML files from /public/website/
+ * Redirects to the static website homepage at the clean root URL.
+ * The craco devServer middleware serves the static HTML at /.
  */
 export default function PublicWebsiteRedirect() {
   useEffect(() => {
-    // Check if we're already on a static HTML page (prevent redirect loop)
-    if (!window.location.pathname.endsWith('.html')) {
-      // Redirect to the static Index.html
-      window.location.replace('/website/Index.html');
+    if (window.location.pathname !== '/') {
+      window.location.replace('/');
     }
   }, []);
 
-  // Show a brief loading state while redirecting
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="text-center">
