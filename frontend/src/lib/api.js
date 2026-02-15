@@ -332,6 +332,10 @@ export const blogAPI = {
   updateSchedule: (data) => api.put('/blog/schedule/config', data),
   triggerPublish: (blogType) => api.post(`/blog/schedule/trigger?blog_type=${blogType}`),
   getScheduleLog: (limit) => api.get('/blog/schedule/log', { params: { limit } }),
+  // AI Topic Research
+  researchTopics: (data) => api.post('/blog/research-topics', data),
+  // Sitemap & Digest
+  sendDigest: () => api.post('/blog/send-digest'),
 };
 
 // Candidate Data Bank APIs
