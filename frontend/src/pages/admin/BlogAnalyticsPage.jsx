@@ -77,6 +77,15 @@ export default function BlogAnalyticsPage() {
     finally { setTriggering(''); }
   };
 
+  const handleSendDigest = async () => {
+    setSendingDigest(true);
+    try {
+      const res = await blogAPI.sendDigest();
+      toast.success(res.data.message);
+    } catch { toast.error('Digest send failed'); }
+    finally { setSendingDigest(false); }
+  };
+
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 
   return (
