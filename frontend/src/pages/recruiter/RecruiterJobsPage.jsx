@@ -45,7 +45,7 @@ export default function RecruiterJobsPage() {
     <div className="space-y-6" data-testid="recruiter-jobs-page">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Jobs</h1>
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Jobs</h1>
           <p className="text-slate-500 mt-1">View and manage job postings</p>
         </div>
         <div className="relative w-full sm:w-64">

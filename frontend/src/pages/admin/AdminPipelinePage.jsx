@@ -104,7 +104,7 @@ export default function AdminPipelinePage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Collective Pipeline</h1>
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Collective Pipeline</h1>
           <p className="text-slate-500 mt-1">Global view across all employers and recruiters</p>
         </div>
         <div className="flex items-center gap-2">
@@ -191,7 +191,7 @@ export default function AdminPipelinePage() {
       </Card>
 
       {/* Stage Summary Cards */}
-      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
+      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2 sm:gap-3">
         {STAGES.map((stage) => {
           const Icon = stage.icon;
           const count = stageCounts[stage.id] || 0;
