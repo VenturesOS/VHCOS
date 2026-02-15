@@ -400,3 +400,149 @@ async def admin_schedule_log(
     """Admin: get auto-publish history."""
     logs = await get_schedule_log(limit)
     return {"logs": logs}
+
+
+# ── AI Topic & Keyword Research ──
+
+class TopicResearchRequest(BaseModel):
+    blog_type: str = Field(..., pattern="^(employer|candidate)$")
+    industry: Optional[str] = None
+    region: Optional[str] = None
+    count: int = Field(5, ge=1, le=10)
+
+
+@router.post("/api/blog/research-topics")
+async def admin_research_topics(
+    req: TopicResearchRequest,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Admin: AI-powered topic & keyword research."""
+    topics = await research_topics(req.blog_type, req.industry, req.region, req.count)
+    return {"topics": topics}
+
+
+# ── Blog Sitemap.xml ──
+
+@router.get("/api/blog/sitemap.xml")
+async def blog_sitemap():
+    """Public: generate XML sitemap for all published blog posts."""
+    blogs = await db.blog_posts.find(
+        {"status": "published"},
+        {"_id": 0, "slug": 1, "blog_type": 1, "published_at": 1, "updated_at": 1}
+    ).sort("published_at", -1).to_list(500)
+
+    base = "https://ventureshrd.com"
+    urls = []
+
+    # Static pages
+    static_pages = [
+        {"loc": "/", "priority": "1.0"},
+        {"loc": "/about", "priority": "0.8"},
+        {"loc": "/services", "priority": "0.8"},
+        {"loc": "/industries", "priority": "0.7"},
+        {"loc": "/careers", "priority": "0.7"},
+        {"loc": "/contact", "priority": "0.7"},
+        {"loc": "/global-hiring", "priority": "0.7"},
+        {"loc": "/industrial-hiring-insights", "priority": "0.8"},
+        {"loc": "/career-insights", "priority": "0.8"},
+    ]
+    for p in static_pages:
+        urls.append(f"""  <url>
+    <loc>{xml_escape(base + p['loc'])}</loc>
+    <priority>{p['priority']}</priority>
+    <changefreq>weekly</changefreq>
+  </url>""")
+
+    # Blog posts
+    for b in blogs:
+        path = "industrial-hiring-insights" if b.get("blog_type") == "employer" else "career-insights"
+        lastmod = b.get("updated_at") or b.get("published_at", "")
+        if lastmod:
+            lastmod = lastmod[:10] if isinstance(lastmod, str) else ""
+        urls.append(f"""  <url>
+    <loc>{xml_escape(f"{base}/{path}/{b.get('slug', '')}")}</loc>
+    <lastmod>{lastmod}</lastmod>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
+  </url>""")
+
+    sitemap_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{chr(10).join(urls)}
+</urlset>"""
+
+    return Response(content=sitemap_xml, media_type="application/xml")
+
+
+# ── Weekly Blog Digest ──
+
+@router.post("/api/blog/send-digest")
+async def admin_send_digest(current_user: dict = Depends(require_role(["admin"]))):
+    """Admin: manually trigger weekly blog digest email to candidates."""
+    from datetime import timedelta
+    from services.email_service import send_email
+
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    recent_blogs = await db.blog_posts.find(
+        {"status": "published", "published_at": {"$gte": week_ago}},
+        {"_id": 0, "title": 1, "slug": 1, "blog_type": 1, "meta_description": 1, "published_at": 1}
+    ).sort("published_at", -1).to_list(20)
+
+    if not recent_blogs:
+        return {"message": "No blogs published in the last 7 days", "sent": 0}
+
+    # Get candidate emails
+    candidates = await db.users.find(
+        {"role": "candidate", "email": {"$exists": True}},
+        {"_id": 0, "email": 1, "name": 1}
+    ).to_list(500)
+
+    if not candidates:
+        return {"message": "No candidate subscribers found", "sent": 0}
+
+    # Build digest HTML
+    base = "https://ventureshrd.com"
+    blog_items = ""
+    for b in recent_blogs:
+        path = "industrial-hiring-insights" if b.get("blog_type") == "employer" else "career-insights"
+        link = f"{base}/{path}/{b.get('slug', '')}"
+        blog_items += f"""
+        <tr>
+          <td style="padding:16px 0;border-bottom:1px solid #E5E7EB;">
+            <a href="{link}" style="color:#111827;font-size:16px;font-weight:600;text-decoration:none;">{b.get('title','')}</a>
+            <p style="color:#6B7280;font-size:13px;margin:6px 0 0;">{b.get('meta_description','')}</p>
+          </td>
+        </tr>"""
+
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px;">
+      <h2 style="color:#111827;">Weekly Career Insights Digest</h2>
+      <p style="color:#6B7280;">Here's what we published this week:</p>
+      <table style="width:100%;border-collapse:collapse;">{blog_items}</table>
+      <div style="text-align:center;margin-top:28px;">
+        <a href="{base}/career-insights" style="display:inline-block;background:#7CB342;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Read More Articles</a>
+      </div>
+      <hr style="border:none;border-top:1px solid #E5E7EB;margin:32px 0 16px;">
+      <p style="color:#9CA3AF;font-size:11px;text-align:center;">Ventures HRD Centre Pvt Ltd</p>
+    </div>"""
+
+    sent = 0
+    for c in candidates:
+        try:
+            await send_email(
+                recipient_email=c["email"],
+                subject="Your Weekly Career Insights — Ventures HRD",
+                html_content=html,
+            )
+            sent += 1
+        except Exception as e:
+            logger.warning(f"[Digest] Failed to send to {c['email']}: {e}")
+
+    # Log the digest send
+    await db.blog_digest_log.insert_one({
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+        "blogs_count": len(recent_blogs),
+        "recipients_count": sent,
+    })
+
+    return {"message": f"Digest sent to {sent} candidates", "sent": sent, "blogs_included": len(recent_blogs)}
