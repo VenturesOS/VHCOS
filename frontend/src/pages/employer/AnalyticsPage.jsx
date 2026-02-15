@@ -57,7 +57,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         <Card className="border-slate-200">
           <CardContent className="p-6">
             <p className="text-sm text-slate-500">Total Jobs</p>
