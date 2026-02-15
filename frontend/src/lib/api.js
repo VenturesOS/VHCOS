@@ -319,6 +319,17 @@ export const blogAPI = {
   employerBySlug: (slug) => api.get(`/blog/employer/${slug}`),
   candidateList: (page, category) => api.get('/blog/candidate', { params: { page, category } }),
   candidateBySlug: (slug) => api.get(`/blog/candidate/${slug}`),
+  // Analytics
+  trackEvent: (data) => api.post('/blog/track', data),
+  analyticsStats: (days) => api.get('/blog/analytics/stats', { params: { days } }),
+  analyticsViews: (days) => api.get('/blog/analytics/views-over-time', { params: { days } }),
+  analyticsTopBlogs: (days, limit) => api.get('/blog/analytics/top-blogs', { params: { days, limit } }),
+  analyticsTopClicks: (days, limit) => api.get('/blog/analytics/top-clicks', { params: { days, limit } }),
+  // Schedule
+  getSchedule: () => api.get('/blog/schedule/config'),
+  updateSchedule: (data) => api.put('/blog/schedule/config', data),
+  triggerPublish: (blogType) => api.post(`/blog/schedule/trigger?blog_type=${blogType}`),
+  getScheduleLog: (limit) => api.get('/blog/schedule/log', { params: { limit } }),
 };
 
 // Candidate Data Bank APIs
