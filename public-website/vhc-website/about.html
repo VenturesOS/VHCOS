@@ -49,6 +49,35 @@
     }
   }
   </script>
+  <style>
+    /* Responsive overrides for about.html inline grids */
+    @media (max-width: 768px) {
+      .about-story-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+      .about-values-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+      .about-team-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+      .about-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
+      .about-hero h1 { font-size: 32px !important; }
+      .about-hero p { font-size: 16px !important; }
+      .about-hero { padding: 60px 16px !important; }
+      .about-section { padding: 48px 16px !important; }
+      .about-section h2 { font-size: 28px !important; }
+      .about-team-card img { max-width: 280px; margin: 0 auto 16px; }
+      .about-team-card h3 { font-size: 20px !important; }
+      .about-team-card p { font-size: 15px !important; }
+      .about-values-card { padding: 24px !important; }
+      .about-cta h2 { font-size: 26px !important; }
+      header nav { display: none; }
+      .mobile-menu-toggle { display: block !important; }
+    }
+    @media (max-width: 480px) {
+      .about-footer-grid { grid-template-columns: 1fr !important; }
+      .about-hero h1 { font-size: 26px !important; }
+      .about-values-grid { grid-template-columns: 1fr !important; }
+    }
+    @media (min-width: 481px) and (max-width: 768px) {
+      .about-values-grid { grid-template-columns: 1fr 1fr !important; }
+    }
+  </style>
 </head>
 <body style="margin:0; font-family:system-ui,-apple-system,sans-serif;">
   
