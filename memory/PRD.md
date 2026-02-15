@@ -1,90 +1,99 @@
 # Ventures HRD - Product Requirements Document
 
 ## Original Problem Statement
-Build a recruitment operating system (formerly VHC Talent OS) with:
-- React frontend + FastAPI backend + MongoDB database
-- Chrome Extension for capturing Naukri profiles
-- Advanced Analytics Dashboard with PDF export
-- AI-powered candidate screening
-- Multi-role access (Admin, Employer, Recruiter, Candidate)
-- Production deployment on custom domain
+VHC Talent OS — a full-stack Recruitment Operating System for Ventures HRD recruitment agency. The platform manages the end-to-end hiring pipeline across Admin, Employer, Recruiter, and Candidate roles.
 
-## Production Domain
-- **Domain:** ventureshrd.com
-- **Deployment:** Emergent Platform
-- **Extension:** v3.9.1 (Ventures HRD branded)
-
-## Current Architecture
-```
-/app
-├── backend/
-│   ├── server.py
-│   ├── routes/
-│   │   ├── auth.py
-│   │   ├── admin.py
-│   │   ├── analytics.py
-│   │   ├── applications.py
-│   │   ├── candidates.py
-│   │   ├── extension.py
-│   │   ├── profile.py
-│   │   ├── cv_upload.py         # NEW: CV Upload → AI Parse
-│   │   └── files.py
-│   └── config.py
-├── frontend/src/
-│   ├── components/dialogs/
-│   │   └── CVUploadDialog.jsx   # NEW: CV Upload dialog
-│   ├── lib/api.js
-│   └── pages/
-└── browser-extension/           # v3.9.0
-```
+## Core Architecture
+- Frontend: React + Tailwind CSS + Shadcn UI
+- Backend: FastAPI + MongoDB
+- Browser Extension: Chrome Extension (v3.9.1) for Naukri profile capture
+- AI Integration: OpenAI GPT-4o-mini for AI Search and JD parsing
 
 ## What's Been Implemented
 
-### Session: Feb 12-13, 2026
-1. Domain Migration (portal.vhc.in → ventureshrd.com)
-2. Branding Update ("VHC Talent OS" → "Ventures HRD")
-3. Favicon/Tab Logo updated to VHC logo
-4. CORS Fix — relative API URLs
-5. CORS Hardcoded origins in server.py
-6. Admin role in Create User dropdown
-7. Extension v3.8.5 — CORS-free via background.js proxy
-8. Candidate Profile/Messages routes
-9. **CRITICAL: Candidate Overwrite Bug Fix** — naukri_profile_id=None query matching all records
-10. Extension ZIP auto-rebuild on download
-11. **Extension phone fix** — BEFORE snapshot phones skipped (recruiter's phone)
-12. **Extension version fix** — source_details uses actual version instead of hardcoded "2.0.0"
-13. **NEW: CV Upload Feature** — Upload PDF/DOCX → AI parses → editable profile → save to Candidate Bank
+### Authentication & Authorization
+- JWT-based auth with role-based access (Admin, Employer, Recruiter, Candidate)
+- Login, Register pages
 
-### Session: Feb 14, 2026
-14. **CRITICAL: Profile Overwrite Bug Fix v2** — `extractNaukriProfileId()` was using `sid` (search session ID, shared across all profiles in a search) instead of `id` (unique profile identifier). Fixed priority: `id` first, `sid` as fallback with timestamp.
-15. **Backend Safety Net** — Even if `naukri_profile_id` matches, backend now verifies names match before allowing update. Different names = different person = new record.
-16. **Extension v3.9.1** — Updated with `uresid` and `storageKey` support for Naukri v3 preview URLs.
-17. **Dynamic ZIP Build** — Download endpoint now builds ZIP from source every time, ensuring latest code is always served.
-18. **AI Screening Broadened Search** — Matching pipeline now searches across `summary`, `headline`, `designation`, `it_skills`, and `raw_profile_text` (not just `skills` array). Fixed `candidate_email=None` crash. Added keyword search filter.
-19. **AI Search (Phase 1)** — Natural language candidate search using GPT-4o-mini.
-    - Architecture: LLM (Structured Extraction) → Deterministic DB Filter Engine → Results → LLM (Explanation)
-    - System prompt for extraction handles: skills, experience, industry, company type, location, notice period, CTC, degree, stability logic, negation/exclusion
-    - Filter preview toggle, per-candidate AI explanation badges
-    - Model-agnostic architecture ready for Phase 2 hybrid routing (GPT-4o for complex prompts)
-    - New files: `/app/backend/services/ai_search.py`, `/app/backend/routes/ai_search.py`
-    - Frontend: New "AI Search" tab on Find Candidates page
-    - Search logging: raw prompt, extracted JSON, model, tokens, time
-    - Testing: 100% backend (14/14), 100% frontend — all verified
-20. **AI Search Analytics** — Dashboard shows total searches, top searched skills (bar chart), demand gaps (zero-result prompts). Cost data (avg cost/search, total tokens, total USD) only appears in the admin PDF report — not on the dashboard.
+### Admin Features
+- Dashboard with stats overview
+- User Management (CRUD)
+- Jobs Management with career page, shareable links, mandate links
+- Candidate Data Bank with search, filters, CV upload, profile editing
+- Pipeline (Kanban-style) with 9 stages
+- Bulk Import (Excel + CV/ZIP modes) with AI industry detection
+- Import History
+- Companies Management with employer assignment
+- Commercials Management (percentage, fixed, level-based)
+- Teams & Hierarchy Management
+- Advanced Analytics with filters, charts, KPI scorecards, PDF export
+- AI Search Analytics (usage, cost tracking in PDF report)
+- Naukri Extension download
 
-## Admin Credentials (Deployed)
-- admin@vhc.in / VhcAdmin@2024
-- ajit@vhc.in / 12345678 (employer)
-- jatin@vhc.in / 12345678 (recruiter)
+### Employer Features
+- Dashboard with quick actions and job stats
+- Job Creation with AI JD Parser
+- Find Candidates with Quick Match + Full AI Match modes
+- AI Search (natural language prompt-based candidate search)
+- Candidate Bank (scoped to own team/applicants)
+- Pipeline Management
+- Analytics
+- Match History
 
-## Backlog (P3)
-1. AI Screening Shortlist Fix — disabled when JD via "Paste/Upload JD"
-2. Forgot Password Feature (P2) — deferred until post-deploy verified
-3. Refactor `content.js` in Chrome Extension
-4. AI Search Phase 2 — Hybrid routing (GPT-4o-mini default + GPT-4o for complex prompts), conversational follow-ups
-2. Refactor content.js into smaller modules
-3. Password Reset (external/forgot password flow)
+### Recruiter Features
+- Dashboard with daily workflow and pipeline overview
+- Jobs assigned view
+- Candidate Bank (scoped to own captures)
+- Pipeline Management
+- Match History
 
-## Cancelled
-- Mobile Number Extraction
-- N8N / Notion Integration
+### Candidate Features
+- Dashboard with application status
+- Browse Jobs
+- Profile Management
+
+### Chrome Extension (v3.9.1)
+- Naukri profile capture with robust profile ID extraction
+- Backend safety net for duplicate prevention
+
+### AI Features
+- AI Search: GPT-4o-mini translates natural language to structured DB queries
+- AI JD Parser: Extracts job details from pasted/uploaded JDs
+- AI Screening: Quick match + Full AI match modes
+- AI Industry Detection: For bulk imported candidates
+
+### Mobile & Tablet Responsiveness (Feb 2026)
+- Hamburger menu with slide-out sidebar on mobile/tablet (< 1024px)
+- Responsive stat card grids (2-col mobile, 4-col desktop)
+- Responsive headings (text-xl → text-2xl → text-3xl)
+- Candidate rows stack vertically on mobile with compact action buttons
+- Dialog/modal mobile optimization with scrollable content
+- Table horizontal scroll for data-heavy pages
+- Tab lists with overflow-x-auto for mobile scrolling
+- Responsive form layouts and button groups
+
+## Prioritized Backlog
+
+### P1 - Fix AI Screening Shortlist Bug
+- "Shortlist" button disabled when JD is pasted/uploaded (no job_id available)
+
+### P2 - External Password Reset
+- "Forgot Password" flow for users
+
+### P3 - Refactor content.js
+- Chrome extension technical debt - break into smaller modules
+
+### P3 - AI Search Phase 2
+- Hybrid model routing (GPT-4o for complex prompts, GPT-4o-mini default)
+- Configurable model selection
+
+## Tech Stack
+- React 18, Tailwind CSS, Shadcn/UI, Recharts
+- FastAPI, PyMongo/Motor, fpdf2
+- MongoDB Atlas
+- OpenAI GPT-4o-mini (via emergentintegrations)
+
+## Key Credentials
+- Admin: admin@vhc.in / VhcAdmin@2024
+- Employer: ajit@vhc.in / 12345678
+- Recruiter: jatin@vhc.in / 12345678
