@@ -54,6 +54,17 @@ class BlogUpdateRequest(BaseModel):
     industry: Optional[str] = None
 
 
+class ScheduleConfigRequest(BaseModel):
+    employer: Optional[dict] = None
+    candidate: Optional[dict] = None
+
+
+class TrackEventRequest(BaseModel):
+    blog_id: str
+    event_type: str = Field(..., pattern="^(view|cta_click)$")
+    metadata: Optional[dict] = None
+
+
 BLOG_PROJECTION = {"_id": 0}
 BLOG_LIST_PROJECTION = {
     "_id": 0, "id": 1, "title": 1, "slug": 1, "meta_description": 1,
