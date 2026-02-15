@@ -250,3 +250,153 @@ async def public_candidate_blog_by_slug(slug: str):
     if not blog:
         raise HTTPException(status_code=404, detail="Blog not found")
     return blog
+
+
+# ── RSS Feed ──
+
+def _build_rss_item(blog: dict, base_url: str) -> str:
+    path = "industrial-hiring-insights" if blog.get("blog_type") == "employer" else "career-insights"
+    link = f"{base_url}/website/{path}/{blog.get('slug', '')}"
+    pub_date = blog.get("published_at", blog.get("created_at", ""))
+    return f"""<item>
+  <title>{xml_escape(blog.get('title', ''))}</title>
+  <link>{xml_escape(link)}</link>
+  <description>{xml_escape(blog.get('meta_description', ''))}</description>
+  <pubDate>{pub_date}</pubDate>
+  <guid isPermaLink="true">{xml_escape(link)}</guid>
+  <category>{xml_escape(blog.get('blog_type', ''))}</category>
+</item>"""
+
+
+@router.get("/api/blog/rss")
+async def rss_feed(blog_type: Optional[str] = None):
+    """Public: RSS 2.0 feed of published blog posts."""
+    query = {"status": "published"}
+    if blog_type in ("employer", "candidate"):
+        query["blog_type"] = blog_type
+
+    blogs = await db.blog_posts.find(
+        query,
+        {"_id": 0, "id": 1, "title": 1, "slug": 1, "meta_description": 1,
+         "blog_type": 1, "published_at": 1, "created_at": 1}
+    ).sort("published_at", -1).limit(50).to_list(50)
+
+    base_url = "https://ventureshrd.com"
+    items = "\n".join(_build_rss_item(b, base_url) for b in blogs)
+    title = "VHC Talent Advisory Blog"
+    if blog_type == "employer":
+        title = "Industrial Hiring Insights - VHC Talent Advisory"
+    elif blog_type == "candidate":
+        title = "Career Insights & Advice - VHC Talent Advisory"
+
+    rss_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>{xml_escape(title)}</title>
+  <link>{xml_escape(base_url)}</link>
+  <description>Expert insights on industrial recruitment, career growth, and talent acquisition.</description>
+  <language>en-in</language>
+  <lastBuildDate>{datetime.now(timezone.utc).isoformat()}</lastBuildDate>
+  <atom:link href="{xml_escape(base_url)}/api/blog/rss" rel="self" type="application/rss+xml"/>
+{items}
+</channel>
+</rss>"""
+
+    return Response(content=rss_xml, media_type="application/rss+xml")
+
+
+# ── Analytics Tracking (Public — No Auth) ──
+
+@router.post("/api/blog/track")
+async def track_blog_event(req: TrackEventRequest):
+    """Public: track blog page views and CTA clicks."""
+    await track_event(req.blog_id, req.event_type, req.metadata)
+    return {"ok": True}
+
+
+# ── Admin: Analytics Dashboard ──
+
+@router.get("/api/blog/analytics/stats")
+async def admin_blog_stats(
+    days: int = Query(30, ge=1, le=365),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Admin: get blog analytics summary."""
+    stats = await get_blog_stats(days)
+    return stats
+
+
+@router.get("/api/blog/analytics/views-over-time")
+async def admin_views_over_time(
+    days: int = Query(30, ge=1, le=365),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Admin: get daily views over time."""
+    data = await get_views_over_time(days)
+    return {"data": data}
+
+
+@router.get("/api/blog/analytics/top-blogs")
+async def admin_top_blogs(
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Admin: get top blogs by views."""
+    data = await get_top_blogs(limit, days)
+    return {"data": data}
+
+
+@router.get("/api/blog/analytics/top-clicks")
+async def admin_top_clicks(
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Admin: get top blogs by CTA clicks."""
+    data = await get_clicks_by_blog(limit, days)
+    return {"data": data}
+
+
+# ── Admin: Auto-Scheduling ──
+
+@router.get("/api/blog/schedule/config")
+async def admin_get_schedule(current_user: dict = Depends(require_role(["admin"]))):
+    """Admin: get current scheduling configuration."""
+    config = await get_schedule_config()
+    queue = await get_draft_queue_counts()
+    return {"config": config, "draft_queue": queue}
+
+
+@router.put("/api/blog/schedule/config")
+async def admin_update_schedule(req: ScheduleConfigRequest, current_user: dict = Depends(require_role(["admin"]))):
+    """Admin: update scheduling configuration."""
+    current = await get_schedule_config()
+    if req.employer:
+        current["employer"] = {**current.get("employer", {}), **req.employer}
+    if req.candidate:
+        current["candidate"] = {**current.get("candidate", {}), **req.candidate}
+    await save_schedule_config(current)
+    return {"message": "Schedule updated", "config": current}
+
+
+@router.post("/api/blog/schedule/trigger")
+async def admin_trigger_publish(
+    blog_type: str = Query(..., pattern="^(employer|candidate)$"),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Admin: manually trigger auto-publish for a blog type."""
+    blog_id = await auto_publish_blog(blog_type)
+    if not blog_id:
+        return {"message": f"No {blog_type} drafts available to publish"}
+    return {"message": f"Published one {blog_type} blog", "blog_id": blog_id}
+
+
+@router.get("/api/blog/schedule/log")
+async def admin_schedule_log(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Admin: get auto-publish history."""
+    logs = await get_schedule_log(limit)
+    return {"logs": logs}
