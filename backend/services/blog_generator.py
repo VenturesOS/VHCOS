@@ -49,6 +49,62 @@ async def _call_llm(system_prompt: str, user_prompt: str, max_tokens: int = None
 
 
 # ──────────────────────────────────────────────
+# AI TOPIC & KEYWORD RESEARCH
+# ──────────────────────────────────────────────
+
+RESEARCH_SYSTEM = """You are an expert SEO strategist and content planner specializing in industrial recruitment, talent acquisition, and career advice for professionals.
+
+You research trending topics, high-search-volume keywords, and content gaps to suggest data-driven blog ideas.
+
+You MUST return valid JSON only. No markdown fencing, no backticks, no commentary outside JSON."""
+
+
+async def research_topics(blog_type: str, industry: Optional[str] = None, region: Optional[str] = None, count: int = 5) -> list:
+    """Use OpenAI to research trending topics and keywords for blog generation."""
+    context = f"Blog type: {blog_type}"
+    if industry:
+        context += f"\nIndustry: {industry}"
+    if region:
+        context += f"\nRegion: {region}"
+
+    prompt = f"""{context}
+
+Research and suggest {count} compelling blog topics with SEO keyword sets. For each topic, provide:
+- A specific, timely topic title
+- Primary keyword (high search volume)
+- 4-6 secondary/long-tail keywords
+- Brief rationale for why this topic would perform well (trends, search demand, content gaps)
+- Estimated difficulty: easy/medium/hard
+- Recommended region focus
+
+{"Focus on industrial hiring, manufacturing recruitment, talent acquisition strategies, workforce planning, and HR technology for employers." if blog_type == "employer" else "Focus on career growth, resume optimization, interview preparation, salary negotiation, industry transitions, and professional development for candidates."}
+
+Return as JSON array:
+[
+  {{
+    "topic": "Specific blog topic title",
+    "primary_keyword": "main keyword",
+    "secondary_keywords": ["kw1", "kw2", "kw3", "kw4"],
+    "rationale": "Why this topic will perform well",
+    "difficulty": "easy|medium|hard",
+    "region": "India|Global|specific region"
+  }}
+]"""
+
+    raw = await _call_llm(RESEARCH_SYSTEM, prompt, max_tokens=2000)
+    # Parse JSON from response
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        logger.error(f"[TopicResearch] Failed to parse: {cleaned[:200]}")
+        return []
+
+
+# ──────────────────────────────────────────────
 # EMPLOYER BLOG GENERATION
 # ──────────────────────────────────────────────
 
