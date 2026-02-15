@@ -235,7 +235,7 @@ export default function CommercialsPage() {
           <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Commercials</h1>
           <p className="text-slate-500 mt-1">Manage fee structures and commercial agreements</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <div className="relative w-full sm:w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
@@ -246,7 +246,7 @@ export default function CommercialsPage() {
             />
           </div>
           <Select value={companyFilter} onValueChange={setCompanyFilter}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue placeholder="All Companies" />
             </SelectTrigger>
             <SelectContent>
@@ -258,7 +258,7 @@ export default function CommercialsPage() {
           </Select>
           <Button
             onClick={() => { resetForm(); setShowCreate(true); }}
-            className="bg-[#7CB342] hover:bg-[#689F38]"
+            className="bg-[#7CB342] hover:bg-[#689F38] w-full sm:w-auto"
             data-testid="create-commercial-btn"
           >
             <Plus className="w-4 h-4 mr-2" /> Add Commercial
