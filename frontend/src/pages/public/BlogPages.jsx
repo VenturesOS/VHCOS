@@ -118,7 +118,11 @@ export function EmployerBlogArticle() {
 
   useEffect(() => {
     setLoading(true);
-    blogAPI.employerBySlug(slug).then(r => setBlog(r.data)).catch(() => setBlog(null)).finally(() => setLoading(false));
+    blogAPI.employerBySlug(slug).then(r => {
+      setBlog(r.data);
+      // Track page view
+      if (r.data?.id) blogAPI.trackEvent({ blog_id: r.data.id, event_type: 'view' }).catch(() => {});
+    }).catch(() => setBlog(null)).finally(() => setLoading(false));
   }, [slug]);
 
   if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ color: '#9ca3af' }}>Loading article...</p></div>;
@@ -294,7 +298,11 @@ export function CandidateBlogArticle() {
 
   useEffect(() => {
     setLoading(true);
-    blogAPI.candidateBySlug(slug).then(r => setBlog(r.data)).catch(() => setBlog(null)).finally(() => setLoading(false));
+    blogAPI.candidateBySlug(slug).then(r => {
+      setBlog(r.data);
+      // Track page view
+      if (r.data?.id) blogAPI.trackEvent({ blog_id: r.data.id, event_type: 'view' }).catch(() => {});
+    }).catch(() => setBlog(null)).finally(() => setLoading(false));
   }, [slug]);
 
   if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ color: '#9ca3af' }}>Loading article...</p></div>;
