@@ -98,7 +98,7 @@ export function EmployerBlogList() {
           blogs.length === 0 ? <p style={{ textAlign: 'center', color: '#9ca3af', padding: '60px' }}>Articles coming soon. Check back for expert hiring insights.</p> : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '32px' }}>
               {blogs.map(b => (
-                <Link key={b.id} to={`/website/industrial-hiring-insights/${b.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Link key={b.id} to={`/industrial-hiring-insights/${b.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                   <article data-testid={`blog-card-${b.slug}`} style={{ background: '#f9fafb', borderRadius: '16px', padding: '32px', height: '100%', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.2s, transform 0.2s', cursor: 'pointer' }}
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
@@ -150,7 +150,7 @@ export function EmployerBlogArticle() {
   }, [slug]);
 
   if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ color: '#9ca3af' }}>Loading article...</p></div>;
-  if (!blog) return <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}><p style={{ fontSize: '24px', fontWeight: 700 }}>Article Not Found</p><Link to="/website/industrial-hiring-insights" style={{ color: '#7CB342' }}>Back to Insights</Link></div>;
+  if (!blog) return <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}><p style={{ fontSize: '24px', fontWeight: 700 }}>Article Not Found</p><Link to="/industrial-hiring-insights" style={{ color: '#7CB342' }}>Back to Insights</Link></div>;
 
   const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
@@ -177,7 +177,7 @@ export function EmployerBlogArticle() {
       </header>
 
       <article style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px' }}>
-        <Link to="/website/industrial-hiring-insights" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#7CB342', fontSize: '14px', fontWeight: 600, textDecoration: 'none', marginBottom: '32px' }} data-testid="back-link">
+        <Link to="/industrial-hiring-insights" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#7CB342', fontSize: '14px', fontWeight: 600, textDecoration: 'none', marginBottom: '32px' }} data-testid="back-link">
           <ArrowLeft size={16} /> Back to Insights
         </Link>
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
@@ -281,7 +281,7 @@ export function CandidateBlogList() {
           blogs.length === 0 ? <p style={{ textAlign: 'center', color: '#9ca3af', padding: '60px' }}>Articles coming soon. Great career advice is on its way!</p> : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '32px' }}>
               {blogs.map(b => (
-                <Link key={b.id} to={`/website/career-insights/${b.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Link key={b.id} to={`/career-insights/${b.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                   <article data-testid={`blog-card-${b.slug}`} style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: '16px', padding: '32px', height: '100%', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.2s, transform 0.2s', cursor: 'pointer' }}
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
@@ -331,7 +331,7 @@ export function CandidateBlogArticle() {
   }, [slug]);
 
   if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ color: '#9ca3af' }}>Loading article...</p></div>;
-  if (!blog) return <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}><p style={{ fontSize: '24px', fontWeight: 700 }}>Article Not Found</p><Link to="/website/career-insights" style={{ color: '#7CB342' }}>Back to Career Insights</Link></div>;
+  if (!blog) return <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}><p style={{ fontSize: '24px', fontWeight: 700 }}>Article Not Found</p><Link to="/career-insights" style={{ color: '#7CB342' }}>Back to Career Insights</Link></div>;
 
   const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
@@ -358,7 +358,7 @@ export function CandidateBlogArticle() {
       </header>
 
       <article style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 24px' }}>
-        <Link to="/website/career-insights" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#7CB342', fontSize: '14px', fontWeight: 600, textDecoration: 'none', marginBottom: '32px' }} data-testid="back-link">
+        <Link to="/career-insights" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#7CB342', fontSize: '14px', fontWeight: 600, textDecoration: 'none', marginBottom: '32px' }} data-testid="back-link">
           <ArrowLeft size={16} /> Back to Career Insights
         </Link>
         <div style={{ marginBottom: '20px' }}>
