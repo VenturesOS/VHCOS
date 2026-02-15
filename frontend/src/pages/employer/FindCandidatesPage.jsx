@@ -459,23 +459,25 @@ export default function FindCandidatesPage() {
 
       {/* Candidate Detail Modal */}
       <Dialog open={!!selectedCandidate} onOpenChange={() => setSelectedCandidate(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="font-heading">Candidate Details</DialogTitle></DialogHeader>
           {selectedCandidate && (
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-                  <span className="text-[#7CB342] font-bold text-2xl">{selectedCandidate.candidate_name?.charAt(0).toUpperCase()}</span>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0">
+                    <span className="text-[#7CB342] font-bold text-xl sm:text-2xl">{selectedCandidate.candidate_name?.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-lg sm:text-xl truncate">{selectedCandidate.candidate_name}</h3>
+                    <p className="text-slate-500 text-sm truncate">{selectedCandidate.candidate_email}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-xl">{selectedCandidate.candidate_name}</h3>
-                  <p className="text-slate-500">{selectedCandidate.candidate_email}</p>
-                </div>
-                <div className={`ml-auto px-4 py-2 rounded-lg font-bold border ${getScoreColor(selectedCandidate.score)}`}>
+                <div className={`sm:ml-auto px-4 py-2 rounded-lg font-bold border self-start ${getScoreColor(selectedCandidate.score)}`}>
                   {selectedCandidate.score}% Match
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-3 gap-3 sm:gap-4 text-sm">
                 <div><p className="text-slate-500">Skill Match</p><p className="font-semibold">{selectedCandidate.skill_match_score || 'N/A'}%</p></div>
                 <div><p className="text-slate-500">Experience</p><p className="font-semibold">{selectedCandidate.experience_match_score || 'N/A'}%</p></div>
                 <div><p className="text-slate-500">Semantic</p><p className="font-semibold">{selectedCandidate.semantic_score != null ? `${selectedCandidate.semantic_score}%` : 'N/A'}</p></div>
