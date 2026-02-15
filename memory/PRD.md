@@ -101,18 +101,29 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - Returns up to 50 most recent published blogs
   - Links directly accessible from admin dashboard
 
-## Prioritized Backlog
+### Phase 6 (Feb 15, 2026)
+- **Forgot Password Flow** — Full email-based password reset
+  - POST /api/auth/forgot-password sends reset email via Resend
+  - Token-based reset with 1-hour expiry (password_reset_tokens collection)
+  - Prevents email enumeration (same response for existing/non-existing)
+  - Frontend at /forgot-password with request + reset forms
+  - "Forgot password?" link on Login page
+  - Sender email: noreply@ventureshrd.com
+- **Contact Form Email Notifications** — Admin email alerts
+  - New contact submissions trigger email to admin via Resend
+  - HTML-formatted email with full submission details
+- **Blog Social Sharing** — Share buttons on all blog articles
+  - LinkedIn, X (Twitter), WhatsApp share buttons
+  - Properly encoded URLs and titles
+  - Added to both employer and candidate blog article pages
 
-### P1
-- Forgot Password flow
+## Prioritized Backlog
 
 ### P2
 - Refactor Chrome extension `content.js`
 - AI Search Phase 2 (hybrid routing, configurable models)
 
 ### P3
-- Email notifications for contact form
-- Social sharing for blog articles
 - Refactor FindCandidatesPage.jsx
 
 ## Key Files
