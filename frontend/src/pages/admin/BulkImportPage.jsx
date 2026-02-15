@@ -503,21 +503,21 @@ export default function BulkImportPage() {
   return (
     <div className="space-y-6" data-testid="bulk-import-page">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Enhanced Bulk Import</h1>
-          <p className="text-slate-500 mt-1">
-            Two modes: Excel-Only (no CV) or CV/ZIP (with resumes)
+          <p className="text-slate-500 mt-1 text-sm">
+            Two modes: Excel-Only or CV/ZIP
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/admin/import-history')} data-testid="import-history-btn">
-            <History className="w-4 h-4 mr-2" />
-            Import History
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => navigate('/admin/import-history')} data-testid="import-history-btn">
+            <History className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Import </span>History
           </Button>
-          <Button variant="outline" onClick={handleDownloadTemplate} data-testid="download-template-btn">
-            <Download className="w-4 h-4 mr-2" />
-            Download Template
+          <Button variant="outline" size="sm" onClick={handleDownloadTemplate} data-testid="download-template-btn">
+            <Download className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Download </span>Template
           </Button>
         </div>
       </div>
