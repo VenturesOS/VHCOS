@@ -217,6 +217,30 @@
     .dropdown-menu a:last-child { border-bottom: none; }
     .dropdown-menu a:hover { background: #f0fdf4; color: #9acd32; }
     .dropdown-menu .role-icon { margin-right: 10px; }
+
+    /* ===== Mobile Responsive Overrides ===== */
+    @media (max-width: 768px) {
+      .about-hero-section { padding: 60px 16px !important; }
+      .about-hero-section h1 { font-size: 28px !important; }
+      .about-hero-section p { font-size: 16px !important; }
+      .about-story-section { padding: 48px 16px !important; }
+      .about-story-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+      .about-story-grid h2 { font-size: 28px !important; }
+      .about-story-grid p { font-size: 16px !important; }
+      .about-values-section { padding: 48px 16px !important; }
+      .about-values-section > div > h2 { font-size: 28px !important; margin-bottom: 32px !important; }
+      .about-values-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+      .about-values-grid > div { padding: 24px !important; }
+      .about-team-section { padding: 48px 16px !important; }
+      .about-team-section h2 { font-size: 28px !important; }
+      .about-cta-section { padding: 48px 16px !important; }
+      .about-cta-section h2 { font-size: 24px !important; }
+      .about-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
+    }
+    @media (max-width: 480px) {
+      .about-hero-section h1 { font-size: 24px !important; }
+      .about-footer-grid { grid-template-columns: 1fr !important; }
+    }
     
     /* Global Switch Styles */
     .view-switch-container {
