@@ -65,11 +65,37 @@ export default function BlogEnginePage() {
       toast.success('Blog generated! Saved as draft.');
       setShowGenerate(false);
       setGenForm({ topic: '', industry: '', keywords: '', region: 'india', category: 'career-growth' });
+      setTopicSuggestions([]);
       loadBlogs();
       setEditBlog(res.data);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Generation failed');
     } finally { setGenerating(false); }
+  };
+
+  const handleResearchTopics = async () => {
+    setResearching(true);
+    try {
+      const res = await blogAPI.researchTopics({
+        blog_type: activeTab,
+        industry: genForm.industry || undefined,
+        region: activeTab === 'employer' ? genForm.region : undefined,
+        count: 5,
+      });
+      setTopicSuggestions(res.data.topics || []);
+      if ((res.data.topics || []).length === 0) toast.info('No topic suggestions found. Try a different industry.');
+    } catch { toast.error('Topic research failed'); }
+    finally { setResearching(false); }
+  };
+
+  const applyTopicSuggestion = (t) => {
+    setGenForm(p => ({
+      ...p,
+      topic: t.topic,
+      keywords: (t.secondary_keywords || []).join(', '),
+      region: t.region?.toLowerCase().includes('india') ? 'india' : (t.region?.toLowerCase().includes('global') ? 'global' : p.region),
+    }));
+    toast.success('Topic applied! Review and generate.');
   };
 
   const handlePublish = async (id) => {
