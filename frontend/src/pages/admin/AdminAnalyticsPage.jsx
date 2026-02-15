@@ -150,7 +150,7 @@ export default function AdminAnalyticsPage() {
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <Select value={filters.employer_id || "all"} onValueChange={(v) => setFilters(f => ({ ...f, employer_id: v === 'all' ? '' : v, team_id: '', recruiter_id: '' }))}>
               <SelectTrigger data-testid="filter-employer">
                 <SelectValue placeholder="All Employers" />
