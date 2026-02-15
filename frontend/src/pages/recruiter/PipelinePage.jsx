@@ -103,7 +103,7 @@ export default function PipelinePage() {
           <p className="text-slate-500 mt-1">Drag candidates between stages to update status</p>
         </div>
         <Select value={selectedJob} onValueChange={setSelectedJob}>
-          <SelectTrigger className="w-64" data-testid="job-filter-select">
+          <SelectTrigger className="w-full sm:w-64" data-testid="job-filter-select">
             <SelectValue placeholder="Filter by mandate" />
           </SelectTrigger>
           <SelectContent>
