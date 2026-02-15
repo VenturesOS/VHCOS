@@ -580,14 +580,40 @@
     const slider = document.getElementById('teamSlider');
     const dotsContainer = document.getElementById('sliderDots');
     const totalCards = 8;
-    const cardsPerView = 2;
+    let cardsPerView = window.innerWidth <= 768 ? 1 : 2;
     let currentSlide = 0;
     let isTransitioning = false;
 
+    // Recalculate on resize
+    window.addEventListener('resize', function() {
+      const newCPV = window.innerWidth <= 768 ? 1 : 2;
+      if (newCPV !== cardsPerView) {
+        cardsPerView = newCPV;
+        // Reset to slide 0 on resize to avoid broken state
+        currentSlide = 0;
+        // Rebuild clones
+        rebuildClones();
+        goToSlide(0, true);
+      }
+    });
+
+    function rebuildClones() {
+      // Remove existing clones
+      while (slider.children.length > totalCards) {
+        slider.removeChild(slider.lastChild);
+      }
+      // Clone first cardsPerView cards
+      const originalCards = Array.from(slider.children);
+      originalCards.slice(0, cardsPerView).forEach(function(card) {
+        var clone = card.cloneNode(true);
+        slider.appendChild(clone);
+      });
+    }
+
     // Clone first cardsPerView cards and append to end for infinite loop
-    const originalCards = Array.from(slider.children);
-    originalCards.slice(0, cardsPerView).forEach(card => {
-      const clone = card.cloneNode(true);
+    var originalCards = Array.from(slider.children);
+    originalCards.slice(0, cardsPerView).forEach(function(card) {
+      var clone = card.cloneNode(true);
       slider.appendChild(clone);
     });
 
