@@ -4,6 +4,7 @@ Handles environment variables, database connection, and R2 storage client.
 """
 import os
 import logging
+import certifi
 from pathlib import Path
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -34,6 +35,7 @@ client = AsyncIOMotorClient(
     retryReads=True,
     maxConnecting=3,         # Max 3 simultaneous new connections (prevent TLS storms)
     tlsAllowInvalidCertificates=True,  # Workaround for Atlas TLS recovery
+    tlsCAFile=certifi.where(),  # Use certifi CA bundle for proper SSL
 )
 
 # Database name - MUST be vhc_talent_os (production database)
