@@ -73,7 +73,7 @@ export default function RecruiterDashboard() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 stagger-children">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 stagger-children">
         <Card className="border-slate-200">
           <CardContent className="p-6">
             <div className="w-12 h-12 rounded-xl bg-[#DCFCE7] flex items-center justify-center mb-4">
