@@ -172,7 +172,7 @@ export default function MatchHistoryPage() {
   return (
     <div className="space-y-6" data-testid="match-history-page">
       <div>
-        <h1 className="font-heading text-3xl font-bold text-slate-900">Match History</h1>
+        <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Match History</h1>
         <p className="text-slate-500 mt-1">Review past candidate matching searches and results</p>
       </div>
 

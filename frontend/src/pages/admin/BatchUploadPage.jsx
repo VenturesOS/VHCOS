@@ -325,7 +325,7 @@ export default function BatchUploadPage() {
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
           <div>
-            <h1 className="font-heading text-3xl font-bold text-slate-900">Batch CV Upload</h1>
+            <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Batch CV Upload</h1>
             <p className="text-slate-500">Upload up to 10 CVs at once</p>
           </div>
         </div>

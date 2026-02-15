@@ -505,7 +505,7 @@ export default function BulkImportPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Enhanced Bulk Import</h1>
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Enhanced Bulk Import</h1>
           <p className="text-slate-500 mt-1">
             Two modes: Excel-Only (no CV) or CV/ZIP (with resumes)
           </p>

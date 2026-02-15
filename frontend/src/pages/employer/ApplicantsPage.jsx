@@ -69,7 +69,7 @@ export default function ApplicantsPage() {
     <div className="space-y-6" data-testid="applicants-page">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">Applicants</h1>
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Applicants</h1>
           <p className="text-slate-500 mt-1">Review and manage job applicants</p>
         </div>
         <Select value={selectedJob} onValueChange={setSelectedJob}>

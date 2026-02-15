@@ -56,7 +56,7 @@ export default function SystemHealthPage() {
     <div className="space-y-6" data-testid="system-health-page">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-slate-900">System Health</h1>
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">System Health</h1>
           <p className="text-slate-500 mt-1">Auto-captured errors from frontend and backend</p>
         </div>
         <div className="flex gap-2">

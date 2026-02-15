@@ -74,7 +74,7 @@ export default function AdminDashboard() {
               <div className={`w-12 h-12 rounded-xl ${stat.color} flex items-center justify-center mb-4`}>
                 <stat.icon className="w-6 h-6" />
               </div>
-              <p className="font-heading text-3xl font-bold text-slate-900">{stat.value}</p>
+              <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stat.value}</p>
               <p className="text-sm text-slate-500 mt-1">{stat.label}</p>
             </CardContent>
           </Card>

@@ -59,7 +59,7 @@ export default function CandidateDashboard() {
             <div className="w-12 h-12 rounded-xl bg-[#DCFCE7] flex items-center justify-center mb-4">
               <FileText className="w-6 h-6 text-[#7CB342]" />
             </div>
-            <p className="font-heading text-3xl font-bold text-slate-900">{stats?.my_applications || 0}</p>
+            <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.my_applications || 0}</p>
             <p className="text-sm text-slate-500 mt-1">My Applications</p>
           </CardContent>
         </Card>
@@ -68,7 +68,7 @@ export default function CandidateDashboard() {
             <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
               <Briefcase className="w-6 h-6 text-blue-600" />
             </div>
-            <p className="font-heading text-3xl font-bold text-slate-900">{stats?.active_jobs || 0}</p>
+            <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.active_jobs || 0}</p>
             <p className="text-sm text-slate-500 mt-1">Active Jobs</p>
           </CardContent>
         </Card>
@@ -88,7 +88,7 @@ export default function CandidateDashboard() {
             <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center mb-4">
               <Mail className="w-6 h-6 text-purple-600" />
             </div>
-            <p className="font-heading text-3xl font-bold text-slate-900">{stats?.unread_messages || 0}</p>
+            <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.unread_messages || 0}</p>
             <p className="text-sm text-slate-500 mt-1">Unread Messages</p>
           </CardContent>
         </Card>

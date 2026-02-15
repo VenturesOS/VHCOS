@@ -79,7 +79,7 @@ export default function RecruiterDashboard() {
             <div className="w-12 h-12 rounded-xl bg-[#DCFCE7] flex items-center justify-center mb-4">
               <Briefcase className="w-6 h-6 text-[#7CB342]" />
             </div>
-            <p className="font-heading text-3xl font-bold text-slate-900">{stats?.total_jobs || 0}</p>
+            <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.total_jobs || 0}</p>
             <p className="text-sm text-slate-500 mt-1">Active Mandates</p>
           </CardContent>
         </Card>
@@ -88,7 +88,7 @@ export default function RecruiterDashboard() {
             <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
               <Users className="w-6 h-6 text-blue-600" />
             </div>
-            <p className="font-heading text-3xl font-bold text-slate-900">{stats?.total_candidates || 0}</p>
+            <p className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">{stats?.total_candidates || 0}</p>
             <p className="text-sm text-slate-500 mt-1">Total Candidates</p>
           </CardContent>
         </Card>

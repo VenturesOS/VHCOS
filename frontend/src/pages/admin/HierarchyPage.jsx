@@ -68,7 +68,7 @@ export default function HierarchyPage() {
     <div className="space-y-6" data-testid="hierarchy-page">
       {/* Header */}
       <div>
-        <h1 className="font-heading text-3xl font-bold text-slate-900">Organization Hierarchy</h1>
+        <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Organization Hierarchy</h1>
         <p className="text-slate-500 mt-1">Visual overview of employers, teams, recruiters, and companies</p>
       </div>
 
