@@ -1,18 +1,28 @@
 """
 Blog Engine API Routes
-- Admin: CRUD, generate, publish
-- Public: list published, read by slug
+- Admin: CRUD, generate, publish, schedule, analytics
+- Public: list published, read by slug, RSS feed, tracking
 """
 import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Optional
+from xml.sax.saxutils import escape as xml_escape
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from config import db
 from utils import get_current_user, require_role
 from services.blog_generator import generate_employer_blog, generate_candidate_blog
+from services.blog_scheduler import (
+    get_schedule_config, save_schedule_config,
+    auto_publish_blog, get_schedule_log, get_draft_queue_counts,
+)
+from services.blog_analytics import (
+    track_event, get_blog_stats, get_views_over_time,
+    get_top_blogs, get_clicks_by_blog,
+)
 
 router = APIRouter(tags=["blog"])
 logger = logging.getLogger(__name__)
