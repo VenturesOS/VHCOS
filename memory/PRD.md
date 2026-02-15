@@ -79,17 +79,36 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 }
 ```
 
+### Phase 5 (Feb 15, 2026)
+- **Blog Auto-Scheduling** — APScheduler-based background jobs
+  - Employer: 3/week (Mon, Wed, Fri at 9:00 AM IST)
+  - Candidate: 2/week (Tue, Thu at 10:00 AM IST)
+  - Admin can enable/disable per blog type via toggle switches
+  - Manual "Publish Now" trigger from admin panel
+  - Auto-publish logs tracked in `blog_schedule_log` collection
+  - Draft queue counter shows available drafts
+- **Blog Analytics Dashboard** at `/admin/blog-analytics`
+  - KPI cards: Published count, Total Views, CTA Clicks, CTR, Draft Queue
+  - Daily page views line chart (recharts)
+  - Top blogs by views and CTA clicks (horizontal bar charts)
+  - Blog performance table with type badges
+  - Period selector (7/30/90 days)
+  - Public tracking: POST /api/blog/track for views and CTA clicks
+  - Auto-tracking on blog article page load
+- **RSS Feed Generation** at `/api/blog/rss`
+  - Valid RSS 2.0 XML with Atom namespace
+  - Filterable by blog_type (employer/candidate)
+  - Returns up to 50 most recent published blogs
+  - Links directly accessible from admin dashboard
+
 ## Prioritized Backlog
 
 ### P1
 - Forgot Password flow
-- Blog auto-scheduling (3/week employer, 2-3/week candidate)
 
 ### P2
 - Refactor Chrome extension `content.js`
 - AI Search Phase 2 (hybrid routing, configurable models)
-- Blog analytics dashboard
-- RSS feed generation for blogs
 
 ### P3
 - Email notifications for contact form
