@@ -643,9 +643,9 @@ export default function CandidateDataBankPage() {
           
           {/* Pagination Controls */}
           {!loading && totalPages > 1 && (
-            <div className="border-t border-slate-100 px-4 py-3 flex items-center justify-between bg-slate-50/50">
-              <div className="text-sm text-slate-500">
-                Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalCandidates)} of {totalCandidates} candidates
+            <div className="border-t border-slate-100 px-3 sm:px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 bg-slate-50/50">
+              <div className="text-xs sm:text-sm text-slate-500">
+                {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, totalCandidates)} of {totalCandidates}
               </div>
               <div className="flex items-center gap-1">
                 <Button
@@ -653,7 +653,7 @@ export default function CandidateDataBankPage() {
                   size="sm"
                   onClick={goToFirstPage}
                   disabled={currentPage === 1}
-                  className="h-8 w-8 p-0"
+                  className="h-8 w-8 p-0 hidden sm:inline-flex"
                 >
                   <ChevronsLeft className="h-4 w-4" />
                 </Button>
