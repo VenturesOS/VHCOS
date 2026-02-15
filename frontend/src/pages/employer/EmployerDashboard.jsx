@@ -69,7 +69,7 @@ export default function EmployerDashboard() {
             <h2 className="font-heading text-xl font-bold text-slate-900 mb-4">
               Get Started in 3 Simple Steps
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="flex items-start gap-3 p-4 bg-white rounded-lg border border-slate-200">
                 <div className="w-8 h-8 rounded-full bg-[#7CB342] text-white flex items-center justify-center font-bold shrink-0">1</div>
                 <div>
@@ -145,7 +145,7 @@ export default function EmployerDashboard() {
 
       {/* Quick Actions - Show when has jobs */}
       {hasJobs && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Pipeline CTA */}
           <Card className="border-[#7CB342] bg-gradient-to-r from-[#DCFCE7] to-white hover:shadow-md transition-shadow">
             <CardContent className="p-4 sm:p-6">
