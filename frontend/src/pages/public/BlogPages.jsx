@@ -2,7 +2,31 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { blogAPI } from '../../lib/api';
-import { ArrowLeft, Calendar, Clock, Tag, Globe, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Tag, Globe, MapPin, Share2 } from 'lucide-react';
+
+function ShareButtons({ title, url }) {
+  const encoded = encodeURIComponent(url);
+  const text = encodeURIComponent(title);
+  const links = [
+    { label: 'LinkedIn', color: '#0A66C2', href: `https://www.linkedin.com/sharing/share-offsite/?url=${encoded}` },
+    { label: 'X', color: '#000', href: `https://x.com/intent/tweet?text=${text}&url=${encoded}` },
+    { label: 'WhatsApp', color: '#25D366', href: `https://wa.me/?text=${text}%20${encoded}` },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px' }} data-testid="share-buttons">
+      <Share2 size={15} color="#9CA3AF" />
+      {links.map(l => (
+        <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: '12px', fontWeight: 600, color: l.color, padding: '4px 14px', borderRadius: '20px', border: `1px solid ${l.color}22`, textDecoration: 'none', transition: 'background 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = `${l.color}10`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          data-testid={`share-${l.label.toLowerCase()}`}>
+          {l.label}
+        </a>
+      ))}
+    </div>
+  );
+}
 
 function BlogArticleSchema({ blog, type }) {
   const baseUrl = window.location.origin;
