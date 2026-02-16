@@ -14,7 +14,7 @@ import httpx
 import os
 
 # API Configuration
-API_URL = os.environ.get("API_URL", "https://rss-feed-engine.preview.emergentagent.com")
+API_URL = os.environ.get("API_URL", "https://auto-publish-hub-1.preview.emergentagent.com")
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
