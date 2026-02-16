@@ -1500,6 +1500,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# SEO & Security Headers Middleware
+@app.middleware("http")
+async def seo_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    # HTTPS enforcement headers
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
