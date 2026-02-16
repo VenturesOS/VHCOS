@@ -100,31 +100,16 @@ Resume text:
 {raw_text_truncated}"""
 
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4o-mini",
-                    "messages": [
-                        {"role": "system", "content": "You are a precise resume parser. Extract structured candidate data from resumes. Return only valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"}
-                }
-            )
+        from services.llm_service import chat_completion
+        content = await chat_completion(
+            system_prompt="You are a precise resume parser. Extract structured candidate data from resumes. Return only valid JSON.",
+            user_prompt=prompt,
+            temperature=0.1,
+            json_mode=True,
+            timeout=30.0,
+        )
         
-        if response.status_code != 200:
-            logger.error(f"[CV Parse] OpenAI error: {response.status_code}")
-            raise HTTPException(status_code=500, detail="AI parsing failed")
-        
-        result = response.json()
-        profile_data = json_module.loads(result["choices"][0]["message"]["content"])
+        profile_data = json_module.loads(content)
         
         logger.info(f"[CV Parse] Extracted: {profile_data.get('name')}")
         return {"success": True, "profile_data": profile_data, "filename": file.filename}
