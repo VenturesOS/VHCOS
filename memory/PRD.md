@@ -136,7 +136,17 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - Includes blogs published in last 7 days with links
   - Admin trigger from Blog Analytics dashboard
 
+### Phase 8 (Feb 2026)
+- **P0 Fix: Production Root URL Redirect** — Made `PublicWebsiteRedirect` bulletproof with 3-layer fallback:
+  1. JS `window.location.replace('/website/Index.html')`
+  2. `<meta http-equiv="refresh">` HTML-level redirect
+  3. Visible "Click here" link after 2s timeout
+  - Requires user to **redeploy** to production for fix to take effect
+
 ## Prioritized Backlog
+
+### P1
+- Automate Weekly Blog Digest (APScheduler recurring job, currently manual button)
 
 ### P2
 - Refactor Chrome extension `content.js`
