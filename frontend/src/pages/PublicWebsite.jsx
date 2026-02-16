@@ -2,14 +2,15 @@ import { useEffect } from 'react';
 
 /**
  * PublicWebsiteRedirect Component
- * Redirects to the static website homepage at the clean root URL.
- * The craco devServer middleware serves the static HTML at /.
+ * 
+ * In development: craco devServer middleware serves the static homepage at /
+ * directly, so this component never renders.
+ * 
+ * In production: Falls back to redirecting to the static HTML file.
  */
 export default function PublicWebsiteRedirect() {
   useEffect(() => {
-    if (window.location.pathname !== '/') {
-      window.location.replace('/');
-    }
+    window.location.replace('/website/Index.html');
   }, []);
 
   return (
