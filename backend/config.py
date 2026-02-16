@@ -42,7 +42,8 @@ client = AsyncIOMotorClient(
     retryReads=True,
     maxConnecting=3,
     tls=True,
-    tlsAllowInvalidCertificates=True,
+    tlsInsecure=True,
+    tlsCAFile=certifi.where(),
 )
 
 # Database name - MUST be vhc_talent_os (production database)
