@@ -144,6 +144,56 @@ async def update_company(
     return CompanyResponse(**updated_company)
 
 
+@admin_router.put("/companies/{company_id}/assign-employer")
+async def assign_employer_to_company(
+    company_id: str,
+    employer_id: str = Query(...),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Assign an employer to a company (Admin only).
+    Sets assigned_employer_id on the company and adds company to employer's team.
+    """
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    employer = await db.users.find_one({"id": employer_id, "role": "employer"}, {"_id": 0, "id": 1, "name": 1})
+    if not employer:
+        raise HTTPException(status_code=404, detail="Employer not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Update company with assigned employer
+    await db.companies.update_one(
+        {"id": company_id},
+        {"$set": {
+            "assigned_employer_id": employer_id,
+            "assigned_employer_name": employer.get("name"),
+            "updated_at": now,
+        }}
+    )
+
+    # Also ensure the company is in the employer's team
+    existing_team = await db.teams.find_one({"employer_id": employer_id}, {"_id": 0})
+    if existing_team:
+        await db.teams.update_one(
+            {"employer_id": employer_id},
+            {"$addToSet": {"company_ids": company_id}, "$set": {"updated_at": now}}
+        )
+    else:
+        await db.teams.insert_one({
+            "id": str(uuid.uuid4()),
+            "employer_id": employer_id,
+            "company_ids": [company_id],
+            "recruiter_ids": [],
+            "created_at": now,
+            "updated_at": now,
+        })
+
+    return {"message": f"Company '{company.get('name')}' assigned to employer '{employer.get('name')}'"}
+
+
 @admin_router.delete("/companies/{company_id}")
 async def delete_company(
     company_id: str,
