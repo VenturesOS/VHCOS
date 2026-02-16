@@ -49,6 +49,35 @@ async def get_all_companies(current_user: dict = Depends(require_role(["admin"])
     return result
 
 
+@admin_router.get("/employers/{employer_id}/companies")
+async def get_employer_companies(
+    employer_id: str,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Get all companies assigned to a specific employer (via direct assignment or team)."""
+    # Companies directly assigned
+    direct = await db.companies.find(
+        {"assigned_employer_id": employer_id}, {"_id": 0}
+    ).to_list(100)
+
+    # Companies linked via teams
+    teams = await db.teams.find(
+        {"employer_id": employer_id}, {"_id": 0, "company_ids": 1}
+    ).to_list(100)
+    team_company_ids = set()
+    for t in teams:
+        team_company_ids.update(t.get("company_ids", []))
+
+    # Merge: add team-linked companies not already in direct list
+    direct_ids = {c["id"] for c in direct}
+    for cid in team_company_ids - direct_ids:
+        company = await db.companies.find_one({"id": cid}, {"_id": 0})
+        if company:
+            direct.append(company)
+
+    return {"companies": [CompanyResponse(**c) for c in direct]}
+
+
 @admin_router.post("/companies", response_model=CompanyResponse)
 async def create_company(
     company_data: CompanyCreate,
