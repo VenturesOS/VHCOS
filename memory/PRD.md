@@ -147,13 +147,29 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - `get_model()` and `get_api_key()` helpers for consistent config
   - Updated 5 files: `blog_generator.py`, `ai_search.py`, `extension.py`, `cv_upload.py`, `blog.py`
   - Model now configurable via `LLM_DEFAULT_MODEL` env var (defaults to gpt-4o-mini)
+- **SEO Phase 1 — Technical SEO Transformation**
+  - **Canonical enforcement**: `rel="canonical"` on all 8 HTML pages pointing to ventureshrd.com
+  - **XML Sitemap** at `/api/sitemap.xml`: auto-includes static pages, published blogs, active job listings
+  - **Structured Data (JSON-LD)**: Organization schema (homepage), AboutPage, Service, BreadcrumbList on all pages
+  - **Meta automation**: SEO-focused titles with `| Ventures HRD Centre Pvt Ltd` pattern, keyword-rich descriptions, OG meta tags
+  - **SEO Admin API**: `GET/PUT /api/seo/settings` for admin meta overrides per page
+  - **Security headers middleware**: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection
+  - **robots.txt**: Static + dynamic versions with sitemap reference, Disallow for admin/auth routes
+  - **Custom 404 page**: Employer CTA, candidate CTA, blog links, contact CTA
+  - **Performance**: Lazy loading images, dns-prefetch, preconnect hints
+  - **React app**: noindex/nofollow on SPA index.html (admin portal)
 
 ## Prioritized Backlog
 
 ### P1
 - Automate Weekly Blog Digest (APScheduler recurring job, currently manual button)
+- SEO Phase 2: Pillar Pages + FAQ Schema + Content Silo Architecture
+  - Create 3 pillar pages: /industrial-recruitment/, /hr-consulting-services/, /career-insights/
+  - AI-optimized FAQ pages with JSON-LD schema for LLM visibility
+  - Internal linking engine between blogs, pillars, and services
 
 ### P2
+- SEO Phase 3-5: LLM visibility strategy, internal linking engine, SEO monitoring dashboard
 - Refactor Chrome extension `content.js`
 - AI Search Phase 2 (hybrid routing, configurable models)
 
