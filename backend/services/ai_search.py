@@ -1,20 +1,17 @@
 """
 AI Search Service — Phase 1
 Architecture: LLM (Extraction) → Deterministic DB Filter → Results → LLM (Explanation)
-Model-agnostic: configurable model, upgrade-ready for Phase 2 hybrid routing.
+Uses centralized LLM service. Phase 2: upgrade to hybrid routing.
 """
 import os
 import json
 import time
 import logging
-import httpx
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from services.llm_service import chat_completion
 
-# --- Model Configuration (Phase 2: swap to routing logic) ---
-DEFAULT_MODEL = "gpt-4o-mini"
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+logger = logging.getLogger(__name__)
 
 EXTRACTION_SYSTEM_PROMPT = """You are an Industrial Hiring Logic Translator inside an ATS system.
 
@@ -87,44 +84,19 @@ No extra characters before or after."""
 
 def _get_model(prompt: str = "") -> str:
     """Phase 1: always returns default. Phase 2: hybrid routing logic here."""
-    return DEFAULT_MODEL
+    from services.llm_service import get_model
+    return get_model()
 
 
 async def _call_llm(system_prompt: str, user_prompt: str, model: str = None, temperature: float = 0.0, json_mode: bool = True) -> dict:
     """Model-agnostic LLM call. Returns {"content": str, "usage": dict, "model": str}."""
     model = model or _get_model(user_prompt)
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY not configured")
-
-    body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": temperature,
-    }
-    if json_mode:
-        body["response_format"] = {"type": "json_object"}
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            OPENAI_API_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=body,
-        )
-
-    if resp.status_code != 200:
-        logger.error(f"[AI Search] LLM error {resp.status_code}: {resp.text[:300]}")
-        raise RuntimeError(f"LLM call failed: {resp.status_code}")
-
-    data = resp.json()
-    return {
-        "content": data["choices"][0]["message"]["content"],
-        "usage": data.get("usage", {}),
-        "model": data.get("model", model),
-    }
+    return await chat_completion(
+        system_prompt, user_prompt,
+        model=model, temperature=temperature,
+        json_mode=json_mode, timeout=30.0,
+        return_usage=True,
+    )
 
 
 # ──────────────────────────────────────────────
