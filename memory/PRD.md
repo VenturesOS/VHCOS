@@ -142,6 +142,7 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   2. `<meta http-equiv="refresh">` HTML-level redirect
   3. Visible "Click here" link after 2s timeout
   - Requires user to **redeploy** to production for fix to take effect
+- **Bug Fix: Company-Employer Assignment** — Added missing `PUT /api/companies/{id}/assign-employer` backend endpoint. Frontend was calling this route but it never existed, causing all company assignments to silently fail. Fix also creates/updates team entries linking companies to employers.
 - **P2: LLM Service Refactor** — Centralized all OpenAI API calls into `services/llm_service.py`
   - Single `chat_completion()` function with configurable model, temperature, max_tokens, json_mode
   - `get_model()` and `get_api_key()` helpers for consistent config
