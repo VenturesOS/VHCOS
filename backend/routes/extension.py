@@ -294,9 +294,6 @@ async def ai_extract_profile(
     current_user: dict = Depends(get_current_user)
 ):
     """Use OpenAI to extract structured profile data from raw Naukri page text."""
-    import os
-    import json as json_module
-    
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return AIExtractResponse(success=False, error="OpenAI API key not configured")
@@ -395,31 +392,15 @@ VERIFIED DATA FROM PAGE DOM (use these values, they are more reliable than anyth
 IMPORTANT: The page text may also contain the logged-in RECRUITER's email/phone. IGNORE any contact info that matches the recruiter's details listed above."""
 
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4o-mini",
-                    "messages": [
-                        {"role": "system", "content": "You are a precise data extraction expert. Extract structured candidate profile data from Naukri Resdex recruitment platform text. CRITICAL: The name field must contain ONLY the person's name — never append experience years, job titles, or any other metadata. Return only valid JSON. If the text appears to be navigation/marketing content rather than a real candidate profile, return {\"name\": null}."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"}
-                }
-            )
+        from services.llm_service import chat_completion
+        content = await chat_completion(
+            system_prompt="You are a precise data extraction expert. Extract structured candidate profile data from Naukri Resdex recruitment platform text. CRITICAL: The name field must contain ONLY the person's name — never append experience years, job titles, or any other metadata. Return only valid JSON. If the text appears to be navigation/marketing content rather than a real candidate profile, return {\"name\": null}.",
+            user_prompt=prompt,
+            temperature=0.1,
+            json_mode=True,
+            timeout=30.0,
+        )
         
-        if response.status_code != 200:
-            logger.error(f"[AI Extract] OpenAI error: {response.status_code} {response.text[:200]}")
-            return AIExtractResponse(success=False, error=f"OpenAI API error: {response.status_code}")
-        
-        result = response.json()
-        content = result["choices"][0]["message"]["content"]
         profile_data = json_module.loads(content)
         
         # Override with DOM-extracted values (most reliable sources)
