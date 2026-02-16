@@ -1,51 +1,19 @@
 """
-Blog Content Generation Service — LLM Abstraction Layer
-Model-agnostic: configurable model, temperature, and prompts.
-Supports future upgrade to GPT-4o or routing logic.
+Blog Content Generation Service
+Uses centralized LLM service for all API calls.
 """
 import os
 import json
 import re
 import logging
-import httpx
 from typing import Optional
+
+from services.llm_service import chat_completion, get_model
 
 logger = logging.getLogger(__name__)
 
-# --- Model Configuration (upgradeable) ---
-BLOG_MODEL = os.environ.get("BLOG_LLM_MODEL", "gpt-4o-mini")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 BLOG_TEMPERATURE = float(os.environ.get("BLOG_LLM_TEMPERATURE", "0.7"))
 BLOG_MAX_TOKENS = int(os.environ.get("BLOG_LLM_MAX_TOKENS", "4096"))
-
-
-def _get_api_key():
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise ValueError("OPENAI_API_KEY not configured")
-    return key
-
-
-async def _call_llm(system_prompt: str, user_prompt: str, max_tokens: int = None) -> str:
-    """Generic LLM call with error handling."""
-    api_key = _get_api_key()
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": BLOG_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": BLOG_TEMPERATURE,
-        "max_tokens": max_tokens or BLOG_MAX_TOKENS,
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(OPENAI_API_URL, headers=headers, json=payload)
-        if resp.status_code != 200:
-            logger.error(f"[Blog LLM] Error {resp.status_code}: {resp.text[:300]}")
-            raise Exception(f"LLM API error: {resp.status_code}")
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
 
 
 # ──────────────────────────────────────────────
@@ -91,7 +59,7 @@ Return as JSON array:
   }}
 ]"""
 
-    raw = await _call_llm(RESEARCH_SYSTEM, prompt, max_tokens=2000)
+    raw = await chat_completion(RESEARCH_SYSTEM, prompt, temperature=BLOG_TEMPERATURE, max_tokens=2000)
     # Parse JSON from response
     cleaned = raw.strip()
     if cleaned.startswith("```"):
@@ -221,7 +189,7 @@ async def generate_employer_blog(topic: str, industry: str, region: str, keyword
         topic=topic, industry=industry, region=region,
         keywords=keywords, ats_note=ats_note
     )
-    raw = await _call_llm(EMPLOYER_SYSTEM_PROMPT, user_prompt)
+    raw = await chat_completion(EMPLOYER_SYSTEM_PROMPT, user_prompt, temperature=BLOG_TEMPERATURE, max_tokens=BLOG_MAX_TOKENS)
     result = _parse_json_response(raw)
     result["blog_type"] = "employer"
     result["region"] = region
@@ -233,7 +201,7 @@ async def generate_candidate_blog(topic: str, category: str, industry: str, keyw
     user_prompt = CANDIDATE_USER_PROMPT.format(
         topic=topic, category=category, industry=industry, keywords=keywords
     )
-    raw = await _call_llm(CANDIDATE_SYSTEM_PROMPT, user_prompt)
+    raw = await chat_completion(CANDIDATE_SYSTEM_PROMPT, user_prompt, temperature=BLOG_TEMPERATURE, max_tokens=BLOG_MAX_TOKENS)
     result = _parse_json_response(raw)
     result["blog_type"] = "candidate"
     result["category"] = category
