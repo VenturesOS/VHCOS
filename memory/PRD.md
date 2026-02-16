@@ -142,6 +142,11 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   2. `<meta http-equiv="refresh">` HTML-level redirect
   3. Visible "Click here" link after 2s timeout
   - Requires user to **redeploy** to production for fix to take effect
+- **P2: LLM Service Refactor** — Centralized all OpenAI API calls into `services/llm_service.py`
+  - Single `chat_completion()` function with configurable model, temperature, max_tokens, json_mode
+  - `get_model()` and `get_api_key()` helpers for consistent config
+  - Updated 5 files: `blog_generator.py`, `ai_search.py`, `extension.py`, `cv_upload.py`, `blog.py`
+  - Model now configurable via `LLM_DEFAULT_MODEL` env var (defaults to gpt-4o-mini)
 
 ## Prioritized Backlog
 
