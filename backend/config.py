@@ -3,6 +3,7 @@ VHC Talent OS - Configuration Module
 Handles environment variables, database connection, and R2 storage client.
 """
 import os
+import ssl
 import logging
 import certifi
 from pathlib import Path
@@ -21,21 +22,27 @@ mongodb_uri = os.environ.get('MONGODB_URI') or os.environ.get('MONGO_URL')
 if not mongodb_uri:
     raise RuntimeError("MONGODB_URI environment variable is required. Application cannot start without database connection.")
 
+# Custom SSL context for Atlas — prevents TLS handshake failures
+ssl_context = ssl.create_default_context(cafile=certifi.where())
+ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+
 # OPTIMIZED: Connection pooling for high concurrency (Atlas-safe limits)
 client = AsyncIOMotorClient(
     mongodb_uri,
-    maxPoolSize=50,          # Limit pool to prevent Atlas connection storms
-    minPoolSize=5,           # Modest baseline
-    maxIdleTimeMS=30000,     # Close idle after 30s
-    waitQueueTimeoutMS=15000, # Wait up to 15s for connection
+    maxPoolSize=50,
+    minPoolSize=5,
+    maxIdleTimeMS=30000,
+    waitQueueTimeoutMS=15000,
     serverSelectionTimeoutMS=15000,
     connectTimeoutMS=10000,
     socketTimeoutMS=30000,
     retryWrites=True,
     retryReads=True,
-    maxConnecting=3,         # Max 3 simultaneous new connections (prevent TLS storms)
-    tlsAllowInvalidCertificates=True,  # Workaround for Atlas TLS recovery
-    tlsCAFile=certifi.where(),  # Use certifi CA bundle for proper SSL
+    maxConnecting=3,
+    tls=True,
+    tlsAllowInvalidCertificates=True,
 )
 
 # Database name - MUST be vhc_talent_os (production database)
