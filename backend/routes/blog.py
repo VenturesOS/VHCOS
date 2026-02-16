@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from config import db
 from utils import get_current_user, require_role
 from services.blog_generator import generate_employer_blog, generate_candidate_blog, research_topics
+from services.llm_service import get_model
 from services.blog_scheduler import (
     get_schedule_config, save_schedule_config,
     auto_publish_blog, get_schedule_log, get_draft_queue_counts,
@@ -112,7 +113,7 @@ async def generate_blog(req: BlogGenerateRequest, current_user: dict = Depends(r
             "blog_type": req.blog_type,
             "industry": req.industry,
             "category": req.category,
-            "model_used": "gpt-4o-mini",
+            "model_used": get_model(),
             "generated_at": now,
         },
         "created_at": now,
