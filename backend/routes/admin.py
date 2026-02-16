@@ -5,7 +5,7 @@ Handles user management and admin-only operations.
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 
 # Import configuration
 from config import db
