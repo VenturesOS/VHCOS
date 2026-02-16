@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /services
+Allow: /industries
+Allow: /careers
+Allow: /contact
+Allow: /global-hiring
+Allow: /industrial-hiring-insights
+Allow: /career-insights
+
+Disallow: /admin
+Disallow: /employer
+Disallow: /recruiter
+Disallow: /candidate
+Disallow: /login
+Disallow: /register
+Disallow: /api/
+
+Sitemap: https://ventureshrd.com/api/sitemap.xml
