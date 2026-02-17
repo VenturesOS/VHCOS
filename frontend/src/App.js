@@ -132,6 +132,7 @@ function App() {
             <Route path="contact-submissions" element={<ContactSubmissionsPage />} />
             <Route path="blog-engine" element={<BlogEnginePage />} />
             <Route path="blog-analytics" element={<BlogAnalyticsPage />} />
+            <Route path="seo-monitoring" element={<SEOMonitoringPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
