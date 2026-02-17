@@ -16,11 +16,13 @@ from botocore.config import Config
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# Force MONGO_URL from .env file (overrides platform-injected localhost)
+# Force MONGO_URL and DB_NAME from .env file (overrides platform-injected values)
 from dotenv import dotenv_values
 _env_vals = dotenv_values(ROOT_DIR / '.env')
 if 'MONGO_URL' in _env_vals and _env_vals['MONGO_URL']:
     os.environ['MONGO_URL'] = _env_vals['MONGO_URL']
+if 'DB_NAME' in _env_vals and _env_vals['DB_NAME']:
+    os.environ['DB_NAME'] = _env_vals['DB_NAME']
 
 # ============== MONGODB CONNECTION ==============
 # CRITICAL: Connection string MUST be provided via environment variable
