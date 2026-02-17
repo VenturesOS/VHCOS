@@ -1439,6 +1439,15 @@ async def seed_admin():
     except Exception as e:
         logging.warning(f"Admin seeding skipped (DB not available): {e}")
 
+@app.on_event("startup")
+async def ensure_pillar_pages_index():
+    """Create unique index on pillar_pages.slug."""
+    try:
+        await db.pillar_pages.create_index("slug", unique=True)
+        logging.info("pillar_pages.slug unique index ensured")
+    except Exception as e:
+        logging.warning(f"pillar_pages index creation skipped: {e}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
