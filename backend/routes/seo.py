@@ -112,6 +112,8 @@ Allow: /contact
 Allow: /global-hiring
 Allow: /industrial-hiring-insights
 Allow: /career-insights
+Allow: /industrial-recruitment
+Allow: /hr-consulting-services
 
 Disallow: /admin
 Disallow: /employer
