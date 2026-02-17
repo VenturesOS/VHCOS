@@ -27,7 +27,8 @@ import {
   History,
   Bug,
   Activity,
-  Download
+  Download,
+  Radar
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
