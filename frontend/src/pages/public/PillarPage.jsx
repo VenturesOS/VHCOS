@@ -90,8 +90,6 @@ export default function PillarPage() {
 
   return (
     <div className="min-h-screen bg-white" data-testid="pillar-page">
-      {page.status === 'published' && <FAQSchema faq={page.faq} />}
-
       {/* Header */}
       <header style={{ background: '#111827', padding: '16px 24px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
