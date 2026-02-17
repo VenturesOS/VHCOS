@@ -324,6 +324,16 @@ export const seoDashboardAPI = {
   resolveAlert: (id) => api.post(`/admin/seo-alerts/resolve/${id}`),
 };
 
+export const digestAPI = {
+  list: () => api.get('/admin/blog-digests'),
+  trigger: () => api.post('/admin/blog-digest/trigger'),
+  preview: (weekKey) => api.get('/admin/blog-digest/preview', { params: weekKey ? { week_key: weekKey } : {} }),
+  send: (segments, weekKey) => api.post('/admin/blog-digest/send', { segments, week_key: weekKey || null }),
+  recipients: (segments) => api.get('/admin/blog-digest/recipients', { params: { segments } }),
+  sendLogs: () => api.get('/admin/blog-digest/send-logs'),
+  subscriptionStats: () => api.get('/admin/blog-digest/subscription-stats'),
+};
+
 export const blogAPI = {
   // Admin
   generate: (data) => api.post('/blog/generate', data),
