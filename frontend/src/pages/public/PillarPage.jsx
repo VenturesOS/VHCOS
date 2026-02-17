@@ -107,7 +107,7 @@ export default function PillarPage() {
 
       {/* Main Content + Sidebar */}
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '60px 24px', display: 'grid', gridTemplateColumns: '1fr', gap: '48px' }} className="lg:!grid-cols-[1fr_320px]" data-testid="pillar-body">
-        <PillarContent html={sanitizedContent} faq={page.faq} />
+        <PillarContent html={linkedContent} faq={page.faq} />
         <PillarSidebar slug={page.slug} />
       </div>
 
