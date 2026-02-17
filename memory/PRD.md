@@ -78,24 +78,35 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - `frontend/src/hooks/useSEOMeta.js` — DOM-based SEO meta tag injection hook
 - `backend/config.py` — Database connection with Atlas override
 
+### Phase 11: Blog Digest Email Distribution (Feb 17, 2026)
+- **Backend:** `digest_email_service.py` — Recipient segmentation, HMAC-based unsubscribe tokens, mobile-responsive HTML email template with personalized greeting, pillar page references, and CTA
+- **Routes:** Extended `blog_digest.py` with 8 endpoints:
+  - `POST /api/admin/blog-digest/send` — Send to segments with duplicate prevention
+  - `GET /api/admin/blog-digest/preview` — Preview email HTML
+  - `GET /api/admin/blog-digest/recipients` — Preview recipient list
+  - `GET /api/admin/blog-digest/send-logs` — Send history
+  - `GET /api/admin/blog-digest/subscription-stats` — Unsubscribe stats
+  - `GET /api/unsubscribe/{token}` — Public unsubscribe (HTML page)
+  - `GET /api/resubscribe/{token}` — Public resubscribe (HTML page)
+- **Frontend:** `DigestEmailPage.jsx` — Admin dashboard for digest distribution
+  - Stats cards, digest selector, segment toggles, email preview iframe, recipient preview, send history table
+- **DB Collections:** `email_subscriptions`, `digest_send_logs`
+- **Testing:** 18/18 backend tests passed, frontend 100% verified
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
 - ~~Database Consolidation~~ **DONE**
 - ~~Production Unification~~ **DONE**
 - ~~SEO Phase 2: Content Silo Architecture~~ **DONE**
+- ~~SEO Phases 3-5~~ **DONE** (JSON-LD, Internal Linking, SEO Dashboard)
+- ~~Weekly Blog Digest Generation~~ **DONE** (APScheduler)
+- ~~Blog Digest Email Distribution~~ **DONE** (Resend integration)
 
 ### P1
-- **Automate Weekly Blog Digest:** APScheduler job for Monday 9:00 AM IST
-- SEO Phase 3: AI-Optimized FAQ Pages with JSON-LD schema
-- SEO Phase 4: Internal Linking Engine
-
-### P2
-- SEO Phase 5: SEO Monitoring Dashboard
-- Resend email integration for blog digest
 - Refactor employer routes (`server.py` → `employer_routes.py`)
 
-### P3
+### P2
 - Refactor Chrome extension content.js
 - AI Search Phase 2 (hybrid routing, configurable models)
 
