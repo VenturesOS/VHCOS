@@ -11,6 +11,29 @@ import { Loader2 } from 'lucide-react';
 const VALID_SLUGS = new Set(['industrial-recruitment', 'hr-consulting-services', 'career-insights']);
 const BASE_URL = 'https://ventureshrd.com';
 
+function FAQSchema({ faq }) {
+  if (!faq || faq.length === 0) return null;
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faq.map(item => ({
+      "@type": "Question",
+      "name": item.question,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": item.answer
+      }
+    }))
+  };
+  return (
+    <script
+      type="application/ld+json"
+      data-testid="faq-jsonld"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  );
+}
+
 function PillarNotFound() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center" data-testid="pillar-404">
