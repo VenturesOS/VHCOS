@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
+import { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { pillarPageAPI } from '../../lib/api';
+import { useSEOMeta } from '../../hooks/useSEOMeta';
 import PillarHero from '../../components/PillarPage/PillarHero';
 import PillarContent from '../../components/PillarPage/PillarContent';
 import PillarSidebar from '../../components/PillarPage/PillarSidebar';
@@ -44,6 +44,21 @@ export default function PillarPage() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  const seoMeta = useMemo(() => {
+    if (!page) return null;
+    const canonicalUrl = `${BASE_URL}/${page.slug}`;
+    return {
+      title: page.meta_title,
+      description: page.meta_description,
+      canonical: canonicalUrl,
+      ogTitle: page.meta_title,
+      ogDescription: page.meta_description,
+      ogUrl: canonicalUrl,
+      ogType: 'article',
+    };
+  }, [page]);
+  useSEOMeta(seoMeta);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center" data-testid="pillar-loading">
@@ -54,7 +69,6 @@ export default function PillarPage() {
 
   if (notFound || !page) return <PillarNotFound />;
 
-  const canonicalUrl = `${BASE_URL}/${page.slug}`;
   const sanitizedContent = DOMPurify.sanitize(page.content || '');
 
   return (
