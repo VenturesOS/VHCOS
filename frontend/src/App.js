@@ -40,6 +40,7 @@ import HierarchyPage from "./pages/admin/HierarchyPage";
 import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
 import CommercialsPage from "./pages/admin/CommercialsPage";
 import SEOMonitoringPage from "./pages/admin/SEOMonitoringPage";
+import DigestEmailPage from "./pages/admin/DigestEmailPage";
 
 // Recruiter Pages
 import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
@@ -133,6 +134,7 @@ function App() {
             <Route path="blog-engine" element={<BlogEnginePage />} />
             <Route path="blog-analytics" element={<BlogAnalyticsPage />} />
             <Route path="seo-monitoring" element={<SEOMonitoringPage />} />
+            <Route path="digest-email" element={<DigestEmailPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
