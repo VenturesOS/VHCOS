@@ -87,11 +87,9 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - SEO: Sitemap & robots.txt updated. Each page has unique H1, proper H2→H3 hierarchy, canonical URL, OG meta tags.
 
 ### P1
-- **SEO Phase 2:** Pillar Pages + FAQ Schema + Content Silo Architecture
-  - Create 3 pillar pages: /industrial-recruitment/, /hr-consulting-services/, /career-insights/
-  - AI-optimized FAQ pages with JSON-LD schema for LLM visibility
-  - Internal linking engine between blogs, pillars, and services
-- Automate Weekly Blog Digest (APScheduler recurring job)
+- **Automate Weekly Blog Digest:** APScheduler job for Monday 9:00 AM IST digest generation + Resend email integration
+- SEO Phase 3: AI-Optimized FAQ Pages with JSON-LD schema
+- SEO Phase 4: Internal Linking Engine between blogs, pillars, and services
 
 ### P2
 - SEO Phase 3-5: LLM visibility strategy, internal linking engine, SEO monitoring dashboard
