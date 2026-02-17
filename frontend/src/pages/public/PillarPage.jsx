@@ -12,26 +12,29 @@ const VALID_SLUGS = new Set(['industrial-recruitment', 'hr-consulting-services',
 const BASE_URL = 'https://ventureshrd.com';
 
 function FAQSchema({ faq }) {
-  if (!faq || faq.length === 0) return null;
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": faq.map(item => ({
-      "@type": "Question",
-      "name": item.question,
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": item.answer
-      }
-    }))
-  };
-  return (
-    <script
-      type="application/ld+json"
-      data-testid="faq-jsonld"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  );
+  useEffect(() => {
+    if (!faq || faq.length === 0) return;
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": faq.map(item => ({
+        "@type": "Question",
+        "name": item.question,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": item.answer
+        }
+      }))
+    };
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.setAttribute('data-testid', 'faq-jsonld');
+    script.setAttribute('data-seo-managed', 'true');
+    script.textContent = JSON.stringify(schema);
+    document.head.appendChild(script);
+    return () => { script.remove(); };
+  }, [faq]);
+  return null;
 }
 
 function PillarNotFound() {
