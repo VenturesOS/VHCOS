@@ -100,12 +100,11 @@ function App() {
           {/* SEO Pillar Pages */}
           <Route path="/industrial-recruitment" element={<PillarPage />} />
           <Route path="/hr-consulting-services" element={<PillarPage />} />
-          <Route path="/career-insights-guide" element={<PillarPage />} />
 
           {/* Public Blog Routes */}
           <Route path="/industrial-hiring-insights" element={<EmployerBlogList />} />
           <Route path="/industrial-hiring-insights/:slug" element={<EmployerBlogArticle />} />
-          <Route path="/career-insights" element={<CandidateBlogList />} />
+          <Route path="/career-insights" element={<PillarPage />} />
           <Route path="/career-insights/:slug" element={<CandidateBlogArticle />} />
 
           {/* Admin Routes */}
