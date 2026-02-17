@@ -228,12 +228,6 @@ async def assign_employer_to_company(
         {"$pull": {"company_ids": company_id}, "$set": {"updated_at": now}}
     )
 
-    # Clear old assignment on the company if it was assigned to someone else
-    await db.companies.update_many(
-        {"assigned_employer_id": {"$ne": employer_id, "$exists": True}, "id": {"$ne": company_id}},
-        {}  # no-op, just for clarity
-    )
-
     return {"message": f"Company '{company.get('name')}' assigned to employer '{employer.get('name')}'"}
 
 
