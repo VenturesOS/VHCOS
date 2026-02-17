@@ -70,12 +70,13 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 
 ## Prioritized Backlog
 
-### P0 (Immediate) — COMPLETED
-- ~~Database Consolidation:~~ **DONE** (Feb 18, 2026)
-- ~~Production .env Fix:~~ `.env` has correct Atlas URL. Enhanced startup logging added.
-- ~~Code Bug Fix:~~ Removed crashing empty update at `admin.py:232` that caused assign-employer 500.
-- **User action required:** Trigger production deploy via Emergent platform. After deploy, verify startup log shows `MongoDB connected: ATLAS`.
-- **If production still shows local DB after deploy:** Check Emergent platform's production environment settings — `MONGO_URL` may be overridden at the platform level.
+### P0 — ALL COMPLETE
+- ~~Database Consolidation:~~ **DONE** (Feb 18, 2026) — Merged local DB into Atlas
+- ~~Production Unification:~~ **DONE** (Feb 18, 2026) — Production now writes exclusively to Atlas
+  - Root cause: Platform injected `MONGO_URL=localhost`, fixed with targeted `dotenv_values()` override in `config.py`
+  - Code bug: Empty `update_many({})` crash in `admin.py:232` removed
+  - All counts verified on production: 14 users, 7 companies, 1719 candidates, 4 teams, 43 applications
+  - Write isolation confirmed: Atlas=YES, localhost=NO
 
 ### P1
 - **SEO Phase 2:** Pillar Pages + FAQ Schema + Content Silo Architecture
