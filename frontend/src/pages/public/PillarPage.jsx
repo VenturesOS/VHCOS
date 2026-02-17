@@ -29,7 +29,7 @@ function FAQSchema({ faq }) {
     const script = document.createElement('script');
     script.type = 'application/ld+json';
     script.setAttribute('data-testid', 'faq-jsonld');
-    script.setAttribute('data-seo-managed', 'true');
+    script.setAttribute('data-faq-schema', 'true');
     script.textContent = JSON.stringify(schema);
     document.head.appendChild(script);
     return () => { script.remove(); };
