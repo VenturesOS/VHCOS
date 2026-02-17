@@ -1,0 +1,249 @@
+[
+  {
+    "id": "f56968c2-8967-460d-8904-fdc4bc0eb1b4",
+    "name": "Tech M ",
+    "description": "",
+    "industry": "IT",
+    "website": "tecm.cinm",
+    "location": "gurugram",
+    "assigned_employer_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "assigned_employer_name": "Ajit Yadav",
+    "hr_contacts": null,
+    "status": "active",
+    "created_at": "2026-01-25T16:43:47.737135+00:00"
+  },
+  {
+    "id": "3908c977-938e-4f47-8c93-3b494e8559aa",
+    "name": "JSW",
+    "description": "",
+    "industry": "manufacturing",
+    "website": "tecm.cinm",
+    "location": "mumbai",
+    "assigned_employer_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "assigned_employer_name": "Ajit Yadav",
+    "hr_contacts": null,
+    "status": "active",
+    "created_at": "2026-01-25T16:43:47.796098+00:00"
+  },
+  {
+    "id": "8066c10f-215b-4ed2-9b2d-8726b609e4fa",
+    "name": "Volvo Commercial Vehicle ",
+    "description": "",
+    "industry": "Commerical Auto",
+    "website": "",
+    "location": "Gurugram",
+    "assigned_employer_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "assigned_employer_name": "Ajit Yadav",
+    "hr_contacts": null,
+    "status": "active",
+    "created_at": "2026-01-28T11:22:10.387388+00:00"
+  },
+  {
+    "id": "ba188401-91dc-446d-93c0-d9712b84c230",
+    "name": "Panosonic India",
+    "description": "",
+    "industry": "FMCD",
+    "website": "",
+    "location": "Gurugram",
+    "assigned_employer_id": "10f2023f-1404-4ae6-afea-884384e020fd",
+    "assigned_employer_name": "Manorma yadav",
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T07:08:15.230134+00:00"
+  },
+  {
+    "id": "f5f9d37e-9fd3-44d8-b6c5-69cf7354cab7",
+    "name": "TEST_Company_HR_569d4d80",
+    "description": "Test company with HR contacts",
+    "industry": "Finance",
+    "website": "",
+    "location": "Mumbai",
+    "assigned_employer_id": "8dc5f7b9-be24-4e65-81d7-7af78fd07c18",
+    "assigned_employer_name": "Bikash Das",
+    "hr_contacts": [
+      {
+        "name": "HR Manager",
+        "email": "hr@test-company.com",
+        "phone": "+91-9876543210",
+        "designation": "HR Manager"
+      },
+      {
+        "name": "POC Contact",
+        "email": "poc@test-company.com",
+        "phone": "+91-9876543211",
+        "designation": "Point of Contact"
+      }
+    ],
+    "status": "deleted",
+    "created_at": "2026-01-30T07:08:15.271012+00:00"
+  },
+  {
+    "id": "0cc83122-c5c9-4d74-afd9-e6930b91a5ac",
+    "name": "TEST_Company_61bb3d68",
+    "description": "Test company created by automated tests",
+    "industry": "Technology",
+    "website": "https://test-company.example.com",
+    "location": "Test City",
+    "assigned_employer_id": "e9e33bd0-db62-4db2-86ea-495a6230e222",
+    "assigned_employer_name": "Avinash D",
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T07:08:34.274412+00:00"
+  },
+  {
+    "id": "5570a478-4bbd-433e-80e1-d62508bcbf60",
+    "name": "TEST_Company_HR_77c727c1",
+    "description": "Test company with HR contacts",
+    "industry": "Finance",
+    "website": null,
+    "location": "Mumbai",
+    "assigned_employer_id": "e9e33bd0-db62-4db2-86ea-495a6230e222",
+    "assigned_employer_name": "Avinash D",
+    "hr_contacts": [
+      {
+        "name": "HR Manager",
+        "email": "hr@test-company.com",
+        "phone": "+91-9876543210",
+        "designation": "HR Manager"
+      },
+      {
+        "name": "POC Contact",
+        "email": "poc@test-company.com",
+        "phone": "+91-9876543211",
+        "designation": "Point of Contact"
+      }
+    ],
+    "status": "deleted",
+    "created_at": "2026-01-30T07:08:34.308638+00:00"
+  },
+  {
+    "id": "0e5da6fb-fce8-4396-8781-730a9d091e9d",
+    "name": "TEST_Company_7fd832c3",
+    "description": null,
+    "industry": "Technology",
+    "website": "https://test.com",
+    "location": "Test City",
+    "assigned_employer_id": null,
+    "assigned_employer_name": null,
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T18:19:15.845998+00:00"
+  },
+  {
+    "id": "729204e2-4ca3-4d9f-b693-b369e3307047",
+    "name": "TEST_Update_Company_208f9526",
+    "description": "",
+    "industry": "Finance",
+    "website": "",
+    "location": "Mumbai",
+    "assigned_employer_id": null,
+    "assigned_employer_name": null,
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T18:19:16.163568+00:00"
+  },
+  {
+    "id": "a33a97f6-d2a1-4027-9a34-d8629c7d7b76",
+    "name": "TEST_Company_26cc4e54",
+    "description": null,
+    "industry": "Technology",
+    "website": "https://test.com",
+    "location": "Test City",
+    "assigned_employer_id": null,
+    "assigned_employer_name": null,
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T18:19:51.375840+00:00"
+  },
+  {
+    "id": "dcad6691-b2be-494d-9083-b172dc657395",
+    "name": "TEST_Update_Company_4e1c5324",
+    "description": null,
+    "industry": "Finance",
+    "website": null,
+    "location": "Mumbai",
+    "assigned_employer_id": null,
+    "assigned_employer_name": null,
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T18:19:51.706601+00:00"
+  },
+  {
+    "id": "fe7a87f0-606e-40ab-a9db-89e48abbbfbc",
+    "name": "Hero motocorp",
+    "description": "",
+    "industry": "auto",
+    "website": "",
+    "location": "gurugram",
+    "assigned_employer_id": "f2a32556-f910-453a-8a2d-961211a17c46",
+    "assigned_employer_name": "Maneet Siwach",
+    "hr_contacts": [],
+    "status": "active",
+    "created_at": "2026-01-30T19:44:04.326407+00:00"
+  },
+  {
+    "id": "0bbc6830-e419-49da-9732-4c1f36edc852",
+    "name": "TEST_DeleteCompany_e8a4fa42",
+    "description": "Test company for deletion",
+    "industry": "Technology",
+    "website": "https://test-delete.com",
+    "location": "Test City",
+    "assigned_employer_id": null,
+    "assigned_employer_name": null,
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T20:10:06.941985+00:00"
+  },
+  {
+    "id": "4b1f1705-3151-4fde-9834-66d0309c32f1",
+    "name": "TEST_CascadeCompany_be731843",
+    "description": null,
+    "industry": "Technology",
+    "website": null,
+    "location": "Test City",
+    "assigned_employer_id": null,
+    "assigned_employer_name": null,
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T20:10:07.817125+00:00"
+  },
+  {
+    "id": "7f54f4fc-13b8-49b9-b9d3-a9fcd6691974",
+    "name": "TEST_UpdatedCompany_cf5561c7",
+    "description": "Updated description",
+    "industry": "Healthcare",
+    "website": "https://updated.com",
+    "location": "Updated City",
+    "assigned_employer_id": null,
+    "assigned_employer_name": null,
+    "hr_contacts": [],
+    "status": "deleted",
+    "created_at": "2026-01-30T20:10:09.288786+00:00"
+  },
+  {
+    "id": "14c1b9aa-9646-4d4c-884c-c985b9ae9198",
+    "name": "TVS ",
+    "description": "",
+    "industry": "2 wheeler ",
+    "website": "",
+    "location": "banglore",
+    "assigned_employer_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "assigned_employer_name": "Ajit Yadav",
+    "hr_contacts": [],
+    "status": "active",
+    "created_at": "2026-02-16T06:56:58.213108+00:00"
+  },
+  {
+    "id": "9c1553d8-4ead-4324-bf79-6a3a6c512d44",
+    "name": "Panasonic",
+    "description": "",
+    "industry": "FMCD",
+    "website": "",
+    "location": "Gurugram,Jhajjar",
+    "assigned_employer_id": "10f2023f-1404-4ae6-afea-884384e020fd",
+    "assigned_employer_name": "Manorma yadav",
+    "hr_contacts": [],
+    "status": "active",
+    "created_at": "2026-02-17T05:52:00.176828+00:00"
+  }
+]

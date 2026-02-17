@@ -1,0 +1,167 @@
+[
+  {
+    "id": "eb962d6f-ad6f-454a-bd7b-edc68f8b4ff7",
+    "email": "admin@vhc.in",
+    "name": "System Admin",
+    "role": "admin",
+    "company_id": null,
+    "phone": null,
+    "created_at": "2026-01-18T08:01:29.570417+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "email": "ajit@vhc.in",
+    "name": "Ajit Yadav",
+    "role": "employer",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-01-24T11:12:03.591922+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "f2a32556-f910-453a-8a2d-961211a17c46",
+    "email": "maneet@vhc.in",
+    "name": "Maneet Siwach",
+    "role": "employer",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-01-24T11:12:28.421906+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "8dc5f7b9-be24-4e65-81d7-7af78fd07c18",
+    "email": "bikash@vhc.in",
+    "name": "Bikash Das",
+    "role": "employer",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-01-24T11:12:50.979012+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "e9e33bd0-db62-4db2-86ea-495a6230e222",
+    "email": "avinash@vhc.in",
+    "name": "Avinash D",
+    "role": "employer",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-01-24T11:13:23.080204+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "06b70e35-bb06-41b9-a5f1-d9111112ae78",
+    "email": "yamini@vhc.in",
+    "name": "Yamini gupta",
+    "role": "recruiter",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-01-27T06:31:07.218244+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "email": "employer@vhctalent.com",
+    "name": "Test Employer",
+    "role": "employer",
+    "company_id": null,
+    "phone": null,
+    "created_at": "2026-01-27T11:44:05.314977+00:00",
+    "is_active": false,
+    "requires_password_reset": false
+  },
+  {
+    "id": "f501f248-57c4-4d38-ae9b-febcbe43c133",
+    "email": "recruiter@vhctalent.com",
+    "name": "Test Recruiter",
+    "role": "recruiter",
+    "company_id": null,
+    "phone": null,
+    "created_at": "2026-01-27T11:44:05.585527+00:00",
+    "is_active": false,
+    "requires_password_reset": false
+  },
+  {
+    "id": "0e82b2aa-9c30-4a06-ab62-6b4336fccf76",
+    "email": "recruiter2@vhctalent.com",
+    "name": "Test Recruiter 2",
+    "role": "recruiter",
+    "company_id": null,
+    "phone": null,
+    "created_at": "2026-01-27T11:44:05.856068+00:00",
+    "is_active": false,
+    "requires_password_reset": false
+  },
+  {
+    "id": "839f5e28-f97e-4e0d-ae18-091e0636fa60",
+    "email": "jatin@vhc.in",
+    "name": "Jatin Yadav",
+    "role": "recruiter",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-01-28T04:47:27.495354+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "f412d7aa-c3f1-436f-aaea-91600905f486",
+    "email": "siddharth@vhc.in",
+    "name": "Siddharth Rao",
+    "role": "employer",
+    "company_id": "",
+    "phone": "9810557485",
+    "created_at": "2026-02-16T05:03:36.884013+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "a39a318f-a107-4a5b-b6ff-03232a4d2289",
+    "email": "rohit@vhc.in",
+    "name": "Rohit Yadav",
+    "role": "employer",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-02-16T08:08:13.909837+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "10f2023f-1404-4ae6-afea-884384e020fd",
+    "email": "manorma@vhc.in",
+    "name": "Manorma yadav",
+    "role": "employer",
+    "company_id": "",
+    "phone": "",
+    "created_at": "2026-02-16T08:08:57.878577+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "a8f2f035-8d4b-4c90-ae53-ef64a0fd7c0c",
+    "email": "Rohitjakhmola28@yahoo.com",
+    "name": "ROHIT JAKHMOLA",
+    "role": "candidate",
+    "company_id": null,
+    "phone": null,
+    "created_at": "2026-02-16T12:07:09.594698+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  },
+  {
+    "id": "67ac3ae1-5b14-4a1c-aedf-0cbbbb58e629",
+    "email": "yatharthrao9@gmail.com",
+    "name": "Nehul Singhania",
+    "role": "candidate",
+    "company_id": null,
+    "phone": null,
+    "created_at": "2026-02-16T12:41:50.545989+00:00",
+    "is_active": true,
+    "requires_password_reset": false
+  }
+]
