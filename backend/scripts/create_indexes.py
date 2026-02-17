@@ -6,7 +6,9 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 
-MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+MONGO_URL = os.environ.get('MONGO_URL')
+if not MONGO_URL:
+    raise RuntimeError("MONGO_URL environment variable is required.")
 DB_NAME = os.environ.get('DB_NAME', 'vhc_talent_os')
 
 async def create_indexes():

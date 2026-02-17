@@ -15,7 +15,10 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 async def seed_users():
-    mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+    mongo_url = os.environ.get('MONGO_URL')
+    if not mongo_url:
+        print("ERROR: MONGO_URL environment variable is required.")
+        sys.exit(1)
     db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
     
     client = AsyncIOMotorClient(mongo_url)
