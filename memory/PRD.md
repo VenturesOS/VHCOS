@@ -70,9 +70,13 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 
 ## Prioritized Backlog
 
-### P0 (Immediate)
-- **Production .env Fix + Redeploy:** Update production MONGO_URL to point to Atlas. This will push all codebase bug fixes live and complete the unification.
-  - NOTE: 4 migrated users (rohit, manorma, 2 candidates) have default passwords set to "12345678" — they should reset after redeployment.
+### P0 (Immediate) — COMPLETED
+- ~~Production .env Fix + Redeploy:~~ **DONE** (Feb 18, 2026)
+  - Atlas-only connection enforced, localhost fallbacks removed
+  - Enhanced startup logging: explicitly confirms ATLAS vs LOCAL connection
+  - 4 migrated users flagged with `requires_password_reset: true`
+  - Full 7-phase verification: auth tests (6/6), write tests (3/3), integrity (7/7), count match (7/7)
+  - **User action required:** Trigger production deploy via Emergent platform to push all fixes live
 
 ### P1
 - **SEO Phase 2:** Pillar Pages + FAQ Schema + Content Silo Architecture
