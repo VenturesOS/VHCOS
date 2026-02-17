@@ -11,30 +11,20 @@ import { Loader2 } from 'lucide-react';
 const VALID_SLUGS = new Set(['industrial-recruitment', 'hr-consulting-services', 'career-insights']);
 const BASE_URL = 'https://ventureshrd.com';
 
-function FAQSchema({ faq }) {
-  useEffect(() => {
-    if (!faq || faq.length === 0) return;
-    const schema = {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      "mainEntity": faq.map(item => ({
-        "@type": "Question",
-        "name": item.question,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": item.answer
-        }
-      }))
-    };
-    const script = document.createElement('script');
-    script.type = 'application/ld+json';
-    script.setAttribute('data-testid', 'faq-jsonld');
-    script.setAttribute('data-faq-schema', 'true');
-    script.textContent = JSON.stringify(schema);
-    document.head.appendChild(script);
-    return () => { script.remove(); };
-  }, [faq]);
-  return null;
+function buildFAQSchema(faq) {
+  if (!faq || faq.length === 0) return null;
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faq.map(item => ({
+      "@type": "Question",
+      "name": item.question,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": item.answer
+      }
+    }))
+  };
 }
 
 function PillarNotFound() {
