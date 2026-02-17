@@ -73,16 +73,6 @@ export default function PillarPage() {
 
   return (
     <div className="min-h-screen bg-white" data-testid="pillar-page">
-      <Helmet>
-        <title>{page.meta_title}</title>
-        <meta name="description" content={page.meta_description} />
-        <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:title" content={page.meta_title} />
-        <meta property="og:description" content={page.meta_description} />
-        <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:type" content="article" />
-      </Helmet>
-
       {/* Header */}
       <header style={{ background: '#111827', padding: '16px 24px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
