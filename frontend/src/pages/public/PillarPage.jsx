@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { pillarPageAPI } from '../../lib/api';
+import { injectInternalLinks } from '../../lib/internalLinks';
 import { useSEOMeta } from '../../hooks/useSEOMeta';
 import PillarHero from '../../components/PillarPage/PillarHero';
 import PillarContent from '../../components/PillarPage/PillarContent';
