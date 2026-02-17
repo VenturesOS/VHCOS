@@ -21,6 +21,10 @@ const PILLAR_LINK_MAP = {
     'industrial sectors',
     'industrial and manufacturing',
     'manufacturing sectors',
+    'plant leadership',
+    'plant leaders',
+    'industrial hiring',
+    'hiring challenge',
   ],
   '/hr-consulting-services': [
     'hr consulting',
@@ -34,6 +38,11 @@ const PILLAR_LINK_MAP = {
     'compensation benchmarking',
     'workforce consulting',
     'hr advisory',
+    'people leadership',
+    'leadership capability',
+    'employee engagement',
+    'attrition trends',
+    'retention rate',
   ],
   '/career-insights': [
     'career insights',
@@ -44,6 +53,11 @@ const PILLAR_LINK_MAP = {
     'salary benchmarks',
     'salary benchmarking',
     'compensation data',
+    'career decision',
+    'career transition',
+    'career planning',
+    'earning trajectory',
+    'compensation intelligence',
   ],
 };
 
