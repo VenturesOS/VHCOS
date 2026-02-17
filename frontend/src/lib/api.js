@@ -307,6 +307,15 @@ export const contactAPI = {
 };
 
 // Blog Engine APIs
+export const pillarPageAPI = {
+  getBySlug: (slug) => api.get(`/pillar-pages/${slug}`),
+  adminList: () => api.get('/admin/pillar-pages'),
+  adminGet: (slug) => api.get(`/admin/pillar-pages/${slug}`),
+  adminCreate: (data) => api.post('/admin/pillar-pages', data),
+  adminUpdate: (slug, data) => api.put(`/admin/pillar-pages/${slug}`, data),
+  adminDelete: (slug) => api.delete(`/admin/pillar-pages/${slug}`),
+};
+
 export const blogAPI = {
   // Admin
   generate: (data) => api.post('/blog/generate', data),

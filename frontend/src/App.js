@@ -18,6 +18,7 @@ import PublicJobPage from "./pages/public/PublicJobPage";
 import ApplicationSuccessPage from "./pages/public/ApplicationSuccessPage";
 import MandateApplyPage from "./pages/public/MandateApplyPage";
 import { EmployerBlogList, EmployerBlogArticle, CandidateBlogList, CandidateBlogArticle } from "./pages/public/BlogPages";
+import PillarPage from "./pages/public/PillarPage";
 
 // Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -95,6 +96,11 @@ function App() {
           <Route path="/jobs/:jobId" element={<PublicJobPage />} />
           <Route path="/apply/mandate/:jobId" element={<MandateApplyPage />} />
           <Route path="/application-success" element={<ApplicationSuccessPage />} />
+
+          {/* SEO Pillar Pages */}
+          <Route path="/industrial-recruitment" element={<PillarPage />} />
+          <Route path="/hr-consulting-services" element={<PillarPage />} />
+          <Route path="/career-insights-guide" element={<PillarPage />} />
 
           {/* Public Blog Routes */}
           <Route path="/industrial-hiring-insights" element={<EmployerBlogList />} />
