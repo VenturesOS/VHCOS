@@ -71,6 +71,7 @@ export default function PillarPage() {
       ogDescription: page.meta_description,
       ogUrl: canonicalUrl,
       ogType: 'article',
+      jsonLd: page.status === 'published' ? buildFAQSchema(page.faq) : null,
     };
   }, [page]);
   useSEOMeta(seoMeta);
