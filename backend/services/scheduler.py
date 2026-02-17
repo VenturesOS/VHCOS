@@ -50,10 +50,11 @@ def start_scheduler():
 
     scheduler.start()
     _started = True
+    logging.warning(f"[Scheduler] Started successfully")
 
     jobs = scheduler.get_jobs()
     for job in jobs:
-        logger.info(f"[Scheduler] Registered job: {job.name} | next_run={job.next_run_time}")
+        logging.warning(f"[Scheduler] Job: {job.name} | next_run={job.next_run_time}")
 
 
 def stop_scheduler():
