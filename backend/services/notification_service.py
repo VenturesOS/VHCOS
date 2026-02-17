@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 JOB_MATCH_THRESHOLD = int(os.environ.get('JOB_MATCH_THRESHOLD', '60'))
 NOTIFICATION_ENABLED = os.environ.get('NOTIFICATION_ENABLED', 'true').lower() == 'true'
-APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://seo-pillar.preview.emergentagent.com')
+APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://pillar-pages-hub.preview.emergentagent.com')
 
 
 async def log_notification(
