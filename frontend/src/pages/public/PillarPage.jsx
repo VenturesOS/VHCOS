@@ -88,6 +88,7 @@ export default function PillarPage() {
   if (notFound || !page) return <PillarNotFound />;
 
   const sanitizedContent = DOMPurify.sanitize(page.content || '');
+  const linkedContent = injectInternalLinks(sanitizedContent, page.slug);
 
   return (
     <div className="min-h-screen bg-white" data-testid="pillar-page">
