@@ -14,7 +14,7 @@ from botocore.config import Config
 
 # ============== ENVIRONMENT SETUP ==============
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / '.env', override=True)
 
 # ============== MONGODB CONNECTION ==============
 # CRITICAL: Connection string MUST be provided via environment variable
