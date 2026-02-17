@@ -1454,13 +1454,16 @@ async def ensure_pillar_pages_index():
 
 @app.on_event("startup")
 async def ensure_blog_digests_index():
-    """Create indexes on blog_digests collection."""
+    """Create indexes on blog_digests and seo collections."""
     try:
         await db.blog_digests.create_index("week_key", unique=True)
         await db.blog_digests.create_index([("generated_at", -1)])
-        logging.info("blog_digests indexes ensured")
+        await db.seo_snapshots.create_index([("snapshot_date", -1)])
+        await db.seo_alerts.create_index("status")
+        await db.seo_alerts.create_index("severity")
+        logging.info("blog_digests + seo indexes ensured")
     except Exception as e:
-        logging.warning(f"blog_digests index creation skipped: {e}")
+        logging.warning(f"Index creation skipped: {e}")
 
 @app.on_event("startup")
 async def start_background_scheduler():
