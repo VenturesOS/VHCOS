@@ -8,29 +8,42 @@
  *   - No linking inside headings, existing links, buttons
  *   - No self-linking (current slug excluded)
  *   - Controlled anchor variation per pillar
+ *   - Skip first paragraph
  */
 
 const PILLAR_LINK_MAP = {
   '/industrial-recruitment': [
-    'industrial recruitment services',
     'industrial recruitment',
-    'manufacturing hiring solutions',
-    'industrial talent acquisition',
-    'factory hiring',
+    'industrial talent',
+    'manufacturing hiring',
+    'talent acquisition',
+    'recruitment practice',
+    'industrial sectors',
+    'industrial and manufacturing',
+    'manufacturing sectors',
   ],
   '/hr-consulting-services': [
-    'hr consulting services',
     'hr consulting',
-    'human resources consulting',
+    'consulting and recruitment expertise',
+    'consulting expertise',
+    'leadership assessment',
+    'psychometric profiling',
+    'organisation design',
+    'people strategies',
+    'workforce planning',
+    'compensation benchmarking',
     'workforce consulting',
     'hr advisory',
   ],
   '/career-insights': [
     'career insights',
     'career guidance',
-    'professional development guidance',
+    'career trajectories',
     'career intelligence',
-    'career advice',
+    'professional development',
+    'salary benchmarks',
+    'salary benchmarking',
+    'compensation data',
   ],
 };
 
@@ -60,26 +73,22 @@ export function injectInternalLinks(html, currentSlug) {
     }
   }
 
-  // Sort longest-first so "industrial recruitment services" matches before "industrial recruitment"
+  // Sort longest-first so longer phrases match before substrings
   keywords.sort((a, b) => b.lower.length - a.lower.length);
 
   let linkCount = 0;
   const usedAnchors = new Set();
-  const usedHrefs = new Set();
+  const hrefLinkCount = {};
 
-  // Walk all text nodes inside safe parent elements
+  // Collect text nodes in safe parent elements
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      // Skip if inside a heading, link, button, etc.
       let parent = node.parentElement;
       while (parent && parent !== root) {
         if (SKIP_TAGS.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
         parent = parent.parentElement;
       }
-      // Only link inside content elements
-      const directParent = node.parentElement;
-      if (!directParent) return NodeFilter.FILTER_REJECT;
-      const tag = directParent.tagName;
+      const tag = node.parentElement?.tagName;
       if (['P', 'LI', 'TD', 'SPAN', 'EM', 'STRONG', 'BLOCKQUOTE'].includes(tag)) {
         return NodeFilter.FILTER_ACCEPT;
       }
@@ -90,58 +99,47 @@ export function injectInternalLinks(html, currentSlug) {
   const textNodes = [];
   while (walker.nextNode()) textNodes.push(walker.currentNode);
 
-  // Skip first paragraph to avoid over-linking the intro
-  let firstParagraphSkipped = false;
+  // Identify first <p> to skip
+  const firstP = root.querySelector('p');
 
   for (const textNode of textNodes) {
     if (linkCount >= MAX_LINKS) break;
 
-    // Skip first <p> content
-    const parentP = textNode.parentElement?.closest('p');
-    if (parentP && !firstParagraphSkipped) {
-      // Check if this is inside the very first <p> in the root
-      const allPs = root.querySelectorAll('p');
-      if (allPs.length > 0 && allPs[0] === parentP) {
-        firstParagraphSkipped = true;
-        continue;
-      }
-    }
+    // Skip content inside the first <p>
+    if (firstP && firstP.contains(textNode)) continue;
 
     const text = textNode.textContent;
+    if (text.trim().length < 10) continue;
 
     for (const kw of keywords) {
       if (linkCount >= MAX_LINKS) break;
       if (usedAnchors.has(kw.lower)) continue;
-
-      // Max 2 links per target URL (for anchor variation, not spam)
-      const hrefCount = [...usedHrefs].filter(h => h === kw.href).length;
-      if (hrefCount >= 2) continue;
+      // Max 2 links to same URL
+      if ((hrefLinkCount[kw.href] || 0) >= 2) continue;
 
       const idx = text.toLowerCase().indexOf(kw.lower);
       if (idx === -1) continue;
 
-      // Found a match — split the text node and insert an anchor
+      // Split text node and insert anchor
       const before = text.substring(0, idx);
       const match = text.substring(idx, idx + kw.text.length);
       const after = text.substring(idx + kw.text.length);
 
-      const beforeNode = doc.createTextNode(before);
+      const frag = doc.createDocumentFragment();
+      if (before) frag.appendChild(doc.createTextNode(before));
       const anchor = doc.createElement('a');
       anchor.href = kw.href;
       anchor.textContent = match;
       anchor.setAttribute('data-internal-link', 'true');
-      const afterNode = doc.createTextNode(after);
+      frag.appendChild(anchor);
+      if (after) frag.appendChild(doc.createTextNode(after));
 
-      const parent = textNode.parentNode;
-      parent.insertBefore(beforeNode, textNode);
-      parent.insertBefore(anchor, textNode);
-      parent.insertBefore(afterNode, textNode);
-      parent.removeChild(textNode);
+      textNode.parentNode.replaceChild(frag, textNode);
 
       linkCount++;
       usedAnchors.add(kw.lower);
-      usedHrefs.add(kw.href);
-      break; // Move to next text node after one replacement per node
+      hrefLinkCount[kw.href] = (hrefLinkCount[kw.href] || 0) + 1;
+      break;
     }
   }
 
