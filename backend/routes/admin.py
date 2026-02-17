@@ -213,12 +213,26 @@ async def assign_employer_to_company(
     else:
         await db.teams.insert_one({
             "id": str(uuid.uuid4()),
+            "name": f"{employer.get('name', 'Employer')} Team",
             "employer_id": employer_id,
             "company_ids": [company_id],
             "recruiter_ids": [],
+            "status": "active",
             "created_at": now,
             "updated_at": now,
         })
+
+    # Remove company from any OTHER employer's team to avoid duplication
+    await db.teams.update_many(
+        {"employer_id": {"$ne": employer_id}, "company_ids": company_id},
+        {"$pull": {"company_ids": company_id}, "$set": {"updated_at": now}}
+    )
+
+    # Clear old assignment on the company if it was assigned to someone else
+    await db.companies.update_many(
+        {"assigned_employer_id": {"$ne": employer_id, "$exists": True}, "id": {"$ne": company_id}},
+        {}  # no-op, just for clarity
+    )
 
     return {"message": f"Company '{company.get('name')}' assigned to employer '{employer.get('name')}'"}
 
