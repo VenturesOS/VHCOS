@@ -71,12 +71,11 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 ## Prioritized Backlog
 
 ### P0 (Immediate) — COMPLETED
-- ~~Production .env Fix + Redeploy:~~ **DONE** (Feb 18, 2026)
-  - Atlas-only connection enforced, localhost fallbacks removed
-  - Enhanced startup logging: explicitly confirms ATLAS vs LOCAL connection
-  - 4 migrated users flagged with `requires_password_reset: true`
-  - Full 7-phase verification: auth tests (6/6), write tests (3/3), integrity (7/7), count match (7/7)
-  - **User action required:** Trigger production deploy via Emergent platform to push all fixes live
+- ~~Database Consolidation:~~ **DONE** (Feb 18, 2026)
+- ~~Production .env Fix:~~ `.env` has correct Atlas URL. Enhanced startup logging added.
+- ~~Code Bug Fix:~~ Removed crashing empty update at `admin.py:232` that caused assign-employer 500.
+- **User action required:** Trigger production deploy via Emergent platform. After deploy, verify startup log shows `MongoDB connected: ATLAS`.
+- **If production still shows local DB after deploy:** Check Emergent platform's production environment settings — `MONGO_URL` may be overridden at the platform level.
 
 ### P1
 - **SEO Phase 2:** Pillar Pages + FAQ Schema + Content Silo Architecture
