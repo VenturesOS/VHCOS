@@ -13,6 +13,7 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 7. **Analytics** — Admin and employer dashboards with revenue tracking
 8. **Chrome Extension** — Naukri profile scraping integration
 9. **Blog Engine** — Dual AI-powered blog engines (Employer + Candidate)
+10. **SEO Content Silo** — Dynamic pillar pages for authority in industrial recruitment, HR consulting, and career insights
 
 ## Architecture
 - **Frontend:** React + Tailwind + Shadcn/UI (port 3000)
@@ -49,51 +50,50 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - 1 commercial added (TVS)
   - Test artifacts excluded (8 companies, 10+ jobs, 3 test users)
 - **Post-Merge Validation:** ALL PASS
-  - Login tests: 5/5 pass (admin, employer, recruiter)
-  - Relationship integrity: 5/5 checks pass (0 broken references)
-  - Count verification: 7/7 collections match expected
-  - API verification: Companies, Jobs, Teams, Applications all functional
 - **Backup:** Full Atlas snapshot at `/app/backup/atlas_pre_merge_20260218/`
-- **Rollback:** `mongorestore --drop --dir='/app/backup/atlas_pre_merge_20260218/vhc_talent_os'` (< 5 min)
 
-## Current Database State (Post-Merge)
-| Collection | Count |
-|---|---|
-| users | 14 |
-| companies | 7 |
-| teams | 4 |
-| jobs | 6 |
-| applications | 43 |
-| candidate_bank | 1,719 |
-| commercials | 6 |
-| blog_posts | 2 |
+### Phase 10: SEO Phase 2 — Content Silo Architecture (Feb 17, 2026)
+- **Backend:** `pillar_pages` collection with admin CRUD + public GET API
+  - Routes: `/api/admin/pillar-pages` (CRUD) + `/api/pillar-pages/{slug}` (public read)
+  - Unique index on slug, constrained to 3 allowed values
+  - Models: `PillarPageCreate`, `PillarPageUpdate` with hero, content, faq, status fields
+- **Frontend:** Dynamic pillar page rendering
+  - `PillarPage.jsx` with `PillarHero`, `PillarContent`, `PillarSidebar` components
+  - `useSEOMeta` hook for reliable DOM-based meta tag injection (title, description, canonical, OG tags)
+  - DOMPurify HTML sanitization, mobile-first responsive layout
+  - FAQ accordion section, two CTAs per page, sticky sidebar with internal links
+- **Content:** 3 pillar pages seeded with 1500+ words each
+  - `/industrial-recruitment` — 1506 words, 5 FAQs
+  - `/hr-consulting-services` — 1518 words, 5 FAQs
+  - `/career-insights` — 1613 words, 5 FAQs (replaces old blog list at this URL)
+- **SEO:** Sitemap & robots.txt updated with pillar page paths
+- **Testing:** 18/18 backend tests passed, frontend verified across all 3 pages
+
+## Key Files
+- `backend/routes/pillar_pages.py` — Pillar pages CRUD + public API
+- `backend/models/pillar_page.py` — Pydantic models
+- `backend/scripts/seed_pillar_pages.py` — Content seeding script
+- `frontend/src/pages/public/PillarPage.jsx` — Main pillar page component
+- `frontend/src/components/PillarPage/` — Hero, Content, Sidebar sub-components
+- `frontend/src/hooks/useSEOMeta.js` — DOM-based SEO meta tag injection hook
+- `backend/config.py` — Database connection with Atlas override
 
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
-- ~~Database Consolidation:~~ **DONE** (Feb 18, 2026) — Merged local DB into Atlas
-- ~~Production Unification:~~ **DONE** (Feb 18, 2026) — Production now writes exclusively to Atlas
-  - Root cause: Platform injected `MONGO_URL=localhost`, fixed with targeted `dotenv_values()` override in `config.py`
-  - Code bug: Empty `update_many({})` crash in `admin.py:232` removed
-  - All counts verified on production: 14 users, 7 companies, 1719 candidates, 4 teams, 43 applications
-  - Write isolation confirmed: Atlas=YES, localhost=NO
-- ~~SEO Phase 2: Content Silo Architecture~~ **DONE** (Feb 17, 2026)
-  - Backend: `pillar_pages` collection with admin CRUD + public GET API. Unique index on slug.
-  - Frontend: Dynamic rendering with `useSEOMeta` hook (title, description, canonical, OG tags), DOMPurify HTML sanitization, mobile-first responsive layout, two-column content+sidebar grid.
-  - Content: 3 pillar pages seeded (1500+ words each, FAQ sections, internal linking placeholders, 2 CTAs per page)
-    - `/industrial-recruitment` — 1506 words
-    - `/hr-consulting-services` — 1518 words
-    - `/career-insights` — 1613 words
-  - SEO: Sitemap & robots.txt updated. Each page has unique H1, proper H2→H3 hierarchy, canonical URL, OG meta tags.
+- ~~Database Consolidation~~ **DONE**
+- ~~Production Unification~~ **DONE**
+- ~~SEO Phase 2: Content Silo Architecture~~ **DONE**
 
 ### P1
-- **Automate Weekly Blog Digest:** APScheduler job for Monday 9:00 AM IST digest generation + Resend email integration
+- **Automate Weekly Blog Digest:** APScheduler job for Monday 9:00 AM IST
 - SEO Phase 3: AI-Optimized FAQ Pages with JSON-LD schema
-- SEO Phase 4: Internal Linking Engine between blogs, pillars, and services
+- SEO Phase 4: Internal Linking Engine
 
 ### P2
-- SEO Phase 3-5: LLM visibility strategy, internal linking engine, SEO monitoring dashboard
-- Refactor employer routes into dedicated file
+- SEO Phase 5: SEO Monitoring Dashboard
+- Resend email integration for blog digest
+- Refactor employer routes (`server.py` → `employer_routes.py`)
 
 ### P3
 - Refactor Chrome extension content.js
@@ -104,15 +104,3 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - Employer: `ajit@vhc.in` / `12345678`
 - Recruiter: `jatin@vhc.in` / `12345678`
 - Admin (alt): `siddharth@vhc.in` / `12345678`
-
-## Key Files
-- `/app/backend/server.py` — Main FastAPI app
-- `/app/backend/routes/admin.py` — Admin routes (employer/team fixes)
-- `/app/backend/routes/seo.py` — SEO infrastructure
-- `/app/backend/services/llm_service.py` — Centralized LLM service
-- `/app/backend/migration_execute.py` — Database merge script (executed)
-- `/app/backend/migration_dry_run.py` — Dry-run simulation script
-- `/app/memory/MIGRATION_PREVIEW_REPORT.md` — Full migration analysis
-- `/app/memory/MIGRATION_EXECUTION_LOG.md` — Execution log
-- `/app/backup/atlas_pre_merge_20260218/` — Atlas backup (pre-merge)
-- `/app/backup/production_snapshot_20260218/` — Production data snapshot
