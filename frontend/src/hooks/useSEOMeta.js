@@ -1,13 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
- * Directly injects/updates meta tags in <head>.
- * More reliable than react-helmet-async for CSR in v2.
- * @param {{ title, description, canonical, ogTitle, ogDescription, ogUrl, ogType }} meta
+ * Directly injects/updates meta tags + JSON-LD in <head>.
+ * Handles React StrictMode double-mount correctly.
+ * @param {{ title, description, canonical, ogTitle, ogDescription, ogUrl, ogType, jsonLd }} meta
  */
 export function useSEOMeta(meta) {
+  const elRef = useRef([]);
+
   useEffect(() => {
     if (!meta) return;
+
+    // Clean up previous elements from this hook instance
+    elRef.current.forEach(el => el.remove());
+    elRef.current = [];
+
     if (meta.title) document.title = meta.title;
 
     const tags = [
@@ -18,7 +25,6 @@ export function useSEOMeta(meta) {
       { attr: 'property', key: 'og:type', content: meta.ogType || 'article' },
     ];
 
-    const managed = [];
     for (const t of tags) {
       if (!t.content) continue;
       let el = document.querySelector(`meta[${t.attr}="${t.key}"]`);
@@ -26,27 +32,38 @@ export function useSEOMeta(meta) {
         el = document.createElement('meta');
         el.setAttribute(t.attr, t.key);
         document.head.appendChild(el);
+        elRef.current.push(el);
       }
       el.setAttribute('content', t.content);
-      el.setAttribute('data-seo-managed', 'true');
-      managed.push(el);
     }
 
     // Canonical link
-    let canonical = document.querySelector('link[rel="canonical"]');
     if (meta.canonical) {
+      let canonical = document.querySelector('link[rel="canonical"]');
       if (!canonical) {
         canonical = document.createElement('link');
         canonical.setAttribute('rel', 'canonical');
         document.head.appendChild(canonical);
+        elRef.current.push(canonical);
       }
       canonical.setAttribute('href', meta.canonical);
-      canonical.setAttribute('data-seo-managed', 'true');
+    }
+
+    // JSON-LD structured data
+    if (meta.jsonLd) {
+      // Remove any existing managed JSON-LD
+      document.querySelectorAll('script[data-seo-jsonld]').forEach(el => el.remove());
+      const script = document.createElement('script');
+      script.type = 'application/ld+json';
+      script.setAttribute('data-seo-jsonld', 'true');
+      script.textContent = JSON.stringify(meta.jsonLd);
+      document.head.appendChild(script);
+      elRef.current.push(script);
     }
 
     return () => {
-      // Cleanup on unmount — remove managed tags
-      document.querySelectorAll('[data-seo-managed]').forEach(el => el.remove());
+      elRef.current.forEach(el => el.remove());
+      elRef.current = [];
     };
-  }, [meta?.title, meta?.description, meta?.canonical, meta?.ogTitle, meta?.ogDescription, meta?.ogUrl, meta?.ogType]);
+  }, [meta?.title, meta?.description, meta?.canonical, meta?.ogTitle, meta?.ogDescription, meta?.ogUrl, meta?.ogType, meta?.jsonLd]);
 }
