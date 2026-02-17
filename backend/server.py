@@ -1448,6 +1448,31 @@ async def ensure_pillar_pages_index():
     except Exception as e:
         logging.warning(f"pillar_pages index creation skipped: {e}")
 
+@app.on_event("startup")
+async def ensure_blog_digests_index():
+    """Create indexes on blog_digests collection."""
+    try:
+        await db.blog_digests.create_index("week_key", unique=True)
+        await db.blog_digests.create_index([("generated_at", -1)])
+        logging.info("blog_digests indexes ensured")
+    except Exception as e:
+        logging.warning(f"blog_digests index creation skipped: {e}")
+
+@app.on_event("startup")
+async def start_background_scheduler():
+    """Start APScheduler for background jobs."""
+    from services.scheduler import start_scheduler
+    try:
+        start_scheduler()
+    except Exception as e:
+        logging.error(f"Scheduler startup failed: {e}", exc_info=True)
+
+@app.on_event("shutdown")
+async def stop_background_scheduler():
+    """Gracefully stop the scheduler."""
+    from services.scheduler import stop_scheduler
+    stop_scheduler()
+
 # Include the router in the main app
 app.include_router(api_router)
 
