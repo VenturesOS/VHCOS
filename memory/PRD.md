@@ -1,7 +1,7 @@
 # VHC Talent OS - Product Requirements Document
 
 ## Original Problem Statement
-A full-stack recruitment application (React, FastAPI, MongoDB) with a public-facing static website and an internal portal for Admin, Employer, Recruiter, and Candidate roles. The platform supports AI-powered candidate matching, job management, pipeline tracking, analytics, and now dual blog engines for recruitment leads and candidate engagement.
+A full-stack recruitment application (React, FastAPI, MongoDB) with a public-facing static website and an internal portal for Admin, Employer, Recruiter, and Candidate roles. The platform supports AI-powered candidate matching, job management, pipeline tracking, analytics, and dual blog engines for recruitment leads and candidate engagement.
 
 ## Core Requirements
 1. **Public Website** — Responsive static site (7+ pages) with contact form, careers, SEO
@@ -17,179 +17,92 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 ## Architecture
 - **Frontend:** React + Tailwind + Shadcn/UI (port 3000)
 - **Backend:** FastAPI + Motor (async MongoDB) (port 8001)
-- **Database:** MongoDB Atlas (vhc_talent_os)
+- **Database:** MongoDB Atlas (vhc_talent_os) — UNIFIED (single source of truth)
 - **Storage:** Cloudflare R2 for files
 - **AI:** OpenAI GPT-4o-mini (screening, matching, blog generation)
 
 ## What's Been Implemented
 
-### Phase 1 (Previous Sessions)
+### Phases 1-8 (Previous Sessions)
 - Full auth system, Job CRUD, Candidate bank, AI matching, Pipeline, Analytics
 - Chrome extension, Teams, Referrals, Commercials, Bug reporting
+- MongoDB Atlas SSL fix, Static site responsiveness, UI/UX audit
+- Contact Form, AI Screening, SEO Meta Tags, Mobile responsive fixes
+- Dual Blog Engines (Employer + Candidate) with AI generation
+- Blog Auto-Scheduling, Analytics Dashboard, RSS Feed
+- Forgot Password Flow, Contact Form Email Notifications, Social Sharing
+- SEO-Friendly Clean URLs, AI Topic Research, Weekly Blog Digest
+- Production Root URL Redirect fix, Company-Employer Assignment fix
+- LLM Service Refactor, SEO Phase 1 (Technical SEO Transformation)
 
-### Phase 2 (Previous Fork)
-- MongoDB Atlas SSL fix, Static site responsiveness, UI/UX audit, Micro-animations
-- AI Screening shortlist bug fix
+### Phase 9: Database Consolidation (Feb 17, 2026)
+- **Critical DB Split-Brain Resolution:** Successfully merged production local MongoDB data into Atlas master
+- **Migration Summary:**
+  - UUID Conflicts: 4 resolved (admin, ajit, jatin, siddharth) — kept production UUIDs
+  - Siddharth role: overridden from employer → admin (production UUID retained)
+  - Company dedup: Panosonic India + Panasonic merged into "Panasonic India"
+  - 9 orphaned Atlas applications cleaned
+  - 56 production-only candidates migrated
+  - 30 production-only applications migrated
+  - 4 production-only real users added (rohit, manorma, 2 candidates)
+  - 2 real companies added (TVS, Panasonic India)
+  - 1 commercial added (TVS)
+  - Test artifacts excluded (8 companies, 10+ jobs, 3 test users)
+- **Post-Merge Validation:** ALL PASS
+  - Login tests: 5/5 pass (admin, employer, recruiter)
+  - Relationship integrity: 5/5 checks pass (0 broken references)
+  - Count verification: 7/7 collections match expected
+  - API verification: Companies, Jobs, Teams, Applications all functional
+- **Backup:** Full Atlas snapshot at `/app/backup/atlas_pre_merge_20260218/`
+- **Rollback:** `mongorestore --drop --dir='/app/backup/atlas_pre_merge_20260218/vhc_talent_os'` (< 5 min)
 
-### Phase 3 (Feb 15, 2026)
-- Contact Form Backend with admin dashboard
-- AI Screening "View Full Profile" and "Add as Applicant" actions
-- SEO Meta Tags audit across all static pages
-- Mobile responsive fix for About page leadership cards
-
-### Phase 4 (Feb 15, 2026 - Current)
-- **Employer Blog Engine** — AI-generated 1500-2000 word recruitment articles
-  - Public listing at `/website/industrial-hiring-insights`
-  - Single article pages with SEO meta tags and Article schema markup
-  - India/Global region tagging, recruitment-focused CTAs
-  - Footer-only link (not in header nav), SEO indexable
-- **Candidate Blog Engine** — AI-generated 1200-1800 word career advice articles
-  - Public listing at `/website/career-insights` with category filters
-  - Soft CTAs for profile creation/resume upload
-  - Linked from "Career Insights & Advice" section on homepage
-- **Admin Blog Management Panel** at `/admin/blog-engine`
-  - One-click AI generation with topic/industry/keywords/region/category inputs
-  - Full content editor with metadata editing
-  - Preview mode, publish/unpublish workflow
-  - Generation logging (topic, keywords, model, region, type)
-- **LLM Service Layer** — Abstracted blog_generator.py with configurable model
-  - Currently uses GPT-4o-mini, upgradeable via env vars
-  - Controlled temperature for consistent SEO structure
-
-## Blog Engine Schema
-```json
-{
-  "id": "uuid",
-  "title": "string",
-  "slug": "string",
-  "meta_description": "string",
-  "content": "HTML string",
-  "blog_type": "employer|candidate",
-  "region": "india|global (employer only)",
-  "category": "career-growth|job-switching|... (candidate only)",
-  "industry": "string",
-  "keywords": ["array"],
-  "internal_links": ["array"],
-  "cta_type": "string",
-  "word_count_estimate": "number",
-  "status": "draft|published",
-  "generation_log": { "topic_source", "model_used", "generated_at", ... },
-  "created_at": "ISO datetime",
-  "published_at": "ISO datetime"
-}
-```
-
-### Phase 5 (Feb 15, 2026)
-- **Blog Auto-Scheduling** — APScheduler-based background jobs
-  - Employer: 3/week (Mon, Wed, Fri at 9:00 AM IST)
-  - Candidate: 2/week (Tue, Thu at 10:00 AM IST)
-  - Admin can enable/disable per blog type via toggle switches
-  - Manual "Publish Now" trigger from admin panel
-  - Auto-publish logs tracked in `blog_schedule_log` collection
-  - Draft queue counter shows available drafts
-- **Blog Analytics Dashboard** at `/admin/blog-analytics`
-  - KPI cards: Published count, Total Views, CTA Clicks, CTR, Draft Queue
-  - Daily page views line chart (recharts)
-  - Top blogs by views and CTA clicks (horizontal bar charts)
-  - Blog performance table with type badges
-  - Period selector (7/30/90 days)
-  - Public tracking: POST /api/blog/track for views and CTA clicks
-  - Auto-tracking on blog article page load
-- **RSS Feed Generation** at `/api/blog/rss`
-  - Valid RSS 2.0 XML with Atom namespace
-  - Filterable by blog_type (employer/candidate)
-  - Returns up to 50 most recent published blogs
-  - Links directly accessible from admin dashboard
-
-### Phase 6 (Feb 15, 2026)
-- **Forgot Password Flow** — Full email-based password reset
-  - POST /api/auth/forgot-password sends reset email via Resend
-  - Token-based reset with 1-hour expiry (password_reset_tokens collection)
-  - Prevents email enumeration (same response for existing/non-existing)
-  - Frontend at /forgot-password with request + reset forms
-  - "Forgot password?" link on Login page
-  - Sender email: noreply@ventureshrd.com
-- **Contact Form Email Notifications** — Admin email alerts
-  - New contact submissions trigger email to admin via Resend
-  - HTML-formatted email with full submission details
-- **Blog Social Sharing** — Share buttons on all blog articles
-  - LinkedIn, X (Twitter), WhatsApp share buttons
-  - Properly encoded URLs and titles
-  - Added to both employer and candidate blog article pages
-
-### Phase 7 (Feb 15, 2026)
-- **SEO-Friendly Clean URLs** — All website pages use clean paths
-  - Removed /website/ prefix and .html extensions from all URLs
-  - craco devServer middleware rewrites: /, /about, /services, /industries, /careers, /contact, /global-hiring, /sitemap
-  - Blog routes: /industrial-hiring-insights, /career-insights (no /website/ prefix)
-  - Updated all internal navigation links across 8 static HTML pages
-  - Asset paths made absolute: /website/style.css, /website/mobile-menu.js
-- **AI Topic & Keyword Research** — OpenAI-powered blog research
-  - POST /api/blog/research-topics generates trending topic suggestions with SEO keywords
-  - Integrated into Blog Engine generate dialog with "Research Topics" button
-  - Clicking a suggestion auto-fills topic, keywords, and region
-- **Blog Sitemap.xml** — Dynamic XML sitemap at /api/blog/sitemap.xml
-  - Includes all static pages with clean URLs and priorities
-  - Includes all published blog posts with lastmod dates
-- **Weekly Blog Digest Email** — Candidate engagement emails
-  - POST /api/blog/send-digest sends digest to all registered candidates
-  - Includes blogs published in last 7 days with links
-  - Admin trigger from Blog Analytics dashboard
-
-### Phase 8 (Feb 2026)
-- **P0 Fix: Production Root URL Redirect** — Made `PublicWebsiteRedirect` bulletproof with 3-layer fallback:
-  1. JS `window.location.replace('/website/Index.html')`
-  2. `<meta http-equiv="refresh">` HTML-level redirect
-  3. Visible "Click here" link after 2s timeout
-  - Requires user to **redeploy** to production for fix to take effect
-- **Bug Fix: Company-Employer Assignment** — Added missing `PUT /api/companies/{id}/assign-employer` backend endpoint. Frontend was calling this route but it never existed, causing all company assignments to silently fail. Fix also creates/updates team entries linking companies to employers.
-- **P2: LLM Service Refactor** — Centralized all OpenAI API calls into `services/llm_service.py`
-  - Single `chat_completion()` function with configurable model, temperature, max_tokens, json_mode
-  - `get_model()` and `get_api_key()` helpers for consistent config
-  - Updated 5 files: `blog_generator.py`, `ai_search.py`, `extension.py`, `cv_upload.py`, `blog.py`
-  - Model now configurable via `LLM_DEFAULT_MODEL` env var (defaults to gpt-4o-mini)
-- **SEO Phase 1 — Technical SEO Transformation**
-  - **Canonical enforcement**: `rel="canonical"` on all 8 HTML pages pointing to ventureshrd.com
-  - **XML Sitemap** at `/api/sitemap.xml`: auto-includes static pages, published blogs, active job listings
-  - **Structured Data (JSON-LD)**: Organization schema (homepage), AboutPage, Service, BreadcrumbList on all pages
-  - **Meta automation**: SEO-focused titles with `| Ventures HRD Centre Pvt Ltd` pattern, keyword-rich descriptions, OG meta tags
-  - **SEO Admin API**: `GET/PUT /api/seo/settings` for admin meta overrides per page
-  - **Security headers middleware**: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection
-  - **robots.txt**: Static + dynamic versions with sitemap reference, Disallow for admin/auth routes
-  - **Custom 404 page**: Employer CTA, candidate CTA, blog links, contact CTA
-  - **Performance**: Lazy loading images, dns-prefetch, preconnect hints
-  - **React app**: noindex/nofollow on SPA index.html (admin portal)
+## Current Database State (Post-Merge)
+| Collection | Count |
+|---|---|
+| users | 14 |
+| companies | 7 |
+| teams | 4 |
+| jobs | 6 |
+| applications | 43 |
+| candidate_bank | 1,719 |
+| commercials | 6 |
+| blog_posts | 2 |
 
 ## Prioritized Backlog
 
+### P0 (Immediate)
+- **Production .env Fix + Redeploy:** Update production MONGO_URL to point to Atlas. This will push all codebase bug fixes live and complete the unification.
+  - NOTE: 4 migrated users (rohit, manorma, 2 candidates) have default passwords set to "12345678" — they should reset after redeployment.
+
 ### P1
-- Automate Weekly Blog Digest (APScheduler recurring job, currently manual button)
-- SEO Phase 2: Pillar Pages + FAQ Schema + Content Silo Architecture
+- **SEO Phase 2:** Pillar Pages + FAQ Schema + Content Silo Architecture
   - Create 3 pillar pages: /industrial-recruitment/, /hr-consulting-services/, /career-insights/
   - AI-optimized FAQ pages with JSON-LD schema for LLM visibility
   - Internal linking engine between blogs, pillars, and services
+- Automate Weekly Blog Digest (APScheduler recurring job)
 
 ### P2
 - SEO Phase 3-5: LLM visibility strategy, internal linking engine, SEO monitoring dashboard
-- Refactor Chrome extension `content.js`
-- AI Search Phase 2 (hybrid routing, configurable models)
+- Refactor employer routes into dedicated file
 
 ### P3
-- Refactor FindCandidatesPage.jsx
-
-## Key Files
-- `/app/backend/server.py` — Main FastAPI app (includes APScheduler startup)
-- `/app/backend/services/blog_generator.py` — LLM abstraction for blog content
-- `/app/backend/services/blog_scheduler.py` — Auto-scheduling logic
-- `/app/backend/services/blog_analytics.py` — Analytics tracking & aggregation
-- `/app/backend/routes/blog.py` — Blog CRUD + public + RSS + analytics + schedule endpoints
-- `/app/backend/routes/contact.py` — Contact form endpoints
-- `/app/frontend/src/pages/admin/BlogEnginePage.jsx` — Admin blog management
-- `/app/frontend/src/pages/admin/BlogAnalyticsPage.jsx` — Admin analytics dashboard
-- `/app/frontend/src/pages/public/BlogPages.jsx` — Public blog pages (with view tracking)
-- `/app/frontend/src/lib/api.js` — API client with blogAPI module
+- Refactor Chrome extension content.js
+- AI Search Phase 2 (hybrid routing, configurable models)
 
 ## Test Credentials
 - Admin: `admin@vhc.in` / `VhcAdmin@2024`
 - Employer: `ajit@vhc.in` / `12345678`
 - Recruiter: `jatin@vhc.in` / `12345678`
+- Admin (alt): `siddharth@vhc.in` / `12345678`
+
+## Key Files
+- `/app/backend/server.py` — Main FastAPI app
+- `/app/backend/routes/admin.py` — Admin routes (employer/team fixes)
+- `/app/backend/routes/seo.py` — SEO infrastructure
+- `/app/backend/services/llm_service.py` — Centralized LLM service
+- `/app/backend/migration_execute.py` — Database merge script (executed)
+- `/app/backend/migration_dry_run.py` — Dry-run simulation script
+- `/app/memory/MIGRATION_PREVIEW_REPORT.md` — Full migration analysis
+- `/app/memory/MIGRATION_EXECUTION_LOG.md` — Execution log
+- `/app/backup/atlas_pre_merge_20260218/` — Atlas backup (pre-merge)
+- `/app/backup/production_snapshot_20260218/` — Production data snapshot
