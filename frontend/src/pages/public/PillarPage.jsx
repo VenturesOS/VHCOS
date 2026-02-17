@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import DOMPurify from 'dompurify';
 import { pillarPageAPI } from '../../lib/api';
@@ -25,7 +25,8 @@ function PillarNotFound() {
 }
 
 export default function PillarPage() {
-  const { slug } = useParams();
+  const location = useLocation();
+  const slug = location.pathname.replace(/^\//, '');
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
