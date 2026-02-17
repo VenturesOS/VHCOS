@@ -95,15 +95,15 @@ PHASE 6: APPLICATIONS
 ================================================================================
 
 --- 6a. Atlas Orphaned Application Cleanup ---
-  DELETE orphaned app: b5b24681-6b4f-4a38-b7ba-5b082ebf2f8b (job_id=ed000817-78ca-496c-a116-7b247e46a2dd not found)
-  DELETE orphaned app: eee688b3-94be-43c7-861f-7fc737874107 (job_id=ed000817-78ca-496c-a116-7b247e46a2dd not found)
-  DELETE orphaned app: 14bce2df-c130-4fcf-b439-4916174ade00 (job_id=ed000817-78ca-496c-a116-7b247e46a2dd not found)
-  DELETE orphaned app: ff5a8a3d-6361-4139-9487-1454f8147ca3 (job_id=ed000817-78ca-496c-a116-7b247e46a2dd not found)
-  DELETE orphaned app: d9b2c707-6bf3-4e04-b8b3-3f7def4a899f (job_id=afc73b3c-0218-4a37-b63a-989c33b7ed19 not found)
-  DELETE orphaned app: 271ba862-2593-4f82-9cd4-74cc666dca47 (job_id=9fac4328-2b12-4cf0-8f78-b9da27c9587c not found)
-  DELETE orphaned app: f1b0cc59-9b45-41cf-801e-707669b9130c (candidate_id=19bbbd7e-8a7e-425d-b6a8-5fdd2a1acd3d not found)
-  DELETE orphaned app: 729ff36e-f467-4545-a169-3e1b5316fdfa (job_id=3d217c26-fc3b-4396-8b81-eeb9fbfa2d12 not found, candidate_id=19bbbd7e-8a7e-425d-b6a8-5fdd2a1acd3d not found)
-  DELETE orphaned app: c79554a5-87da-4d4a-bfce-420225f8376f (candidate_id=19bbbd7e-8a7e-425d-b6a8-5fdd2a1acd3d not found)
+  DELETE orphaned app: b5b24681-6b4f-4a38-b7ba-5b082ebf2f8b (job_id=seo-pillar not found)
+  DELETE orphaned app: eee688b3-94be-43c7-861f-7fc737874107 (job_id=seo-pillar not found)
+  DELETE orphaned app: 14bce2df-c130-4fcf-b439-4916174ade00 (job_id=seo-pillar not found)
+  DELETE orphaned app: ff5a8a3d-6361-4139-9487-1454f8147ca3 (job_id=seo-pillar not found)
+  DELETE orphaned app: d9b2c707-6bf3-4e04-b8b3-3f7def4a899f (job_id=seo-pillar not found)
+  DELETE orphaned app: 271ba862-2593-4f82-9cd4-74cc666dca47 (job_id=seo-pillar not found)
+  DELETE orphaned app: f1b0cc59-9b45-41cf-801e-707669b9130c (candidate_id=seo-pillar not found)
+  DELETE orphaned app: 729ff36e-f467-4545-a169-3e1b5316fdfa (job_id=seo-pillar not found, candidate_id=seo-pillar not found)
+  DELETE orphaned app: c79554a5-87da-4d4a-bfce-420225f8376f (candidate_id=seo-pillar not found)
 
 --- 6b. Production-Only Applications ---
     SKIP app c27f1520-0594-40c1-b984-23a914b0cf91: job (1666dad8-80a6-4452-bd3b-6f6764669c49) missing from final DB
