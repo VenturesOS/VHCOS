@@ -77,6 +77,14 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - Code bug: Empty `update_many({})` crash in `admin.py:232` removed
   - All counts verified on production: 14 users, 7 companies, 1719 candidates, 4 teams, 43 applications
   - Write isolation confirmed: Atlas=YES, localhost=NO
+- ~~SEO Phase 2: Content Silo Architecture~~ **DONE** (Feb 17, 2026)
+  - Backend: `pillar_pages` collection with admin CRUD + public GET API. Unique index on slug.
+  - Frontend: Dynamic rendering with `useSEOMeta` hook (title, description, canonical, OG tags), DOMPurify HTML sanitization, mobile-first responsive layout, two-column content+sidebar grid.
+  - Content: 3 pillar pages seeded (1500+ words each, FAQ sections, internal linking placeholders, 2 CTAs per page)
+    - `/industrial-recruitment` — 1506 words
+    - `/hr-consulting-services` — 1518 words
+    - `/career-insights` — 1613 words
+  - SEO: Sitemap & robots.txt updated. Each page has unique H1, proper H2→H3 hierarchy, canonical URL, OG meta tags.
 
 ### P1
 - **SEO Phase 2:** Pillar Pages + FAQ Schema + Content Silo Architecture
