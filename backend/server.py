@@ -1335,13 +1335,12 @@ async def validate_mongodb_connection():
     for attempt in range(3):
         try:
             await client.admin.command("ping")
-            # Log connection target for deployment verification
+            # Log connection target for deployment verification (WARNING level for visibility)
             mongo_host = os.environ.get('MONGO_URL', '')[:60]
             is_atlas = 'mongodb+srv' in mongo_host or 'mongodb.net' in mongo_host
-            logging.info(f"MongoDB connected: {'Atlas' if is_atlas else 'LOCAL'} ({mongo_host}...)")
-            logging.info(f"Database: {db_name}")
+            logging.warning(f"MongoDB connected: {'ATLAS' if is_atlas else 'LOCAL'} | DB: {db_name} | Host: {mongo_host}...")
             if not is_atlas:
-                logging.warning("WARNING: Connected to LOCAL MongoDB, NOT Atlas. Check MONGO_URL in .env")
+                logging.warning("CRITICAL: Connected to LOCAL MongoDB, NOT Atlas! Check MONGO_URL in .env")
             return
         except Exception as e:
             logging.warning(f"MongoDB connection attempt {attempt+1}/3 failed: {e}")
