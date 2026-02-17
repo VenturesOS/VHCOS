@@ -316,6 +316,14 @@ export const pillarPageAPI = {
   adminDelete: (slug) => api.delete(`/admin/pillar-pages/${slug}`),
 };
 
+export const seoDashboardAPI = {
+  getLive: () => api.get('/admin/seo-dashboard'),
+  createSnapshot: () => api.post('/admin/seo-snapshot'),
+  getSnapshots: () => api.get('/admin/seo-snapshots'),
+  getAlerts: () => api.get('/admin/seo-alerts'),
+  resolveAlert: (id) => api.post(`/admin/seo-alerts/resolve/${id}`),
+};
+
 export const blogAPI = {
   // Admin
   generate: (data) => api.post('/blog/generate', data),
