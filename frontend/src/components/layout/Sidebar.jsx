@@ -27,7 +27,8 @@ import {
   Bug,
   Activity,
   Download,
-  Radar
+  Radar,
+  IndianRupee
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
