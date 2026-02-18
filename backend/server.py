@@ -383,12 +383,8 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
         {"_id": 0}
     ).to_list(100)
     
-    # Get commercials for each company
-    commercials = await db.commercials.find(
-        {"company_id": {"$in": company_ids}},
-        {"_id": 0}
-    ).to_list(100)
-    commercial_by_company = {c["company_id"]: c for c in commercials}
+    # Commercials are now embedded in company documents
+    commercial_by_company = {c["id"]: c.get("commercial", {}) for c in companies}
     
     # Get jobs for each company
     all_jobs = await db.jobs.find(
