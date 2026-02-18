@@ -418,9 +418,8 @@ async def calculate_application_revenue(
         "revenue_id": revenue_id,
         "application_id": application_id,
         "offered_salary": offered_salary,
-        "commercial_name": commercial.get("commercial_name"),
-        "commercial_type": commercial["type"],
-        "fee_percentage": commercial.get("fee_percentage"),
+        "commercial_type": comm_type,
+        "fee_percentage": fee_pct,
         "calculated_revenue": calculated_revenue,
         "final_revenue": calculated_revenue
     }
