@@ -40,6 +40,7 @@ import HierarchyPage from "./pages/admin/HierarchyPage";
 import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
 import SEOMonitoringPage from "./pages/admin/SEOMonitoringPage";
 import DigestEmailPage from "./pages/admin/DigestEmailPage";
+import RevenueDashboardPage from "./pages/admin/RevenueDashboardPage";
 
 // Recruiter Pages
 import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
@@ -123,6 +124,7 @@ function App() {
             <Route path="teams" element={<TeamsPage />} />
             <Route path="hierarchy" element={<HierarchyPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
+            <Route path="revenue" element={<RevenueDashboardPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="bulk-import" element={<BulkImportPage />} />
             <Route path="import-history" element={<ImportHistoryPage />} />
