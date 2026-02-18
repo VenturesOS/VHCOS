@@ -811,6 +811,7 @@ async def get_job_applicants(
             "shortlisted": sum(1 for a in applications if a.get("stage") == "shortlisted"),
             "interview": sum(1 for a in applications if a.get("stage") == "interview"),
             "offered": sum(1 for a in applications if a.get("stage") == "offered"),
+            "joined": sum(1 for a in applications if a.get("stage") == "joined"),
             "hired": sum(1 for a in applications if a.get("stage") == "hired"),
             "rejected": sum(1 for a in applications if a.get("stage") == "rejected"),
             "on_hold": sum(1 for a in applications if a.get("stage") == "on_hold"),
