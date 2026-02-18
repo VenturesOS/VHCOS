@@ -319,12 +319,6 @@ async def delete_company(
         {"$pull": {"company_ids": company_id}}
     )
     
-    # Deactivate commercials for this company
-    await db.commercials.update_many(
-        {"company_id": company_id},
-        {"$set": {"is_active": False, "updated_at": now}}
-    )
-    
     # Audit log
     await db.audit_logs.insert_one({
         "id": str(uuid.uuid4()),
