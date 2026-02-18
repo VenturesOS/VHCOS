@@ -189,13 +189,6 @@ export const commercialAPI = {
   delete: (id) => api.delete(`/commercials/${id}`),
 };
 
-// Revenue APIs
-export const revenueAPI = {
-  calculate: (applicationId, offeredSalary) => api.post('/revenue/calculate', null, { params: { application_id: applicationId, offered_salary: offeredSalary } }),
-  override: (revenueId, manualOverride, reason) => api.put(`/revenue/${revenueId}/override`, null, { params: { manual_override: manualOverride, reason } }),
-  getPipeline: (params) => api.get('/revenue/pipeline', { params }),
-};
-
 // Analytics APIs
 export const analyticsAPI = {
   getAdmin: (params) => api.get('/analytics/admin', { params }),
