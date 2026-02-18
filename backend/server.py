@@ -1302,7 +1302,7 @@ async def get_company_pipeline(
             "total_revenue": round(total_revenue, 2),
             "avg_commercial_percentage": round(avg_commercial_pct, 2),
         },
-        "commercials": [CommercialResponse(**c).model_dump() for c in commercials],
+        "commercials": [company_commercial] if company_commercial else [],
         "pipeline": pipeline,
     }
 
