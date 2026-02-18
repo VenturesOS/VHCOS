@@ -151,6 +151,7 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - ~~Company + Commercials Merge~~ **DONE** (Unified workflow)
 - ~~Revenue Engine~~ **DONE** (Dual-layer: forecast + financial)
 - ~~Revenue Engine Frontend~~ **DONE** (Dashboard + Pipeline UI)
+- ~~Revenue Engine E2E Verification~~ **DONE** (Full flow tested + 3 bugs fixed)
 
 ### P1
 - Refactor employer routes (`server.py` → `employer_routes.py`) — ON HOLD per user (stability first)
