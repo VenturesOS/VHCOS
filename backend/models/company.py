@@ -1,8 +1,9 @@
 """
 Company-related Pydantic models.
+Includes embedded commercial model (merged from standalone commercials).
 """
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 
 class HRContact(BaseModel):
@@ -13,13 +14,30 @@ class HRContact(BaseModel):
     designation: Optional[str] = None
 
 
+class LevelRange(BaseModel):
+    """Salary range with percentage for level-based commercials."""
+    min_salary: float
+    max_salary: float
+    percentage: float
+
+
+class CommercialModel(BaseModel):
+    """Embedded commercial structure within a company."""
+    type: str  # "percentage", "fixed", "level_based"
+    percentage_value: Optional[float] = None      # for percentage type
+    fixed_fee_amount: Optional[float] = None       # for fixed type
+    level_config: Optional[List[LevelRange]] = None  # for level_based type
+    legacy_level_mapping: Optional[Dict[str, float]] = None  # migrated named-key data
+
+
 class CompanyBase(BaseModel):
     name: str
     description: Optional[str] = None
     industry: Optional[str] = None
     website: Optional[str] = None
     location: Optional[str] = None
-    hr_contacts: Optional[List[HRContact]] = None  # HR / POC details
+    hr_contacts: Optional[List[HRContact]] = None
+    commercial: Optional[CommercialModel] = None
 
 
 class CompanyCreate(CompanyBase):
@@ -34,10 +52,11 @@ class CompanyResponse(BaseModel):
     industry: Optional[str] = None
     website: Optional[str] = None
     location: Optional[str] = None
-    assigned_employer_id: Optional[str] = None  # Employer assigned to this company
+    assigned_employer_id: Optional[str] = None
     assigned_employer_name: Optional[str] = None
-    hr_contacts: Optional[List[HRContact]] = None  # HR / POC details
-    status: str = "active"  # active, disabled
+    hr_contacts: Optional[List[HRContact]] = None
+    commercial: Optional[CommercialModel] = None
+    status: str = "active"
     created_at: str
 
 
@@ -48,5 +67,6 @@ class CompanyUpdate(BaseModel):
     website: Optional[str] = None
     location: Optional[str] = None
     assigned_employer_id: Optional[str] = None
-    hr_contacts: Optional[List[HRContact]] = None  # HR / POC details
+    hr_contacts: Optional[List[HRContact]] = None
+    commercial: Optional[CommercialModel] = None
     status: Optional[str] = None
