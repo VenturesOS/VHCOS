@@ -75,16 +75,40 @@ class CommercialResponse(BaseModel):
 # ============== HELPER FUNCTIONS ==============
 
 def calculate_revenue(offered_salary: float, commercial: dict, job_level: Optional[str] = None) -> float:
-    """Calculate revenue based on commercial type."""
-    if commercial["type"] == "percentage":
-        return offered_salary * (commercial["fee_percentage"] / 100)
-    elif commercial["type"] == "fixed":
-        return commercial["fixed_amount"]
-    elif commercial["type"] == "level_based":
-        level_config = commercial.get("level_config", {})
-        level = job_level or "mid"
-        fee_pct = level_config.get(level, level_config.get("mid", 10.0))
-        return offered_salary * (fee_pct / 100)
+    """Calculate revenue based on commercial type (reads from company.commercial).
+    Returns 0 safely if commercial is missing or misconfigured."""
+    if not commercial:
+        return 0.0
+
+    comm_type = commercial.get("type", "")
+
+    if comm_type == "percentage":
+        pct = commercial.get("percentage_value") or commercial.get("fee_percentage") or 0
+        return offered_salary * (pct / 100) if pct > 0 else 0.0
+
+    elif comm_type == "fixed":
+        return commercial.get("fixed_fee_amount") or commercial.get("fixed_amount") or 0.0
+
+    elif comm_type == "level_based":
+        # New salary-range array
+        level_config = commercial.get("level_config", [])
+        if isinstance(level_config, list) and level_config:
+            for lv in level_config:
+                if isinstance(lv, dict):
+                    min_s = lv.get("min_salary", 0)
+                    max_s = lv.get("max_salary", 0)
+                    if min_s <= offered_salary <= max_s:
+                        return offered_salary * (lv.get("percentage", 0) / 100)
+            # No matching range — return 0
+            return 0.0
+
+        # Legacy named-key mapping fallback
+        legacy = commercial.get("legacy_level_mapping", {})
+        if isinstance(legacy, dict) and legacy:
+            level = job_level or "mid"
+            fee_pct = legacy.get(level, legacy.get("mid", 0))
+            return offered_salary * (fee_pct / 100) if fee_pct else 0.0
+
     return 0.0
 
 
@@ -93,38 +117,11 @@ async def get_applicable_commercial(
     salary: Optional[float] = None,
     job_level: Optional[str] = None
 ) -> Optional[dict]:
-    """Get the applicable commercial for a job/offer."""
-    now = datetime.now(timezone.utc).isoformat()
-    
-    query = {
-        "company_id": company_id,
-        "is_active": True,
-        "effective_from": {"$lte": now},
-        "$or": [
-            {"effective_to": None},
-            {"effective_to": {"$gte": now}}
-        ]
-    }
-    
-    commercials = await db.commercials.find(query, {"_id": 0}).to_list(100)
-    
-    if not commercials:
+    """Get the applicable commercial from the company document."""
+    company = await db.companies.find_one({"id": company_id}, {"_id": 0, "commercial": 1})
+    if not company or not company.get("commercial"):
         return None
-    
-    if salary:
-        for comm in commercials:
-            if comm.get("salary_min") and comm.get("salary_max"):
-                if comm["salary_min"] <= salary <= comm["salary_max"]:
-                    return comm
-    
-    if job_level:
-        for comm in commercials:
-            if comm.get("job_level") == job_level:
-                return comm
-            if comm["type"] == "level_based":
-                return comm
-    
-    return commercials[0]
+    return company["commercial"]
 
 
 # ============== COMMERCIAL CRUD ==============
