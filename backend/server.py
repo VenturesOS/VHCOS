@@ -1073,12 +1073,12 @@ async def get_employer_analytics(
     revenue_by_job = await db.revenue.aggregate(revenue_by_job_pipeline).to_list(10000)
     job_revenue_map = {r["_id"]: r["total_revenue"] for r in revenue_by_job}
     
-    # ========== COMMERCIALS: Average fee percentage ==========
-    commercials = await db.commercials.find(
-        {"company_id": {"$in": company_ids}, "is_active": True},
-        {"_id": 0, "fee_percentage": 1}
-    ).to_list(1000)
-    pct_fees = [c.get("fee_percentage", 0) for c in commercials if c.get("fee_percentage")]
+    # ========== COMMERCIALS: Average fee percentage (from company.commercial) ==========
+    pct_fees = []
+    for co in assigned_companies:
+        comm = co.get("commercial", {})
+        if comm and comm.get("type") == "percentage" and comm.get("percentage_value"):
+            pct_fees.append(comm["percentage_value"])
     avg_fee = sum(pct_fees) / len(pct_fees) if pct_fees else 0
     
     # ========== BUILD COMPANY REVENUE (No N+1 - using pre-fetched data) ==========
