@@ -121,6 +121,12 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - **DB Indexes:** 7 indexes on revenue collection (company_id, job_id, recruiter_id, join_date, revenue_status, compound, application_id unique)
 - **Testing:** 41/41 tests (19 API + 22 unit). Zero regressions on employer/analytics endpoints
 
+### Phase 14: Revenue Engine Frontend (Feb 18, 2026)
+- **Revenue Dashboard:** `/admin/revenue` — KPI cards (joined revenue, counts), date range filters, status filter, 3-way aggregation tables (by company/job/recruiter), full revenue records table with CTC, revenue, type, status, dates
+- **Pipeline Enhancements:** 5 primary columns (Applied, Shortlisted, Interview, Offered, Joined). "Move to Offered" dialog collects offered_ctc + offer_date. "Move to Joined" dialog collects join_date with revenue lock warning
+- **Sidebar:** Revenue entry with IndianRupee icon for admin
+- **Testing:** 16/16 frontend features verified, 41/41 backend tests from Phase 13
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
