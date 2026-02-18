@@ -160,23 +160,30 @@ async def update_company(
     company = await db.companies.find_one({"id": company_id}, {"_id": 0})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    
+
+    if company_data.commercial:
+        _validate_commercial(company_data.commercial)
+
     now = datetime.now(timezone.utc).isoformat()
-    
+
     update_data = {
         "name": company_data.name,
         "description": company_data.description,
         "industry": company_data.industry,
         "website": company_data.website,
         "location": company_data.location,
+        "hr_contacts": [c.model_dump() for c in (company_data.hr_contacts or [])],
         "updated_at": now
     }
-    
+
+    if company_data.commercial:
+        update_data["commercial"] = company_data.commercial.model_dump()
+
     await db.companies.update_one(
         {"id": company_id},
         {"$set": update_data}
     )
-    
+
     updated_company = await db.companies.find_one({"id": company_id}, {"_id": 0})
     return CompanyResponse(**updated_company)
 
