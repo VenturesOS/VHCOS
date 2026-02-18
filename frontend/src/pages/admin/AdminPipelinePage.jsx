@@ -345,6 +345,43 @@ export default function AdminPipelinePage() {
                             <FileText className="w-3 h-3 text-green-500" title="Has Resume" />
                           )}
                         </div>
+                        {/* Revenue actions */}
+                        {stage.id === 'interview' && (
+                          <Button
+                            size="sm" variant="outline"
+                            className="w-full mt-2 h-7 text-xs text-green-700 border-green-200 hover:bg-green-50"
+                            onClick={() => openOfferDialog(app)}
+                            data-testid={`offer-btn-${app.id}`}
+                          >
+                            <ArrowRight className="w-3 h-3 mr-1" /> Move to Offered
+                          </Button>
+                        )}
+                        {stage.id === 'offered' && (
+                          <div className="mt-2 space-y-1">
+                            {app.offered_ctc && (
+                              <div className="flex items-center gap-1 text-xs text-teal-700 bg-teal-50 rounded px-2 py-1">
+                                <IndianRupee className="w-3 h-3" />
+                                <span>CTC: {(app.offered_ctc / 100000).toFixed(1)}L</span>
+                                {app.forecast_revenue && <span className="ml-auto font-medium">Rev: ₹{Math.round(app.forecast_revenue).toLocaleString('en-IN')}</span>}
+                              </div>
+                            )}
+                            <Button
+                              size="sm" variant="outline"
+                              className="w-full h-7 text-xs text-teal-700 border-teal-200 hover:bg-teal-50"
+                              onClick={() => openJoinDialog(app)}
+                              data-testid={`join-btn-${app.id}`}
+                            >
+                              <Lock className="w-3 h-3 mr-1" /> Move to Joined
+                            </Button>
+                          </div>
+                        )}
+                        {stage.id === 'joined' && app.offered_ctc && (
+                          <div className="mt-2 flex items-center gap-1 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                            <Lock className="w-3 h-3" />
+                            <span>CTC: {(app.offered_ctc / 100000).toFixed(1)}L</span>
+                            <span className="ml-auto font-medium">Locked</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
