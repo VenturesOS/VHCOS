@@ -84,7 +84,7 @@ from services import (
 )
 
 # Import route modules
-from routes import auth_router, public_router, files_router, admin_router, jobs_router, candidates_router, applications_router, settings_router, background_jobs_router, teams_router, referrals_router, commercials_router, analytics_router
+from routes import auth_router, public_router, files_router, admin_router, jobs_router, candidates_router, applications_router, settings_router, background_jobs_router, teams_router, referrals_router, commercials_router, analytics_router, revenue_router
 from routes.bulk_import import bulk_import_router
 from routes.bug_reports import bug_reports_router
 from routes.system_errors import system_errors_router, log_system_error
