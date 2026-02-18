@@ -154,6 +154,7 @@ app.include_router(seo_router)
 app.include_router(pillar_pages_router)
 app.include_router(blog_digest_router)
 app.include_router(seo_dashboard_router)
+app.include_router(revenue_router)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
