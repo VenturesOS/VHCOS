@@ -290,7 +290,6 @@ async def delete_company(
     - Jobs linked to this company: Marked as 'archived' (not deleted)
     - Teams with this company: Company removed from team's company_ids
     - Applications: Preserved (historical data)
-    - Commercials: Deactivated
     """
     company = await db.companies.find_one({"id": company_id}, {"_id": 0})
     if not company:
