@@ -531,7 +531,7 @@ async def get_employer_pipeline(
         applications = []
     
     # Define pipeline stages
-    all_stages = ["applied", "shortlisted", "interview", "offered", "hired", "rejected", "on_hold"]
+    all_stages = ["applied", "shortlisted", "interview", "offered", "joined", "hired", "rejected", "on_hold"]
     
     # Group applications by stage
     pipeline_data = {stage: [] for stage in all_stages}
