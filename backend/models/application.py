@@ -27,6 +27,13 @@ class ApplicationResponse(BaseModel):
     cover_letter: Optional[str] = None
     current_salary: Optional[int] = None  # INR
     expected_salary: Optional[int] = None  # INR - Expected CTC
+    expected_ctc: Optional[float] = None
+    offered_ctc: Optional[float] = None
+    offer_date: Optional[str] = None
+    join_date: Optional[str] = None
+    forecast_revenue: Optional[float] = None
+    forecast_slab: Optional[dict] = None
+    forecast_percentage: Optional[float] = None
     notice_period: Optional[str] = None
     skills: Optional[List[str]] = None
     experience_years: Optional[int] = None
@@ -36,11 +43,11 @@ class ApplicationResponse(BaseModel):
     resume_url: Optional[str] = None
     status: str = "applied"
     stage: str = "applied"
-    source: Optional[str] = None  # Where the application came from (self, ai_screening, referral, etc.)
+    source: Optional[str] = None
     notes: List[dict] = []
     edit_history: List[dict] = []  # Audit trail
-    last_edited_by: Optional[dict] = None  # {name, role, timestamp}
-    manually_edited: bool = False  # Flag to prevent parsing overwrites
+    last_edited_by: Optional[dict] = None
+    manually_edited: bool = False
     applied_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: str
