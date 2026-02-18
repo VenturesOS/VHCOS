@@ -50,6 +50,10 @@ class ApplicationUpdate(BaseModel):
     status: Optional[str] = None
     stage: Optional[str] = None
     rejection_reason: Optional[str] = None  # For tracking why rejected/not qualified
+    offered_ctc: Optional[float] = None
+    offer_date: Optional[str] = None
+    join_date: Optional[str] = None
+    expected_ctc: Optional[float] = None
 
 
 class ApplicationDetailUpdate(BaseModel):
