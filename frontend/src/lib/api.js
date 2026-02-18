@@ -334,6 +334,17 @@ export const digestAPI = {
   subscriptionStats: () => api.get('/admin/blog-digest/subscription-stats'),
 };
 
+export const revenueAPI = {
+  forecast: (applicationId, expectedCtc) => api.post('/revenue/forecast', { application_id: applicationId, expected_ctc: expectedCtc }),
+  offered: (appId, data) => api.post(`/revenue/offered/${appId}`, data),
+  joined: (appId, data) => api.post(`/revenue/joined/${appId}`, data),
+  records: (params) => api.get('/revenue/records', { params }),
+  byApplication: (appId) => api.get(`/revenue/by-application/${appId}`),
+  aggregateByCompany: (from, to) => api.get('/revenue/aggregate/by-company', { params: { from_date: from, to_date: to } }),
+  aggregateByJob: (from, to) => api.get('/revenue/aggregate/by-job', { params: { from_date: from, to_date: to } }),
+  aggregateByRecruiter: (from, to) => api.get('/revenue/aggregate/by-recruiter', { params: { from_date: from, to_date: to } }),
+};
+
 export const blogAPI = {
   // Admin
   generate: (data) => api.post('/blog/generate', data),
