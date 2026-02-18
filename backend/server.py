@@ -306,12 +306,12 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
             job = next((j for j in recruiter_jobs if j["id"] == app["job_id"]), None)
             if job:
                 company_id = job.get("company_id")
-                commercial = commercial_by_company.get(company_id)
+                commercial = commercial_by_company.get(company_id, {})
                 offered_salary = app.get("offered_salary", 0) or app.get("current_salary", 0) or 0
                 
                 if commercial and offered_salary > 0:
-                    fee_percent = commercial.get("fee_percentage", 0) or 8.33
-                    revenue = (offered_salary * fee_percent) / 100
+                    from routes.commercials import calculate_revenue as _calc_rev
+                    revenue = _calc_rev(offered_salary, commercial)
                     
                     if app.get("stage") == "hired":
                         revenue_closed += revenue
