@@ -416,8 +416,6 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
             stages = {"applied": 0, "shortlisted": 0, "interview": 0, "offered": 0, "hired": 0, "rejected": 0}
             revenue_by_stage = {"applied": 0, "shortlisted": 0, "interview": 0, "offered": 0, "hired": 0}
             
-            fee_percent = commercial.get("fee_percentage", 0) or 8.33
-            
             for app in job_apps:
                 stage = app.get("stage", "applied")
                 if stage in stages:
@@ -425,7 +423,8 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
                 
                 offered_salary = app.get("offered_salary", 0) or app.get("current_salary", 0) or 0
                 if offered_salary > 0 and stage in revenue_by_stage:
-                    revenue_by_stage[stage] += (offered_salary * fee_percent) / 100
+                    from routes.commercials import calculate_revenue as _calc_rev
+                    revenue_by_stage[stage] += _calc_rev(offered_salary, commercial)
             
             mandates_with_pipeline.append({
                 "id": job["id"],
@@ -452,14 +451,7 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
             "location": company.get("location"),
             "logo_url": company.get("logo_url"),
             # Commercial details (read-only for employer)
-            "commercial": {
-                "fee_percentage": commercial.get("fee_percentage"),
-                "fee_structure": commercial.get("fee_structure"),
-                "payment_terms": commercial.get("payment_terms"),
-                "currency": commercial.get("currency", "INR"),
-                "commercial_slabs": commercial.get("commercial_slabs", []),
-                "is_active": commercial.get("is_active", True)
-            },
+            "commercial": commercial or {},
             # Mandates
             "mandates": mandates_with_pipeline,
             "active_mandates_count": len([m for m in mandates_with_pipeline if m["status"] == "active"]),
