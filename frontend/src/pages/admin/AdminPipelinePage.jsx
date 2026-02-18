@@ -477,6 +477,84 @@ export default function AdminPipelinePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Offer Dialog */}
+      <Dialog open={showOfferDialog} onOpenChange={setShowOfferDialog}>
+        <DialogContent data-testid="offer-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Award className="w-5 h-5 text-green-600" /> Process Offer
+            </DialogTitle>
+            <DialogDescription>
+              {selectedApp?.candidate_name} — {selectedApp?.job_title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm font-medium">Offered CTC (Annual, INR) *</Label>
+              <Input
+                type="number" min="0" step="1000" placeholder="e.g. 1800000"
+                value={offerForm.offered_ctc}
+                onChange={e => setOfferForm(p => ({ ...p, offered_ctc: e.target.value }))}
+                data-testid="offer-ctc-input"
+              />
+              {offerForm.offered_ctc > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  ₹{(parseFloat(offerForm.offered_ctc) / 100000).toFixed(1)} LPA
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Offer Date *</Label>
+              <Input
+                type="date"
+                value={offerForm.offer_date}
+                onChange={e => setOfferForm(p => ({ ...p, offer_date: e.target.value }))}
+                data-testid="offer-date-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOfferDialog(false)}>Cancel</Button>
+            <Button onClick={handleProcessOffer} disabled={stageLoading} className="bg-green-600 hover:bg-green-700" data-testid="confirm-offer-btn">
+              {stageLoading ? 'Processing...' : 'Confirm Offer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Join Dialog */}
+      <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
+        <DialogContent data-testid="join-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-teal-600" /> Process Joining
+            </DialogTitle>
+            <DialogDescription>
+              {selectedApp?.candidate_name} — Offered CTC: ₹{selectedApp?.offered_ctc ? (selectedApp.offered_ctc / 100000).toFixed(1) + 'L' : '—'}
+              <br />
+              <span className="text-amber-600 text-xs font-medium">Revenue will be locked after this action.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm font-medium">Join Date *</Label>
+              <Input
+                type="date"
+                value={joinForm.join_date}
+                onChange={e => setJoinForm({ join_date: e.target.value })}
+                data-testid="join-date-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowJoinDialog(false)}>Cancel</Button>
+            <Button onClick={handleProcessJoin} disabled={stageLoading} className="bg-teal-600 hover:bg-teal-700" data-testid="confirm-join-btn">
+              {stageLoading ? 'Processing...' : 'Confirm Joining'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
