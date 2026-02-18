@@ -336,7 +336,7 @@ async def calculate_application_revenue(
     )
     
     if not commercial:
-        raise HTTPException(status_code=400, detail="No active commercial found for this company")
+        raise HTTPException(status_code=400, detail="No commercial configured for this company")
     
     calculated_revenue = calculate_revenue(
         offered_salary,
@@ -348,16 +348,19 @@ async def calculate_application_revenue(
     
     existing = await db.revenue.find_one({"application_id": application_id}, {"_id": 0})
     
+    comm_type = commercial.get("type", "")
+    fee_pct = commercial.get("percentage_value") or commercial.get("fee_percentage")
+    fixed_amt = commercial.get("fixed_fee_amount") or commercial.get("fixed_amount")
+
     if existing:
         await db.revenue.update_one(
             {"application_id": application_id},
             {
                 "$set": {
                     "offered_salary": offered_salary,
-                    "commercial_id": commercial["id"],
-                    "commercial_type": commercial["type"],
-                    "fee_percentage": commercial.get("fee_percentage"),
-                    "fixed_amount": commercial.get("fixed_amount"),
+                    "commercial_type": comm_type,
+                    "fee_percentage": fee_pct,
+                    "fixed_amount": fixed_amt,
                     "calculated_revenue": calculated_revenue,
                     "final_revenue": existing.get("manual_override") or calculated_revenue,
                     "stage": application.get("stage", "offered"),
@@ -385,11 +388,9 @@ async def calculate_application_revenue(
             "candidate_name": application.get("candidate_name"),
             "company_id": company_id,
             "offered_salary": offered_salary,
-            "commercial_id": commercial["id"],
-            "commercial_name": commercial.get("commercial_name"),
-            "commercial_type": commercial["type"],
-            "fee_percentage": commercial.get("fee_percentage"),
-            "fixed_amount": commercial.get("fixed_amount"),
+            "commercial_type": comm_type,
+            "fee_percentage": fee_pct,
+            "fixed_amount": fixed_amt,
             "calculated_revenue": calculated_revenue,
             "manual_override": None,
             "final_revenue": calculated_revenue,
