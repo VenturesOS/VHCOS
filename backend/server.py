@@ -314,9 +314,6 @@ async def stop_background_scheduler():
     from services.scheduler import stop_scheduler
     stop_scheduler()
 
-# Include the router in the main app
-app.include_router(api_router)
-
 
 # Auto-capture unhandled exceptions and log to system_errors
 @app.exception_handler(Exception)
