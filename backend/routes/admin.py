@@ -24,6 +24,36 @@ from utils import hash_password, require_role
 admin_router = APIRouter(prefix="/api", tags=["Admin"])
 
 
+def _validate_commercial(commercial):
+    """Validate commercial model fields based on type."""
+    if commercial.type not in ("percentage", "fixed", "level_based"):
+        raise HTTPException(status_code=400, detail="Commercial type must be percentage, fixed, or level_based")
+
+    if commercial.type == "percentage":
+        if commercial.percentage_value is None or commercial.percentage_value <= 0:
+            raise HTTPException(status_code=400, detail="percentage_value is required and must be > 0")
+
+    elif commercial.type == "fixed":
+        if commercial.fixed_fee_amount is None or commercial.fixed_fee_amount <= 0:
+            raise HTTPException(status_code=400, detail="fixed_fee_amount is required and must be > 0")
+
+    elif commercial.type == "level_based":
+        levels = commercial.level_config or []
+        for i, lv in enumerate(levels):
+            if lv.min_salary >= lv.max_salary:
+                raise HTTPException(status_code=400, detail=f"Level {i+1}: min_salary must be less than max_salary")
+            if lv.percentage <= 0:
+                raise HTTPException(status_code=400, detail=f"Level {i+1}: percentage must be > 0")
+        # Check for overlapping ranges
+        sorted_levels = sorted(levels, key=lambda x: x.min_salary)
+        for i in range(1, len(sorted_levels)):
+            if sorted_levels[i].min_salary <= sorted_levels[i-1].max_salary:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Overlapping salary ranges: level {i} and {i+1}"
+                )
+
+
 # ============== COMPANY MANAGEMENT (ADMIN) ==============
 
 @admin_router.get("/companies", response_model=List[CompanyResponse])
