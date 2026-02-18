@@ -270,9 +270,9 @@ class TestCompanyCommercialMerge:
         
         companies = resp.json()
         
-        # Find companies with different commercial types
-        percentage_cos = [c for c in companies if c.get("commercial", {}).get("type") == "percentage"]
-        level_based_cos = [c for c in companies if c.get("commercial", {}).get("type") == "level_based"]
+        # Find companies with different commercial types (handle None commercial)
+        percentage_cos = [c for c in companies if c.get("commercial") and c["commercial"].get("type") == "percentage"]
+        level_based_cos = [c for c in companies if c.get("commercial") and c["commercial"].get("type") == "level_based"]
         
         print(f"✓ Found {len(percentage_cos)} percentage commercial companies")
         print(f"✓ Found {len(level_based_cos)} level-based commercial companies")
@@ -295,8 +295,8 @@ class TestCompanyCommercialMerge:
         
         companies = resp.json()
         
-        # Find companies with legacy_level_mapping
-        legacy_cos = [c for c in companies if c.get("commercial", {}).get("legacy_level_mapping")]
+        # Find companies with legacy_level_mapping (handle None commercial)
+        legacy_cos = [c for c in companies if c.get("commercial") and c["commercial"].get("legacy_level_mapping")]
         
         print(f"✓ Found {len(legacy_cos)} companies with legacy_level_mapping")
         
