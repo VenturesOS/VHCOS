@@ -1230,14 +1230,12 @@ async def get_company_pipeline(
         else:
             revenue_by_job[jid]["expected"] += r.get("final_revenue", 0)
     
-    # Get commercials
-    commercials = await db.commercials.find(
-        {"company_id": company_id, "is_active": True},
-        {"_id": 0}
-    ).to_list(100)
-    
-    pct_fees = [c.get("fee_percentage", 0) for c in commercials if c.get("fee_percentage")]
-    avg_commercial_pct = sum(pct_fees) / len(pct_fees) if pct_fees else 0
+    # Get commercial from company document
+    company_doc = await db.companies.find_one({"id": company_id}, {"_id": 0, "commercial": 1})
+    company_commercial = company_doc.get("commercial", {}) if company_doc else {}
+    avg_commercial_pct = 0
+    if company_commercial.get("type") == "percentage" and company_commercial.get("percentage_value"):
+        avg_commercial_pct = company_commercial["percentage_value"]
     
     # OPTIMIZATION: Batch fetch all recruiter names at once (eliminates N+1)
     recruiter_ids = set()
