@@ -120,7 +120,6 @@ function App() {
             <Route path="candidate-bank" element={<CandidateDataBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="companies" element={<CompaniesPage />} />
-            <Route path="commercials" element={<CommercialsPage />} />
             <Route path="teams" element={<TeamsPage />} />
             <Route path="hierarchy" element={<HierarchyPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
