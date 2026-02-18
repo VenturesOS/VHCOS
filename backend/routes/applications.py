@@ -1452,7 +1452,7 @@ async def shortlist_candidate_from_screening(
         "job_id": req.job_id,
         "$or": [
             {"candidate_id": req.candidate_id},
-            {"candidate_email": candidate.get("email", "").lower()},
+            {"candidate_email": (candidate.get("email") or "").lower()},
         ],
     })
     if existing:
