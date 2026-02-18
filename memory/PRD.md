@@ -131,8 +131,10 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - ~~Weekly Blog Digest Generation~~ **DONE** (APScheduler)
 - ~~Blog Digest Email Distribution~~ **DONE** (Resend integration)
 - ~~Company + Commercials Merge~~ **DONE** (Unified workflow)
+- ~~Revenue Engine~~ **DONE** (Dual-layer: forecast + financial)
 
 ### P1
+- Revenue Engine Frontend (admin dashboard for revenue visualization, offered/joined stage UI in pipeline)
 - Refactor employer routes (`server.py` → `employer_routes.py`) — ON HOLD per user (stability first)
 
 ### P2
