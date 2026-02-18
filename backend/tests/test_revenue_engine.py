@@ -26,9 +26,10 @@ ADMIN_PASSWORD = "VhcAdmin@2024"
 EMPLOYER_EMAIL = "ajit@vhc.in"
 EMPLOYER_PASSWORD = "12345678"
 
-# Known test data
+# Known test data - Volvo Commercial Vehicle has 8.33% percentage commercial
 VOLVO_COMPANY_ID = "8066c10f-215b-4ed2-9b2d-8726b609e4fa"
-VOLVO_JOB_ID = "7b6a6be0-1e7a-4730-b0b1-c4e614f8ee21"
+# This job has company_id properly linked (not the manager job which has empty company_id)
+VOLVO_JOB_ID = "36a27da3-00b4-4f45-80a6-eb73f980709c"  # Assistant Manager, Area Sales Manager
 VOLVO_PERCENTAGE = 8.33
 
 
