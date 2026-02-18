@@ -14,3 +14,4 @@ from .teams import teams_router
 from .referrals import referrals_router
 from .commercials import commercials_router
 from .analytics import analytics_router
+from .revenue import revenue_router
