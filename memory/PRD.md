@@ -139,6 +139,12 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
   - `applications.py` line 809-819 — applicants stage_counts
 - **Pipeline Response Enhanced:** Added `offered_ctc`, `offer_date`, `join_date` to pipeline data
 
+### Phase 16: Employer Routes Refactor (Feb 18, 2026)
+- **Extracted 10 endpoints** from `server.py` (1559→400 lines) into `routes/employer_routes.py`
+- Endpoints: `/employers/{id}/companies`, `/employer/my-team`, `/employer/companies`, `/employer/pipeline`, `/companies/{id}/assign-employer`, `/companies/{id}` (PUT), `/admin/hierarchy`, `/analytics/admin`, `/analytics/employer`, `/companies/{id}/pipeline`
+- **Testing:** 11/11 backend + 100% frontend — zero regressions
+- No business logic changes, pure structural refactor
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
@@ -152,9 +158,10 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - ~~Revenue Engine~~ **DONE** (Dual-layer: forecast + financial)
 - ~~Revenue Engine Frontend~~ **DONE** (Dashboard + Pipeline UI)
 - ~~Revenue Engine E2E Verification~~ **DONE** (Full flow tested + 3 bugs fixed)
+- ~~Employer Routes Refactor~~ **DONE** (server.py → employer_routes.py)
 
 ### P1
-- Refactor employer routes (`server.py` → `employer_routes.py`) — ON HOLD per user (stability first)
+- None currently
 
 ### P2
 - Refactor Chrome extension content.js
