@@ -253,7 +253,7 @@ export default function AdminPipelinePage() {
       </Card>
 
       {/* Stage Summary Cards */}
-      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2 sm:gap-3">
+      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-2 sm:gap-3">
         {STAGES.map((stage) => {
           const Icon = stage.icon;
           const count = stageCounts[stage.id] || 0;
