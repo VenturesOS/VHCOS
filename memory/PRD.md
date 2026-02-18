@@ -93,6 +93,18 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - **DB Collections:** `email_subscriptions`, `digest_send_logs`
 - **Testing:** 18/18 backend tests passed, frontend 100% verified
 
+### Phase 12: Company + Commercials Merge (Feb 18, 2026)
+- **Schema change:** Commercials embedded as subdocument in company (no longer a separate collection)
+- **Commercial types:** `percentage` (flat %), `fixed` (fixed fee), `level_based` (salary range array)
+- **HR Contacts:** Array of `{name, email, phone, designation}` — multiple per company
+- **Migration:** 5 existing commercials migrated into company docs. 2 level_based preserved with `legacy_level_mapping`. Old `commercials` collection kept as backup
+- **Validation:** Overlapping ranges, min<max, percentage>0, commercial required at creation
+- **Revenue calc:** `calculate_revenue()` and `get_applicable_commercial()` refactored to read from `company.commercial`
+- **5 server.py references updated:** employer my-team, employer companies, employer analytics, admin company pipeline, admin analytics
+- **Frontend:** Unified create/edit form with 3 sections (Company Info, HR Contacts, Commercial Model)
+- **Sidebar:** "Commercials" menu item removed. Commercials exist ONLY within Company
+- **Testing:** 19/19 backend tests passed, all frontend verified. Zero regressions
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
@@ -102,9 +114,10 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - ~~SEO Phases 3-5~~ **DONE** (JSON-LD, Internal Linking, SEO Dashboard)
 - ~~Weekly Blog Digest Generation~~ **DONE** (APScheduler)
 - ~~Blog Digest Email Distribution~~ **DONE** (Resend integration)
+- ~~Company + Commercials Merge~~ **DONE** (Unified workflow)
 
 ### P1
-- Refactor employer routes (`server.py` → `employer_routes.py`)
+- Refactor employer routes (`server.py` → `employer_routes.py`) — ON HOLD per user (stability first)
 
 ### P2
 - Refactor Chrome extension content.js
