@@ -22,7 +22,6 @@ import {
   Network,
   UsersRound,
   CheckCircle,
-  DollarSign,
   Upload,
   History,
   Bug,
