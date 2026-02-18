@@ -48,7 +48,6 @@ const navItems = {
     { icon: Upload, label: 'Bulk Import', path: '/admin/bulk-import' },
     { icon: History, label: 'Import History', path: '/admin/import-history' },
     { icon: Building2, label: 'Companies', path: '/admin/companies' },
-    { icon: DollarSign, label: 'Commercials', path: '/admin/commercials' },
     { icon: UsersRound, label: 'Teams', path: '/admin/teams' },
     { icon: Network, label: 'Hierarchy', path: '/admin/hierarchy' },
     { icon: Bug, label: 'Bug Reports', path: '/admin/bug-reports' },
