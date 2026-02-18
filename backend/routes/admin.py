@@ -625,7 +625,10 @@ async def get_admin_pipeline(
             "applied_at": app.get("created_at"),
             "current_salary": app.get("current_salary"),
             "notice_period": app.get("notice_period"),
-            "resume_url": app.get("resume_url")
+            "resume_url": app.get("resume_url"),
+            "offered_ctc": app.get("offered_ctc"),
+            "offer_date": app.get("offer_date"),
+            "join_date": app.get("join_date"),
         })
     
     # Calculate stage counts
