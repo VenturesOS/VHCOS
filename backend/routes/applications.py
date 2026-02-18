@@ -347,7 +347,7 @@ async def create_application(app_data: ApplicationCreate, current_user: dict = D
 
 @applications_router.get("/applications", response_model=List[ApplicationResponse])
 async def get_applications(job_id: Optional[str] = None, stage: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    """Get applications with role-based filtering"""
+    """Get applications with role-based filtering. Revenue fields stripped for recruiters."""
     query = {}
     
     if current_user["role"] == "candidate":
@@ -364,27 +364,67 @@ async def get_applications(job_id: Optional[str] = None, stage: Optional[str] = 
         query["stage"] = stage
     
     applications = await db.applications.find(query, {"_id": 0}).to_list(1000)
-    return [ApplicationResponse(**a) for a in applications]
+
+    # Strip revenue fields for non-admin/employer roles
+    is_revenue_role = current_user.get("role") in ("admin", "employer")
+    results = []
+    for a in applications:
+        if not is_revenue_role:
+            for key in ("forecast_revenue", "forecast_slab", "forecast_percentage",
+                        "offered_ctc", "expected_ctc"):
+                a.pop(key, None)
+        results.append(ApplicationResponse(**a))
+    return results
 
 
 @applications_router.get("/applications/{app_id}", response_model=ApplicationResponse)
 async def get_application(app_id: str, current_user: dict = Depends(get_current_user)):
-    """Get single application"""
+    """Get single application. Revenue fields stripped for recruiters."""
     application = await db.applications.find_one({"id": app_id}, {"_id": 0})
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    if current_user.get("role") not in ("admin", "employer"):
+        for key in ("forecast_revenue", "forecast_slab", "forecast_percentage",
+                    "offered_ctc", "expected_ctc"):
+            application.pop(key, None)
     return ApplicationResponse(**application)
 
 
 @applications_router.put("/applications/{app_id}", response_model=ApplicationResponse)
 async def update_application(app_id: str, update_data: ApplicationUpdate, current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
-    """Update application with stage tracking"""
+    """Update application with stage tracking and revenue enforcement."""
     # Get current application for history tracking
     application = await db.applications.find_one({"id": app_id}, {"_id": 0})
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
     update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+
+    # ── Stage transition enforcement ──
+    new_stage = update_dict.get("stage")
+    if new_stage:
+        # Block offered without offered_ctc
+        if new_stage == "offered" and not update_dict.get("offered_ctc") and not application.get("offered_ctc"):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot move to offered: offered_ctc is required. Use the revenue/offered endpoint."
+            )
+        # Block joined without offered_ctc
+        if new_stage in ("joined", "hired") and not application.get("offered_ctc"):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot move to joined: offered_ctc must be set first via offered stage."
+            )
+        # Block editing of joined revenue
+        if application.get("stage") == "joined" and new_stage not in ("joined",):
+            rev = await db.revenue.find_one({"application_id": app_id, "revenue_status": "joined"}, {"_id": 0, "id": 1})
+            if rev:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Revenue record is locked at joined stage. Cannot change stage."
+                )
+
     update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     result = await db.applications.update_one({"id": app_id}, {"$set": update_dict})
