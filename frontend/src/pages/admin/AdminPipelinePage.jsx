@@ -273,7 +273,7 @@ export default function AdminPipelinePage() {
 
       {/* Pipeline Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        {STAGES.slice(0, 5).map((stage) => {
+        {STAGES.filter(s => PRIMARY_STAGES.includes(s.id)).map((stage) => {
           const Icon = stage.icon;
           const applications = pipelineData[stage.id] || [];
           
