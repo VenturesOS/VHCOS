@@ -268,12 +268,12 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
         {"_id": 0}
     ).to_list(10000)
     
-    # Get commercials for revenue calculation
-    commercials = await db.commercials.find(
-        {"company_id": {"$in": company_ids}},
-        {"_id": 0}
+    # Get commercials from company documents for revenue calculation
+    companies_with_commercial = await db.companies.find(
+        {"id": {"$in": company_ids}},
+        {"_id": 0, "id": 1, "commercial": 1}
     ).to_list(100)
-    commercial_by_company = {c["company_id"]: c for c in commercials}
+    commercial_by_company = {c["id"]: c.get("commercial", {}) for c in companies_with_commercial}
     
     # Calculate per-member metrics
     members_with_metrics = []
