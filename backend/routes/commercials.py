@@ -75,41 +75,15 @@ class CommercialResponse(BaseModel):
 # ============== HELPER FUNCTIONS ==============
 
 def calculate_revenue(offered_salary: float, commercial: dict, job_level: Optional[str] = None) -> float:
-    """Calculate revenue based on commercial type (reads from company.commercial).
-    Returns 0 safely if commercial is missing or misconfigured."""
-    if not commercial:
+    """Legacy wrapper — delegates to central revenue engine.
+    Returns float for backward compatibility with server.py pipeline calculations.
+    Returns 0 if calculation fails (pipeline forecast tolerance)."""
+    from services.revenue_engine import calculate_revenue as _engine_calc, RevenueCalculationError
+    try:
+        result = _engine_calc(offered_salary, commercial)
+        return result["revenue_amount"]
+    except RevenueCalculationError:
         return 0.0
-
-    comm_type = commercial.get("type", "")
-
-    if comm_type == "percentage":
-        pct = commercial.get("percentage_value") or commercial.get("fee_percentage") or 0
-        return offered_salary * (pct / 100) if pct > 0 else 0.0
-
-    elif comm_type == "fixed":
-        return commercial.get("fixed_fee_amount") or commercial.get("fixed_amount") or 0.0
-
-    elif comm_type == "level_based":
-        # New salary-range array
-        level_config = commercial.get("level_config", [])
-        if isinstance(level_config, list) and level_config:
-            for lv in level_config:
-                if isinstance(lv, dict):
-                    min_s = lv.get("min_salary", 0)
-                    max_s = lv.get("max_salary", 0)
-                    if min_s <= offered_salary <= max_s:
-                        return offered_salary * (lv.get("percentage", 0) / 100)
-            # No matching range — return 0
-            return 0.0
-
-        # Legacy named-key mapping fallback
-        legacy = commercial.get("legacy_level_mapping", {})
-        if isinstance(legacy, dict) and legacy:
-            level = job_level or "mid"
-            fee_pct = legacy.get(level, legacy.get("mid", 0))
-            return offered_salary * (fee_pct / 100) if fee_pct else 0.0
-
-    return 0.0
 
 
 async def get_applicable_commercial(
