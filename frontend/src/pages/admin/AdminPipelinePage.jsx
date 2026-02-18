@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
-import { adminAPI, applicationAPI } from '../../lib/api';
+import { adminAPI, applicationAPI, revenueAPI } from '../../lib/api';
 import { formatSalaryINR } from '../../lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 import { 
   LayoutGrid, Users, CheckCircle, Clock, Award, UserCheck, 
   XCircle, Pause, TrendingDown, UserX, Filter, Building2,
-  Briefcase, FileText, Trash2, AlertCircle
+  Briefcase, FileText, Trash2, AlertCircle, IndianRupee, Lock, ArrowRight
 } from 'lucide-react';
 
 // Stage configuration
