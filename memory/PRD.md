@@ -105,6 +105,22 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - **Sidebar:** "Commercials" menu item removed. Commercials exist ONLY within Company
 - **Testing:** 19/19 backend tests passed, all frontend verified. Zero regressions
 
+### Phase 13: Revenue Engine (Feb 18, 2026)
+- **Central Engine:** `services/revenue_engine.py` — Single `calculate_revenue()` returning structured `{salary, commercial_type, slab_applied, percentage_used, revenue_amount}`. Strict errors via `RevenueCalculationError` (no silent fallback to 0)
+- **Revenue Routes:** `routes/revenue.py` — 8 endpoints:
+  - `POST /api/revenue/forecast` — Pipeline forecast (stored on application, NOT in revenue collection)
+  - `POST /api/revenue/offered/{app_id}` — Creates revenue record with commercial snapshot + slab shift detection
+  - `POST /api/revenue/joined/{app_id}` — Locks revenue (immutable after joined)
+  - `GET /api/revenue/aggregate/by-company` — Date-filtered aggregation
+  - `GET /api/revenue/aggregate/by-job` — Date-filtered aggregation
+  - `GET /api/revenue/aggregate/by-recruiter` — Date-filtered aggregation with name enrichment
+  - `GET /api/revenue/records` — Role-filtered revenue list
+  - `GET /api/revenue/by-application/{app_id}` — Single revenue lookup
+- **Stage Enforcement:** Applications route enforces: no offered without offered_ctc, no joined without offered_ctc, locked after joined
+- **Role-Based Visibility:** Recruiter NEVER sees revenue fields (stripped at API layer)
+- **DB Indexes:** 7 indexes on revenue collection (company_id, job_id, recruiter_id, join_date, revenue_status, compound, application_id unique)
+- **Testing:** 41/41 tests (19 API + 22 unit). Zero regressions on employer/analytics endpoints
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
