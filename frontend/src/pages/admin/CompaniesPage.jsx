@@ -342,8 +342,9 @@ export default function CompaniesPage() {
   const loadData = useCallback(async () => {
     try {
       const [compRes, empRes] = await Promise.all([companyAPI.getAll(), userAPI.getEmployers()]);
-      setCompanies(compRes.data.companies || []);
-      setEmployers(empRes.data.employers || []);
+      const rawCompanies = compRes.data;
+      setCompanies(Array.isArray(rawCompanies) ? rawCompanies : (rawCompanies.companies || []));
+      setEmployers(empRes.data.employers || empRes.data || []);
     } catch {
       toast.error('Failed to load companies');
     } finally {
