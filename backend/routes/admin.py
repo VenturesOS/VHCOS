@@ -85,7 +85,14 @@ async def create_company(
 ):
     """
     Create a new company (Admin only).
+    Commercial model is mandatory at creation.
     """
+    # Validate commercial is provided
+    if not company_data.commercial:
+        raise HTTPException(status_code=400, detail="Commercial structure is required")
+
+    _validate_commercial(company_data.commercial)
+
     company = {
         "id": str(uuid.uuid4()),
         "name": company_data.name,
@@ -94,12 +101,13 @@ async def create_company(
         "website": company_data.website,
         "location": company_data.location,
         "hr_contacts": [c.model_dump() for c in (company_data.hr_contacts or [])],
+        "commercial": company_data.commercial.model_dump(),
         "assigned_employer_id": None,
         "assigned_employer_name": None,
         "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.companies.insert_one(company)
     return CompanyResponse(**company)
 
