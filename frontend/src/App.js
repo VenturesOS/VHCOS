@@ -38,7 +38,6 @@ import ImportHistoryPage from "./pages/admin/ImportHistoryPage";
 import TeamsPage from "./pages/admin/TeamsPage";
 import HierarchyPage from "./pages/admin/HierarchyPage";
 import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
-import CommercialsPage from "./pages/admin/CommercialsPage";
 import SEOMonitoringPage from "./pages/admin/SEOMonitoringPage";
 import DigestEmailPage from "./pages/admin/DigestEmailPage";
 
