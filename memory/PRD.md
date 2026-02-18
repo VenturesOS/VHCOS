@@ -127,6 +127,18 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - **Sidebar:** Revenue entry with IndianRupee icon for admin
 - **Testing:** 16/16 frontend features verified, 41/41 backend tests from Phase 13
 
+### Phase 15: Revenue Engine E2E Verification & Bug Fixes (Feb 18, 2026)
+- **E2E Test Flow:** Shortlist → Interview → Offered (₹15L, Panasonic 8.33%) → Joined (Feb 20) → Dashboard verified
+- **Revenue Calculation Verified:** ₹1,24,950 = ₹15,00,000 × 8.33% — CORRECT
+- **Immutability Verified:** Re-offer after join correctly blocked with "Revenue record is locked"
+- **Aggregation Verified:** By-company, by-job endpoints return correct totals
+- **Bug Fixed:** `shortlist_candidate_from_screening` crashed on null email — `.lower()` on None
+- **Bug Fixed:** `"joined"` stage missing from `all_stages` in 3 places:
+  - `admin.py` line 605 — admin pipeline view
+  - `server.py` line 534 — employer pipeline view
+  - `applications.py` line 809-819 — applicants stage_counts
+- **Pipeline Response Enhanced:** Added `offered_ctc`, `offer_date`, `join_date` to pipeline data
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
