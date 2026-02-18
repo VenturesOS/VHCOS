@@ -399,7 +399,7 @@ export default function AdminPipelinePage() {
         </CardHeader>
         <CardContent className="p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {STAGES.slice(5).map((stage) => {
+            {STAGES.filter(s => !PRIMARY_STAGES.includes(s.id)).map((stage) => {
               const Icon = stage.icon;
               const applications = pipelineData[stage.id] || [];
               
