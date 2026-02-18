@@ -1,0 +1,72 @@
+{
+  "summary": "Company-Commercial Merge feature fully tested. All 19 backend API tests passed. All frontend UI tests passed. Features verified: unified company+commercial creation, 3 commercial types, validation rules, HR contacts, employer endpoints, admin analytics, sidebar Commercials removed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_company_commercial_merge.py",
+    "/app/test_reports/pytest/pytest_company_commercial_merge.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_validate_commercial() in admin.py properly validates all 3 commercial types",
+    "Overlapping salary range detection works correctly for level_based",
+    "calculate_revenue() in commercials.py correctly handles percentage_value, fixed_fee_amount, and level_config array",
+    "Legacy level_based companies with legacy_level_mapping still display amber 'Legacy levels (needs config)' badge",
+    "Companies without commercial (Hero motocorp, Panasonic India) show 'No commercial' badge as expected",
+    "Employer endpoints (/my-team, /companies, /pipeline) all read commercial from company.commercial field"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_company_commercial_merge.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin_email": "admin@vhc.in",
+    "admin_password": "VhcAdmin@2024",
+    "employer_email": "ajit@vhc.in",
+    "employer_password": "12345678"
+  },
+  "seed_data_creation": "Test companies created during tests were automatically deleted (TEST_ prefixed)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Company-commercial merge fully implemented. Companies table now has embedded 'commercial' field. Old commercials collection preserved as backup. 5 migrated companies: 3 percentage type, 2 level_based with legacy_level_mapping. Sidebar Commercials link removed. Create/Edit dialog has 3 sections (Info, HR Contacts, Commercial). All validations work.",
+  "features_verified": {
+    "POST /api/companies with percentage commercial": "PASS - 8.33% commercial created",
+    "POST /api/companies with fixed commercial": "PASS - 50000 fixed fee created",
+    "POST /api/companies with level_based 3+ ranges": "PASS - 3 salary ranges created",
+    "Validation: no commercial returns 400": "PASS",
+    "Validation: overlapping ranges returns 400": "PASS",
+    "Validation: min >= max returns 400": "PASS",
+    "Validation: percentage <= 0 returns 400": "PASS",
+    "PUT /api/companies/{id} with HR contacts": "PASS - updated with 2 HR contacts",
+    "GET /api/companies returns commercial field": "PASS - all companies have commercial or null",
+    "Migrated companies return correct data": "PASS - percentage and level_based types found",
+    "Legacy level_based shows legacy_level_mapping": "PASS - 2 companies found (JSW steel sanjeex, TVS)",
+    "PUT /api/companies/{id}/assign-employer": "PASS - employer assigned",
+    "GET /api/employer/my-team": "PASS - returns team, members, summary",
+    "GET /api/employer/companies": "PASS - returns companies with commercial data",
+    "GET /api/employer/pipeline": "PASS - returns pipeline with stage counts",
+    "GET /api/analytics/admin": "PASS - returns KPIs and analytics",
+    "GET /api/admin/pipeline": "PASS - returns pipeline data",
+    "GET /api/teams": "PASS - returns teams list",
+    "GET /api/admin/hierarchy": "PASS - returns employer hierarchy",
+    "Frontend: Companies page loads": "PASS - 20 companies displayed",
+    "Frontend: Commercials sidebar REMOVED": "PASS - not in sidebar links",
+    "Frontend: Commercial badges on cards": "PASS - 10% flat, 8.33% flat, Fixed: 75,000, Legacy levels, No commercial",
+    "Frontend: Create dialog 3 sections": "PASS - Company Info, HR Contacts, Commercial Model",
+    "Frontend: Commercial type selector": "PASS - Flat %, Fixed Fee, Level-Based buttons",
+    "Frontend: Level-based shows add/remove rows": "PASS - level_config visible, Add Level button present",
+    "Frontend: HR contacts add/remove": "PASS - 2nd contact row added",
+    "Frontend: Legacy companies amber badge": "PASS - JSW steel sanjeex and TVS show legacy badge",
+    "Frontend: Edit pre-populates form": "PASS - Tech M data populated"
+  }
+}
