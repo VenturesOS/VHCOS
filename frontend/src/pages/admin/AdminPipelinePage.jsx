@@ -78,6 +78,63 @@ export default function AdminPipelinePage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [applicationToDelete, setApplicationToDelete] = useState(null);
 
+  // Revenue stage dialogs
+  const [showOfferDialog, setShowOfferDialog] = useState(false);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [offerForm, setOfferForm] = useState({ offered_ctc: '', offer_date: '' });
+  const [joinForm, setJoinForm] = useState({ join_date: '' });
+  const [stageLoading, setStageLoading] = useState(false);
+
+  const openOfferDialog = (app) => {
+    setSelectedApp(app);
+    setOfferForm({ offered_ctc: app.offered_ctc || app.expected_salary || '', offer_date: new Date().toISOString().split('T')[0] });
+    setShowOfferDialog(true);
+  };
+
+  const openJoinDialog = (app) => {
+    setSelectedApp(app);
+    setJoinForm({ join_date: new Date().toISOString().split('T')[0] });
+    setShowJoinDialog(true);
+  };
+
+  const handleProcessOffer = async () => {
+    if (!offerForm.offered_ctc || parseFloat(offerForm.offered_ctc) <= 0) return toast.error('Offered CTC is required');
+    if (!offerForm.offer_date) return toast.error('Offer date is required');
+    setStageLoading(true);
+    try {
+      const res = await revenueAPI.offered(selectedApp.id, {
+        offered_ctc: parseFloat(offerForm.offered_ctc),
+        offer_date: offerForm.offer_date,
+      });
+      const d = res.data;
+      let msg = `Offered: Revenue ₹${Math.round(d.revenue_amount).toLocaleString('en-IN')}`;
+      if (d.slab_shift) msg += ' (slab changed!)';
+      toast.success(msg);
+      setShowOfferDialog(false);
+      loadPipeline();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to process offer');
+    } finally {
+      setStageLoading(false);
+    }
+  };
+
+  const handleProcessJoin = async () => {
+    if (!joinForm.join_date) return toast.error('Join date is required');
+    setStageLoading(true);
+    try {
+      const res = await revenueAPI.joined(selectedApp.id, { join_date: joinForm.join_date });
+      toast.success(`Joined: Revenue ₹${Math.round(res.data.final_revenue).toLocaleString('en-IN')} locked`);
+      setShowJoinDialog(false);
+      loadPipeline();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to process join');
+    } finally {
+      setStageLoading(false);
+    }
+  };
+
   const openDeleteDialog = (app) => {
     setApplicationToDelete(app);
     setShowDeleteDialog(true);
