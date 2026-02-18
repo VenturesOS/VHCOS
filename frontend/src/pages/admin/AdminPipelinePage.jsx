@@ -21,12 +21,15 @@ const STAGES = [
   { id: 'shortlisted', label: 'Shortlisted', color: 'bg-amber-500', icon: CheckCircle, bgLight: 'bg-amber-50' },
   { id: 'interview', label: 'Interview', color: 'bg-purple-500', icon: Clock, bgLight: 'bg-purple-50' },
   { id: 'offered', label: 'Offered', color: 'bg-green-500', icon: Award, bgLight: 'bg-green-50' },
+  { id: 'joined', label: 'Joined', color: 'bg-teal-500', icon: Lock, bgLight: 'bg-teal-50' },
   { id: 'hired', label: 'Hired', color: 'bg-emerald-500', icon: UserCheck, bgLight: 'bg-emerald-50' },
   { id: 'rejected', label: 'Rejected', color: 'bg-red-500', icon: XCircle, bgLight: 'bg-red-50' },
   { id: 'on_hold', label: 'On Hold', color: 'bg-gray-500', icon: Pause, bgLight: 'bg-gray-50' },
   { id: 'over_budget', label: 'Over Budget', color: 'bg-orange-500', icon: TrendingDown, bgLight: 'bg-orange-50' },
   { id: 'not_qualified', label: 'Not Qualified', color: 'bg-rose-500', icon: UserX, bgLight: 'bg-rose-50' },
 ];
+
+const PRIMARY_STAGES = ['applied', 'shortlisted', 'interview', 'offered', 'joined'];
 
 export default function AdminPipelinePage() {
   const [loading, setLoading] = useState(true);
