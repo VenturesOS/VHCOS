@@ -126,7 +126,10 @@ async def save_cv_profile(
     data: dict,
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
-    """Save an AI-parsed CV profile to the candidate bank."""
+    """Save an AI-parsed CV profile to the candidate bank.
+    Maps to the UNIFIED candidate schema (identical to extension capture).
+    Missing fields remain null — never fabricated or inferred.
+    """
     
     profile = data.get("profile", {})
     name = profile.get("name")
@@ -150,48 +153,216 @@ async def save_cv_profile(
     candidate_id = existing["id"] if existing else str(uuid.uuid4())
     action = "updated" if existing else "created"
     
-    # Build visibility
-    visibility = {"employer_ids": [], "recruiter_ids": [], "team_ids": []}
-    if current_user["role"] == "employer":
-        visibility["employer_ids"].append(current_user["id"])
-    elif current_user["role"] == "recruiter":
-        visibility["recruiter_ids"].append(current_user["id"])
-        if current_user.get("company_id"):
-            visibility["employer_ids"].append(current_user["company_id"])
-    elif current_user["role"] == "admin":
-        visibility["employer_ids"].append(current_user["id"])
+    # Build visibility (reuse extension pattern)
+    from routes.extension import build_team_visibility, normalize_phone
+    visibility_data = await build_team_visibility(current_user)
+    visibility = visibility_data.get("visibility", {"employer_ids": [], "recruiter_ids": []})
     
+    # Parse name parts
+    name_parts = name.strip().split()
+    first_name = name_parts[0] if name_parts else None
+    last_name = name_parts[-1] if len(name_parts) > 1 else None
+    middle_name = " ".join(name_parts[1:-1]) if len(name_parts) > 2 else None
+    
+    # Extract work experience
+    work_exp = profile.get("work_experience") or []
+    
+    # Determine current employment from experience
+    current_from_exp = {}
+    for exp in work_exp:
+        if isinstance(exp, dict) and exp.get("is_current"):
+            current_from_exp = exp
+            break
+    
+    # Extract education
+    education = profile.get("education") or []
+    highest_qual = None
+    highest_degree = None
+    if education:
+        first_edu = education[0] if isinstance(education[0], dict) else {}
+        highest_qual = first_edu.get("degree")
+        highest_degree = first_edu.get("specialization") or first_edu.get("degree")
+    
+    # Extract certifications — normalize to [{name: ...}] format
+    raw_certs = profile.get("certifications") or []
+    certs_list = []
+    certs_detailed = []
+    for c in raw_certs:
+        if isinstance(c, dict):
+            cert_name = c.get("name") or c.get("title") or ""
+            if cert_name:
+                certs_list.append(cert_name)
+                certs_detailed.append(c)
+        elif isinstance(c, str) and c:
+            certs_list.append(c)
+            certs_detailed.append({"name": c})
+    
+    # Extract online profiles for linkedin/github
+    online_profiles = profile.get("online_profiles") or []
+    linkedin_url = None
+    github_url = None
+    for op in online_profiles:
+        if isinstance(op, dict):
+            platform = (op.get("platform") or "").lower()
+            url = op.get("url") or ""
+            if "linkedin" in platform and url:
+                linkedin_url = url
+            elif "github" in platform and url:
+                github_url = url
+    
+    phone = profile.get("phone")
+    email = (profile.get("email") or "").lower().strip() or None
+    
+    # Build UNIFIED candidate document — matching extension schema exactly
     doc = {
         "id": candidate_id,
+        
+        # === BASIC INFO ===
         "name": name.strip(),
-        "first_name": name.strip().split()[0] if name.strip() else None,
-        "last_name": name.strip().split()[-1] if name.strip() and len(name.strip().split()) > 1 else None,
-        "email": (profile.get("email") or "").lower().strip() or None,
-        "phone": profile.get("phone"),
-        "current_company": profile.get("current_company"),
-        "current_designation": profile.get("current_designation"),
-        "current_industry": profile.get("current_industry"),
-        "total_experience_years": profile.get("total_experience_years"),
+        "first_name": first_name,
+        "middle_name": middle_name,
+        "last_name": last_name,
+        "photo_url": None,
+        
+        # === CONTACT ===
+        "email": email,
+        "alternate_email": None,
+        "phone": phone,
+        "phone_normalized": normalize_phone(phone) if phone else None,
+        "alternate_phone": None,
+        
+        # === PROFESSIONAL IDENTITY ===
         "headline": profile.get("headline"),
-        "profile_summary": profile.get("profile_summary"),
-        "location": profile.get("location"),
-        "preferred_locations": profile.get("preferred_locations", []),
+        "resume_headline": profile.get("headline"),
+        "summary": profile.get("profile_summary"),
+        
+        # === CURRENT EMPLOYMENT ===
+        "current_employer": profile.get("current_company") or current_from_exp.get("company"),
+        "designation": profile.get("current_designation") or current_from_exp.get("designation"),
+        "department": None,
+        "industry": profile.get("current_industry"),
+        "role_category": None,
+        "employment_status": None,
+        
+        # === EXPERIENCE ===
+        "experience_years": int(profile.get("total_experience_years") or 0) if profile.get("total_experience_years") else None,
+        "experience_months": None,
+        "experience_display": f"{profile.get('total_experience_years')} years" if profile.get("total_experience_years") else None,
+        "experience": work_exp,
+        
+        # === EDUCATION ===
+        "highest_qualification": highest_qual,
+        "highest_degree": highest_degree,
+        "education": education,
+        
+        # === SKILLS ===
+        "skills": profile.get("key_skills") or [],
+        "skills_display": ", ".join(profile.get("key_skills") or []),
+        "it_skills": profile.get("it_skills") or [],
+        "soft_skills": [],
+        "tools": [],
+        
+        # === CERTIFICATIONS ===
+        "certifications": certs_list,
+        "certifications_detailed": certs_detailed,
+        
+        # === PROJECTS ===
+        "projects": profile.get("projects") or [],
+        
+        # === LANGUAGES ===
+        "languages": profile.get("languages") or [],
+        
+        # === ONLINE PROFILES ===
+        "online_profiles": online_profiles,
+        "linkedin_url": linkedin_url,
+        "github_url": github_url,
+        "portfolio_url": None,
+        
+        # === PERSONAL DETAILS ===
         "date_of_birth": profile.get("date_of_birth"),
+        "age": None,
         "gender": profile.get("gender"),
-        "key_skills": profile.get("key_skills", []),
-        "it_skills": profile.get("it_skills", []),
-        "work_experience": profile.get("work_experience", []),
-        "education": profile.get("education", []),
-        "certifications": profile.get("certifications", []),
-        "projects": profile.get("projects", []),
-        "languages": profile.get("languages", []),
-        "online_profiles": profile.get("online_profiles", []),
+        "marital_status": None,
+        "nationality": None,
+        "has_passport": False,
+        "passport_number": None,
+        "passport_expiry": None,
+        
+        # Address
+        "permanent_address": None,
+        "permanent_city": None,
+        "permanent_state": None,
+        "permanent_country": None,
+        "permanent_pincode": None,
+        "current_address": None,
+        "current_city": None,
+        "current_state": None,
+        "current_country": None,
+        "current_pincode": None,
+        
+        # Category
+        "category": None,
+        "differently_abled": False,
+        "disability_type": None,
+        
+        # Work Permit
+        "work_permit_usa": None,
+        "work_permit_other": None,
+        
+        # === CAREER PREFERENCES ===
+        "current_salary": None,
+        "current_salary_currency": "INR",
+        "current_salary_breakdown": None,
+        "expected_salary": None,
+        "expected_salary_currency": "INR",
+        "expected_salary_min": None,
+        "expected_salary_max": None,
+        
+        "notice_period": None,
+        "notice_period_days": None,
+        "is_serving_notice": False,
+        "last_working_day": None,
+        "notice_negotiable": False,
+        
+        "location": profile.get("location"),
+        "preferred_locations": profile.get("preferred_locations") or [],
+        "willing_to_relocate": False,
+        "relocation_preferences": [],
+        
+        "preferred_job_type": [],
+        "preferred_employment_type": [],
+        "preferred_shift": [],
+        "work_from_home": False,
+        "remote_work_preference": None,
+        
+        "preferred_industry": [],
+        "preferred_functional_area": [],
+        "preferred_role": [],
+        "preferred_role_category": [],
+        
+        "preferred_company_type": [],
+        "preferred_company_size": None,
+        "companies_to_avoid": [],
+        
+        # === ADDITIONAL ===
+        "accomplishments": None,
+        "about_me": None,
+        "additional_info": None,
+        
+        # === RESUME ===
+        "has_resume": True,
+        "resume_title": data.get("filename"),
+        "resume_format": None,
+        
+        # === SOURCE TRACKING ===
         "source": "cv_upload",
         "source_details": {
             "upload_method": "cv_upload",
             "filename": data.get("filename", "unknown"),
             "captured_by": current_user["id"],
+            "captured_by_name": current_user.get("name", current_user.get("email")),
             "captured_by_email": current_user.get("email"),
+            "captured_at": now,
         },
         "visibility": visibility,
         "created_by": current_user["id"],
