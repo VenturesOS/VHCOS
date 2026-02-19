@@ -179,8 +179,32 @@ export default function NaukriProfileView() {
                 </p>
               )}
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <Badge className="bg-[#7CB342] text-white text-xs">Naukri Sourced</Badge>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                {(profile.resume_url || profile.active_resume_id) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadResume}
+                    className="text-[#7CB342] border-[#7CB342] hover:bg-green-50 h-7 text-xs"
+                    data-testid="profile-download-cv-btn"
+                  >
+                    <Download className="w-3 h-3 mr-1" /> Download CV
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadAtsCv}
+                  className="text-blue-600 border-blue-400 hover:bg-blue-50 h-7 text-xs"
+                  data-testid="profile-ats-cv-btn"
+                >
+                  <FileText className="w-3 h-3 mr-1" /> ATS CV
+                </Button>
+              </div>
+              <Badge className="bg-[#7CB342] text-white text-xs">
+                {p.source === 'cv_upload' ? 'CV Upload' : 'Naukri Sourced'}
+              </Badge>
               {p.naukri_profile_url && (
                 <a href={p.naukri_profile_url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
                   View on Naukri <ExternalLink className="w-3 h-3" />
