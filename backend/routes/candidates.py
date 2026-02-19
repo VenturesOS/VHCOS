@@ -535,13 +535,18 @@ async def download_candidate_resume(
 @candidates_router.get("/candidate-bank/{candidate_id}/download-resume")
 async def download_candidate_bank_resume(
     candidate_id: str,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    request: Request,
+    token: Optional[str] = None,
 ):
     """
     Download resume from Candidate Data Bank view.
-    Alias for /candidates/{candidate_id}/resume with same access control.
+    Supports both Authorization header and ?token= query param.
     """
-    return await download_candidate_resume(candidate_id, current_user)
+    from utils.auth import get_current_user_from_token
+    current_user = await get_current_user_from_token(request, token)
+    if current_user["role"] not in ("admin", "employer", "recruiter"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    return await download_candidate_resume(candidate_id, request, token, current_user)
 
 
 @candidates_router.get("/candidate-bank/{candidate_id}/ats-cv")
