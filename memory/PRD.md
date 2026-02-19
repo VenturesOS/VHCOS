@@ -145,6 +145,11 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - **Testing:** 11/11 backend + 100% frontend — zero regressions
 - No business logic changes, pure structural refactor
 
+### Phase 17: Candidate Bank 500 Fix (Feb 19, 2026)
+- **Bug:** `/api/candidate-bank` returned 500 due to Pydantic validation error
+- **Root cause:** `certifications` field in DB stored as `List[dict]` (e.g. `{"name": "..."}`) but model expected `List[str]`
+- **Fix:** Changed `certifications: List[str]` → `List[Any]` in `CandidateBankRecord` and `CandidateBankUpdate`
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
