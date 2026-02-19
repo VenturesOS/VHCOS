@@ -74,7 +74,7 @@ class CandidateBankUpdate(BaseModel):
     experience: Optional[List[dict]] = None
     education: Optional[List[dict]] = None
     location: Optional[str] = None
-    certifications: Optional[List[str]] = None
+    certifications: Optional[List[Any]] = None
     current_salary: Optional[int] = None  # INR
     notice_period: Optional[str] = None
     # Additional profile fields for inline editing
