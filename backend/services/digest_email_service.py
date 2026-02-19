@@ -83,7 +83,7 @@ def build_digest_email_html(digest: Dict, recipient: Dict) -> str:
         h_summary = h.get("short_summary", "")
         link_html = ""
         if slug:
-            link_html = f'<a href="{SITE_URL}/employer-blog/{slug}" style="color:#0F766E;text-decoration:none;font-weight:600;">Read more &rarr;</a>'
+            link_html = f'<a href="{SITE_URL}/industrial-hiring-insights/{slug}" style="color:#0F766E;text-decoration:none;font-weight:600;">Read more &rarr;</a>'
         highlights_html += f"""
         <tr><td style="padding:12px 0;border-bottom:1px solid #E5E7EB;">
           <p style="margin:0 0 4px;font-weight:600;color:#111827;font-size:15px;">{h_title}</p>
@@ -145,7 +145,7 @@ def build_digest_email_html(digest: Dict, recipient: Dict) -> str:
   <!-- CTA -->
   <tr><td style="padding:24px 28px;text-align:center;">
     <p style="margin:0 0 16px;color:#374151;font-size:14px;font-style:italic;">{cta_text}</p>
-    <a href="{SITE_URL}/employer-blog" style="display:inline-block;padding:12px 32px;background:#0F766E;color:#FFFFFF;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Visit Our Blog</a>
+    <a href="{SITE_URL}/industrial-hiring-insights" style="display:inline-block;padding:12px 32px;background:#0F766E;color:#FFFFFF;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Visit Our Blog</a>
   </td></tr>
 
   <!-- Footer -->
