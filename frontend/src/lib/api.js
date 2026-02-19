@@ -389,6 +389,7 @@ export const candidateBankAPI = {
   getHistory: (id) => api.get(`/candidate-bank/${id}/history`),
   // Resume download URL (use window.open or anchor tag)
   getResumeDownloadUrl: (id) => `${API_BASE}/candidate-bank/${id}/download-resume`,
+  getAtsCvUrl: (id) => `${API_BASE}/candidate-bank/${id}/ats-cv`,
   // Phase-2: Batch upload
   batchParse: (files) => {
     const formData = new FormData();
