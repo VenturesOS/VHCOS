@@ -150,6 +150,17 @@ A full-stack recruitment application (React, FastAPI, MongoDB) with a public-fac
 - **Root cause:** `certifications` field in DB stored as `List[dict]` (e.g. `{"name": "..."}`) but model expected `List[str]`
 - **Fix:** Changed `certifications: List[str]` → `List[Any]` in `CandidateBankRecord` and `CandidateBankUpdate`
 
+### Phase 18: CV + Profile Enhancement Upgrade (Feb 19, 2026)
+- **Part 1 - Profile Parity:** cv_upload.py /cv-upload/save now populates ALL unified schema fields (80+) matching extension capture. Missing fields remain null (never fabricated).
+- **Part 2 - ATS CV Generation:** New on-demand PDF generator (services/ats_cv_generator.py). Endpoint: GET /api/candidate-bank/{id}/ats-cv. Generates in memory, never stored. Excludes CTC/notice period.
+- **Part 3 - CV File Naming:** All downloads enforce Firstname_Lastname_VHC.pdf standard (R2 + local + ATS).
+- **Part 4 - Endpoint Audit:** 11 endpoints verified, all return proper HTTP codes (200/404/422). No unhandled exceptions.
+- **Part 5 - Safety:** Zero changes to revenue, pipeline, extension capture, employer assignment.
+- **Resume Parser Enhanced:** GPT prompt upgraded for richer extraction (work_experience, education, it_skills, projects, languages, online_profiles).
+- **Frontend:** ATS CV + Download CV buttons added to NaukriProfileView and CandidateProfileDialog.
+- **Testing:** 10/10 backend + 100% frontend, zero regressions.
+
+
 ## Prioritized Backlog
 
 ### P0 — ALL COMPLETE
