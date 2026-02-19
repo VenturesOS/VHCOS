@@ -536,14 +536,18 @@ async def download_candidate_bank_resume(
 @candidates_router.get("/candidate-bank/{candidate_id}/ats-cv")
 async def generate_ats_cv_endpoint(
     candidate_id: str,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    request: Request,
+    token: Optional[str] = None,
 ):
     """
     Generate an ATS-friendly CV on-demand from the candidate's structured profile.
-    PDF is generated in memory — never stored.
-    Excludes: CTC, Expected CTC, Notice Period.
-    Filename follows Firstname_Lastname_VHC.pdf standard.
+    Supports both Authorization header and ?token= query param (for browser tab downloads).
     """
+    from utils.auth import get_current_user_from_token
+    current_user = await get_current_user_from_token(request, token)
+    if current_user["role"] not in ("admin", "employer", "recruiter"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
