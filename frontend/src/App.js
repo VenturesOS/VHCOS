@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "./lib/auth";
 import { Toaster } from "./components/ui/sonner";
+import GoogleAnalytics from "./components/GoogleAnalytics";
 
 // Auth Pages
 import Login from "./pages/auth/Login";
