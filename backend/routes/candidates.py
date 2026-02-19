@@ -533,6 +533,43 @@ async def download_candidate_bank_resume(
     return await download_candidate_resume(candidate_id, current_user)
 
 
+@candidates_router.get("/candidate-bank/{candidate_id}/ats-cv")
+async def generate_ats_cv_endpoint(
+    candidate_id: str,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """
+    Generate an ATS-friendly CV on-demand from the candidate's structured profile.
+    PDF is generated in memory — never stored.
+    Excludes: CTC, Expected CTC, Notice Period.
+    Filename follows Firstname_Lastname_VHC.pdf standard.
+    """
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    from services.ats_cv_generator import generate_ats_cv, get_cv_filename
+
+    try:
+        pdf_bytes = generate_ats_cv(candidate)
+    except Exception as e:
+        logger.error(f"[ATS CV] Generation failed for {candidate_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate CV")
+
+    filename = get_cv_filename(candidate)
+
+    from fastapi.responses import StreamingResponse
+    import io
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(pdf_bytes)),
+        }
+    )
+
+
 # ============== CANDIDATE BANK CRUD ==============
 
 class CandidateBankResponse(BaseModel):
