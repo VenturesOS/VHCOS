@@ -7,11 +7,11 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
-import {
-  ArrowLeft, User, Mail, Phone, MapPin, Briefcase, GraduationCap,
+import { ArrowLeft, User, Mail, Phone, MapPin, Briefcase, GraduationCap,
   Clock, Globe, Award, FolderOpen, Languages, FileText,
-  Building2, Calendar, ExternalLink, ChevronRight
+  Building2, Calendar, ExternalLink, ChevronRight, Download
 } from 'lucide-react';
+import { candidateBankAPI } from '../../lib/api';
 
 function Section({ title, icon: Icon, children, testId }) {
   return (
