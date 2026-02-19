@@ -348,8 +348,19 @@ async def get_accessible_candidate_ids(current_user: dict) -> list:
 @candidates_router.get("/candidates/{candidate_id}/resume")
 async def download_candidate_resume(
     candidate_id: str,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    request: Request,
+    token: Optional[str] = None,
+    current_user: dict = None,
 ):
+    """
+    Download resume directly from candidate bank.
+    Supports both Authorization header and ?token= query param (for browser tab downloads).
+    """
+    if current_user is None:
+        from utils.auth import get_current_user_from_token
+        current_user = await get_current_user_from_token(request, token)
+        if current_user["role"] not in ("admin", "employer", "recruiter"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
     """
     Download resume directly from candidate bank.
     Same naming convention: Firstname_Lastname_VHC.ext
