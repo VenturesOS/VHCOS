@@ -395,6 +395,86 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
     </section>
 
+    <!-- Trusted By — Client Logo Carousel -->
+    <section style="padding:80px 24px; overflow:hidden;">
+      <div style="max-width:1280px; margin:0 auto;">
+        <p style="color:#9acd32; font-weight:600; font-size:14px; text-transform:uppercase; letter-spacing:1.5px; text-align:center; margin-bottom:12px;">Trusted By Industry Leaders</p>
+        <h2 style="font-size:40px; font-weight:800; text-align:center; margin-bottom:56px; color:#111827;">Our Clients</h2>
+      </div>
+      <style>
+        .hp-logo-carousel{position:relative;width:100%;overflow:hidden}
+        .hp-logo-carousel::before,.hp-logo-carousel::after{content:'';position:absolute;top:0;width:120px;height:100%;z-index:2;pointer-events:none}
+        .hp-logo-carousel::before{left:0;background:linear-gradient(to right,#fff 0%,transparent 100%)}
+        .hp-logo-carousel::after{right:0;background:linear-gradient(to left,#fff 0%,transparent 100%)}
+        .hp-logo-track{display:flex;align-items:center;gap:48px;width:max-content;will-change:transform}
+        .hp-logo-track-r2l{animation:hpScrollR2L 60s linear infinite}
+        .hp-logo-track-l2r{animation:hpScrollL2R 60s linear infinite}
+        .hp-logo-carousel:hover .hp-logo-track{animation-play-state:paused}
+        .hp-logo-item{flex-shrink:0;height:52px;display:flex;align-items:center;justify-content:center;padding:0 8px}
+        .hp-logo-item img{height:48px;width:auto;max-width:140px;object-fit:contain;filter:grayscale(80%) opacity(0.55);transition:filter 0.4s ease,transform 0.3s ease}
+        .hp-logo-item img:hover{filter:grayscale(0%) opacity(1);transform:scale(1.08)}
+        @keyframes hpScrollR2L{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        @keyframes hpScrollL2R{0%{transform:translateX(-50%)}100%{transform:translateX(0)}}
+        @media(max-width:768px){
+          .hp-logo-item{height:40px;padding:0 4px}
+          .hp-logo-item img{height:36px;max-width:110px}
+          .hp-logo-track{gap:32px}
+          .hp-logo-carousel::before,.hp-logo-carousel::after{width:60px}
+          .hp-logo-track-r2l{animation-duration:45s}
+          .hp-logo-track-l2r{animation-duration:45s}
+        }
+        @media(max-width:480px){
+          .hp-logo-item img{height:30px;max-width:90px}
+          .hp-logo-track{gap:24px}
+        }
+      </style>
+      <div class="hp-logo-carousel" style="margin-bottom:32px;">
+        <div class="hp-logo-track hp-logo-track-r2l" id="hpLogoRow1"></div>
+      </div>
+      <div class="hp-logo-carousel">
+        <div class="hp-logo-track hp-logo-track-l2r" id="hpLogoRow2"></div>
+      </div>
+      <script>
+      (function(){
+        var logos=[
+          '/website/logos/ventureshrd-client-logo-01.webp','/website/logos/ventureshrd-client-logo-02.webp',
+          '/website/logos/ventureshrd-client-logo-04.webp','/website/logos/ventureshrd-client-logo-05.webp',
+          '/website/logos/ventureshrd-client-logo-06.webp','/website/logos/ventureshrd-client-logo-07.webp',
+          '/website/logos/ventureshrd-client-logo-08.webp','/website/logos/ventureshrd-client-logo-09.webp',
+          '/website/logos/ventureshrd-client-logo-10.webp','/website/logos/ventureshrd-client-logo-11.webp',
+          '/website/logos/ventureshrd-client-logo-12.webp','/website/logos/ventureshrd-client-logo-13.gif',
+          '/website/logos/ventureshrd-client-logo-14.webp','/website/logos/ventureshrd-client-logo-15.webp',
+          '/website/logos/ventureshrd-client-logo-16.webp','/website/logos/ventureshrd-client-logo-17.webp',
+          '/website/logos/ventureshrd-client-logo-18.webp','/website/logos/ventureshrd-client-logo-19.webp',
+          '/website/logos/ventureshrd-client-logo-20.webp','/website/logos/ventureshrd-client-logo-21.webp',
+          '/website/logos/ventureshrd-client-logo-22.webp','/website/logos/ventureshrd-client-logo-23.webp',
+          '/website/logos/ventureshrd-client-logo-24.webp','/website/logos/ventureshrd-client-logo-25.webp',
+          '/website/logos/ventureshrd-client-logo-26.webp','/website/logos/ventureshrd-client-logo-27.webp',
+          '/website/logos/ventureshrd-client-logo-28.webp','/website/logos/ventureshrd-client-logo-29.webp',
+          '/website/logos/ventureshrd-client-logo-30.webp','/website/logos/ventureshrd-client-logo-31.webp',
+          '/website/logos/ventureshrd-client-logo-32.webp','/website/logos/ventureshrd-client-logo-33.webp',
+          '/website/logos/ventureshrd-client-logo-34.webp','/website/logos/ventureshrd-client-logo-35.webp',
+          '/website/logos/ventureshrd-client-logo-36.webp','/website/logos/ventureshrd-client-logo-37.webp',
+          '/website/logos/ventureshrd-client-logo-38.webp','/website/logos/ventureshrd-client-logo-39.webp',
+          '/website/logos/ventureshrd-client-logo-40.webp','/website/logos/ventureshrd-client-logo-41.webp',
+          '/website/logos/ventureshrd-client-logo-42.webp','/website/logos/ventureshrd-client-logo-43.webp',
+          '/website/logos/ventureshrd-client-logo-44.webp','/website/logos/ventureshrd-client-logo-45.webp',
+          '/website/logos/ventureshrd-client-logo-46.webp','/website/logos/ventureshrd-client-logo-47.webp',
+          '/website/logos/ventureshrd-client-logo-48.webp','/website/logos/ventureshrd-client-logo-49.webp',
+          '/website/logos/ventureshrd-client-logo-50.webp'
+        ];
+        var r1=logos.slice(0,25),r2=logos.slice(25);
+        function build(id,items){
+          var t=document.getElementById(id);if(!t)return;
+          var h='';for(var d=0;d<2;d++)for(var i=0;i<items.length;i++)
+            h+='<div class="hp-logo-item"><img src="'+items[i]+'" alt="Client logo" loading="lazy"></div>';
+          t.innerHTML=h;
+        }
+        build('hpLogoRow1',r1);build('hpLogoRow2',r2);
+      })();
+      </script>
+    </section>
+
     <!-- How We Work Section -->
     <section style="padding:80px 24px; background:#111827;">
       <div style="max-width:1280px; margin:0 auto;">
