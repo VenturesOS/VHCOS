@@ -35,6 +35,7 @@ async def comprehensive_sitemap():
         {"loc": "/careers", "priority": "0.8", "changefreq": "daily"},
         {"loc": "/contact", "priority": "0.7", "changefreq": "monthly"},
         {"loc": "/global-hiring", "priority": "0.8", "changefreq": "monthly"},
+        {"loc": "/recruitment-expertise", "priority": "0.9", "changefreq": "monthly"},
         {"loc": "/industrial-hiring-insights", "priority": "0.9", "changefreq": "daily"},
         {"loc": "/career-insights", "priority": "0.8", "changefreq": "daily"},
         {"loc": "/industrial-recruitment", "priority": "0.9", "changefreq": "weekly"},
