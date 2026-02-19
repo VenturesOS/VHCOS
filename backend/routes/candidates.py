@@ -439,14 +439,34 @@ async def download_candidate_resume(
             break
     
     if r2_metadata and r2_metadata.get("storage") == "r2":
-        # Generate signed URL for R2 download
+        # Generate signed URL for R2 download with proper Content-Disposition
         r2_key = r2_metadata.get("r2_key")
         if r2_key:
             try:
-                signed_url = get_r2_signed_url(r2_key)
+                # Build standardized filename for R2 downloads too
+                cname = candidate.get("name", "Unknown Candidate")
+                cparts = cname.strip().split()
+                fn = re.sub(r'[^a-zA-Z0-9]', '', cparts[0]) if cparts else "Unknown"
+                ln = re.sub(r'[^a-zA-Z0-9]', '', cparts[-1]) if len(cparts) > 1 else "Candidate"
+                r2_ext = Path(r2_key).suffix or ".pdf"
+                r2_download_name = f"{fn}_{ln}_VHC{r2_ext}"
+
+                signed_url = get_r2_signed_url(
+                    r2_key,
+                    response_content_disposition=f'attachment; filename="{r2_download_name}"'
+                )
                 if signed_url:
                     from fastapi.responses import RedirectResponse
                     return RedirectResponse(url=signed_url, status_code=302)
+            except TypeError:
+                # Fallback if get_r2_signed_url doesn't support response_content_disposition
+                try:
+                    signed_url = get_r2_signed_url(r2_key)
+                    if signed_url:
+                        from fastapi.responses import RedirectResponse
+                        return RedirectResponse(url=signed_url, status_code=302)
+                except Exception as e:
+                    logger.error(f"R2 download URL generation failed: {e}")
             except Exception as e:
                 logger.error(f"R2 download URL generation failed: {e}")
                 # Fall through to local file
