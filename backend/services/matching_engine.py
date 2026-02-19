@@ -29,41 +29,56 @@ def get_chat_client(system_msg: str = "You are an expert recruiter AI that extra
 async def parse_resume_with_ai(resume_text: str) -> Dict:
     """
     Parse resume text using GPT-5.2 to extract structured data.
-    Returns structured candidate data.
+    Returns structured candidate data matching the unified profile schema.
     """
     try:
-        chat = get_chat_client("You are an expert resume parser. Extract structured data from resumes accurately.")
+        chat = get_chat_client("You are an expert resume parser. Extract structured data from resumes with maximum detail and accuracy. Never fabricate data — only extract what is present.")
         
-        prompt = f"""Parse the following resume and extract structured data. Return ONLY valid JSON with this exact structure:
+        prompt = f"""Parse the following resume and extract structured data. Return ONLY valid JSON with this exact structure.
+IMPORTANT: Only include data explicitly found in the resume. Use null for missing fields. Never infer or fabricate.
+
 {{
     "name": "full name",
-    "email": "email if found or null",
-    "phone": "phone if found or null",
+    "email": "email or null",
+    "phone": "phone or null",
     "headline": "professional title/headline",
-    "summary": "brief professional summary (2-3 sentences)",
-    "skills": ["skill1", "skill2", ...],
-    "experience_years": number or 0,
-    "experience": [
+    "profile_summary": "professional summary (2-3 sentences from resume objective/summary section)",
+    "current_company": "current or most recent employer or null",
+    "current_designation": "current or most recent job title or null",
+    "current_industry": "industry if determinable or null",
+    "total_experience_years": number or null,
+    "location": "city, state/country or null",
+    "date_of_birth": "DOB if found or null",
+    "gender": "gender if found or null",
+    "key_skills": ["skill1", "skill2", ...],
+    "it_skills": [{{"name": "tool/tech name", "version": "version or null", "experience": "years or null"}}],
+    "work_experience": [
         {{
-            "title": "job title",
+            "designation": "job title",
             "company": "company name",
-            "duration": "duration string",
-            "description": "brief description"
+            "from_date": "start date (MMM YYYY) or null",
+            "to_date": "end date (MMM YYYY) or null",
+            "is_current": true/false,
+            "description": "responsibilities/achievements summary"
         }}
     ],
     "education": [
         {{
             "degree": "degree name",
-            "institution": "school/university",
-            "year": "graduation year or null"
+            "specialization": "field of study or null",
+            "institution": "university/college",
+            "year_of_passing": "year or null"
         }}
     ],
-    "location": "city, state/country if found or null",
-    "certifications": ["cert1", "cert2", ...]
+    "certifications": ["certification name 1", "certification name 2"],
+    "projects": [{{"title": "project name", "description": "brief description"}}],
+    "languages": [{{"language": "language name", "proficiency": "level or null"}}],
+    "online_profiles": [{{"platform": "LinkedIn/GitHub/etc", "url": "URL"}}],
+    "preferred_locations": ["location1", "location2"]
 }}
 
 Resume text:
-{resume_text[:8000]}"""  # Limit to 8000 chars
+{resume_text[:8000]}"""
         
         logger.info(f"[RESUME PARSE] Sending prompt to GPT-5.2, length: {len(prompt)}")
         
@@ -91,6 +106,27 @@ Resume text:
         logger.info(f"[RESUME PARSE] Extracted JSON string: {json_str[:300] if json_str else 'EMPTY'}")
         
         parsed = json.loads(json_str.strip())
+        
+        # Backwards-compat: map old field names if present
+        if "summary" in parsed and "profile_summary" not in parsed:
+            parsed["profile_summary"] = parsed.pop("summary")
+        if "skills" in parsed and "key_skills" not in parsed:
+            parsed["key_skills"] = parsed.pop("skills")
+        if "experience" in parsed and "work_experience" not in parsed:
+            raw_exp = parsed.pop("experience")
+            mapped_exp = []
+            for e in (raw_exp or []):
+                if isinstance(e, dict):
+                    mapped_exp.append({
+                        "designation": e.get("title") or e.get("designation"),
+                        "company": e.get("company"),
+                        "from_date": e.get("from_date") or e.get("start_date"),
+                        "to_date": e.get("to_date") or e.get("end_date"),
+                        "is_current": e.get("is_current", False),
+                        "description": e.get("description") or e.get("duration"),
+                    })
+            parsed["work_experience"] = mapped_exp
+        
         logger.info(f"[RESUME PARSE] Successfully parsed JSON with keys: {list(parsed.keys())}")
         return {"success": True, "data": parsed}
         
