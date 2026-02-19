@@ -197,6 +197,17 @@ export default function CandidateProfileDialog({
     document.body.removeChild(link);
   };
 
+  const downloadAtsCv = () => {
+    const token = localStorage.getItem('vhc_token');
+    const atsUrl = candidateBankAPI.getAtsCvUrl(candidate.id);
+    const link = document.createElement('a');
+    link.href = `${atsUrl}?token=${token}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (!candidate) return null;
 
   return (
