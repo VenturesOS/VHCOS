@@ -19,7 +19,7 @@ class CandidateBankRecord(BaseModel):
     experience: List[dict] = []
     education: List[dict] = []
     location: Optional[str] = None  # MANDATORY for data completeness
-    certifications: List[str] = []
+    certifications: List[Any] = []
     active_resume_id: Optional[str] = None
     resume_versions: List[dict] = []
     resume_fingerprints: List[str] = []
