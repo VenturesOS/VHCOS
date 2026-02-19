@@ -115,6 +115,7 @@ webpackConfig.devServer = (devServerConfig) => {
       '/careers': 'careers.html',
       '/contact': 'contact.html',
       '/global-hiring': 'global-hiring.html',
+      '/recruitment-expertise': 'recruitment-expertise.html',
       '/sitemap': 'sitemap.html',
     };
 
