@@ -13,6 +13,7 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 
 // Public Website Redirect
 import PublicWebsiteRedirect from "./pages/PublicWebsite";
+import StaticPageRedirect from "./components/StaticPageRedirect";
 
 // Public Job Pages (No Auth Required)
 import PublicJobPage from "./pages/public/PublicJobPage";
@@ -183,6 +184,15 @@ function App() {
             <Route path="notifications" element={<NotificationSettingsPage />} />
             <Route path="settings/notifications" element={<NotificationSettingsPage />} />
           </Route>
+
+          {/* Static Website Pages */}
+          <Route path="/recruitment-expertise" element={<StaticPageRedirect page="recruitment-expertise.html" />} />
+          <Route path="/about" element={<StaticPageRedirect page="about.html" />} />
+          <Route path="/services" element={<StaticPageRedirect page="services.html" />} />
+          <Route path="/industries" element={<StaticPageRedirect page="industries.html" />} />
+          <Route path="/careers" element={<StaticPageRedirect page="careers.html" />} />
+          <Route path="/contact" element={<StaticPageRedirect page="contact.html" />} />
+          <Route path="/global-hiring" element={<StaticPageRedirect page="global-hiring.html" />} />
 
           {/* Default Redirect - Public Website is the landing page */}
           <Route path="/" element={<PublicWebsiteRedirect />} />
