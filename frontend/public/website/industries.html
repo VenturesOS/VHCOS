@@ -170,52 +170,45 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   <section style="padding:80px 24px;">
     <div style="max-width:1280px; margin:0 auto;">
-      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:40px;">
-        
-        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease;">
-          <div style="font-size:48px; margin-bottom:20px;">💻</div>
-          <h3 style="font-size:24px; font-weight:700; margin-bottom:16px; color:#111827;">Technology & R&D</h3>
-          <p style="color:#6b7280; line-height:1.7; margin-bottom:16px;">From startups to enterprise tech giants, we place engineers, product leaders, and technical executives.</p>
-          <p style="color:#9acd32; font-weight:600; font-size:14px;">Key Roles: CTOs, Engineering Leads, Product Managers, DevOps Architects</p>
-        </div>
-
-        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease;">
-          <div style="font-size:48px; margin-bottom:20px;">🏭</div>
-          <h3 style="font-size:24px; font-weight:700; margin-bottom:16px; color:#111827;">Manufacturing & Industrial</h3>
-          <p style="color:#6b7280; line-height:1.7; margin-bottom:16px;">Operations, supply chain, quality, and plant management for automotive, aerospace, and consumer goods.</p>
-          <p style="color:#9acd32; font-weight:600; font-size:14px;">Key Roles: Plant Managers, Supply Chain VPs, Quality Directors, Operations Heads</p>
-        </div>
-
-        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease;">
-          <div style="font-size:48px; margin-bottom:20px;">🛍️</div>
-          <h3 style="font-size:24px; font-weight:700; margin-bottom:16px; color:#111827;">Retail & E-commerce</h3>
-          <p style="color:#6b7280; line-height:1.7; margin-bottom:16px;">Omnichannel retail, digital commerce, merchandising, and customer experience leadership.</p>
-          <p style="color:#9acd32; font-weight:600; font-size:14px;">Key Roles: Merchandising VPs, E-commerce Directors, Store Operations, Digital Marketing</p>
-        </div>
-
-        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease;">
-          <div style="font-size:48px; margin-bottom:20px;">📊</div>
-          <h3 style="font-size:24px; font-weight:700; margin-bottom:16px; color:#111827;">Consulting & Professional Services</h3>
-          <p style="color:#6b7280; line-height:1.7; margin-bottom:16px;">Management consulting, legal, accounting, and advisory firms across strategy and operations.</p>
-          <p style="color:#9acd32; font-weight:600; font-size:14px;">Key Roles: Partners, Principal Consultants, Practice Leaders, Client Directors</p>
-        </div>
-
-        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease;">
-          <div style="font-size:48px; margin-bottom:20px;">⚡</div>
-          <h3 style="font-size:24px; font-weight:700; margin-bottom:16px; color:#111827;">Energy & Utilities</h3>
-          <p style="color:#6b7280; line-height:1.7; margin-bottom:16px;">Renewable energy, oil & gas, utilities management, and sustainable infrastructure projects.</p>
-          <p style="color:#9acd32; font-weight:600; font-size:14px;">Key Roles: Project Directors, Asset Managers, Sustainability Officers, Grid Operations</p>
-        </div>
-
-        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease;">
-          <div style="font-size:48px; margin-bottom:20px;">🏢</div>
-          <h3 style="font-size:24px; font-weight:700; margin-bottom:16px; color:#111827;">Real Estate & Construction</h3>
-          <p style="color:#6b7280; line-height:1.7; margin-bottom:16px;">Commercial real estate, residential development, property management, and construction leadership.</p>
-          <p style="color:#9acd32; font-weight:600; font-size:14px;">Key Roles: Development Heads, Construction Managers, Architects, Property Directors</p>
-        </div>
-
-      </div>
+      <div id="industryCardsGrid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:40px;"></div>
     </div>
+    <script>
+    (function(){
+      var cards=[
+        {icon:'💻',title:'Technology & R&D',desc:'From startups to enterprise tech giants, we place engineers, product leaders, and technical executives.',roles:'CTOs, Engineering Leads, Product Managers, DevOps Architects'},
+        {icon:'🏭',title:'Manufacturing & Industrial',desc:'Operations, supply chain, quality, and plant management for automotive, aerospace, and consumer goods.',roles:'Plant Managers, Supply Chain VPs, Quality Directors, Operations Heads'},
+        {icon:'🛍️',title:'Retail & E-commerce',desc:'Omnichannel retail, digital commerce, merchandising, and customer experience leadership.',roles:'Merchandising VPs, E-commerce Directors, Store Operations, Digital Marketing'},
+        {icon:'📊',title:'Consulting & Professional Services',desc:'Management consulting, legal, accounting, and advisory firms across strategy and operations.',roles:'Partners, Principal Consultants, Practice Leaders, Client Directors'},
+        {icon:'⚡',title:'Power Sector & Infrastructure',desc:'Renewable energy, oil & gas, utilities management, and sustainable infrastructure projects.',roles:'Project Directors, Asset Managers, Sustainability Officers, Grid Operations'},
+        {icon:'🏗️',title:'Building Material (Cement & Allied)',desc:'Cement, building products, construction materials, and allied manufacturing leadership.',roles:'Plant Heads, Production Directors, Quality Managers, Business Development Leads'},
+        {icon:'🧴',title:'FMCG',desc:'Fast-moving consumer goods across food, beverages, personal care, and household products.',roles:'Brand Managers, Sales Directors, Marketing Heads, Supply Chain Leaders'},
+        {icon:'📺',title:'FMCD',desc:'Consumer durables including electronics, appliances, and home products manufacturing and distribution.',roles:'Product Managers, Regional Sales Heads, Service Directors, Channel Managers'},
+        {icon:'🍷',title:'Alcobev',desc:'Alcoholic beverages including spirits, wine, and brewing — covering production, marketing, and distribution.',roles:'Brand Directors, Distillery Heads, Distribution Managers, Marketing VPs'},
+        {icon:'🚗',title:'Automobile & Ancillary & EV',desc:'Automotive OEMs, ancillary component manufacturers, and electric vehicle ecosystem companies.',roles:'Plant Heads, R&D Directors, EV Program Managers, Sourcing Heads'},
+        {icon:'💊',title:'Pharma',desc:'Pharmaceutical manufacturing, formulation R&D, regulatory affairs, and commercial operations.',roles:'R&D Directors, Regulatory Heads, Plant Managers, Business Unit Heads'},
+        {icon:'🌿',title:'Agro Pesticides',desc:'Crop protection, pesticide manufacturing, agri-input distribution, and field operations leadership.',roles:'Technical Directors, Zonal Managers, R&D Heads, Registration Managers'},
+        {icon:'🧪',title:'Chemical',desc:'Specialty chemicals, bulk chemicals, petrochemicals, and chemical processing industries.',roles:'Plant Directors, Process Engineers, Safety Heads, Business Development Managers'},
+        {icon:'🌾',title:'Agrochem',desc:'Agrochemical formulations, crop nutrition, seed technology, and agricultural input industries.',roles:'Formulation Heads, Crop Advisors, Regional Directors, Product Development Managers'}
+      ];
+      var grid=document.getElementById('industryCardsGrid');
+      if(!grid)return;
+      var html='';
+      for(var i=0;i<cards.length;i++){
+        var c=cards[i];
+        html+='<div style="background:white;padding:40px;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.08);transition:transform 0.3s ease;">'
+          +'<div style="font-size:48px;margin-bottom:20px;">'+c.icon+'</div>'
+          +'<h3 style="font-size:24px;font-weight:700;margin-bottom:16px;color:#111827;">'+c.title+'</h3>'
+          +'<p style="color:#6b7280;line-height:1.7;margin-bottom:16px;">'+c.desc+'</p>'
+          +'<p style="color:#9acd32;font-weight:600;font-size:14px;">Key Roles: '+c.roles+'</p>'
+          +'</div>';
+      }
+      grid.innerHTML=html;
+    })();
+    </script>
+    <style>
+      @media(max-width:768px){#industryCardsGrid{grid-template-columns:1fr!important;gap:24px!important}}
+      @media(min-width:769px) and (max-width:1024px){#industryCardsGrid{grid-template-columns:repeat(2,1fr)!important;gap:32px!important}}
+    </style>
   </section>
 
   <section style="background:#f9fafb; padding:80px 24px;">
