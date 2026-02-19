@@ -249,29 +249,120 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
   </section>
 
-  <section style="padding:80px 24px;">
-    <div style="max-width:1100px; margin:0 auto;">
-      <h2 style="font-size:42px; font-weight:800; text-align:center; margin-bottom:60px; color:#111827;">Client Success Stories</h2>
-
-      <div style="display:flex; flex-direction:column; gap:32px;">
-        
-        <div style="background:#f9fafb; padding:40px; border-radius:12px; border-left:4px solid #9acd32;">
-          <p style="font-size:18px; font-style:italic; line-height:1.8; color:#4b5563; margin-bottom:20px;">"Ventures HRD Centre understood our fintech space intimately. They placed a CTO who transformed our product architecture and scaled our engineering team from 15 to 150 in 18 months."</p>
-          <p style="font-weight:700; color:#111827;">— CEO, Mumbai-based Fintech Unicorn</p>
-        </div>
-
-        <div style="background:#f9fafb; padding:40px; border-radius:12px; border-left:4px solid #9acd32;">
-          <p style="font-size:18px; font-style:italic; line-height:1.8; color:#4b5563; margin-bottom:20px;">"Their healthcare sector expertise was invaluable. We hired a COO with exactly the hospital operations background we needed, delivered in just 6 weeks."</p>
-          <p style="font-weight:700; color:#111827;">— Board Member, US Healthcare Network</p>
-        </div>
-
-        <div style="background:#f9fafb; padding:40px; border-radius:12px; border-left:4px solid #9acd32;">
-          <p style="font-size:18px; font-style:italic; line-height:1.8; color:#4b5563; margin-bottom:20px;">"For our manufacturing expansion into India, Ventures HRD Centre provided not just candidates but strategic insights on local talent markets and competitive compensation that proved invaluable."</p>
-          <p style="font-weight:700; color:#111827;">— VP Operations, Global Automotive Manufacturer</p>
-        </div>
-
-      </div>
+  <!-- Trusted By — Auto-Moving Logo Carousel -->
+  <section style="padding:80px 24px; overflow:hidden;">
+    <div style="max-width:1280px; margin:0 auto;">
+      <p style="color:#9acd32; font-weight:600; font-size:14px; text-transform:uppercase; letter-spacing:1.5px; text-align:center; margin-bottom:12px;">Trusted By Industry Leaders</p>
+      <h2 style="font-size:42px; font-weight:800; text-align:center; margin-bottom:56px; color:#111827;">Our Clients</h2>
     </div>
+
+    <style>
+      .logo-carousel{position:relative;width:100%;overflow:hidden}
+      .logo-carousel::before,.logo-carousel::after{content:'';position:absolute;top:0;width:120px;height:100%;z-index:2;pointer-events:none}
+      .logo-carousel::before{left:0;background:linear-gradient(to right,#fff 0%,transparent 100%)}
+      .logo-carousel::after{right:0;background:linear-gradient(to left,#fff 0%,transparent 100%)}
+      .logo-track{display:flex;align-items:center;gap:48px;width:max-content;will-change:transform}
+      .logo-track-r2l{animation:scrollR2L 60s linear infinite}
+      .logo-track-l2r{animation:scrollL2R 60s linear infinite}
+      .logo-carousel:hover .logo-track{animation-play-state:paused}
+      .logo-item{flex-shrink:0;height:52px;width:auto;display:flex;align-items:center;justify-content:center;padding:0 8px}
+      .logo-item img{height:48px;width:auto;max-width:140px;object-fit:contain;filter:grayscale(80%) opacity(0.55);transition:filter 0.4s ease,transform 0.3s ease}
+      .logo-item img:hover{filter:grayscale(0%) opacity(1);transform:scale(1.08)}
+      @keyframes scrollR2L{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+      @keyframes scrollL2R{0%{transform:translateX(-50%)}100%{transform:translateX(0)}}
+      @media(max-width:768px){
+        .logo-item{height:40px;padding:0 4px}
+        .logo-item img{height:36px;max-width:110px}
+        .logo-track{gap:32px}
+        .logo-carousel::before,.logo-carousel::after{width:60px}
+        .logo-track-r2l{animation-duration:45s}
+        .logo-track-l2r{animation-duration:45s}
+      }
+      @media(max-width:480px){
+        .logo-item img{height:30px;max-width:90px}
+        .logo-track{gap:24px}
+      }
+    </style>
+
+    <!-- Row 1: Right to Left -->
+    <div class="logo-carousel" style="margin-bottom:32px;">
+      <div class="logo-track logo-track-r2l" id="logoRow1"></div>
+    </div>
+
+    <!-- Row 2: Left to Right -->
+    <div class="logo-carousel">
+      <div class="logo-track logo-track-l2r" id="logoRow2"></div>
+    </div>
+
+    <script>
+    (function(){
+      var logos=[
+        {src:'/website/logos/ventureshrd-client-logo-01.webp',alt:'Client 1'},
+        {src:'/website/logos/ventureshrd-client-logo-02.webp',alt:'Client 2'},
+        {src:'/website/logos/ventureshrd-client-logo-04.webp',alt:'Client 4'},
+        {src:'/website/logos/ventureshrd-client-logo-05.webp',alt:'Client 5'},
+        {src:'/website/logos/ventureshrd-client-logo-06.webp',alt:'Client 6'},
+        {src:'/website/logos/ventureshrd-client-logo-07.webp',alt:'Client 7'},
+        {src:'/website/logos/ventureshrd-client-logo-08.webp',alt:'Client 8'},
+        {src:'/website/logos/ventureshrd-client-logo-09.webp',alt:'Client 9'},
+        {src:'/website/logos/ventureshrd-client-logo-10.webp',alt:'Client 10'},
+        {src:'/website/logos/ventureshrd-client-logo-11.webp',alt:'Client 11'},
+        {src:'/website/logos/ventureshrd-client-logo-12.webp',alt:'Client 12'},
+        {src:'/website/logos/ventureshrd-client-logo-13.gif',alt:'Client 13'},
+        {src:'/website/logos/ventureshrd-client-logo-14.webp',alt:'Client 14'},
+        {src:'/website/logos/ventureshrd-client-logo-15.webp',alt:'Client 15'},
+        {src:'/website/logos/ventureshrd-client-logo-16.webp',alt:'Client 16'},
+        {src:'/website/logos/ventureshrd-client-logo-17.webp',alt:'Client 17'},
+        {src:'/website/logos/ventureshrd-client-logo-18.webp',alt:'Client 18'},
+        {src:'/website/logos/ventureshrd-client-logo-19.webp',alt:'Client 19'},
+        {src:'/website/logos/ventureshrd-client-logo-20.webp',alt:'Client 20'},
+        {src:'/website/logos/ventureshrd-client-logo-21.webp',alt:'Client 21'},
+        {src:'/website/logos/ventureshrd-client-logo-22.webp',alt:'Client 22'},
+        {src:'/website/logos/ventureshrd-client-logo-23.webp',alt:'Client 23'},
+        {src:'/website/logos/ventureshrd-client-logo-24.webp',alt:'Client 24'},
+        {src:'/website/logos/ventureshrd-client-logo-25.webp',alt:'Client 25'},
+        {src:'/website/logos/ventureshrd-client-logo-26.webp',alt:'Client 26'},
+        {src:'/website/logos/ventureshrd-client-logo-27.webp',alt:'Client 27'},
+        {src:'/website/logos/ventureshrd-client-logo-28.webp',alt:'Client 28'},
+        {src:'/website/logos/ventureshrd-client-logo-29.webp',alt:'Client 29'},
+        {src:'/website/logos/ventureshrd-client-logo-30.webp',alt:'Client 30'},
+        {src:'/website/logos/ventureshrd-client-logo-31.webp',alt:'Client 31'},
+        {src:'/website/logos/ventureshrd-client-logo-32.webp',alt:'Client 32'},
+        {src:'/website/logos/ventureshrd-client-logo-33.webp',alt:'Client 33'},
+        {src:'/website/logos/ventureshrd-client-logo-34.webp',alt:'Client 34'},
+        {src:'/website/logos/ventureshrd-client-logo-35.webp',alt:'Client 35'},
+        {src:'/website/logos/ventureshrd-client-logo-36.webp',alt:'Client 36'},
+        {src:'/website/logos/ventureshrd-client-logo-37.webp',alt:'Client 37'},
+        {src:'/website/logos/ventureshrd-client-logo-38.webp',alt:'Client 38'},
+        {src:'/website/logos/ventureshrd-client-logo-39.webp',alt:'Client 39'},
+        {src:'/website/logos/ventureshrd-client-logo-40.webp',alt:'Client 40'},
+        {src:'/website/logos/ventureshrd-client-logo-41.webp',alt:'Client 41'},
+        {src:'/website/logos/ventureshrd-client-logo-42.webp',alt:'Client 42'},
+        {src:'/website/logos/ventureshrd-client-logo-43.webp',alt:'Client 43'},
+        {src:'/website/logos/ventureshrd-client-logo-44.webp',alt:'Client 44'},
+        {src:'/website/logos/ventureshrd-client-logo-45.webp',alt:'Client 45'},
+        {src:'/website/logos/ventureshrd-client-logo-46.webp',alt:'Client 46'},
+        {src:'/website/logos/ventureshrd-client-logo-47.webp',alt:'Client 47'},
+        {src:'/website/logos/ventureshrd-client-logo-48.webp',alt:'Client 48'},
+        {src:'/website/logos/ventureshrd-client-logo-49.webp',alt:'Client 49'},
+        {src:'/website/logos/ventureshrd-client-logo-50.webp',alt:'Client 50'}
+      ];
+      var row1=logos.slice(0,25),row2=logos.slice(25);
+      function buildTrack(id,items){
+        var track=document.getElementById(id);
+        if(!track)return;
+        var html='';
+        for(var r=0;r<2;r++){
+          for(var i=0;i<items.length;i++){
+            html+='<div class="logo-item"><img src="'+items[i].src+'" alt="'+items[i].alt+'" loading="lazy"></div>';
+          }
+        }
+        track.innerHTML=html;
+      }
+      buildTrack('logoRow1',row1);
+      buildTrack('logoRow2',row2);
+    })();
+    </script>
   </section>
 
   <section style="background:#111827; padding:80px 24px; text-align:center; color:white;">
