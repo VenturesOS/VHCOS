@@ -228,6 +228,17 @@ export default function CandidateProfileDialog({
                   <Download className="w-4 h-4 mr-1" /> Download CV
                 </Button>
               )}
+              {showDownloadResume && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadAtsCv}
+                  className="text-blue-600 border-blue-400 hover:bg-blue-50"
+                  data-testid="generate-ats-cv-btn"
+                >
+                  <FileText className="w-4 h-4 mr-1" /> ATS CV
+                </Button>
+              )}
               {showEditButton && !isEditing && (
                 <Button
                   variant="outline"
