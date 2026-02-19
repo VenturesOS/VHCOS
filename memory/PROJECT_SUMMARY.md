@@ -402,7 +402,7 @@ RESEND_API_KEY=re_placeholder_key
 
 ### Frontend (.env)
 ```env
-REACT_APP_BACKEND_URL=https://revenue-verify-3.preview.emergentagent.com
+REACT_APP_BACKEND_URL=https://cv-parity-hub.preview.emergentagent.com
 WDS_SOCKET_PORT=443
 ```
 

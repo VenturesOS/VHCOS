@@ -18,7 +18,7 @@ from collections import defaultdict
 import os
 
 # Configuration
-API_URL = os.environ.get("API_URL", "https://revenue-verify-3.preview.emergentagent.com")
+API_URL = os.environ.get("API_URL", "https://cv-parity-hub.preview.emergentagent.com")
 ADMIN_EMAIL = "admin@vhc.in"
 ADMIN_PASSWORD = "VhcAdmin@2024"
 
