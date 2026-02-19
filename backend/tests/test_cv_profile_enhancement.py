@@ -34,7 +34,7 @@ class TestCVProfileEnhancement:
             json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
         )
         assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
-        self.token = login_resp.json().get("token")
+        self.token = login_resp.json().get("access_token")
         self.headers = {"Authorization": f"Bearer {self.token}"}
 
     def test_candidate_bank_list(self):
@@ -266,7 +266,7 @@ class TestRegressionEndpoints:
             json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
         )
         assert login_resp.status_code == 200
-        self.token = login_resp.json().get("token")
+        self.token = login_resp.json().get("access_token")
         self.headers = {"Authorization": f"Bearer {self.token}"}
 
     def test_revenue_aggregate_by_company(self):
@@ -328,7 +328,7 @@ class TestCandidateBankSearch:
             json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
         )
         assert login_resp.status_code == 200
-        self.token = login_resp.json().get("token")
+        self.token = login_resp.json().get("access_token")
         self.headers = {"Authorization": f"Bearer {self.token}"}
 
     def test_candidate_bank_search_with_filters(self):
