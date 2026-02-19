@@ -105,6 +105,32 @@ export default function NaukriProfileView() {
     );
   }
 
+  const downloadAtsCv = () => {
+    const token = localStorage.getItem('vhc_token');
+    const atsUrl = candidateBankAPI.getAtsCvUrl(profile.id);
+    const link = document.createElement('a');
+    link.href = `${atsUrl}?token=${token}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadResume = () => {
+    if (!profile.resume_url && !profile.active_resume_id) {
+      toast.error('No resume uploaded for this candidate');
+      return;
+    }
+    const token = localStorage.getItem('vhc_token');
+    const url = candidateBankAPI.getResumeDownloadUrl(profile.id);
+    const link = document.createElement('a');
+    link.href = `${url}?token=${token}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Safe accessors for nested data
   const p = {
     ...profile,
