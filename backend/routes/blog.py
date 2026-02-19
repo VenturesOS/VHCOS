@@ -444,6 +444,7 @@ async def blog_sitemap():
         {"loc": "/careers", "priority": "0.7"},
         {"loc": "/contact", "priority": "0.7"},
         {"loc": "/global-hiring", "priority": "0.7"},
+        {"loc": "/recruitment-expertise", "priority": "0.9"},
         {"loc": "/industrial-hiring-insights", "priority": "0.8"},
         {"loc": "/career-insights", "priority": "0.8"},
     ]
