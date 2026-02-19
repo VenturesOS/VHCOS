@@ -278,8 +278,11 @@ class TestRegressionEndpoints:
         )
         assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
         
-        data = resp.json()
-        assert isinstance(data, list), "Expected list response"
+        response_data = resp.json()
+        # API returns {"data": [...], "from_date": "...", "to_date": "..."}
+        assert "data" in response_data, "Expected 'data' field in response"
+        data = response_data["data"]
+        assert isinstance(data, list), "Expected list in 'data' field"
         print(f"✅ Revenue aggregate by company: {len(data)} companies with revenue data")
         
         if data:
@@ -298,23 +301,31 @@ class TestRegressionEndpoints:
         assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
         
         data = resp.json()
-        assert "applications" in data or "pipeline" in data, "Response missing expected fields"
+        assert "pipeline" in data, "Response missing 'pipeline' field"
         
-        # Check that joined stage is accessible
-        applications = data.get("applications", data.get("pipeline", []))
-        stages_found = set()
-        for app in applications:
-            stage = app.get("stage")
-            if stage:
-                stages_found.add(stage)
+        # Pipeline is structured by stage: {"applied": [...], "shortlisted": [...], "joined": [...], ...}
+        pipeline = data.get("pipeline", {})
         
-        print(f"✅ Admin pipeline: {len(applications)} applications")
-        print(f"   Stages found: {', '.join(stages_found) if stages_found else 'none'}")
+        # Check that joined stage exists
+        assert "joined" in pipeline, "Missing 'joined' stage in pipeline"
         
-        # Verify pagination structure
-        if "total" in data:
-            assert data["total"] >= 0, "Invalid total count"
-            print(f"   Total in system: {data['total']}")
+        # Count total applications across all stages
+        stages_found = list(pipeline.keys())
+        total_apps = sum(len(apps) for apps in pipeline.values() if isinstance(apps, list))
+        
+        print(f"✅ Admin pipeline: {total_apps} total applications")
+        print(f"   Stages found: {', '.join(stages_found)}")
+        print(f"   Joined candidates: {len(pipeline.get('joined', []))}")
+        
+        # Verify stage counts if present
+        if "stage_counts" in data:
+            counts = data["stage_counts"]
+            print(f"   Stage counts: applied={counts.get('applied', 0)}, joined={counts.get('joined', 0)}")
+        
+        # Verify total applications count
+        if "total_applications" in data:
+            assert data["total_applications"] >= 0, "Invalid total_applications count"
+            print(f"   Total applications: {data['total_applications']}")
 
 
 class TestCandidateBankSearch:
