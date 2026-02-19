@@ -88,6 +88,7 @@ function App() {
     <HelmetProvider>
     <AuthProvider>
       <BrowserRouter>
+        <GoogleAnalytics />
         <Routes>
           {/* Public Routes (No Auth Required) */}
           <Route path="/login" element={<Login />} />
