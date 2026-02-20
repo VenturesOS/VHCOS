@@ -142,6 +142,7 @@ export default function MandateApplyPage() {
       submitFormData.append('notice_period', formData.notice_period || '');
       submitFormData.append('resume', resumeFile);
       submitFormData.append('consent_given', 'true');
+      submitFormData.append('consent_future_opportunities', formData.consent_future_opportunities ? 'true' : 'false');
       submitFormData.append('mandate_token', token); // Include mandate token for verification
       
       const response = await fetch(`${API_URL}/api/public/apply`, {
