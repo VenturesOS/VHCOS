@@ -283,7 +283,7 @@ def _build_rss_item(blog: dict, base_url: str) -> str:
   <title>{xml_escape(blog.get('title', ''))}</title>
   <link>{xml_escape(link)}</link>
   <description>{xml_escape(blog.get('meta_description', ''))}</description>
-  <pubDate>{pub_date}</pubDate>
+  <pubDate>{_format_rfc822(pub_date)}</pubDate>
   <guid isPermaLink="true">{xml_escape(link)}</guid>
   <category>{xml_escape(blog.get('blog_type', ''))}</category>
 </item>"""
