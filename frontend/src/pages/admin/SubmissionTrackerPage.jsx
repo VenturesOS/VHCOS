@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { trackerAPI, jobsAPI } from '../../lib/api';
+import { trackerAPI, jobAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -40,7 +40,7 @@ function TrackerListView({ onSelectTracker }) {
       const [tr, tp, jb] = await Promise.all([
         trackerAPI.getTrackers(),
         trackerAPI.getTemplates(),
-        jobsAPI.getAll(),
+        jobAPI.getAll(),
       ]);
       setTrackers(tr.data.trackers || []);
       setTemplates(tp.data.templates || []);
