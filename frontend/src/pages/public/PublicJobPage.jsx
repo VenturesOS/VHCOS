@@ -418,18 +418,23 @@ export default function PublicJobPage() {
                   </div>
                 </div>
 
-                {/* Consent Checkbox */}
-                <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
-                  <Checkbox
-                    id="consent"
-                    checked={formData.consent_given}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, consent_given: checked }))}
-                    data-testid="consent-checkbox"
-                  />
-                  <Label htmlFor="consent" className="text-sm text-gray-600 leading-relaxed cursor-pointer">
-                    I consent to Ventures HRD collecting and processing my personal and professional 
-                    data for recruitment purposes. I understand I can withdraw consent at any time.
-                  </Label>
+                {/* DPDP Consent Block */}
+                <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-slate-200" data-testid="consent-block">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="consent"
+                      checked={formData.consent_given}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, consent_given: checked }))}
+                      data-testid="consent-checkbox"
+                    />
+                    <Label htmlFor="consent" className="text-xs text-gray-600 leading-relaxed cursor-pointer">
+                      I consent to Ventures HRD collecting and processing my personal data including resume, contact details, and professional information for recruitment purposes under the Digital Personal Data Protection Act, 2023. I understand I can withdraw consent at any time by contacting <span className="text-emerald-700">privacy@vhc.in</span>.<span className="text-red-500 ml-0.5">*</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                    <a href="/privacy-policy" target="_blank" rel="noopener" className="underline hover:text-slate-600">Privacy Policy</a>
+                    <a href="/terms-of-use" target="_blank" rel="noopener" className="underline hover:text-slate-600">Terms of Use</a>
+                  </div>
                 </div>
 
                 {/* Submit Button */}
