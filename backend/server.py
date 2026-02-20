@@ -195,6 +195,16 @@ async def validate_mongodb_connection():
 
 
 @app.on_event("startup")
+async def init_compliance_indexes():
+    try:
+        from services.compliance_service import ensure_compliance_indexes
+        await ensure_compliance_indexes()
+        logging.info("Compliance DB indexes initialized")
+    except Exception as e:
+        logging.warning(f"Compliance index init failed: {e}")
+
+
+@app.on_event("startup")
 async def start_blog_scheduler():
     """Start the APScheduler background jobs for blog auto-publishing."""
     try:
