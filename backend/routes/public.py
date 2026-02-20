@@ -391,6 +391,7 @@ async def public_apply(
     website: Optional[str] = Form(None),  # Honeypot
     turnstile_token: Optional[str] = Form(None),
     consent_given: Optional[str] = Form(None),  # Must be "true" for consent
+    consent_future_opportunities: Optional[str] = Form(None),
     mandate_token: Optional[str] = Form(None)  # Optional: for mandate shareable links
 ):
     """
