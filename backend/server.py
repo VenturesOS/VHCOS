@@ -98,6 +98,7 @@ from routes.seo import router as seo_router
 from routes.pillar_pages import router as pillar_pages_router
 from routes.blog_digest import router as blog_digest_router
 from routes.seo_dashboard import router as seo_dashboard_router
+from routes.tracker import router as tracker_router
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
