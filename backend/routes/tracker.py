@@ -11,7 +11,8 @@ import io
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from config import db
 from utils import require_role
