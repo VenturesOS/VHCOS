@@ -118,13 +118,21 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
         logger.error(f"LinkedIn API request error: {e}")
         raise HTTPException(status_code=502, detail="Failed to connect to LinkedIn API")
 
+    # /v2/me returns {id, localizedFirstName, localizedLastName}
+    profile_name = ""
+    profile_sub = ""
+    if profile:
+        first = profile.get("localizedFirstName", "")
+        last = profile.get("localizedLastName", "")
+        profile_name = f"{first} {last}".strip() or profile.get("name", "")
+        profile_sub = profile.get("id", profile.get("sub", ""))
+
     token_doc = {
         "platform": "linkedin",
         "access_token": access_token,
         "expires_in": expires_in,
-        "profile_name": profile.get("name", ""),
-        "profile_email": profile.get("email", ""),
-        "profile_sub": profile.get("sub", ""),
+        "profile_name": profile_name,
+        "profile_sub": profile_sub,
         "connected_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
