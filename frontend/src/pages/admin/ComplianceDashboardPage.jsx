@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+function getToken() { return localStorage.getItem('vhc_token'); }
 
 const SEVERITY_CONFIG = {
   CRITICAL: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', badge: 'bg-red-100 text-red-800' },
@@ -28,7 +29,7 @@ export default function ComplianceDashboardPage() {
   const [auditPage, setAuditPage] = useState(1);
   const [auditFilter, setAuditFilter] = useState({ action: '', source: '' });
 
-  const headers = { Authorization: `Bearer ${user?.token || localStorage.getItem('token')}` };
+  const headers = { Authorization: `Bearer ${getToken()}` };
 
   const fetchStats = useCallback(async () => {
     try {
