@@ -9,7 +9,8 @@ import { Label } from '../../components/ui/label';
 import { Switch } from '../../components/ui/switch';
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Eye, Trash2, Globe, GlobeLock, History, AlertTriangle, Link2, Copy, ExternalLink } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Eye, Trash2, Globe, GlobeLock, History, AlertTriangle, Link2, Copy, ExternalLink, Linkedin } from 'lucide-react';
+import { shareJobOnLinkedIn } from '../../lib/linkedin';
 
 const API_URL = '';
 
