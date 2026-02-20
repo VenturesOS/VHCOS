@@ -579,7 +579,10 @@ async def export_tracker_excel(tracker_id: str, user=Depends(require_role(["admi
     # Column widths
     ws.column_dimensions["A"].width = 5
     for ci, col in enumerate(columns, start=2):
-        ws.column_dimensions[ws.cell(row=1, column=ci).column_letter].width = max(15, len(col.get("label", "")) + 4)
+        col_letter = chr(64 + ci) if ci <= 26 else chr(64 + (ci // 26)) + chr(64 + (ci % 26))
+        from openpyxl.utils import get_column_letter
+        col_letter = get_column_letter(ci)
+        ws.column_dimensions[col_letter].width = max(15, len(col.get("label", "")) + 4)
 
     buf = io.BytesIO()
     wb.save(buf)
