@@ -7,6 +7,7 @@ Automatically publishes draft blogs on a configurable schedule.
 import logging
 from datetime import datetime, timezone
 from config import db
+from services.linkedin_service import auto_post_on_publish
 
 logger = logging.getLogger(__name__)
 
