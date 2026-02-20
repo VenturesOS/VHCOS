@@ -29,6 +29,10 @@ class JoinStageInput(BaseModel):
     join_date: str  # ISO date string
 
 
+class HiredStageInput(BaseModel):
+    date_of_joining: str  # Expected DOJ - ISO date string
+
+
 class ForecastRequest(BaseModel):
     application_id: str
     expected_ctc: float
