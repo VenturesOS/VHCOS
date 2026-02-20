@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   Lock
 } from 'lucide-react';
+import TrustBadge from '../../components/compliance/TrustBadge';
 
 const API_URL = '';
 
