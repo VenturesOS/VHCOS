@@ -72,6 +72,11 @@ async def post_blog_to_linkedin(blog: dict, is_test: bool = False):
     if not access_token:
         return {"success": False, "error": "LinkedIn not connected. Please authorize first."}
 
+    # Get the member's profile URN for posting
+    token, profile_sub = await get_linkedin_profile_urn()
+    if not profile_sub:
+        return {"success": False, "error": "LinkedIn profile info missing. Please re-authorize."}
+
     # Build the blog URL
     blog_type = blog.get("blog_type", "employer")
     slug = blog.get("slug", "")
@@ -85,7 +90,8 @@ async def post_blog_to_linkedin(blog: dict, is_test: bool = False):
     if is_test:
         commentary = f"[Test Post] {commentary}"
 
-    author_urn = f"urn:li:organization:{org_id}"
+    # Post as the authenticated member (admin user)
+    author_urn = f"urn:li:person:{profile_sub}"
 
     payload = {
         "author": author_urn,
