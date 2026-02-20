@@ -402,7 +402,7 @@ RESEND_API_KEY=re_placeholder_key
 
 ### Frontend (.env)
 ```env
-REACT_APP_BACKEND_URL=https://hr-platform-staging-1.preview.emergentagent.com
+REACT_APP_BACKEND_URL=https://candidate-flow-8.preview.emergentagent.com
 WDS_SOCKET_PORT=443
 ```
 

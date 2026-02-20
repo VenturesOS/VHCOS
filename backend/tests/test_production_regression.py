@@ -14,7 +14,7 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://hr-platform-staging-1.preview.emergentagent.com"
+    BASE_URL = "https://candidate-flow-8.preview.emergentagent.com"
 
 # Test credentials from environment
 ADMIN_EMAIL = "admin@vhc.in"
@@ -385,7 +385,7 @@ class TestCORSConfiguration:
         # The server might return * or specific origin
         if cors_origin:
             print(f"CORS origin header: {cors_origin}")
-            assert cors_origin in ["*", "https://portal.vhc.in", "https://hr-platform-staging-1.preview.emergentagent.com"], \
+            assert cors_origin in ["*", "https://portal.vhc.in", "https://candidate-flow-8.preview.emergentagent.com"], \
                 f"Unexpected CORS origin: {cors_origin}"
         else:
             print("No CORS origin header returned (may be handled by ingress)")

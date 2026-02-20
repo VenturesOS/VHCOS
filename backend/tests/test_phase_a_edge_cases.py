@@ -16,7 +16,7 @@ import os
 import uuid
 
 # API Configuration
-API_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://hr-platform-staging-1.preview.emergentagent.com")
+API_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://candidate-flow-8.preview.emergentagent.com")
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
