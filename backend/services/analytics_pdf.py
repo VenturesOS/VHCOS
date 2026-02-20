@@ -477,7 +477,7 @@ def build_combined_pdf(overview, pipeline, revenue, performance, date_from=None,
         for m in mandates_data[:20]:
             rows.append([
                 Paragraph(m.get("mandate_name", "—")[:30], styles["Cell"]),
-                Paragraph(m.get("company", "—")[:20], styles["CellGrey"]),
+                Paragraph((m.get("company") or "—")[:20], styles["CellGrey"]),
                 Paragraph(str(m.get("total_candidates", 0)), styles["Cell"]),
                 Paragraph(str(m.get("submitted", 0)), styles["Cell"]),
                 Paragraph(str(m.get("joined", 0)), styles["CellBold"]),
