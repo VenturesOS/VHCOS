@@ -92,6 +92,71 @@ async def get_master_columns(user=Depends(require_role(["admin", "recruiter", "e
     }
 
 
+@router.post("/parse-template-file")
+async def parse_template_file(
+    file: UploadFile = File(...),
+    user=Depends(require_role(["admin", "recruiter"])),
+):
+    """Parse an uploaded Excel/CSV file and return header mapping suggestions for template creation."""
+    filename = file.filename or ""
+    content = await file.read()
+
+    try:
+        if filename.endswith(".csv"):
+            import csv
+            reader = csv.reader(io.StringIO(content.decode("utf-8-sig")))
+            headers = [str(h).strip() for h in next(reader)]
+            sample_rows = []
+            for i, row in enumerate(reader):
+                if i >= 3:
+                    break
+                if any(row):
+                    sample_rows.append(row)
+        elif filename.endswith((".xlsx", ".xls")):
+            from openpyxl import load_workbook
+            wb = load_workbook(io.BytesIO(content), read_only=True)
+            ws = wb.active
+            rows_iter = ws.iter_rows(values_only=True)
+            headers = [str(h or "").strip() for h in next(rows_iter)]
+            sample_rows = []
+            for i, row in enumerate(rows_iter):
+                if i >= 3:
+                    break
+                if any(c for c in row):
+                    sample_rows.append([str(c or "") for c in row])
+        else:
+            raise HTTPException(status_code=400, detail="Only .xlsx and .csv files supported")
+    except StopIteration:
+        raise HTTPException(status_code=400, detail="File is empty")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)[:200]}")
+
+    label_map = {c["label"].strip().lower().replace(" ", "_").replace("/", "_"): c for c in MASTER_COLUMNS}
+    key_map = {c["key"]: c for c in MASTER_COLUMNS}
+
+    mapped = []
+    for idx, header in enumerate(headers):
+        h_clean = header.strip().lower().replace(" ", "_").replace("/", "_")
+        mc = key_map.get(h_clean) or label_map.get(h_clean)
+        mapped.append({
+            "index": idx,
+            "header": header,
+            "master_column": mc if mc else None,
+            "matched": mc is not None,
+        })
+
+    return {
+        "headers": headers,
+        "mapping": mapped,
+        "sample_rows": sample_rows,
+        "total_headers": len(headers),
+        "matched_count": sum(1 for m in mapped if m["matched"]),
+    }
+
+
+
 # ── Template CRUD ──
 
 @router.post("/templates")
