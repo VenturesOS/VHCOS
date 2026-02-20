@@ -1,16 +1,26 @@
 """
-LinkedIn OAuth Routes — Handles OAuth callback for LinkedIn automation
-(blog auto-posting, job posting)
+LinkedIn OAuth & Auto-Posting Routes
+- OAuth flow for connecting LinkedIn
+- Settings for auto-posting configuration
+- Test post and post history
 """
-from fastapi import APIRouter, HTTPException, Request, Depends
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from datetime import datetime, timezone
+from typing import Optional
 import httpx
 import os
 import logging
 
 from config import db
 from utils import require_role
+from services.linkedin_service import (
+    get_linkedin_settings,
+    save_linkedin_settings,
+    post_blog_to_linkedin,
+    get_linkedin_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +34,17 @@ LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/userinfo"
 
-SCOPES = "openid profile email w_member_social"
+SCOPES = "openid profile email w_member_social w_organization_social"
 
+
+# ── Pydantic Models ──
+
+class LinkedInSettingsRequest(BaseModel):
+    auto_post_enabled: Optional[bool] = None
+    organization_id: Optional[str] = None
+
+
+# ── OAuth Endpoints ──
 
 @router.get("/authorize")
 async def linkedin_authorize(user=Depends(require_role("admin"))):
@@ -47,7 +66,6 @@ async def linkedin_authorize(user=Depends(require_role("admin"))):
 @router.get("/callback")
 async def linkedin_callback(code: str = None, state: str = None, error: str = None, error_description: str = None):
     """LinkedIn OAuth callback — exchanges code for access token and stores it."""
-
     if error:
         logger.error(f"LinkedIn OAuth error: {error} — {error_description}")
         return HTMLResponse(content=f"""
@@ -65,7 +83,6 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
     if not LINKEDIN_CLIENT_ID or not LINKEDIN_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="LinkedIn credentials not configured")
 
-    # Exchange authorization code for access token
     try:
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
@@ -91,7 +108,6 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
             if not access_token:
                 raise HTTPException(status_code=502, detail="No access token received")
 
-            # Fetch LinkedIn profile info
             profile_response = await client.get(
                 LINKEDIN_PROFILE_URL,
                 headers={"Authorization": f"Bearer {access_token}"},
@@ -102,7 +118,6 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
         logger.error(f"LinkedIn API request error: {e}")
         raise HTTPException(status_code=502, detail="Failed to connect to LinkedIn API")
 
-    # Store token securely in DB
     token_doc = {
         "platform": "linkedin",
         "access_token": access_token,
@@ -121,7 +136,6 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
 
     logger.info(f"LinkedIn connected successfully for {profile.get('name', 'unknown')}")
 
-    # Return success page that auto-closes
     return HTMLResponse(content="""
         <html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;background:#111827;">
         <div style="text-align:center;color:white;">
@@ -136,10 +150,8 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
 async def linkedin_status(user=Depends(require_role("admin"))):
     """Check if LinkedIn is connected and token is valid."""
     integration = await db.social_integrations.find_one(
-        {"platform": "linkedin"},
-        {"_id": 0}
+        {"platform": "linkedin"}, {"_id": 0}
     )
-
     if not integration or not integration.get("access_token"):
         return {"connected": False}
 
@@ -149,3 +161,72 @@ async def linkedin_status(user=Depends(require_role("admin"))):
         "profile_email": integration.get("profile_email", ""),
         "connected_at": integration.get("connected_at", ""),
     }
+
+
+# ── Settings Endpoints ──
+
+@router.get("/settings")
+async def get_settings(user=Depends(require_role("admin"))):
+    """Get LinkedIn auto-posting settings."""
+    settings = await get_linkedin_settings()
+    status = await linkedin_status(user)
+    return {**settings, "connection": status}
+
+
+@router.put("/settings")
+async def update_settings(req: LinkedInSettingsRequest, user=Depends(require_role("admin"))):
+    """Update LinkedIn auto-posting settings."""
+    current = await get_linkedin_settings()
+    updates = {}
+    if req.auto_post_enabled is not None:
+        updates["auto_post_enabled"] = req.auto_post_enabled
+    if req.organization_id is not None:
+        updates["organization_id"] = req.organization_id.strip()
+    if updates:
+        current.update(updates)
+        await save_linkedin_settings(current)
+    return {"message": "Settings updated", **current}
+
+
+# ── Test Post & History ──
+
+@router.post("/test-post")
+async def test_post(user=Depends(require_role("admin"))):
+    """Send a test post to LinkedIn to verify the connection works."""
+    token = await get_linkedin_token()
+    if not token:
+        raise HTTPException(status_code=400, detail="LinkedIn not connected. Please authorize first.")
+
+    settings = await get_linkedin_settings()
+    if not settings.get("organization_id"):
+        raise HTTPException(status_code=400, detail="Organization ID not configured")
+
+    test_blog = {
+        "id": "test-post",
+        "title": "VHC Talent Advisory Blog - Connection Test",
+        "slug": "",
+        "blog_type": "employer",
+        "meta_description": "This is a test post to verify LinkedIn auto-posting is working correctly.",
+    }
+
+    result = await post_blog_to_linkedin(test_blog, is_test=True)
+    if not result["success"]:
+        raise HTTPException(status_code=502, detail=result["error"])
+
+    return {"message": "Test post sent successfully", **result}
+
+
+@router.get("/post-history")
+async def get_post_history(limit: int = 20, user=Depends(require_role("admin"))):
+    """Get LinkedIn auto-posting history."""
+    posts = await db.linkedin_post_history.find(
+        {}, {"_id": 0}
+    ).sort("posted_at", -1).limit(limit).to_list(limit)
+    return {"posts": posts, "total": len(posts)}
+
+
+@router.delete("/disconnect")
+async def disconnect_linkedin(user=Depends(require_role("admin"))):
+    """Disconnect LinkedIn integration."""
+    await db.social_integrations.delete_one({"platform": "linkedin"})
+    return {"message": "LinkedIn disconnected"}
