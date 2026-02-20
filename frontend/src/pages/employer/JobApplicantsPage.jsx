@@ -19,13 +19,13 @@ import {
 const STAGES = {
   applied: { label: 'Applied', color: 'bg-blue-100 text-blue-700', icon: Users },
   shortlisted: { label: 'Shortlisted', color: 'bg-green-100 text-green-700', icon: CheckCircle },
+  submitted_to_client: { label: 'Submitted', color: 'bg-cyan-100 text-cyan-700', icon: Users },
   interview: { label: 'Interview', color: 'bg-purple-100 text-purple-700', icon: Users },
   offered: { label: 'Offered', color: 'bg-amber-100 text-amber-700', icon: Star },
   hired: { label: 'Hired', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle },
+  joined: { label: 'Joined', color: 'bg-teal-100 text-teal-700', icon: CheckCircle },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700', icon: XCircle },
   on_hold: { label: 'On Hold', color: 'bg-gray-100 text-gray-700', icon: Pause },
-  over_budget: { label: 'Over Budget', color: 'bg-orange-100 text-orange-700', icon: TrendingDown },
-  not_qualified: { label: 'Not Qualified', color: 'bg-rose-100 text-rose-700', icon: UserX }
 };
 
 // Career stability indicator colors
