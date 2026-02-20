@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="13" skipped="6" tests="21" time="5.213" timestamp="2026-02-20T10:34:53.626233+00:00" hostname="agent-env-66c7030e-3da9-4578-8eb9-c09f540a389e"><testcase classname="backend.tests.test_tracker_system.TestMasterColumns" name="test_get_master_columns_returns_columns" time="4.282"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:56: in test_get_master_columns_returns_columns
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestMasterColumns" name="test_master_columns_count_58" time="0.048"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:66: in test_master_columns_count_58
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestMasterColumns" name="test_master_columns_has_11_categories" time="0.049"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:75: in test_master_columns_has_11_categories
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestMasterColumns" name="test_master_columns_has_field_types" time="0.052"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:85: in test_master_columns_has_field_types
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestTemplates" name="test_list_templates" time="0.052"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:99: in test_list_templates
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestTemplates" name="test_create_template" time="0.052"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:120: in test_create_template
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestTemplates" name="test_get_existing_template" time="0.049"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:138: in test_get_existing_template
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestTemplates" name="test_clone_template" time="0.000"><skipped type="pytest.skip" message="No template to clone">/app/backend/tests/test_tracker_system.py:147: No template to clone</skipped></testcase><testcase classname="backend.tests.test_tracker_system.TestTemplates" name="test_delete_test_templates" time="0.000" /><testcase classname="backend.tests.test_tracker_system.TestTrackers" name="test_list_trackers_with_row_count" time="0.045"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:181: in test_list_trackers_with_row_count
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestTrackers" name="test_create_tracker_linked_to_mandate" time="0.051"><skipped type="pytest.skip" message="No templates available">/app/backend/tests/test_tracker_system.py:198: No templates available</skipped></testcase><testcase classname="backend.tests.test_tracker_system.TestTrackers" name="test_get_tracker_with_rows" time="0.052"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:232: in test_get_tracker_with_rows
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestTrackers" name="test_delete_test_tracker" time="0.000" /><testcase classname="backend.tests.test_tracker_system.TestRowOperations" name="test_add_row_duplicate_returns_409" time="0.049"><skipped type="pytest.skip" message="No applications found for job">/app/backend/tests/test_tracker_system.py:271: No applications found for job</skipped></testcase><testcase classname="backend.tests.test_tracker_system.TestRowOperations" name="test_update_row_inline_edit" time="0.000"><skipped type="pytest.skip" message="No applications found for job">/app/backend/tests/test_tracker_system.py:292: No applications found for job</skipped></testcase><testcase classname="backend.tests.test_tracker_system.TestRowOperations" name="test_update_row_status_syncs_pipeline" time="0.000"><skipped type="pytest.skip" message="No applications found for job">/app/backend/tests/test_tracker_system.py:321: No applications found for job</skipped></testcase><testcase classname="backend.tests.test_tracker_system.TestValidation" name="test_validation_returns_status" time="0.049"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:378: in test_validation_returns_status
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestValidation" name="test_validation_returns_missing_field_details" time="0.058"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:396: in test_validation_returns_missing_field_details
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestSyncBehavior" name="test_add_candidate_to_tracker_moves_pipeline_to_submitted" time="0.050"><skipped type="pytest.skip" message="Could not get applications">/app/backend/tests/test_tracker_system.py:416: Could not get applications</skipped></testcase><testcase classname="backend.tests.test_tracker_system.TestTrackerEvents" name="test_get_tracker_events" time="0.055"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:486: in test_get_tracker_events
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_tracker_system.TestTrackerEvents" name="test_get_events_filtered_by_tracker" time="0.048"><failure message="assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_tracker_system.py:502: in test_get_events_filtered_by_tracker
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase></testsuite></testsuites>
