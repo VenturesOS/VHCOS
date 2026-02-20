@@ -496,18 +496,14 @@ function RevenueTab() {
   }, [dr.fromDate, dr.toDate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-      .catch(() => toast.error('Failed to load revenue data'))
-      .finally(() => setLoading(false));
-  }, []);
 
-  if (loading) return <LoadingSpinner />;
-  if (!data) return <EmptyState msg="No revenue data available" />;
+  if (loading && !data) return <><DateRangeFilter fromDate={dr.fromDate} toDate={dr.toDate} onFromChange={dr.setFromDate} onToChange={dr.setToDate} onPreset={dr.handlePreset} /><LoadingSpinner /></>;
 
-  const byStage = data.by_stage || {};
-  const probMap = data.probability_map || {};
-  const forecast = data.total_forecast_pipeline || 0;
-  const realized = data.total_realized_revenue || 0;
-  const totalCandidates = data.total_candidates_with_offer || 0;
+  const byStage = data?.by_stage || {};
+  const probMap = data?.probability_map || {};
+  const forecast = data?.total_forecast_pipeline || 0;
+  const realized = data?.total_realized_revenue || 0;
+  const totalCandidates = data?.total_candidates_with_offer || 0;
 
   const stageOrder = ['applied', 'shortlisted', 'submitted_to_client', 'interview', 'offered', 'hired', 'joined'];
   const stageRevData = stageOrder
