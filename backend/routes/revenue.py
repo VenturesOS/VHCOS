@@ -237,6 +237,79 @@ async def process_offered_stage(
     return response
 
 
+# ── PART 3b: Hired Stage (Offer Accepted) ──
+
+@revenue_router.post("/revenue/hired/{app_id}")
+async def process_hired_stage(
+    app_id: str,
+    req: HiredStageInput,
+    current_user: dict = Depends(require_role(["admin", "employer"]))
+):
+    """
+    Process candidate moving to 'hired' stage (offer accepted).
+    Requires Date of Joining (DOJ). Updates revenue record with forecast date.
+    """
+    if not req.date_of_joining:
+        raise HTTPException(status_code=400, detail="Date of Joining (DOJ) is required")
+
+    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if not application.get("offered_ctc"):
+        raise HTTPException(status_code=400, detail="Cannot move to hired: offered_ctc must be set via offered stage first")
+
+    existing_rev = await db.revenue.find_one({"application_id": app_id}, {"_id": 0})
+    if existing_rev and existing_rev.get("revenue_status") == "joined":
+        raise HTTPException(status_code=400, detail="Revenue record is locked after joined stage")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Update revenue record with hired status and forecast date
+    if existing_rev:
+        await db.revenue.update_one(
+            {"application_id": app_id},
+            {"$set": {
+                "revenue_status": "hired",
+                "date_of_joining": req.date_of_joining,
+                "revenue_probability": 85,
+                "updated_at": now,
+            }}
+        )
+
+    # Update application
+    await db.applications.update_one(
+        {"id": app_id},
+        {"$set": {
+            "stage": "hired",
+            "join_date": req.date_of_joining,
+            "updated_at": now,
+        }}
+    )
+
+    # Log event
+    from services.pipeline_events import log_pipeline_event
+    await log_pipeline_event(
+        candidate_id=application.get("candidate_id", ""),
+        mandate_id=application.get("job_id", ""),
+        application_id=app_id,
+        previous_stage=application.get("stage", "offered"),
+        new_stage="hired",
+        source="revenue",
+        user_id=current_user.get("id", ""),
+        user_name=current_user.get("name", current_user.get("email", "")),
+        metadata={"date_of_joining": req.date_of_joining},
+    )
+
+    return {
+        "application_id": app_id,
+        "stage": "hired",
+        "date_of_joining": req.date_of_joining,
+        "revenue_probability": 85,
+        "final_revenue": existing_rev.get("final_revenue") if existing_rev else None,
+    }
+
+
 # ── PART 4: Joined Stage ──
 
 @revenue_router.post("/revenue/joined/{app_id}")
