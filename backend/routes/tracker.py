@@ -502,3 +502,194 @@ async def _auto_fill_row(row_data: dict, candidate_id: str, application_id: str,
         if key not in row_data or not row_data[key]:
             if value:
                 row_data[key] = str(value) if not isinstance(value, str) else value
+
+
+
+# ── Excel Export ──
+
+@router.get("/trackers/{tracker_id}/export")
+async def export_tracker_excel(tracker_id: str, user=Depends(require_role(["admin", "recruiter", "employer"]))):
+    """Export tracker as formatted Excel file, client-ready."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    tracker = await db.submission_trackers.find_one({"id": tracker_id}, {"_id": 0})
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    rows = await db.tracker_rows.find({"tracker_id": tracker_id}, {"_id": 0}).sort("created_at", 1).to_list(10000)
+    columns = tracker.get("columns", [])
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Submission Tracker"
+
+    # Styles
+    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    required_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    missing_fill = PatternFill(start_color="FFE0E0", end_color="FFE0E0", fill_type="solid")
+    cell_border = Border(
+        left=Side(style="thin", color="D9D9D9"),
+        right=Side(style="thin", color="D9D9D9"),
+        top=Side(style="thin", color="D9D9D9"),
+        bottom=Side(style="thin", color="D9D9D9"),
+    )
+
+    # Title row
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(columns) + 2)
+    title_cell = ws.cell(row=1, column=1, value=tracker.get("name", "Submission Tracker"))
+    title_cell.font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+    ws.cell(row=2, column=1, value=f"Mandate: {tracker.get('mandate_name', '')} | Exported: {datetime.now(timezone.utc).strftime('%d %b %Y')}")
+    ws.cell(row=2, column=1).font = Font(name="Calibri", size=10, color="666666")
+
+    # Headers (row 4)
+    header_row = 4
+    ws.cell(row=header_row, column=1, value="#").font = header_font
+    ws.cell(row=header_row, column=1).fill = header_fill
+    ws.cell(row=header_row, column=1).alignment = Alignment(horizontal="center")
+
+    for ci, col in enumerate(columns, start=2):
+        cell = ws.cell(row=header_row, column=ci, value=col.get("label", col.get("key", "")))
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="left", wrap_text=True)
+
+    status_col = len(columns) + 2
+    cell = ws.cell(row=header_row, column=status_col, value="Status")
+    cell.font = header_font
+    cell.fill = header_fill
+
+    # Data rows
+    required_keys = {c["key"] for c in columns if c.get("required")}
+    for ri, row in enumerate(rows, start=header_row + 1):
+        ws.cell(row=ri, column=1, value=ri - header_row).border = cell_border
+        data = row.get("data", {})
+        for ci, col in enumerate(columns, start=2):
+            val = data.get(col["key"], "")
+            cell = ws.cell(row=ri, column=ci, value=val)
+            cell.border = cell_border
+            cell.font = Font(name="Calibri", size=10)
+            if col["key"] in required_keys and not val:
+                cell.fill = missing_fill
+
+        status = STATUS_MAP_LABEL.get(row.get("submission_status", ""), row.get("submission_status", ""))
+        ws.cell(row=ri, column=status_col, value=status).border = cell_border
+
+    # Column widths
+    ws.column_dimensions["A"].width = 5
+    for ci, col in enumerate(columns, start=2):
+        ws.column_dimensions[ws.cell(row=1, column=ci).column_letter].width = max(15, len(col.get("label", "")) + 4)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    safe_name = (tracker.get("name", "tracker")).replace(" ", "_")[:50]
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.xlsx"'},
+    )
+
+
+# Status label map for export
+STATUS_MAP_LABEL = {
+    "submitted": "Submitted",
+    "interview_scheduled": "Interview Scheduled",
+    "interviewed": "Interviewed",
+    "offer_issued": "Offer Issued",
+    "offer_accepted": "Offer Accepted",
+    "joining_confirmed": "Joining Confirmed",
+    "rejected": "Rejected",
+    "on_hold": "On Hold",
+}
+
+
+# ── Excel/CSV Upload ──
+
+@router.post("/trackers/{tracker_id}/upload")
+async def upload_tracker_data(
+    tracker_id: str,
+    file: UploadFile = File(...),
+    user=Depends(require_role(["admin", "recruiter"])),
+):
+    """
+    Upload Excel/CSV to a tracker. Auto-detects headers and maps to master columns.
+    Returns mapping suggestions for confirmation.
+    """
+    tracker = await db.submission_trackers.find_one({"id": tracker_id}, {"_id": 0})
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    filename = file.filename or ""
+    content = await file.read()
+
+    try:
+        if filename.endswith(".csv"):
+            import csv
+            reader = csv.reader(io.StringIO(content.decode("utf-8-sig")))
+            headers = next(reader)
+            data_rows = [row for row in reader if any(row)]
+        elif filename.endswith((".xlsx", ".xls")):
+            from openpyxl import load_workbook
+            wb = load_workbook(io.BytesIO(content), read_only=True)
+            ws = wb.active
+            rows_iter = ws.iter_rows(values_only=True)
+            headers = [str(h or "").strip() for h in next(rows_iter)]
+            data_rows = [[str(c or "") for c in row] for row in rows_iter if any(c for c in row)]
+        else:
+            raise HTTPException(status_code=400, detail="Only .xlsx and .csv files are supported")
+    except StopIteration:
+        raise HTTPException(status_code=400, detail="File is empty")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)[:200]}")
+
+    # Auto-map headers to master columns
+    header_lower = {h.strip().lower().replace(" ", "_").replace("/", "_"): i for i, h in enumerate(headers)}
+    all_columns_lower = {c["key"]: c for c in MASTER_COLUMNS}
+    label_map = {c["label"].strip().lower().replace(" ", "_").replace("/", "_"): c["key"] for c in MASTER_COLUMNS}
+
+    mapping = {}
+    unmapped = []
+    for idx, header in enumerate(headers):
+        h_clean = header.strip().lower().replace(" ", "_").replace("/", "_")
+        if h_clean in all_columns_lower:
+            mapping[idx] = h_clean
+        elif h_clean in label_map:
+            mapping[idx] = label_map[h_clean]
+        else:
+            unmapped.append({"index": idx, "header": header})
+
+    # Import rows
+    now = datetime.now(timezone.utc).isoformat()
+    imported = 0
+    for data_row in data_rows:
+        row_data = {}
+        for col_idx, master_key in mapping.items():
+            if col_idx < len(data_row):
+                row_data[master_key] = data_row[col_idx]
+
+        row = {
+            "id": str(uuid.uuid4()),
+            "tracker_id": tracker_id,
+            "candidate_id": row_data.get("candidate_id", ""),
+            "application_id": "",
+            "mandate_id": tracker.get("mandate_id", ""),
+            "pipeline_stage": "submitted_to_client",
+            "submission_status": "submitted",
+            "data": row_data,
+            "created_by": user.get("id", ""),
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.tracker_rows.insert_one(row)
+        imported += 1
+
+    return {
+        "message": f"Imported {imported} rows",
+        "imported": imported,
+        "total_headers": len(headers),
+        "mapped_columns": len(mapping),
+        "unmapped_headers": unmapped,
+    }
