@@ -77,6 +77,9 @@ import EmployerMyTeamPage from "./pages/employer/EmployerMyTeamPage";
 import EmployerCompaniesPage from "./pages/employer/EmployerCompaniesPage";
 import EmployerPipelinePage from "./pages/employer/EmployerPipelinePage";
 import EmployerTrackerPage from "./pages/employer/EmployerTrackerPage";
+import ComplianceDashboardPage from "./pages/admin/ComplianceDashboardPage";
+import { PrivacyPolicyPage, TermsOfUsePage, CookiePolicyPage } from "./pages/policy/PolicyPages";
+import CookieConsentBanner from "./components/compliance/CookieConsentBanner";
 
 // Candidate Pages
 import CandidateDashboard from "./pages/candidate/CandidateDashboard";
@@ -143,6 +146,7 @@ function App() {
             <Route path="digest-email" element={<DigestEmailPage />} />
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
             <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
+            <Route path="compliance-dashboard" element={<ComplianceDashboardPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
@@ -191,6 +195,11 @@ function App() {
             <Route path="settings/notifications" element={<NotificationSettingsPage />} />
           </Route>
 
+          {/* Policy Pages */}
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms-of-use" element={<TermsOfUsePage />} />
+          <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+
           {/* Static Website Pages */}
           <Route path="/recruitment-expertise" element={<StaticPageRedirect page="recruitment-expertise.html" />} />
           <Route path="/about" element={<StaticPageRedirect page="about.html" />} />
@@ -205,6 +214,7 @@ function App() {
           <Route path="*" element={<PublicWebsiteRedirect />} />
         </Routes>
       </BrowserRouter>
+      <CookieConsentBanner />
       <Toaster position="top-right" richColors />
     </AuthProvider>
     </HelmetProvider>
