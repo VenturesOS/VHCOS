@@ -465,8 +465,12 @@ export default function PublicJobPage() {
 
       {/* Footer */}
       <footer className="bg-white border-t mt-12 py-6">
-        <div className="max-w-4xl mx-auto px-4 text-center text-gray-500 text-sm">
+        <div className="max-w-4xl mx-auto px-4 text-center text-gray-500 text-sm space-y-2">
           <p>© {new Date().getFullYear()} Ventures HRD. All rights reserved.</p>
+          <div className="flex items-center justify-center gap-4 text-xs">
+            <a href="/privacy-policy" className="hover:text-slate-700 underline underline-offset-2">Privacy Policy</a>
+            <a href="/terms-of-use" className="hover:text-slate-700 underline underline-offset-2">Terms of Use</a>
+          </div>
         </div>
       </footer>
     </div>
