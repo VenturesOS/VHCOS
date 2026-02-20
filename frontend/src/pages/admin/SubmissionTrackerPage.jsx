@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import {
   Table, Plus, FileSpreadsheet, Download, AlertTriangle, CheckCircle2,
-  Trash2, Search, Settings2, Loader2, ChevronDown, X, ClipboardList, Eye, Upload
+  Trash2, Search, Settings2, Loader2, ChevronDown, X, ClipboardList, Eye, Upload, Copy
 } from 'lucide-react';
 import CreateTrackerWizard from '../../components/admin/CreateTrackerWizard';
 
