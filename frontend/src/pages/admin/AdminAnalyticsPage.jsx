@@ -370,7 +370,10 @@ function PipelineFunnelTab() {
 
   return (
     <div className="space-y-6" data-testid="pipeline-funnel-tab">
-      <p className="text-sm text-slate-500">Stage-by-stage conversion rates across your recruitment pipeline</p>
+      <DateRangeFilter fromDate={dr.fromDate} toDate={dr.toDate} onFromChange={dr.setFromDate} onToChange={dr.setToDate} onPreset={dr.handlePreset} />
+      {loading && <LoadingSpinner />}
+      {!loading && !data && <EmptyState msg="No pipeline data available" />}
+      {!loading && data && <><p className="text-sm text-slate-500">Stage-by-stage conversion rates across your recruitment pipeline</p>
 
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
