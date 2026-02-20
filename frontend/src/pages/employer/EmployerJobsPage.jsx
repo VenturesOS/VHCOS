@@ -10,7 +10,8 @@ import { Label } from '../../components/ui/label';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Switch } from '../../components/ui/switch';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeLock, AlertTriangle, History, UserPlus, UserCheck, Link2, Copy, ExternalLink } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Plus, Edit2, Trash2, Eye, Globe, GlobeLock, AlertTriangle, History, UserPlus, UserCheck, Link2, Copy, ExternalLink, Linkedin } from 'lucide-react';
+import { shareJobOnLinkedIn } from '../../lib/linkedin';
 
 const API_URL = '';
 
