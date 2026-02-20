@@ -366,6 +366,25 @@ export default function AdminPipelinePage() {
                             )}
                             <Button
                               size="sm" variant="outline"
+                              className="w-full h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                              onClick={() => openHiredDialog(app)}
+                              data-testid={`hired-btn-${app.id}`}
+                            >
+                              <UserCheck className="w-3 h-3 mr-1" /> Move to Hired
+                            </Button>
+                          </div>
+                        )}
+                        {stage.id === 'hired' && (
+                          <div className="mt-2 space-y-1">
+                            {app.offered_ctc && (
+                              <div className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1">
+                                <IndianRupee className="w-3 h-3" />
+                                <span>CTC: {(app.offered_ctc / 100000).toFixed(1)}L</span>
+                                {app.join_date && <span className="ml-auto">DOJ: {new Date(app.join_date).toLocaleDateString('en-IN')}</span>}
+                              </div>
+                            )}
+                            <Button
+                              size="sm" variant="outline"
                               className="w-full h-7 text-xs text-teal-700 border-teal-200 hover:bg-teal-50"
                               onClick={() => openJoinDialog(app)}
                               data-testid={`join-btn-${app.id}`}
