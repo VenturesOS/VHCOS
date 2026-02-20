@@ -139,6 +139,7 @@ function App() {
             <Route path="blog-analytics" element={<BlogAnalyticsPage />} />
             <Route path="seo-monitoring" element={<SEOMonitoringPage />} />
             <Route path="digest-email" element={<DigestEmailPage />} />
+            <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
