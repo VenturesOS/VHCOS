@@ -289,6 +289,43 @@ async def create_tracker(req: TrackerCreate, user=Depends(require_role(["admin",
     return tracker
 
 
+class DuplicateTrackerRequest(BaseModel):
+    name: str
+    mandate_id: Optional[str] = None
+
+
+@router.post("/trackers/{tracker_id}/duplicate")
+async def duplicate_tracker(tracker_id: str, req: DuplicateTrackerRequest, user=Depends(require_role(["admin", "recruiter"]))):
+    """Duplicate a tracker's structure (columns, template) for a new mandate. No rows are copied."""
+    source = await db.submission_trackers.find_one({"id": tracker_id}, {"_id": 0})
+    if not source:
+        raise HTTPException(status_code=404, detail="Source tracker not found")
+
+    mandate_id = req.mandate_id or source.get("mandate_id")
+    job = await db.jobs.find_one({"id": mandate_id}, {"_id": 0, "id": 1, "title": 1, "company_name": 1, "company_id": 1})
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_tracker = {
+        "id": str(uuid.uuid4()),
+        "name": req.name,
+        "mandate_id": mandate_id,
+        "mandate_name": job.get("title", "") if job else source.get("mandate_name", ""),
+        "client_id": job.get("company_id") if job else source.get("client_id"),
+        "employer_id": job.get("posted_by") if job else source.get("employer_id"),
+        "team_id": source.get("team_id"),
+        "template_id": source.get("template_id"),
+        "columns": source.get("columns", []),
+        "created_by": user.get("id", ""),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.submission_trackers.insert_one(new_tracker)
+    new_tracker.pop("_id", None)
+    return new_tracker
+
+
+
+
 @router.get("/trackers")
 async def list_trackers(
     mandate_id: Optional[str] = None,
