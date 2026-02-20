@@ -127,6 +127,21 @@ export default function AdminPipelinePage() {
     }
   };
 
+  const handleProcessHired = async () => {
+    if (!hiredForm.date_of_joining) return toast.error('Date of Joining (DOJ) is required');
+    setStageLoading(true);
+    try {
+      await revenueAPI.hired(selectedApp.id, { date_of_joining: hiredForm.date_of_joining });
+      toast.success('Hired: Offer accepted, DOJ set');
+      setShowHiredDialog(false);
+      loadPipeline();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to process hired stage');
+    } finally {
+      setStageLoading(false);
+    }
+  };
+
   const handleProcessJoin = async () => {
     if (!joinForm.join_date) return toast.error('Join date is required');
     setStageLoading(true);
