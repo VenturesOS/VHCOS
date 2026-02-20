@@ -19,9 +19,11 @@ import {
 const STAGES = [
   { id: 'applied', label: 'Applied', color: 'border-blue-400 bg-blue-50', textColor: 'text-blue-700', icon: Users, desc: 'New applications' },
   { id: 'shortlisted', label: 'Shortlisted', color: 'border-amber-400 bg-amber-50', textColor: 'text-amber-700', icon: CheckCircle, desc: 'Ready for review' },
+  { id: 'submitted_to_client', label: 'Submitted', color: 'border-cyan-400 bg-cyan-50', textColor: 'text-cyan-700', icon: Send, desc: 'Sent to client' },
   { id: 'interview', label: 'Interview', color: 'border-purple-400 bg-purple-50', textColor: 'text-purple-700', icon: Clock, desc: 'In process' },
   { id: 'offered', label: 'Offered', color: 'border-green-400 bg-green-50', textColor: 'text-green-700', icon: Award, desc: 'Offer extended' },
-  { id: 'hired', label: 'Hired', color: 'border-emerald-400 bg-emerald-50', textColor: 'text-emerald-700', icon: UserCheck, desc: 'Joined' },
+  { id: 'hired', label: 'Hired', color: 'border-emerald-400 bg-emerald-50', textColor: 'text-emerald-700', icon: UserCheck, desc: 'Offer accepted' },
+  { id: 'joined', label: 'Joined', color: 'border-teal-400 bg-teal-50', textColor: 'text-teal-700', icon: Lock, desc: 'Revenue confirmed' },
   { id: 'rejected', label: 'Rejected', color: 'border-red-400 bg-red-50', textColor: 'text-red-700', icon: XCircle, desc: 'Not selected' },
   { id: 'on_hold', label: 'On Hold', color: 'border-gray-400 bg-gray-50', textColor: 'text-gray-700', icon: Pause, desc: 'Paused' },
 ];

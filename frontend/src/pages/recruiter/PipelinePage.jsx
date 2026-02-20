@@ -11,10 +11,12 @@ import { ClipboardList, User, Mail, FileText, Plus, MessageSquare } from 'lucide
 
 const STAGES = [
   { id: 'applied', label: 'New CVs', color: 'border-blue-400 bg-blue-50', desc: 'Awaiting screening' },
-  { id: 'shortlisted', label: 'Shortlisted', color: 'border-amber-400 bg-amber-50', desc: 'Ready for interview' },
+  { id: 'shortlisted', label: 'Shortlisted', color: 'border-amber-400 bg-amber-50', desc: 'Ready for submission' },
+  { id: 'submitted_to_client', label: 'Submitted', color: 'border-cyan-400 bg-cyan-50', desc: 'Sent to client' },
   { id: 'interview', label: 'Interview', color: 'border-purple-400 bg-purple-50', desc: 'In process' },
   { id: 'offered', label: 'Offered', color: 'border-green-400 bg-green-50', desc: 'Offer extended' },
-  { id: 'hired', label: 'Hired', color: 'border-emerald-400 bg-emerald-50', desc: 'Joined' },
+  { id: 'hired', label: 'Hired', color: 'border-emerald-400 bg-emerald-50', desc: 'Offer accepted' },
+  { id: 'joined', label: 'Joined', color: 'border-teal-400 bg-teal-50', desc: 'Revenue confirmed' },
 ];
 
 export default function PipelinePage() {
