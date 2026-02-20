@@ -79,9 +79,11 @@ export default function AdminPipelinePage() {
 
   // Revenue stage dialogs
   const [showOfferDialog, setShowOfferDialog] = useState(false);
+  const [showHiredDialog, setShowHiredDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   const [offerForm, setOfferForm] = useState({ offered_ctc: '', offer_date: '' });
+  const [hiredForm, setHiredForm] = useState({ date_of_joining: '' });
   const [joinForm, setJoinForm] = useState({ join_date: '' });
   const [stageLoading, setStageLoading] = useState(false);
 
@@ -91,9 +93,15 @@ export default function AdminPipelinePage() {
     setShowOfferDialog(true);
   };
 
+  const openHiredDialog = (app) => {
+    setSelectedApp(app);
+    setHiredForm({ date_of_joining: app.join_date || '' });
+    setShowHiredDialog(true);
+  };
+
   const openJoinDialog = (app) => {
     setSelectedApp(app);
-    setJoinForm({ join_date: new Date().toISOString().split('T')[0] });
+    setJoinForm({ join_date: app.join_date || new Date().toISOString().split('T')[0] });
     setShowJoinDialog(true);
   };
 
