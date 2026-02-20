@@ -24,6 +24,7 @@ from services.blog_analytics import (
     track_event, get_blog_stats, get_views_over_time,
     get_top_blogs, get_clicks_by_blog,
 )
+from services.linkedin_service import auto_post_on_publish
 
 router = APIRouter(tags=["blog"])
 logger = logging.getLogger(__name__)
