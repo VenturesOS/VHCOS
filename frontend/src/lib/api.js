@@ -265,6 +265,7 @@ export const trackerAPI = {
   getTracker: (id) => api.get(`/tracker/trackers/${id}`),
   createTracker: (data) => api.post('/tracker/trackers', data),
   deleteTracker: (id) => api.delete(`/tracker/trackers/${id}`),
+  duplicateTracker: (id, data) => api.post(`/tracker/trackers/${id}/duplicate`, data),
   // Rows
   addRow: (trackerId, data) => api.post(`/tracker/trackers/${trackerId}/rows`, data),
   updateRow: (trackerId, rowId, data) => api.put(`/tracker/trackers/${trackerId}/rows/${rowId}`, data),
