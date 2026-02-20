@@ -84,6 +84,12 @@ async def auto_publish_blog(blog_type: str):
     })
 
     logger.info(f"[BlogScheduler] Auto-published {blog_type} blog: {draft.get('title')}")
+
+    # Trigger LinkedIn auto-post
+    published_blog = await db.blog_posts.find_one({"id": blog_id}, {"_id": 0})
+    if published_blog:
+        await auto_post_on_publish(published_blog)
+
     return blog_id
 
 
