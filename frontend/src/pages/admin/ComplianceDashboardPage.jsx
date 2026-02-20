@@ -20,7 +20,6 @@ const SEVERITY_CONFIG = {
 };
 
 export default function ComplianceDashboardPage() {
-  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditTotal, setAuditTotal] = useState(0);
