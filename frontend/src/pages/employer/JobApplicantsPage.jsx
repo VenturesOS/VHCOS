@@ -788,22 +788,6 @@ function ApplicantDetailDialog({ applicant, jobData, onClose, onUpdateStage, onR
                 >
                   <Pause className="h-4 w-4 mr-1" /> Hold
                 </Button>
-                <Button
-                  variant="outline"
-                  className="text-orange-600 border-orange-200 hover:bg-orange-50"
-                  onClick={() => onUpdateStage(applicant.id, 'over_budget')}
-                  data-testid="action-over-budget"
-                >
-                  <TrendingDown className="h-4 w-4 mr-1" /> Over Budget
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-rose-600 border-rose-200 hover:bg-rose-50"
-                  onClick={() => onUpdateStage(applicant.id, 'not_qualified')}
-                  data-testid="action-not-qualified"
-                >
-                  <UserX className="h-4 w-4 mr-1" /> Not Qualified
-                </Button>
               </div>
             </div>
           )}
