@@ -673,6 +673,20 @@ async def public_apply(
     }
     await db.applications.insert_one(application_doc)
     
+    # Log consent to audit trail
+    try:
+        from services.compliance_service import log_consent_audit
+        await log_consent_audit(
+            candidate_id=candidate_id,
+            action="consent_given",
+            source=application_source,
+            ip_address=client_ip,
+            user_agent=request.headers.get("User-Agent", ""),
+            metadata={"application_id": application_id, "future_opportunities": consent_future_opportunities == "true"},
+        )
+    except Exception:
+        pass
+
     # Update job applicant count
     await db.jobs.update_one({"id": internal_job_id}, {"$inc": {"applicant_count": 1}})
     
