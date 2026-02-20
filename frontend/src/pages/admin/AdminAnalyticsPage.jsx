@@ -475,6 +475,7 @@ function PipelineFunnelTab() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+      </>}
     </div>
   );
 }
@@ -484,10 +485,17 @@ function PipelineFunnelTab() {
 function RevenueTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const dr = useDateRange();
 
-  useEffect(() => {
-    fetchJSON('/analytics/revenue-forecast')
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    fetchJSON(`/analytics/revenue-forecast${dr.queryStr()}`)
       .then(setData)
+      .catch(() => toast.error('Failed to load revenue data'))
+      .finally(() => setLoading(false));
+  }, [dr.fromDate, dr.toDate]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
       .catch(() => toast.error('Failed to load revenue data'))
       .finally(() => setLoading(false));
   }, []);
