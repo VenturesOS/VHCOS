@@ -31,37 +31,17 @@ const STATUS_MAP = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s]));
 function TrackerListView({ onSelectTracker }) {
   const [trackers, setTrackers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [jobs, setJobs] = useState([]);
-  const [templates, setTemplates] = useState([]);
-  const [form, setForm] = useState({ name: '', mandate_id: '', template_id: '' });
+  const [showWizard, setShowWizard] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const [tr, tp, jb] = await Promise.all([
-        trackerAPI.getTrackers(),
-        trackerAPI.getTemplates(),
-        jobAPI.getAll(),
-      ]);
+      const tr = await trackerAPI.getTrackers();
       setTrackers(tr.data.trackers || []);
-      setTemplates(tp.data.templates || []);
-      setJobs(Array.isArray(jb.data) ? jb.data : jb.data.jobs || []);
     } catch { toast.error('Failed to load trackers'); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  const handleCreate = async () => {
-    if (!form.name || !form.mandate_id || !form.template_id) return toast.error('All fields required');
-    try {
-      const res = await trackerAPI.createTracker(form);
-      toast.success('Tracker created');
-      setShowCreate(false);
-      setForm({ name: '', mandate_id: '', template_id: '' });
-      onSelectTracker(res.data.id);
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
-  };
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
 
@@ -75,7 +55,7 @@ function TrackerListView({ onSelectTracker }) {
             <p className="text-sm text-muted-foreground">Manage candidate submissions per mandate</p>
           </div>
         </div>
-        <Button onClick={() => setShowCreate(true)} data-testid="create-tracker-btn"><Plus className="h-4 w-4 mr-1" /> New Tracker</Button>
+        <Button onClick={() => setShowWizard(true)} data-testid="create-tracker-btn"><Plus className="h-4 w-4 mr-1" /> New Tracker</Button>
       </div>
 
       {trackers.length === 0 ? (
@@ -102,26 +82,11 @@ function TrackerListView({ onSelectTracker }) {
         </div>
       )}
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent><DialogHeader><DialogTitle>Create New Tracker</DialogTitle><DialogDescription>Link a tracker to a mandate and template</DialogDescription></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><Label>Tracker Name *</Label><Input value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))} placeholder="e.g. Senior Dev - ABC Corp" data-testid="tracker-name-input" /></div>
-            <div><Label>Mandate / Job *</Label>
-              <Select value={form.mandate_id} onValueChange={v => setForm(p => ({...p, mandate_id: v}))}>
-                <SelectTrigger data-testid="mandate-select"><SelectValue placeholder="Select mandate" /></SelectTrigger>
-                <SelectContent>{jobs.map(j => <SelectItem key={j.id} value={j.id}>{j.title} {j.company_name ? `— ${j.company_name}` : ''}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label>Template *</Label>
-              <Select value={form.template_id} onValueChange={v => setForm(p => ({...p, template_id: v}))}>
-                <SelectTrigger data-testid="template-select"><SelectValue placeholder="Select template" /></SelectTrigger>
-                <SelectContent>{templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name} ({t.columns?.length || 0} cols)</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button onClick={handleCreate} data-testid="confirm-create-tracker">Create</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateTrackerWizard
+        open={showWizard}
+        onClose={() => setShowWizard(false)}
+        onCreated={(id) => { loadData(); onSelectTracker(id); }}
+      />
     </div>
   );
 }
