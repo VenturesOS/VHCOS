@@ -280,6 +280,11 @@ export const trackerAPI = {
     fd.append('file', file);
     return api.post(`/tracker/trackers/${trackerId}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+  parseTemplateFile: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/tracker/parse-template-file', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
 };
 
 
