@@ -310,6 +310,9 @@ async def rss_feed(blog_type: Optional[str] = None):
     elif blog_type == "candidate":
         title = "Career Insights & Advice - VHC Talent Advisory"
 
+    from email.utils import format_datetime as email_format_datetime
+    now_rfc822 = email_format_datetime(datetime.now(timezone.utc))
+
     rss_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
@@ -317,13 +320,17 @@ async def rss_feed(blog_type: Optional[str] = None):
   <link>{xml_escape(base_url)}</link>
   <description>Expert insights on industrial recruitment, career growth, and talent acquisition.</description>
   <language>en-in</language>
-  <lastBuildDate>{datetime.now(timezone.utc).isoformat()}</lastBuildDate>
+  <lastBuildDate>{now_rfc822}</lastBuildDate>
   <atom:link href="{xml_escape(base_url)}/api/blog/rss" rel="self" type="application/rss+xml"/>
 {items}
 </channel>
 </rss>"""
 
-    return Response(content=rss_xml, media_type="application/rss+xml")
+    return Response(
+        content=rss_xml,
+        media_type="application/rss+xml",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 # ── Analytics Tracking (Public — No Auth) ──
