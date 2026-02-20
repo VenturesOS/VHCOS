@@ -273,6 +273,13 @@ export const trackerAPI = {
   // Validation & Events
   validate: (trackerId) => api.get(`/tracker/trackers/${trackerId}/validation`),
   getEvents: (params) => api.get('/tracker/events', { params }),
+  // Export & Import
+  exportExcel: (trackerId) => api.get(`/tracker/trackers/${trackerId}/export`, { responseType: 'blob' }),
+  uploadFile: (trackerId, file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/tracker/trackers/${trackerId}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
 };
 
 
