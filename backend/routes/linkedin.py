@@ -10,7 +10,7 @@ import os
 import logging
 
 from config import db
-from auth.auth import require_role
+from utils import require_role
 
 logger = logging.getLogger(__name__)
 
