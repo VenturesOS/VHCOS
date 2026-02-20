@@ -404,17 +404,30 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
     # ── Stage transition enforcement ──
     new_stage = update_dict.get("stage")
     if new_stage:
+        from services.pipeline_events import validate_stage_transition, log_pipeline_event
+        current_stage = application.get("stage", "applied")
+
+        is_valid, error_msg = validate_stage_transition(current_stage, new_stage)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+
         # Block offered without offered_ctc
         if new_stage == "offered" and not update_dict.get("offered_ctc") and not application.get("offered_ctc"):
             raise HTTPException(
                 status_code=400,
                 detail="Cannot move to offered: offered_ctc is required. Use the revenue/offered endpoint."
             )
-        # Block joined without offered_ctc
+        # Block hired/joined without offered_ctc
         if new_stage in ("joined", "hired") and not application.get("offered_ctc"):
             raise HTTPException(
                 status_code=400,
-                detail="Cannot move to joined: offered_ctc must be set first via offered stage."
+                detail="Cannot move to hired/joined: offered_ctc must be set first via offered stage."
+            )
+        # Block joined without DOJ
+        if new_stage == "joined" and not application.get("join_date") and not update_dict.get("join_date"):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot move to joined: Date of Joining (DOJ) is required."
             )
         # Block editing of joined revenue
         if application.get("stage") == "joined" and new_stage not in ("joined",):
@@ -434,14 +447,27 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
     # Data Governance: Update candidate history if stage changed
     if "stage" in update_dict and application.get("candidate_id"):
         new_stage = update_dict["stage"]
+        previous_stage = application.get("stage", "applied")
         outcome = None
-        if new_stage in ["hired", "rejected", "dropped"]:
+        if new_stage in ["joined", "hired", "rejected", "dropped"]:
             outcome = new_stage
         await update_application_in_history(
             application["candidate_id"],
             app_id,
             new_stage,
             outcome
+        )
+        # Log pipeline event
+        from services.pipeline_events import log_pipeline_event
+        await log_pipeline_event(
+            candidate_id=application.get("candidate_id", ""),
+            mandate_id=application.get("job_id", ""),
+            application_id=app_id,
+            previous_stage=previous_stage,
+            new_stage=new_stage,
+            source="pipeline",
+            user_id=current_user.get("id", ""),
+            user_name=current_user.get("name", current_user.get("email", "")),
         )
     
     updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
@@ -809,14 +835,13 @@ async def get_job_applicants(
         "stage_counts": {
             "applied": sum(1 for a in applications if a.get("stage") == "applied"),
             "shortlisted": sum(1 for a in applications if a.get("stage") == "shortlisted"),
+            "submitted_to_client": sum(1 for a in applications if a.get("stage") == "submitted_to_client"),
             "interview": sum(1 for a in applications if a.get("stage") == "interview"),
             "offered": sum(1 for a in applications if a.get("stage") == "offered"),
-            "joined": sum(1 for a in applications if a.get("stage") == "joined"),
             "hired": sum(1 for a in applications if a.get("stage") == "hired"),
+            "joined": sum(1 for a in applications if a.get("stage") == "joined"),
             "rejected": sum(1 for a in applications if a.get("stage") == "rejected"),
             "on_hold": sum(1 for a in applications if a.get("stage") == "on_hold"),
-            "over_budget": sum(1 for a in applications if a.get("stage") == "over_budget"),
-            "not_qualified": sum(1 for a in applications if a.get("stage") == "not_qualified")
         }
     }
 

@@ -602,7 +602,7 @@ async def get_admin_pipeline(
         applications = []
     
     # Define all pipeline stages
-    all_stages = ["applied", "shortlisted", "interview", "offered", "joined", "hired", "rejected", "on_hold", "over_budget", "not_qualified"]
+    all_stages = ["applied", "shortlisted", "submitted_to_client", "interview", "offered", "hired", "joined", "rejected", "on_hold"]
     
     # Group applications by stage
     pipeline_data = {stage: [] for stage in all_stages}
