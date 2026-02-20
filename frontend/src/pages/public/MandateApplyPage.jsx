@@ -483,10 +483,11 @@ export default function MandateApplyPage() {
           </CardContent>
         </Card>
 
-        {/* Privacy Notice */}
-        <div className="text-center text-sm text-slate-500">
+        {/* Privacy Notice + Trust Badges */}
+        <div className="text-center text-sm text-slate-500 space-y-3">
+          <TrustBadge />
           <p>This is a confidential job opportunity shared via a secure link.</p>
-          <p>Your application data will be handled in accordance with our privacy policy.</p>
+          <p className="text-xs">Your application data will be handled in accordance with our <a href="/privacy-policy" target="_blank" rel="noopener" className="text-emerald-600 underline">Privacy Policy</a>.</p>
         </div>
       </main>
     </div>
