@@ -12,6 +12,7 @@ import {
   Table, Plus, FileSpreadsheet, Download, AlertTriangle, CheckCircle2,
   Trash2, Search, Settings2, Loader2, ChevronDown, X, ClipboardList, Eye, Upload
 } from 'lucide-react';
+import CreateTrackerWizard from '../../components/admin/CreateTrackerWizard';
 
 const STATUS_OPTIONS = [
   { value: 'submitted', label: 'Submitted', color: 'bg-cyan-100 text-cyan-700' },
