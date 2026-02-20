@@ -52,7 +52,8 @@ export default function MandateApplyPage() {
     phone: '',
     current_salary: '',
     notice_period: '',
-    consent_given: false
+    consent_given: false,
+    consent_future_opportunities: false
   });
   const [resumeFile, setResumeFile] = useState(null);
 
