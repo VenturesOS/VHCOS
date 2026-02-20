@@ -79,6 +79,7 @@ const navItems = {
     { icon: UsersRound, label: 'My Team', path: '/employer/my-team' },
     { icon: Building2, label: 'Companies', path: '/employer/companies' },
     { icon: ClipboardList, label: 'Pipeline', path: '/employer/pipeline' },
+    { icon: FileText, label: 'Trackers', path: '/employer/submission-tracker' },
     { icon: Briefcase, label: 'My Jobs', path: '/employer/jobs' },
     { icon: UserPlus, label: 'Post Job', path: '/employer/jobs/new' },
     { icon: CheckCircle, label: 'Approvals', path: '/employer/approvals' },
