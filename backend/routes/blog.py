@@ -263,6 +263,18 @@ async def public_candidate_blog_by_slug(slug: str):
 
 # ── RSS Feed ──
 
+def _format_rfc822(dt_str: str) -> str:
+    """Convert ISO datetime string to RFC 822 format for RSS."""
+    try:
+        from email.utils import format_datetime as email_format_datetime
+        dt = datetime.fromisoformat(dt_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return email_format_datetime(dt)
+    except Exception:
+        return dt_str
+
+
 def _build_rss_item(blog: dict, base_url: str) -> str:
     path = "industrial-hiring-insights" if blog.get("blog_type") == "employer" else "career-insights"
     link = f"{base_url}/{path}/{blog.get('slug', '')}"
