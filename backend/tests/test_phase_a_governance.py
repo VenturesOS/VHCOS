@@ -14,7 +14,7 @@ import httpx
 import os
 
 # API Configuration
-API_URL = os.environ.get("API_URL", "https://candidate-flow-8.preview.emergentagent.com")
+API_URL = os.environ.get("API_URL", "https://dpdp-compliance-3.preview.emergentagent.com")
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
