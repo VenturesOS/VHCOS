@@ -654,6 +654,7 @@ function RevenueTab() {
           </CardContent>
         </Card>
       )}
+      </>}
     </div>
   );
 }
