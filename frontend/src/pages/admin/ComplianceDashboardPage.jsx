@@ -4,7 +4,6 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { useAuth } from '../../lib/auth';
 import {
   Shield, ShieldCheck, ShieldAlert, AlertTriangle, FileText, Users,
   RefreshCw, ChevronLeft, ChevronRight, Search, Activity
