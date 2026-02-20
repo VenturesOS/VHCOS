@@ -45,9 +45,21 @@ async def get_linkedin_token():
     return integration["access_token"]
 
 
+async def get_linkedin_profile_urn():
+    """Get the LinkedIn member URN (sub) for the connected user."""
+    integration = await db.social_integrations.find_one(
+        {"platform": "linkedin"},
+        {"_id": 0, "access_token": 1, "profile_sub": 1}
+    )
+    if not integration:
+        return None, None
+    return integration.get("access_token"), integration.get("profile_sub")
+
+
 async def post_blog_to_linkedin(blog: dict, is_test: bool = False):
     """
-    Post a blog article link to LinkedIn company page.
+    Post a blog article link to LinkedIn.
+    Uses w_member_social to post as the authenticated admin user.
     Returns dict with success status and post details.
     """
     settings = await get_linkedin_settings()
