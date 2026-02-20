@@ -186,26 +186,34 @@ function TrackerSpreadsheetView({ trackerId, onBack }) {
     } catch { toast.error('Failed to remove'); }
   };
 
-  const handleDownload = () => {
-    if (!tracker) return;
-    const cols = tracker.columns || [];
-    const headers = [...cols.map(c => c.label), 'Status'];
-    const csvRows = [headers.join(',')];
-    (tracker.rows || []).forEach(row => {
-      const vals = cols.map(c => {
-        const v = row.data?.[c.key] || '';
-        return `"${String(v).replace(/"/g, '""')}"`;
-      });
-      vals.push(`"${STATUS_MAP[row.submission_status]?.label || row.submission_status}"`);
-      csvRows.push(vals.join(','));
-    });
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${tracker.name || 'tracker'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleDownload = async () => {
+    try {
+      const res = await trackerAPI.exportExcel(trackerId);
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${tracker?.name || 'tracker'}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error('Download failed'); }
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await trackerAPI.uploadFile(trackerId, file);
+      const d = res.data;
+      toast.success(`Imported ${d.imported} rows. ${d.unmapped_headers?.length || 0} unmapped columns.`);
+      loadTracker();
+      setShowUpload(false);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Upload failed');
+    } finally { setUploading(false); e.target.value = ''; }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
