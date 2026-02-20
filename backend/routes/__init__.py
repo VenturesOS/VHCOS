@@ -16,3 +16,4 @@ from .commercials import commercials_router
 from .analytics import analytics_router
 from .revenue import revenue_router
 from .employer_routes import employer_router
+from .linkedin import router as linkedin_router
