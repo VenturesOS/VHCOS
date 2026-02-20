@@ -564,6 +564,37 @@ export default function AdminPipelinePage() {
         </DialogContent>
       </Dialog>
 
+      {/* Hired Dialog (Offer Accepted) */}
+      <Dialog open={showHiredDialog} onOpenChange={setShowHiredDialog}>
+        <DialogContent data-testid="hired-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-emerald-600" /> Process Hired (Offer Accepted)
+            </DialogTitle>
+            <DialogDescription>
+              {selectedApp?.candidate_name} — Offered CTC: ₹{selectedApp?.offered_ctc ? (selectedApp.offered_ctc / 100000).toFixed(1) + 'L' : '—'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm font-medium">Date of Joining (DOJ) *</Label>
+              <Input
+                type="date"
+                value={hiredForm.date_of_joining}
+                onChange={e => setHiredForm({ date_of_joining: e.target.value })}
+                data-testid="hired-doj-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowHiredDialog(false)}>Cancel</Button>
+            <Button onClick={handleProcessHired} disabled={stageLoading} className="bg-emerald-600 hover:bg-emerald-700" data-testid="confirm-hired-btn">
+              {stageLoading ? 'Processing...' : 'Confirm Hired'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Join Dialog */}
       <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
         <DialogContent data-testid="join-dialog">
