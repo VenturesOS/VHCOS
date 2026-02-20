@@ -28,7 +28,8 @@ import {
   Activity,
   Download,
   Radar,
-  IndianRupee
+  IndianRupee,
+  Linkedin
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
