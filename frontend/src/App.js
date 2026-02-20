@@ -67,6 +67,7 @@ import SystemHealthPage from "./pages/admin/SystemHealthPage";
 import ContactSubmissionsPage from "./pages/admin/ContactSubmissionsPage";
 import BlogEnginePage from "./pages/admin/BlogEnginePage";
 import BlogAnalyticsPage from "./pages/admin/BlogAnalyticsPage";
+import LinkedInSettingsPage from "./pages/admin/LinkedInSettingsPage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
 import EmployerCandidateBankPage from "./pages/employer/EmployerCandidateBankPage";
 
