@@ -323,6 +323,21 @@ export default function EmployerJobsPage() {
                           )}
                         </div>
                       )}
+
+                      {/* LinkedIn Share */}
+                      {job.career_page_status === 'live' && job.shareable_link_enabled && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[#0A66C2] hover:bg-blue-50"
+                          onClick={() => shareJobOnLinkedIn(job)}
+                          title="Share on LinkedIn"
+                          data-testid={`linkedin-share-${job.id}`}
+                        >
+                          <Linkedin className="w-4 h-4" />
+                        </Button>
+                      )}
+
                       {/* Mandate Shareable Link - For Assigned Mandates (Independent of Career Page) */}
                       {job.status === 'active' && (
                         <div className="flex items-center gap-2 px-2 py-1 bg-purple-50 rounded-lg" data-testid={`mandate-link-section-${job.id}`}>
