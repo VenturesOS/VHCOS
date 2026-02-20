@@ -525,7 +525,9 @@ function RevenueTab() {
 
   return (
     <div className="space-y-6" data-testid="revenue-tab">
-      <p className="text-sm text-slate-500">Revenue forecast weighted by stage probability and realized revenue</p>
+      <DateRangeFilter fromDate={dr.fromDate} toDate={dr.toDate} onFromChange={dr.setFromDate} onToChange={dr.setToDate} onPreset={dr.handlePreset} />
+      {loading && <LoadingSpinner />}
+      {!loading && <><p className="text-sm text-slate-500">Revenue forecast weighted by stage probability and realized revenue</p>
 
       {/* Revenue KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
