@@ -158,6 +158,7 @@ app.include_router(seo_dashboard_router)
 app.include_router(revenue_router)
 app.include_router(employer_router)
 app.include_router(linkedin_router)
+app.include_router(tracker_router)
 
 # All employer/admin business endpoints extracted to routes/employer_routes.py
 # Endpoints: /api/employers/{id}/companies, /api/employer/my-team, /api/employer/companies,
