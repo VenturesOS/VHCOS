@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
 import { 
-  Users, CheckCircle, Clock, Award, UserCheck, XCircle, Pause,
+  Users, CheckCircle, Clock, Award, UserCheck, XCircle, Pause, Send,
   Filter, Briefcase, FileText, Mail, Phone, Calendar, Download,
-  ChevronRight, MessageSquare, Star, Building2
+  ChevronRight, MessageSquare, Star, Building2, Lock
 } from 'lucide-react';
 
 // Stage configuration with colors

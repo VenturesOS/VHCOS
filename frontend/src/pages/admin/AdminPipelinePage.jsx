@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from 'sonner';
 import { 
   LayoutGrid, Users, CheckCircle, Clock, Award, UserCheck, 
-  XCircle, Pause, TrendingDown, UserX, Filter, Building2,
+  XCircle, Pause, Filter, Building2, Send,
   Briefcase, FileText, Trash2, AlertCircle, IndianRupee, Lock, ArrowRight
 } from 'lucide-react';
 
