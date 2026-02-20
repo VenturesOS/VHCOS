@@ -473,7 +473,9 @@ async def public_apply(
         "consent_timestamp": datetime.now(timezone.utc).isoformat(),
         "consent_ip_address": client_ip,
         "consent_policy_version": "v1.0_2026",
-        "consent_text": "I consent to Ventures HRD collecting and processing my personal data including resume, contact details, and professional information for recruitment purposes under the Digital Personal Data Protection Act, 2023. I understand I can withdraw consent at any time."
+        "consent_text": "I consent to Ventures HRD collecting and processing my personal data including resume, contact details, and professional information for recruitment purposes under the Digital Personal Data Protection Act, 2023. I understand I can withdraw consent at any time.",
+        "future_opportunities": consent_future_opportunities == "true",
+        "user_agent": request.headers.get("User-Agent", ""),
     }
     
     # Handle resume - either from parse step or new upload
