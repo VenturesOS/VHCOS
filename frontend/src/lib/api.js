@@ -238,6 +238,18 @@ export const settingsAPI = {
   update: (data) => api.put('/settings', data),
 };
 
+// LinkedIn Integration APIs
+export const linkedinAPI = {
+  getSettings: () => api.get('/linkedin/settings'),
+  updateSettings: (data) => api.put('/linkedin/settings', data),
+  getStatus: () => api.get('/linkedin/status'),
+  authorize: () => api.get('/linkedin/authorize'),
+  testPost: () => api.post('/linkedin/test-post'),
+  getPostHistory: (limit = 20) => api.get(`/linkedin/post-history?limit=${limit}`),
+  disconnect: () => api.delete('/linkedin/disconnect'),
+};
+
+
 // AI Matching APIs
 export const matchingAPI = {
   parseResume: (file) => {
