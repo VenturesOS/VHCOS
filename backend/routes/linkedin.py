@@ -32,9 +32,9 @@ LINKEDIN_REDIRECT_URI = os.environ.get("LINKEDIN_REDIRECT_URI", "https://venture
 
 LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
-LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/userinfo"
+LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/me"
 
-SCOPES = "openid profile email w_member_social"
+SCOPES = "w_member_social"
 
 
 # ── Pydantic Models ──
