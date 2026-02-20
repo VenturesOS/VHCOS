@@ -124,6 +124,7 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
         "expires_in": expires_in,
         "profile_name": profile.get("name", ""),
         "profile_email": profile.get("email", ""),
+        "profile_sub": profile.get("sub", ""),
         "connected_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
