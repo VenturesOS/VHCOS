@@ -469,6 +469,14 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
             user_id=current_user.get("id", ""),
             user_name=current_user.get("name", current_user.get("email", "")),
         )
+        # Sync pipeline → tracker (Rule B)
+        from services.tracker_sync import sync_pipeline_to_tracker
+        await sync_pipeline_to_tracker(
+            application_id=app_id,
+            new_stage=new_stage,
+            user_id=current_user.get("id", ""),
+            user_name=current_user.get("name", current_user.get("email", "")),
+        )
     
     updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
     return ApplicationResponse(**updated_application)
