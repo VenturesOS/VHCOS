@@ -342,6 +342,7 @@ export const digestAPI = {
 export const revenueAPI = {
   forecast: (applicationId, expectedCtc) => api.post('/revenue/forecast', { application_id: applicationId, expected_ctc: expectedCtc }),
   offered: (appId, data) => api.post(`/revenue/offered/${appId}`, data),
+  hired: (appId, data) => api.post(`/revenue/hired/${appId}`, data),
   joined: (appId, data) => api.post(`/revenue/joined/${appId}`, data),
   records: (params) => api.get('/revenue/records', { params }),
   byApplication: (appId) => api.get(`/revenue/by-application/${appId}`),
