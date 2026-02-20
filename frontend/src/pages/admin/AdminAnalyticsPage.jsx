@@ -260,18 +260,85 @@ function OverviewTab() {
   );
 }
 
+// ── Date Range Filter Component ──
+
+function DateRangeFilter({ fromDate, toDate, onFromChange, onToChange, onPreset }) {
+  const presets = [
+    { label: '7d', days: 7 },
+    { label: '30d', days: 30 },
+    { label: '90d', days: 90 },
+    { label: 'YTD', days: 'ytd' },
+  ];
+  return (
+    <Card className="border-slate-200 bg-slate-50/50" data-testid="date-range-filter">
+      <CardContent className="p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Filter className="w-4 h-4 text-slate-500" />
+          <div className="flex gap-1.5">
+            {presets.map(p => (
+              <Button key={p.label} variant="outline" size="sm" className="h-7 text-xs px-2.5" data-testid={`preset-${p.label}`}
+                onClick={() => onPreset(p.days)}>
+                {p.label}
+              </Button>
+            ))}
+            {(fromDate || toDate) && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs px-2" data-testid="preset-clear" onClick={() => onPreset('clear')}>
+                <RotateCcw className="w-3 h-3 mr-1" /> Clear
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <Input type="date" value={fromDate} onChange={e => onFromChange(e.target.value)} className="h-7 text-xs w-36 bg-white" data-testid="date-from" />
+            <span className="text-xs text-slate-400">to</span>
+            <Input type="date" value={toDate} onChange={e => onToChange(e.target.value)} className="h-7 text-xs w-36 bg-white" data-testid="date-to" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function useDateRange() {
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const handlePreset = (days) => {
+    if (days === 'clear') { setFromDate(''); setToDate(''); return; }
+    const now = new Date();
+    const to = now.toISOString().split('T')[0];
+    let from;
+    if (days === 'ytd') {
+      from = `${now.getFullYear()}-01-01`;
+    } else {
+      const d = new Date(now); d.setDate(d.getDate() - days);
+      from = d.toISOString().split('T')[0];
+    }
+    setFromDate(from); setToDate(to);
+  };
+  const queryStr = () => {
+    const p = new URLSearchParams();
+    if (fromDate) p.append('from_date', fromDate);
+    if (toDate) p.append('to_date', toDate);
+    return p.toString() ? `?${p}` : '';
+  };
+  return { fromDate, toDate, setFromDate, setToDate, handlePreset, queryStr };
+}
+
 // ── Pipeline Funnel Tab ──
 
 function PipelineFunnelTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const dr = useDateRange();
 
-  useEffect(() => {
-    fetchJSON('/analytics/pipeline-conversion')
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    fetchJSON(`/analytics/pipeline-conversion${dr.queryStr()}`)
       .then(setData)
       .catch(() => toast.error('Failed to load pipeline data'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [dr.fromDate, dr.toDate]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) return <LoadingSpinner />;
   if (!data) return <EmptyState msg="No pipeline data available" />;
