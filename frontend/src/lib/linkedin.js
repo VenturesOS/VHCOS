@@ -1,10 +1,19 @@
 /**
  * Generate LinkedIn share URL for a job posting.
- * Uses LinkedIn's share-offsite URL (no API needed).
+ * Uses LinkedIn's feed share with pre-filled text.
  */
 export function getLinkedInShareUrl(job) {
   const jobUrl = `https://ventureshrd.com/jobs/${job.id}`;
-  return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(jobUrl)}`;
+  const title = job.title || 'New Job Opening';
+  const company = job.company_name || 'Ventures HRD';
+  const location = job.location || '';
+
+  let text = `🚀 We're hiring: ${title}`;
+  if (company) text += ` at ${company}`;
+  if (location) text += ` (${location})`;
+  text += `\n\nApply now: ${jobUrl}`;
+
+  return `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`;
 }
 
 /**
