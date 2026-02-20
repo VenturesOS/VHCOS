@@ -111,8 +111,8 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
         recruiter_apps = [a for a in applications if a["job_id"] in recruiter_job_ids]
 
         stages = {
-            "applied": 0, "shortlisted": 0, "interview": 0,
-            "offered": 0, "joined": 0, "hired": 0, "rejected": 0
+            "applied": 0, "shortlisted": 0, "submitted_to_client": 0, "interview": 0,
+            "offered": 0, "hired": 0, "joined": 0, "rejected": 0
         }
         for app in recruiter_apps:
             stage = app.get("stage", "applied")
@@ -133,9 +133,9 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
                     from routes.commercials import calculate_revenue as _calc_rev
                     revenue = _calc_rev(offered_salary, commercial)
 
-                    if app.get("stage") == "hired":
+                    if app.get("stage") == "joined":
                         revenue_closed += revenue
-                    elif app.get("stage") in ["offered", "interview", "shortlisted"]:
+                    elif app.get("stage") in ["offered", "hired", "interview", "shortlisted", "submitted_to_client"]:
                         revenue_pipeline += revenue
 
         members_with_metrics.append({
@@ -222,8 +222,8 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
         for job in company_jobs:
             job_apps = [a for a in company_apps if a["job_id"] == job["id"]]
 
-            stages = {"applied": 0, "shortlisted": 0, "interview": 0, "offered": 0, "joined": 0, "hired": 0, "rejected": 0}
-            revenue_by_stage = {"applied": 0, "shortlisted": 0, "interview": 0, "offered": 0, "hired": 0}
+            stages = {"applied": 0, "shortlisted": 0, "submitted_to_client": 0, "interview": 0, "offered": 0, "hired": 0, "joined": 0, "rejected": 0}
+            revenue_by_stage = {"applied": 0, "shortlisted": 0, "submitted_to_client": 0, "interview": 0, "offered": 0, "hired": 0}
 
             for app in job_apps:
                 stage = app.get("stage", "applied")
@@ -245,8 +245,8 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
                 "pipeline_count": sum(stages.values()),
                 "stages": stages,
                 "revenue_by_stage": {k: round(v, 2) for k, v in revenue_by_stage.items()},
-                "total_revenue_pipeline": round(sum(v for k, v in revenue_by_stage.items() if k != "hired"), 2),
-                "total_revenue_closed": round(revenue_by_stage.get("hired", 0), 2)
+                "total_revenue_pipeline": round(sum(v for k, v in revenue_by_stage.items() if k != "joined"), 2),
+                "total_revenue_closed": round(revenue_by_stage.get("joined", 0), 2)
             })
 
         total_pipeline = sum(m["pipeline_count"] for m in mandates_with_pipeline)
@@ -284,8 +284,8 @@ async def get_employer_pipeline(
 
     if not team:
         return {
-            "pipeline": {stage: [] for stage in ["applied", "shortlisted", "interview", "offered", "joined", "hired", "rejected", "on_hold"]},
-            "stage_counts": {stage: 0 for stage in ["applied", "shortlisted", "interview", "offered", "joined", "hired", "rejected", "on_hold"]},
+            "pipeline": {stage: [] for stage in ["applied", "shortlisted", "submitted_to_client", "interview", "offered", "hired", "joined", "rejected", "on_hold"]},
+            "stage_counts": {stage: 0 for stage in ["applied", "shortlisted", "submitted_to_client", "interview", "offered", "hired", "joined", "rejected", "on_hold"]},
             "total_applications": 0,
             "filters": {"recruiters": [], "jobs": []}
         }
@@ -323,7 +323,7 @@ async def get_employer_pipeline(
     else:
         applications = []
 
-    all_stages = ["applied", "shortlisted", "interview", "offered", "joined", "hired", "rejected", "on_hold"]
+    all_stages = ["applied", "shortlisted", "submitted_to_client", "interview", "offered", "hired", "joined", "rejected", "on_hold"]
 
     pipeline_data = {stage: [] for stage in all_stages}
 
