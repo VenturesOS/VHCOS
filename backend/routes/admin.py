@@ -767,9 +767,11 @@ async def get_employer_dashboard_stats(current_user: dict = Depends(require_role
         "stage_stats": {
             "applied": stage_stats.get("applied", 0),
             "shortlisted": stage_stats.get("shortlisted", 0),
+            "submitted_to_client": stage_stats.get("submitted_to_client", 0),
             "interview": stage_stats.get("interview", 0),
             "offered": stage_stats.get("offered", 0),
             "hired": stage_stats.get("hired", 0),
+            "joined": stage_stats.get("joined", 0),
             "rejected": stage_stats.get("rejected", 0)
         }
     }
@@ -825,9 +827,11 @@ async def get_recruiter_dashboard_stats(current_user: dict = Depends(require_rol
         "pipeline_stats": {
             "applied": pipeline_stats.get("applied", 0),
             "shortlisted": pipeline_stats.get("shortlisted", 0),
+            "submitted_to_client": pipeline_stats.get("submitted_to_client", 0),
             "interview": pipeline_stats.get("interview", 0),
             "offered": pipeline_stats.get("offered", 0),
             "hired": pipeline_stats.get("hired", 0),
+            "joined": pipeline_stats.get("joined", 0),
             "rejected": pipeline_stats.get("rejected", 0)
         }
     }
