@@ -10,83 +10,63 @@ Full-stack talent operating system for industrial recruitment, with CV managemen
 
 ## What's Been Implemented
 
-### Phase 1: Pipeline Restructure (Feb 2026) - COMPLETE
-- New stage order: applied > shortlisted > submitted_to_client > interview > offered > hired > joined
-- Validation rules: can't skip stages, joined locks, DOJ required for hired
-- Revenue closure at 'joined' stage. Event logging service.
+### Phase 1: Pipeline Restructure - COMPLETE
+- 7-stage pipeline: applied > shortlisted > submitted_to_client > interview > offered > hired > joined
+- Validation rules, revenue closure at 'joined', event-based logging
 
-### Phase 2: Tracker Backend (Feb 2026) - COMPLETE
+### Phase 2: Tracker Backend - COMPLETE
 - Master Column System: 58 enterprise columns across 11 categories
-- Template System: CRUD with column structure, required fields, custom fields
-- Submission Trackers: CRUD linked to mandate/client/employer
-- Tracker Rows: Add candidate with auto-fill, inline edit, status management
-- Duplicate Protection: 409 for same candidate + same mandate
-- Download Validation: Green/Yellow/Red dynamic state
+- Template System with custom columns, field types (text/number/currency/date/dropdown)
+- Submission Trackers CRUD linked to mandate/client/employer
+- Tracker Row operations, duplicate protection, download validation
 
-### Phase 3: Tracker Frontend UI (Feb 2026) - COMPLETE
-- Tracker List View with cards, Spreadsheet View with inline editing
-- Validation Highlighting, Dynamic Download Button color
-- Add Candidate Dialog, Status Dropdown with pipeline sync
+### Phase 3: Tracker Frontend UI - COMPLETE
+- **Multi-step Tracker Creation Wizard** (NEW - 5 steps):
+  - Step 1: Basic Setup (name, mandate, template mode: existing/new/upload)
+  - Step 2: Column Selection with categorized dropdown, search, alphabetical ordering
+  - Step 3: Custom Columns with field types, dropdown options, required toggle
+  - Step 4: Required Field Configuration (Required/Optional switches)
+  - Step 5: Review with full summary before creation
+- Template Upload: Parse XLSX/CSV, auto-map headers to master columns
+- Spreadsheet View with inline editing, validation highlighting
+- Dynamic Download Button (Green/Yellow/Red)
 
-### Phase 4: Tracker <> Pipeline Sync (Feb 2026) - COMPLETE
-- Bidirectional sync between tracker and pipeline
-- Event logging for all changes
+### Phase 4: Tracker <> Pipeline Sync - COMPLETE
+- Bidirectional sync, event logging
 
-### Phase 5: Analytics Dashboard (Feb 2026) - COMPLETE
-- 4-tab analytics page: Overview, Pipeline Funnel, Revenue, Performance
-- Pipeline Conversion: Funnel visualization with stage-by-stage conversion rates
-- Revenue Intelligence: Forecast vs realized, probability-weighted pipeline, by-stage breakdown
-- Recruiter Performance: Submissions, conversions, revenue per recruiter
-- Mandate Performance: Per-mandate metrics with submission rates
-- Date Range Filters on Pipeline Funnel and Revenue tabs (7d/30d/90d/YTD/Custom presets)
+### Phase 5: Analytics Dashboard - COMPLETE
+- 4-tab analytics: Overview, Pipeline Funnel, Revenue, Performance
+- Date Range Filters (7d/30d/90d/YTD/Custom) on Pipeline Funnel and Revenue tabs
+- Analytics API optimized from 11s to ~2s with asyncio.gather
 
-### Phase 6: Excel Import/Export (Feb 2026) - COMPLETE
-- Excel export as formatted .xlsx with styles, validation highlighting
-- CSV/XLSX upload with auto-header mapping to master columns
+### Phase 6: Excel Import/Export - COMPLETE
+- Excel export as .xlsx, CSV/XLSX upload with auto-mapping
 
-### Client-Facing View (Feb 2026) - COMPLETE
+### Client-Facing View - COMPLETE
 - Read-only tracker view for employers at /employer/submission-tracker
 
-### Stabilization (Feb 2026) - COMPLETE
-- Analytics API optimized from 11s to ~2s via asyncio.gather parallelization
-- Employer test account created (employer@vhc.in / VhcEmployer@2024)
-- Sidebar reorganized: Submission Tracker at position 4 (visible without scrolling)
-
-### Earlier Features (Previously Completed)
-- LinkedIn OAuth2 + Job Share + Auto-posting settings
-- Google Analytics, Recruitment Expertise page, Client Logo Carousel
-- Role-based navigation, SEO URL audit, RSS feed
-- CV enhancement, pipeline tracking, revenue engine, blog/SEO
+### Stabilization - COMPLETE
+- Employer test account (employer@vhc.in / VhcEmployer@2024)
+- Sidebar reorganized for better visibility
 
 ## Key Files
-- `backend/routes/tracker.py` - All tracker CRUD + rows + validation + export/import
-- `backend/routes/analytics.py` - Pipeline conversion, revenue, recruiter/mandate analytics
-- `backend/services/analytics_service.py` - Optimized with asyncio.gather
+- `frontend/src/components/admin/CreateTrackerWizard.jsx` - NEW: Multi-step wizard
+- `backend/routes/tracker.py` - All tracker CRUD + parse-template-file endpoint
 - `backend/services/master_columns.py` - 58 enterprise column definitions
-- `backend/services/tracker_sync.py` - Bidirectional sync logic
-- `backend/services/pipeline_events.py` - Stage validation, event logging, revenue probability
 - `frontend/src/pages/admin/AdminAnalyticsPage.jsx` - 4-tab analytics with date filters
-- `frontend/src/pages/admin/SubmissionTrackerPage.jsx` - Tracker spreadsheet UI
-- `frontend/src/pages/employer/EmployerTrackerPage.jsx` - Client-facing tracker
-- `frontend/src/components/layout/Sidebar.jsx` - Reordered navigation
+- `frontend/src/pages/admin/SubmissionTrackerPage.jsx` - Tracker list + spreadsheet UI
 
 ## Key API Endpoints
-- `GET /api/tracker/columns` - Master column definitions
-- `POST/GET/PUT/DELETE /api/tracker/templates` - Template CRUD
-- `POST/GET/DELETE /api/tracker/trackers` - Tracker CRUD
-- `POST/PUT/DELETE /api/tracker/trackers/{id}/rows` - Row operations
-- `PUT /api/tracker/trackers/{id}/rows/{rowId}/status` - Status with sync
-- `GET /api/tracker/trackers/{id}/validation` - Download validation
-- `GET /api/tracker/trackers/{id}/export` - Excel export
-- `POST /api/tracker/trackers/{id}/upload` - Excel/CSV import
-- `GET /api/analytics/pipeline-conversion?from_date=&to_date=` - Stage conversion rates
+- `POST /api/tracker/parse-template-file` - Parse XLSX/CSV for template creation
+- `POST /api/tracker/templates` - Create template with custom columns
+- `POST /api/tracker/trackers` - Create tracker linked to template
+- `GET /api/tracker/columns` - Master column definitions (58 columns, 11 categories)
+- `GET /api/analytics/pipeline-conversion?from_date=&to_date=` - Pipeline funnel
 - `GET /api/analytics/revenue-forecast?from_date=&to_date=` - Revenue forecast
-- `GET /api/analytics/recruiter-performance` - Recruiter metrics
-- `GET /api/analytics/mandate-performance` - Mandate metrics
 
 ## Prioritized Backlog
 ### P2
-- Client Dashboards enhancements
+- Client Dashboard enhancements
 - AI-driven Analytics and Insights
 - Advanced Revenue Intelligence features
 - Automation workflows based on pipeline events
