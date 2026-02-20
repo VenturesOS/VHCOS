@@ -252,11 +252,13 @@ class TestRegressionAdminAuth:
         assert "access_token" in data, "Response should contain access_token"
         print("PASS: Admin login successful")
     
-    def test_admin_dashboard_api(self, api_client, admin_headers):
-        """Admin dashboard API should work"""
-        response = api_client.get(f"{BASE_URL}/api/admin/stats", headers=admin_headers)
-        assert response.status_code == 200, f"Admin stats failed: {response.status_code}"
-        print("PASS: Admin dashboard API works")
+    def test_admin_analytics_api(self, api_client, admin_headers):
+        """Admin analytics API should work"""
+        response = api_client.get(f"{BASE_URL}/api/analytics/admin", headers=admin_headers)
+        assert response.status_code == 200, f"Admin analytics failed: {response.status_code}"
+        data = response.json()
+        assert "kpis" in data, "Response should contain kpis"
+        print("PASS: Admin analytics API works")
 
 
 if __name__ == "__main__":
