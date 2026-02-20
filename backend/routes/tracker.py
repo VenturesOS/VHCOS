@@ -3,10 +3,11 @@ Client Submission Tracker Routes
 - Template CRUD (column structure, required fields)
 - Tracker CRUD (linked to mandate/client/employer)
 - Tracker Row operations (add candidate, inline edit, bulk ops)
-- Download validation
+- Download validation + Excel export/import
 - Master column definitions
 """
 import uuid
+import io
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List
