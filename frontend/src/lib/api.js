@@ -249,6 +249,32 @@ export const linkedinAPI = {
   disconnect: () => api.delete('/linkedin/disconnect'),
 };
 
+// Tracker APIs
+export const trackerAPI = {
+  // Master columns
+  getColumns: () => api.get('/tracker/columns'),
+  // Templates
+  getTemplates: (params) => api.get('/tracker/templates', { params }),
+  getTemplate: (id) => api.get(`/tracker/templates/${id}`),
+  createTemplate: (data) => api.post('/tracker/templates', data),
+  updateTemplate: (id, data) => api.put(`/tracker/templates/${id}`, data),
+  cloneTemplate: (id, name) => api.post(`/tracker/templates/${id}/clone?name=${encodeURIComponent(name)}`),
+  deleteTemplate: (id) => api.delete(`/tracker/templates/${id}`),
+  // Trackers
+  getTrackers: (params) => api.get('/tracker/trackers', { params }),
+  getTracker: (id) => api.get(`/tracker/trackers/${id}`),
+  createTracker: (data) => api.post('/tracker/trackers', data),
+  deleteTracker: (id) => api.delete(`/tracker/trackers/${id}`),
+  // Rows
+  addRow: (trackerId, data) => api.post(`/tracker/trackers/${trackerId}/rows`, data),
+  updateRow: (trackerId, rowId, data) => api.put(`/tracker/trackers/${trackerId}/rows/${rowId}`, data),
+  updateRowStatus: (trackerId, rowId, status) => api.put(`/tracker/trackers/${trackerId}/rows/${rowId}/status`, { submission_status: status }),
+  deleteRow: (trackerId, rowId) => api.delete(`/tracker/trackers/${trackerId}/rows/${rowId}`),
+  // Validation & Events
+  validate: (trackerId) => api.get(`/tracker/trackers/${trackerId}/validation`),
+  getEvents: (params) => api.get('/tracker/events', { params }),
+};
+
 
 // AI Matching APIs
 export const matchingAPI = {
