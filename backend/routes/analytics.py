@@ -1,14 +1,16 @@
 """
 VHC Talent OS - Analytics Routes
-Admin-only analytics dashboard API.
+Admin-only analytics dashboard API + Pipeline conversion + Revenue intelligence.
 """
 import io
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from utils.auth import require_role
 from services.analytics_service import get_analytics_summary
+from services.pipeline_events import STAGE_REVENUE_PROBABILITY, PIPELINE_STAGES
+from config import db
 
 analytics_router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
