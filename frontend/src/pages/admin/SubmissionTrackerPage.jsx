@@ -241,6 +241,12 @@ function TrackerSpreadsheetView({ trackerId, onBack }) {
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={() => setShowAddCandidate(true)} data-testid="add-candidate-btn"><Plus className="h-4 w-4 mr-1" /> Add Candidate</Button>
+          <label className="cursor-pointer">
+            <input type="file" accept=".xlsx,.csv" className="hidden" onChange={handleUpload} data-testid="upload-input" />
+            <Button size="sm" variant="outline" asChild disabled={uploading} data-testid="upload-btn">
+              <span>{uploading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Upload className="h-4 w-4 mr-1" />} Upload</span>
+            </Button>
+          </label>
           <Button size="sm" className={downloadColor} onClick={handleDownload} data-testid="download-tracker-btn"
             title={validation?.message || ''}>
             {validation?.status === 'green' ? <CheckCircle2 className="h-4 w-4 mr-1" /> : <AlertTriangle className="h-4 w-4 mr-1" />}
