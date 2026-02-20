@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/ta
 import { toast } from 'sonner';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, FunnelChart, Funnel, LabelList,
+  PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts';
 import {
   TrendingUp, Users, Database, Zap, Clock, Activity,
