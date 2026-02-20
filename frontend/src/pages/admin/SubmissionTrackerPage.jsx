@@ -32,16 +32,48 @@ function TrackerListView({ onSelectTracker }) {
   const [trackers, setTrackers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
+  const [dupSource, setDupSource] = useState(null);
+  const [dupName, setDupName] = useState('');
+  const [dupMandateId, setDupMandateId] = useState('');
+  const [jobs, setJobs] = useState([]);
+  const [duplicating, setDuplicating] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const tr = await trackerAPI.getTrackers();
+      const [tr, jb] = await Promise.all([
+        trackerAPI.getTrackers(),
+        jobAPI.getAll(),
+      ]);
       setTrackers(tr.data.trackers || []);
+      setJobs(Array.isArray(jb.data) ? jb.data : jb.data.jobs || []);
     } catch { toast.error('Failed to load trackers'); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const openDuplicate = (tracker, e) => {
+    e.stopPropagation();
+    setDupSource(tracker);
+    setDupName(`${tracker.name} (Copy)`);
+    setDupMandateId(tracker.mandate_id || '');
+  };
+
+  const handleDuplicate = async () => {
+    if (!dupName.trim()) return toast.error('Name required');
+    setDuplicating(true);
+    try {
+      const res = await trackerAPI.duplicateTracker(dupSource.id, {
+        name: dupName.trim(),
+        mandate_id: dupMandateId || undefined,
+      });
+      toast.success('Tracker duplicated');
+      setDupSource(null);
+      loadData();
+      onSelectTracker(res.data.id);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to duplicate'); }
+    finally { setDuplicating(false); }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
 
@@ -66,11 +98,21 @@ function TrackerListView({ onSelectTracker }) {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {trackers.map(t => (
-            <Card key={t.id} className="cursor-pointer hover:border-cyan-300 transition-colors" onClick={() => onSelectTracker(t.id)} data-testid={`tracker-card-${t.id}`}>
+            <Card key={t.id} className="cursor-pointer hover:border-cyan-300 transition-colors group" onClick={() => onSelectTracker(t.id)} data-testid={`tracker-card-${t.id}`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center justify-between">
                   <span className="truncate">{t.name}</span>
-                  <Badge variant="secondary" className="text-xs ml-2 shrink-0">{t.row_count || 0} candidates</Badge>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <Badge variant="secondary" className="text-xs">{t.row_count || 0}</Badge>
+                    <button
+                      onClick={(e) => openDuplicate(t, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-100 transition-all"
+                      title="Duplicate tracker"
+                      data-testid={`duplicate-btn-${t.id}`}
+                    >
+                      <Copy className="h-3.5 w-3.5 text-slate-400" />
+                    </button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -87,6 +129,41 @@ function TrackerListView({ onSelectTracker }) {
         onClose={() => setShowWizard(false)}
         onCreated={(id) => { loadData(); onSelectTracker(id); }}
       />
+
+      {/* Duplicate Tracker Dialog */}
+      <Dialog open={!!dupSource} onOpenChange={v => { if (!v) setDupSource(null); }}>
+        <DialogContent className="max-w-md" data-testid="duplicate-tracker-dialog">
+          <DialogHeader>
+            <DialogTitle>Duplicate Tracker</DialogTitle>
+            <DialogDescription>
+              Clone the column structure from <span className="font-semibold">{dupSource?.name}</span>. No candidate rows are copied.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm font-medium">New Tracker Name *</Label>
+              <Input value={dupName} onChange={e => setDupName(e.target.value)} className="mt-1.5" data-testid="dup-name-input" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Mandate / Job</Label>
+              <Select value={dupMandateId} onValueChange={setDupMandateId}>
+                <SelectTrigger className="mt-1.5" data-testid="dup-mandate-select"><SelectValue placeholder="Same mandate" /></SelectTrigger>
+                <SelectContent>
+                  {jobs.map(j => <SelectItem key={j.id} value={j.id}>{j.title}{j.company_name ? ` — ${j.company_name}` : ''}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-slate-400 mt-1">Leave as-is to use the same mandate, or pick a different one</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDupSource(null)}>Cancel</Button>
+            <Button onClick={handleDuplicate} disabled={!dupName.trim() || duplicating} data-testid="confirm-duplicate-btn">
+              {duplicating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
+              Duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
