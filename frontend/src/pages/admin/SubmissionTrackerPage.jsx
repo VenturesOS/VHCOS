@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import {
   Table, Plus, FileSpreadsheet, Download, AlertTriangle, CheckCircle2,
-  Trash2, Search, Settings2, Loader2, ChevronDown, X, ClipboardList, Eye
+  Trash2, Search, Settings2, Loader2, ChevronDown, X, ClipboardList, Eye, Upload
 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
