@@ -68,6 +68,7 @@ import ContactSubmissionsPage from "./pages/admin/ContactSubmissionsPage";
 import BlogEnginePage from "./pages/admin/BlogEnginePage";
 import BlogAnalyticsPage from "./pages/admin/BlogAnalyticsPage";
 import LinkedInSettingsPage from "./pages/admin/LinkedInSettingsPage";
+import SubmissionTrackerPage from "./pages/admin/SubmissionTrackerPage";
 import JobApprovalPage from "./pages/employer/JobApprovalPage";
 import EmployerCandidateBankPage from "./pages/employer/EmployerCandidateBankPage";
 
@@ -140,6 +141,7 @@ function App() {
             <Route path="seo-monitoring" element={<SEOMonitoringPage />} />
             <Route path="digest-email" element={<DigestEmailPage />} />
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
+            <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
