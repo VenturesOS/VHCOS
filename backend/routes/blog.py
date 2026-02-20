@@ -176,6 +176,13 @@ async def admin_publish_blog(blog_id: str, current_user: dict = Depends(require_
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Blog not found")
+
+    # Trigger LinkedIn auto-post (fire-and-forget)
+    blog = await db.blog_posts.find_one({"id": blog_id}, {"_id": 0})
+    if blog:
+        import asyncio
+        asyncio.create_task(auto_post_on_publish(blog))
+
     return {"message": "Blog published"}
 
 
