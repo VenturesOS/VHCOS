@@ -5,7 +5,8 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { toast } from 'sonner';
-import { Search, Briefcase, MapPin, Clock, Users, Eye } from 'lucide-react';
+import { Search, Briefcase, MapPin, Clock, Users, Eye, Linkedin } from 'lucide-react';
+import { shareJobOnLinkedIn } from '../../lib/linkedin';
 
 export default function RecruiterJobsPage() {
   const [jobs, setJobs] = useState([]);
@@ -83,6 +84,18 @@ export default function RecruiterJobsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {job.status === 'active' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[#0A66C2] hover:bg-blue-50"
+                      onClick={() => shareJobOnLinkedIn(job)}
+                      title="Share on LinkedIn"
+                      data-testid={`linkedin-share-${job.id}`}
+                    >
+                      <Linkedin className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="default"
                     size="sm"
