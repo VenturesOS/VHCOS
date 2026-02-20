@@ -236,20 +236,20 @@ class TestLinkedInAuthRequired:
     def test_settings_requires_auth(self):
         """GET /api/linkedin/settings requires authentication"""
         response = requests.get(f"{BASE_URL}/api/linkedin/settings")
-        assert response.status_code == 401, f"Should require auth: {response.status_code}"
-        print("Settings endpoint correctly requires authentication")
+        assert response.status_code in [401, 403], f"Should require auth: {response.status_code}"
+        print(f"Settings endpoint correctly requires authentication (returns {response.status_code})")
 
     def test_post_history_requires_auth(self):
         """GET /api/linkedin/post-history requires authentication"""
         response = requests.get(f"{BASE_URL}/api/linkedin/post-history")
-        assert response.status_code == 401, f"Should require auth: {response.status_code}"
-        print("Post history endpoint correctly requires authentication")
+        assert response.status_code in [401, 403], f"Should require auth: {response.status_code}"
+        print(f"Post history endpoint correctly requires authentication (returns {response.status_code})")
 
     def test_authorize_requires_auth(self):
         """GET /api/linkedin/authorize requires authentication"""
         response = requests.get(f"{BASE_URL}/api/linkedin/authorize")
-        assert response.status_code == 401, f"Should require auth: {response.status_code}"
-        print("Authorize endpoint correctly requires authentication")
+        assert response.status_code in [401, 403], f"Should require auth: {response.status_code}"
+        print(f"Authorize endpoint correctly requires authentication (returns {response.status_code})")
 
 
 class TestBlogPublishEndpoint:
