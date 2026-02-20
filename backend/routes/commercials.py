@@ -369,7 +369,7 @@ async def calculate_application_revenue(
             "manual_override": None,
             "final_revenue": calculated_revenue,
             "stage": application.get("stage", "offered"),
-            "is_closed": application.get("stage") == "hired",
+            "is_closed": application.get("stage") == "joined",
             "created_at": now,
             "created_by": current_user["id"],
             "audit_log": [{

@@ -485,7 +485,7 @@ async def get_team_stats(
     total_applications = await db.applications.count_documents({"job_id": {"$in": job_id_list}})
     
     # Stage distribution
-    stages = ["applied", "shortlisted", "interview", "offered", "hired", "rejected"]
+    stages = ["applied", "shortlisted", "submitted_to_client", "interview", "offered", "hired", "joined", "rejected"]
     stage_counts = {}
     for stage in stages:
         stage_counts[stage] = await db.applications.count_documents({

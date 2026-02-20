@@ -1682,6 +1682,7 @@ async def get_candidate_activity_history(
             "stages": {
                 "applied": sum(1 for a in applications if a.get("stage") == "applied"),
                 "shortlisted": sum(1 for a in applications if a.get("stage") == "shortlisted"),
+                "submitted_to_client": sum(1 for a in applications if a.get("stage") == "submitted_to_client"),
                 "interview": sum(1 for a in applications if a.get("stage") == "interview"),
                 "offered": sum(1 for a in applications if a.get("stage") == "offered"),
                 "hired": sum(1 for a in applications if a.get("stage") == "hired"),
