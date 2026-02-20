@@ -54,7 +54,8 @@ def get_admin_session():
     if response.status_code != 200:
         raise Exception(f"Admin login failed: {response.status_code} - {response.text}")
     
-    _admin_token = response.json().get("token")
+    data = response.json()
+    _admin_token = data.get("access_token") or data.get("token")
     session.headers.update({"Authorization": f"Bearer {_admin_token}"})
     _admin_session = session
     return session
