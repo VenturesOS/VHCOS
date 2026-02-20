@@ -65,6 +65,101 @@ async def export_analytics_pdf(
     )
 
 
+
+@analytics_router.get("/export-combined-pdf")
+async def export_combined_analytics_pdf(
+    employer_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    recruiter_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Export all analytics sections as a single PDF: Revenue > Pipeline > Performance > Overview."""
+    import asyncio
+
+    # Fetch all 4 datasets in parallel
+    overview_task = get_analytics_summary(
+        employer_id=employer_id, team_id=team_id, recruiter_id=recruiter_id,
+        date_from=date_from, date_to=date_to,
+    )
+
+    query_pipe = {}
+    if recruiter_id:
+        query_pipe["assigned_recruiter_id"] = recruiter_id
+    if date_from:
+        query_pipe["created_at"] = {"$gte": date_from}
+    if date_to:
+        query_pipe.setdefault("created_at", {})["$lte"] = date_to
+
+    async def get_pipeline():
+        agg = [{"$match": query_pipe}, {"$group": {"_id": "$stage", "count": {"$sum": 1}}}] if query_pipe else [{"$group": {"_id": "$stage", "count": {"$sum": 1}}}]
+        results = await db.applications.aggregate(agg).to_list(50)
+        counts = {r["_id"]: r["count"] for r in results}
+        total = sum(counts.values())
+        shortlisted = sum(counts.get(s, 0) for s in PIPELINE_STAGES[1:])
+        submitted = sum(counts.get(s, 0) for s in PIPELINE_STAGES[2:])
+        interviewed = sum(counts.get(s, 0) for s in PIPELINE_STAGES[3:])
+        offered = sum(counts.get(s, 0) for s in PIPELINE_STAGES[4:])
+        hired = sum(counts.get(s, 0) for s in PIPELINE_STAGES[5:])
+        joined = counts.get("joined", 0)
+        def rate(num, den):
+            return round((num / den) * 100, 1) if den > 0 else 0
+        return {"stage_counts": counts, "total_applications": total, "conversions": {
+            "applied_to_shortlisted": {"count": shortlisted, "rate": rate(shortlisted, total)},
+            "shortlisted_to_submitted": {"count": submitted, "rate": rate(submitted, shortlisted)},
+            "submitted_to_interview": {"count": interviewed, "rate": rate(interviewed, submitted)},
+            "interview_to_offered": {"count": offered, "rate": rate(offered, interviewed)},
+            "offered_to_hired": {"count": hired, "rate": rate(hired, offered)},
+            "hired_to_joined": {"count": joined, "rate": rate(joined, hired)},
+        }}
+
+    async def get_revenue():
+        rq = {"offered_ctc": {"$exists": True, "$ne": None}}
+        apps = await db.applications.find(rq, {"_id": 0, "stage": 1, "forecast_revenue": 1}).to_list(10000)
+        forecast_pipeline, realized_revenue = 0, 0
+        by_stage = {}
+        for app in apps:
+            stage = app.get("stage", "applied")
+            prob = STAGE_REVENUE_PROBABILITY.get(stage, 0)
+            rev = app.get("forecast_revenue", 0) or 0
+            weighted = rev * (prob / 100)
+            forecast_pipeline += weighted
+            if stage == "joined":
+                realized_revenue += rev
+            by_stage.setdefault(stage, {"count": 0, "total_revenue": 0, "weighted_revenue": 0, "probability": prob})
+            by_stage[stage]["count"] += 1
+            by_stage[stage]["total_revenue"] += rev
+            by_stage[stage]["weighted_revenue"] += weighted
+        return {"total_forecast_pipeline": round(forecast_pipeline, 2), "total_realized_revenue": round(realized_revenue, 2), "total_candidates_with_offer": len(apps), "by_stage": by_stage, "probability_map": STAGE_REVENUE_PROBABILITY}
+
+    async def get_perf():
+        rec_agg = [{"$group": {"_id": "$assigned_recruiter_id", "total": {"$sum": 1}, "submitted": {"$sum": {"$cond": [{"$in": ["$stage", ["submitted_to_client", "interview", "offered", "hired", "joined"]]}, 1, 0]}}, "offered": {"$sum": {"$cond": [{"$in": ["$stage", ["offered", "hired", "joined"]]}, 1, 0]}}, "joined": {"$sum": {"$cond": [{"$eq": ["$stage", "joined"]}, 1, 0]}}, "rejected": {"$sum": {"$cond": [{"$eq": ["$stage", "rejected"]}, 1, 0]}}, "total_revenue": {"$sum": {"$ifNull": ["$forecast_revenue", 0]}}}}]
+        man_agg = [{"$group": {"_id": "$job_id", "total": {"$sum": 1}, "submitted": {"$sum": {"$cond": [{"$in": ["$stage", ["submitted_to_client", "interview", "offered", "hired", "joined"]]}, 1, 0]}}, "offered": {"$sum": {"$cond": [{"$in": ["$stage", ["offered", "hired", "joined"]]}, 1, 0]}}, "joined": {"$sum": {"$cond": [{"$eq": ["$stage", "joined"]}, 1, 0]}}, "total_revenue": {"$sum": {"$ifNull": ["$forecast_revenue", 0]}}}}]
+        rec_results, man_results = await asyncio.gather(db.applications.aggregate(rec_agg).to_list(500), db.applications.aggregate(man_agg).to_list(500))
+        rec_ids = [r["_id"] for r in rec_results if r["_id"]]
+        job_ids = [r["_id"] for r in man_results if r["_id"]]
+        users, job_docs = await asyncio.gather(db.users.find({"id": {"$in": rec_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500) if rec_ids else asyncio.sleep(0), db.jobs.find({"id": {"$in": job_ids}}, {"_id": 0, "id": 1, "title": 1, "company_name": 1}).to_list(500) if job_ids else asyncio.sleep(0))
+        umap = {u["id"]: u.get("name", "") for u in (users or [])}
+        jmap = {j["id"]: j for j in (job_docs or [])}
+        perf = [{"recruiter_id": r["_id"], "recruiter_name": umap.get(r["_id"], "Unknown"), "total_candidates": r["total"], "submitted": r["submitted"], "offered": r["offered"], "joined": r["joined"], "rejected": r["rejected"], "total_revenue": round(r["total_revenue"], 2), "conversion_rate": round((r["joined"] / r["total"]) * 100, 1) if r["total"] > 0 else 0} for r in rec_results if r["_id"]]
+        perf.sort(key=lambda x: x["total_revenue"], reverse=True)
+        mandates = [{"mandate_id": r["_id"], "mandate_name": jmap.get(r["_id"], {}).get("title", "Unknown"), "company": jmap.get(r["_id"], {}).get("company_name", ""), "total_candidates": r["total"], "submitted": r["submitted"], "offered": r["offered"], "joined": r["joined"], "total_revenue": round(r["total_revenue"], 2), "submission_rate": round((r["submitted"] / r["total"]) * 100, 1) if r["total"] > 0 else 0} for r in man_results if r["_id"]]
+        mandates.sort(key=lambda x: x["total_revenue"], reverse=True)
+        return {"recruiter": {"recruiters": perf}, "mandate": {"mandates": mandates}}
+
+    overview, pipeline, revenue, performance = await asyncio.gather(overview_task, get_pipeline(), get_revenue(), get_perf())
+
+    from services.analytics_pdf import build_combined_pdf
+    buf = build_combined_pdf(overview, pipeline, revenue, performance, date_from, date_to)
+
+    now_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    filename = f"VHC_Complete_Analytics_{now_str}.pdf"
+
+    return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+
 # ── Pipeline Conversion Rates ──
 
 @analytics_router.get("/pipeline-conversion")
