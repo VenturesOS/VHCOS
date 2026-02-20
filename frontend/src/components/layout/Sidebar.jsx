@@ -29,7 +29,8 @@ import {
   Download,
   Radar,
   IndianRupee,
-  Linkedin
+  Linkedin,
+  Shield
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -61,6 +62,7 @@ const navItems = {
     { icon: Mail, label: 'Contact Leads', path: '/admin/contact-submissions' },
     { icon: Bug, label: 'Bug Reports', path: '/admin/bug-reports' },
     { icon: Activity, label: 'System Health', path: '/admin/system-health' },
+    { icon: Shield, label: 'Compliance', path: '/admin/compliance-dashboard' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
   recruiter: [
