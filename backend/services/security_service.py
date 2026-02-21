@@ -1,13 +1,15 @@
 """
 VHC Talent OS — Security Service
-File validation, content scanning, security event logging, Turnstile verification.
+File validation, content scanning, ClamAV integration, security event logging, Turnstile verification.
 """
 import uuid
 import struct
+import socket
 import logging
 import asyncio
 import zipfile
 import io
+import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from config import db
@@ -18,6 +20,11 @@ logger = logging.getLogger(__name__)
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 PARSE_TIMEOUT = 15  # seconds
+
+# ─── ClamAV Configuration ───
+CLAMAV_HOST = os.environ.get("CLAMAV_HOST", "")
+CLAMAV_PORT = int(os.environ.get("CLAMAV_PORT", "3310"))
+CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "false").lower() == "true"
 
 # Magic byte signatures for file type validation
 MAGIC_BYTES = {
