@@ -19,9 +19,16 @@ from models import (
 # Import utilities
 from utils import hash_password, require_role
 
+# Import Zero Trust middleware
+from middleware.zero_trust import require_zero_trust
 
-# Create router for admin endpoints
-admin_router = APIRouter(prefix="/api", tags=["Admin"])
+
+# Create router for admin endpoints (Zero Trust applied at router level)
+admin_router = APIRouter(
+    prefix="/api",
+    tags=["Admin"],
+    dependencies=[Depends(require_zero_trust)],
+)
 
 
 def _validate_commercial(commercial):
