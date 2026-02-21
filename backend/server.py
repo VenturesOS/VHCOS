@@ -207,6 +207,25 @@ async def init_compliance_indexes():
 
 
 @app.on_event("startup")
+async def init_maintenance_bot():
+    try:
+        # Create indexes for maintenance collections
+        await db.system_health_checks.create_index("timestamp")
+        await db.system_health_checks.create_index("service_name")
+        await db.maintenance_fixes.create_index("start_time")
+        await db.maintenance_fixes.create_index("service_name")
+        await db.reliability_events.create_index("timestamp")
+        await db.reliability_events.create_index("event_type")
+        await db.reliability_buffer.create_index("status")
+        # Start bot background loop
+        from services.maintenance_bot import start_bot
+        start_bot()
+        logging.info("Maintenance bot started")
+    except Exception as e:
+        logging.warning(f"Maintenance bot init failed: {e}")
+
+
+@app.on_event("startup")
 async def start_blog_scheduler():
     """Start the APScheduler background jobs for blog auto-publishing."""
     try:
