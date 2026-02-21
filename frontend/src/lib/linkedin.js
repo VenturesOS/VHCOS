@@ -3,7 +3,7 @@
  * Uses LinkedIn's feed share with pre-filled text.
  */
 export function getLinkedInShareUrl(job) {
-  const jobUrl = `https://ventureshrd.com/jobs/${job.id}`;
+  const jobUrl = `${window.location.origin}/jobs/${job.id}`;
   const title = job.title || 'New Job Opening';
   const company = job.company_name || job.public_company_alias || '';
   const location = job.location || '';

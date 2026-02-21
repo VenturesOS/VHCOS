@@ -28,7 +28,9 @@ router = APIRouter(prefix="/api/linkedin", tags=["LinkedIn"])
 
 LINKEDIN_CLIENT_ID = os.environ.get("LINKEDIN_CLIENT_ID", "")
 LINKEDIN_CLIENT_SECRET = os.environ.get("LINKEDIN_CLIENT_SECRET", "")
-LINKEDIN_REDIRECT_URI = os.environ.get("LINKEDIN_REDIRECT_URI", "https://ventureshrd.com/api/linkedin/callback")
+LINKEDIN_REDIRECT_URI = os.environ.get("LINKEDIN_REDIRECT_URI")
+if not LINKEDIN_REDIRECT_URI:
+    logger.warning("LINKEDIN_REDIRECT_URI not configured — LinkedIn OAuth will not work")
 
 LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
