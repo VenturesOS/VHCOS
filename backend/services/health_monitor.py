@@ -162,6 +162,23 @@ async def check_naukri_capture():
         return {"status": "warning", "metrics": {}, "error_details": str(e)}
 
 
+async def check_security():
+    try:
+        now = datetime.now(timezone.utc)
+        h24 = (now - timedelta(hours=24)).isoformat()
+        total = await db.security_events.count_documents({"timestamp": {"$gte": h24}})
+        critical = await db.security_events.count_documents({"timestamp": {"$gte": h24}, "severity": "CRITICAL"})
+        high = await db.security_events.count_documents({"timestamp": {"$gte": h24}, "severity": "HIGH"})
+        status = "healthy" if critical == 0 and high < 3 else "warning" if critical < 3 and high < 10 else "critical"
+        return {
+            "status": status,
+            "metrics": {"events_24h": total, "critical_24h": critical, "high_24h": high},
+            "error_details": f"{critical} critical, {high} high security events" if critical + high > 0 else None,
+        }
+    except Exception as e:
+        return {"status": "warning", "metrics": {}, "error_details": str(e)}
+
+
 CHECK_MAP = {
     "mongodb": check_mongodb,
     "api_server": check_api_server,
