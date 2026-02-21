@@ -63,6 +63,7 @@ const navItems = {
     { icon: Mail, label: 'Contact Leads', path: '/admin/contact-submissions' },
     { icon: Bug, label: 'Bug Reports', path: '/admin/bug-reports' },
     { icon: Activity, label: 'System Health', path: '/admin/system-health' },
+    { icon: ShieldCheck, label: 'Security Audit', path: '/admin/security-audit' },
     { icon: Shield, label: 'Compliance', path: '/admin/compliance-dashboard' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
