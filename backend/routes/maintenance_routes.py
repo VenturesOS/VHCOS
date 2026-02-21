@@ -257,7 +257,7 @@ async def security_posture(user=Depends(require_role("admin"))):
         TURNSTILE_ENABLED, CLAMAV_ENABLED, CLAMAV_HOST,
         check_clamav_health, get_security_summary
     )
-    from middleware.zero_trust import ZERO_TRUST_ENABLED
+    from middleware.zero_trust import ZERO_TRUST_ENABLED, CF_ENFORCE
     from middleware.rate_limiter import ROUTE_LIMITS
 
     # Gather validation data
