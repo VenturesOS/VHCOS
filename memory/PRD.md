@@ -9,42 +9,46 @@ Full-stack talent operating system for industrial recruitment with pipeline trac
 - **3rd Party:** OpenAI GPT-4o-mini, Resend, Google Tag Manager, LinkedIn API
 
 ## What's Been Implemented
-- 7-stage Pipeline (applied→joined) with validation, event logging, revenue closure
-- Submission Tracker: Master columns (58), templates, CRUD, spreadsheet UI, bidirectional sync
-- Multi-step Tracker Creation Wizard + Duplicate Tracker
-- Client-facing read-only tracker view
-- Analytics Dashboard: 4 tabs, unified filter bar, combined PDF export
-- Analytics API optimized from 11s to ~2s
 
-### Enterprise Compliance (DPDP 2023) — Feb 2026
+### Core Platform
+- 7-stage Pipeline, Submission Tracker, Analytics (4 tabs), Revenue Engine
+- Tracker Creation Wizard, Duplicate Tracker, Template Upload
+- Unified Filter Bar, Combined PDF Export, Analytics API optimization
+
+### Enterprise Compliance (DPDP 2023)
 - Cookie Consent Banner, Candidate Data Consent, Compliance Dashboard
 - Policy Pages (Privacy, Terms, Cookie), Trust Badges, Audit Logging
 
-### Enterprise System Maintenance Bot — Feb 2026
-- **Health Monitor:** 8 service checks (MongoDB, API, Workers, Queue, Resources, Automation, AI, Data Sync)
-- **Auto-Healer:** Rate-limited 3/hr/service, CRITICAL escalation
-- **Reliability Layer:** Circuit breaker, retry with backoff, graceful degradation, queue buffering, safe mode, task priority (HIGH/MEDIUM/LOW)
-- **Maintenance Bot:** Background worker (5-min loop), non-blocking asyncio
-- **PDF Report:** 6-section enterprise report (Header+Score, Summary, Errors, Fixes, AI Analytics, Reliability Events)
-- **Real-Time Dashboard:** Live service monitor grid (8 cards), health score trend chart (24h), active incidents panel (last 5), auto-refresh 30s
+### Enterprise System Maintenance Bot
+- Health Monitor: 9 service checks (MongoDB, API, Workers, Queue, Resources, Automation, AI, Data Sync, Naukri Capture)
+- Auto-Healer: Rate-limited 3/hr/service, CRITICAL escalation
+- Reliability Layer: Circuit breaker, retry, graceful degradation, queue buffering, safe mode, task priority
+- Background Bot: 5-min loop, daily diagnostic self-test
+- PDF Report: 7 sections (Header, Summary, Errors, Fixes, AI Analytics, Reliability, Naukri Failed Captures)
+- Real-Time Dashboard: Live service grid (9 cards), health score trend (24h), active incidents, auto-refresh 30s
+
+### Naukri Extension Capture Monitoring
+- Full capture logging to `naukri_capture_logs` (success + failure with candidate identity)
+- Failed Naukri Captures panel in System Health dashboard with Recover button
+- Health score affected by capture failure rate and unrecovered count
+- PDF Section 7: Failed Capture Details with candidate name, email, profile URL, failure reason, missing fields
+- Recovery workflow: POST /api/system-health/failed-captures/{id}/recover
 
 ## DB Collections
-### Maintenance
-- `system_health_checks`: { service_name, priority, status, timestamp, metrics, error_details }
-- `maintenance_fixes`: { id, service_name, issue_detected, fix_action, start_time, end_time, recovery_duration_ms, result }
-- `reliability_events`: { id, event_type, service, detail, timestamp }
-- `reliability_buffer`: { id, action_type, payload, status, created_at, processed_at }
+### Maintenance & Monitoring
+- `system_health_checks`, `maintenance_fixes`, `reliability_events`, `reliability_buffer`
+- `naukri_capture_logs`: { id, timestamp, profile_id, profile_url, candidate_name, candidate_email, candidate_phone, status, failure_reason, failed_step, data_missing_fields, captured_to_bank, is_recovered, retry_count, capture_duration_ms, source }
 
 ### Compliance
 - `consent_audit_logs`, `cookie_consent_logs`, `compliance_alerts`, `data_governance_requests`
 
 ## Key API Endpoints
-- `GET /api/system-health/live-status` — Real-time services, score history, incidents
-- `GET /api/system-health/maintenance-status` — Bot status, health score, reliability state
-- `GET /api/system-health/maintenance-report/download` — PDF report
+- `GET /api/system-health/live-status` — 9 services, score history, incidents
+- `GET /api/system-health/failed-captures` — Failed Naukri capture logs
+- `POST /api/system-health/failed-captures/{id}/recover` — Mark as recovered
+- `GET /api/system-health/maintenance-report/download` — 7-section PDF
 - `POST /api/system-health/maintenance-run` — Manual maintenance trigger
-- `GET /api/compliance/dashboard-stats` — Compliance health
-- `GET /api/compliance/audit-logs` — Consent audit logs
+- `POST /api/system-health/diagnostic-test` — Diagnostic self-test
 
 ## Credentials
 - Admin: admin@vhc.in / VhcAdmin@2024
