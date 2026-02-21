@@ -143,6 +143,24 @@ async def check_data_sync():
         return {"status": "warning", "metrics": {}, "error_details": str(e)}
 
 
+async def check_naukri_capture():
+    try:
+        now = datetime.now(timezone.utc)
+        h24 = (now - timedelta(hours=24)).isoformat()
+        total = await db.naukri_capture_logs.count_documents({"timestamp": {"$gte": h24}})
+        failed = await db.naukri_capture_logs.count_documents({"timestamp": {"$gte": h24}, "status": "failed"})
+        unrecovered = await db.naukri_capture_logs.count_documents({"status": "failed", "is_recovered": False})
+        rate = round(((total - failed) / max(total, 1)) * 100, 1) if total > 0 else 100.0
+        status = "healthy" if rate >= 95 and unrecovered < 5 else "warning" if rate >= 80 and unrecovered < 20 else "critical"
+        return {
+            "status": status,
+            "metrics": {"total_24h": total, "failed_24h": failed, "success_rate": rate, "unrecovered": unrecovered},
+            "error_details": f"{unrecovered} unrecovered failed captures" if unrecovered > 0 else None,
+        }
+    except Exception as e:
+        return {"status": "warning", "metrics": {}, "error_details": str(e)}
+
+
 CHECK_MAP = {
     "mongodb": check_mongodb,
     "api_server": check_api_server,
