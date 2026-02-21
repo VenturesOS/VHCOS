@@ -13,6 +13,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    turnstile_token: Optional[str] = None
 
 
 class UserLogin(BaseModel):
