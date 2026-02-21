@@ -2,7 +2,8 @@
 VHC Talent OS — Maintenance Routes
 Endpoints for maintenance report download, bot status, and manual triggers.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
 from fastapi.responses import Response
 from utils import require_role
 from services.maintenance_report_generator import generate_maintenance_report
