@@ -20,35 +20,53 @@ Full-stack talent operating system for industrial recruitment with pipeline trac
 - Policy Pages (Privacy, Terms, Cookie), Trust Badges, Audit Logging
 
 ### Enterprise System Maintenance Bot
-- Health Monitor: 9 service checks (MongoDB, API, Workers, Queue, Resources, Automation, AI, Data Sync, Naukri Capture)
+- Health Monitor: 11 service checks (MongoDB, API, Workers, Queue, Resources, Automation, AI, Data Sync, Naukri Capture, Security, Virus Scanner)
 - Auto-Healer: Rate-limited 3/hr/service, CRITICAL escalation
 - Reliability Layer: Circuit breaker, retry, graceful degradation, queue buffering, safe mode, task priority
 - Background Bot: 5-min loop, daily diagnostic self-test
-- PDF Report: 7 sections (Header, Summary, Errors, Fixes, AI Analytics, Reliability, Naukri Failed Captures)
-- Real-Time Dashboard: Live service grid (9 cards), health score trend (24h), active incidents, auto-refresh 30s
+- PDF Report: 8 sections (Header, Summary, Errors, Fixes, AI Analytics, Reliability, Naukri Failed Captures, Security Events + ClamAV status)
+- Real-Time Dashboard: Live service grid (11 cards), health score trend (24h), active incidents, auto-refresh 30s
 
 ### Naukri Extension Capture Monitoring
 - Full capture logging to `naukri_capture_logs` (success + failure with candidate identity)
 - Failed Naukri Captures panel in System Health dashboard with Recover button
 - Health score affected by capture failure rate and unrecovered count
 - PDF Section 7: Failed Capture Details with candidate name, email, profile URL, failure reason, missing fields
-- Recovery workflow: POST /api/system-health/failed-captures/{id}/recover
+
+### Enterprise Security Hardening (COMPLETED Feb 2026)
+- **CV Upload Security:** File type (PDF/DOC/DOCX only), size (5MB max), magic byte validation, pattern-based threat scanning
+- **ClamAV Virus Scanner:** Optional integration with graceful fallback — when disabled, uses pattern-based scanning; logs events when scanner unavailable
+- **Bot & Spam Protection:** Cloudflare Turnstile CAPTCHA on registration, resume upload, and job application — bypassed gracefully when keys not configured
+- **API Abuse Protection:** Rate limiting middleware on login (5/min), register (5/min), parse-resume (10/min), apply (5/min), upload (3/min), admin routes (30/min)
+- **Admin Security:** Cloudflare Zero Trust Access middleware on all admin routes — validates CF-Access-Jwt-Assertion header; bypassed when not configured
+- **Security Logging:** All security events logged to `security_events` collection (event_type, severity, IP, detail)
+- **System Health Dashboard:** Security Events panel, Virus Scanner service card (11 services total)
+- **PDF Report:** Section 8 Security Events with ClamAV status note, event counts and details
+- **CV Display Safety:** HTML sanitization of extracted resume text to prevent XSS
+- **Refresh Token Support:** Short JWT expiry configurable via env
 
 ## DB Collections
 ### Maintenance & Monitoring
 - `system_health_checks`, `maintenance_fixes`, `reliability_events`, `reliability_buffer`
-- `naukri_capture_logs`: { id, timestamp, profile_id, profile_url, candidate_name, candidate_email, candidate_phone, status, failure_reason, failed_step, data_missing_fields, captured_to_bank, is_recovered, retry_count, capture_duration_ms, source }
+- `naukri_capture_logs`, `security_events`
 
 ### Compliance
 - `consent_audit_logs`, `cookie_consent_logs`, `compliance_alerts`, `data_governance_requests`
 
 ## Key API Endpoints
-- `GET /api/system-health/live-status` — 9 services, score history, incidents
+- `GET /api/system-health/live-status` — 11 services, score history, incidents
+- `GET /api/system-health/security-events` — Security event logs with summary
 - `GET /api/system-health/failed-captures` — Failed Naukri capture logs
 - `POST /api/system-health/failed-captures/{id}/recover` — Mark as recovered
-- `GET /api/system-health/maintenance-report/download` — 7-section PDF
+- `GET /api/system-health/maintenance-report/download` — 8-section PDF
 - `POST /api/system-health/maintenance-run` — Manual maintenance trigger
 - `POST /api/system-health/diagnostic-test` — Diagnostic self-test
+
+## Environment Variables (Security)
+- `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY` — Cloudflare Turnstile CAPTCHA
+- `REACT_APP_TURNSTILE_SITE_KEY` — Frontend Turnstile widget
+- `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` — Cloudflare Zero Trust
+- `CLAMAV_HOST` / `CLAMAV_PORT` / `CLAMAV_ENABLED` — ClamAV virus scanner
 
 ## Credentials
 - Admin: admin@vhc.in / VhcAdmin@2024
@@ -63,3 +81,6 @@ Full-stack talent operating system for industrial recruitment with pipeline trac
 - Automation workflows
 - Consent withdrawal flow
 - Bulk consent remediation
+
+## Known Issues
+- LinkedIn API auto-posting blocked (requires `w_organization_social` scope approval from LinkedIn)
