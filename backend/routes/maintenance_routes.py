@@ -73,6 +73,50 @@ async def run_diagnostic(user=Depends(require_role("admin"))):
     return {"status": "ok", **result}
 
 
+@maintenance_router.get("/failed-captures")
+async def get_failed_captures(
+    page: int = 1,
+    limit: int = 20,
+    recovered: Optional[str] = None,
+    user=Depends(require_role("admin")),
+):
+    """Get failed Naukri capture logs for admin review."""
+    from typing import Optional as Opt
+    query = {"status": "failed"}
+    if recovered == "true":
+        query["is_recovered"] = True
+    elif recovered == "false":
+        query["is_recovered"] = False
+
+    skip = (page - 1) * limit
+    total = await db.naukri_capture_logs.count_documents(query)
+    logs = await db.naukri_capture_logs.find(query, {"_id": 0}).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
+
+    # Stats
+    total_failed = await db.naukri_capture_logs.count_documents({"status": "failed"})
+    unrecovered = await db.naukri_capture_logs.count_documents({"status": "failed", "is_recovered": False})
+
+    return {
+        "logs": logs,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "stats": {"total_failed": total_failed, "unrecovered": unrecovered},
+    }
+
+
+@maintenance_router.post("/failed-captures/{capture_id}/recover")
+async def mark_capture_recovered(capture_id: str, user=Depends(require_role("admin"))):
+    """Mark a failed capture as recovered (manually added to candidate bank)."""
+    result = await db.naukri_capture_logs.update_one(
+        {"id": capture_id, "status": "failed"},
+        {"$set": {"is_recovered": True, "recovered_at": datetime.now(timezone.utc).isoformat(), "recovered_by": user.get("id", "")}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Capture log not found or already recovered")
+    return {"status": "ok", "message": "Marked as recovered"}
+
+
 @maintenance_router.get("/live-status")
 async def live_status(user=Depends(require_role("admin"))):
     """Returns current services, score history (24h), and latest incidents."""
