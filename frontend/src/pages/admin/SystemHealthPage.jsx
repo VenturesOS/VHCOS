@@ -5,7 +5,10 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Activity, AlertTriangle, Monitor, Server, Clock, Trash2, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, Monitor, Server, Clock, Trash2, RefreshCw, Download, Loader2, Shield } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+function getToken() { return localStorage.getItem('vhc_token'); }
 
 export default function SystemHealthPage() {
   const [stats, setStats] = useState(null);
@@ -13,6 +16,8 @@ export default function SystemHealthPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [mStatus, setMStatus] = useState(null);
 
   useEffect(() => { load(); }, [filter]);
 
