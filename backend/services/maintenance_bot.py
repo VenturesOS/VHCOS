@@ -51,11 +51,11 @@ async def run_maintenance_cycle():
 
     # Auto-heal critical and warning services
     for check in critical + warnings:
-        if check["status"] in ("critical", "warning") and check.get("error_details"):
-            try:
-                await attempt_fix(check["service_name"], check.get("error_details", "unknown issue"))
-            except Exception as e:
-                logger.error(f"[BOT] Auto-heal failed for {check['service_name']}: {e}")
+        issue = check.get("error_details") or f"{check['service_name']} status: {check['status']}"
+        try:
+            await attempt_fix(check["service_name"], issue)
+        except Exception as e:
+            logger.error(f"[BOT] Auto-heal failed for {check['service_name']}: {e}")
 
     # Drain buffered requests if system is healthy
     if score >= 70:
