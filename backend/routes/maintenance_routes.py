@@ -156,7 +156,7 @@ async def live_status(user=Depends(require_role("admin"))):
         sn = doc["service_name"]
         if sn not in latest_services:
             latest_services[sn] = doc
-        if len(latest_services) >= 10:
+        if len(latest_services) >= 12:
             break
 
     # 2. Failure counts per service (last 24h)
