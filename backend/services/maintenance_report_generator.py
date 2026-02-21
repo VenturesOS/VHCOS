@@ -263,6 +263,31 @@ async def generate_maintenance_report() -> bytes:
     else:
         story.append(Paragraph("No failed captures in the reporting period.", styles["SmallGray"]))
 
+    # SECTION 8 — Security Events
+    sec_events = await db.security_events.find(
+        {"timestamp": {"$gte": cutoff}}, {"_id": 0}
+    ).sort("timestamp", -1).limit(LIMIT).to_list(LIMIT)
+    sec_critical = len([e for e in sec_events if e.get("severity") == "CRITICAL"])
+    sec_high = len([e for e in sec_events if e.get("severity") == "HIGH"])
+
+    story.append(Paragraph(f"Security Events ({len(sec_events)} total, {sec_critical} critical, {sec_high} high)", styles["SectionTitle"]))
+    if sec_events:
+        sec_rows = []
+        for se in sec_events[:100]:
+            sev = se.get("severity", "")
+            sec_rows.append([
+                Paragraph(_esc(str(se.get("timestamp", ""))[:19]), styles["CellText"]),
+                Paragraph(_esc(sev), styles["CellText"]),
+                Paragraph(_esc(se.get("event_type", "")), styles["CellText"]),
+                Paragraph(_esc(se.get("ip_address", "")), styles["CellText"]),
+                Paragraph(_esc(str(se.get("detail", ""))[:100]), styles["CellText"]),
+            ])
+        story.append(_make_log_table(styles,
+            ["Time", "Severity", "Event Type", "IP", "Detail"],
+            sec_rows, [28 * mm, 18 * mm, 30 * mm, 25 * mm, 69 * mm]))
+    else:
+        story.append(Paragraph("No security events in the reporting period.", styles["SmallGray"]))
+
     # Footer
     story.append(Spacer(1, 10 * mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_GRAY))
