@@ -19,6 +19,7 @@ SERVICES = [
     {"name": "automation_pipeline", "priority": "MEDIUM"},
     {"name": "ai_services", "priority": "MEDIUM"},
     {"name": "data_sync", "priority": "LOW"},
+    {"name": "naukri_capture", "priority": "MEDIUM"},
 ]
 
 
