@@ -6,6 +6,7 @@ Scoped to last 7 days OR 1000 records max.
 import io
 import logging
 from datetime import datetime, timezone, timedelta
+from xml.sax.saxutils import escape as xml_escape
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
