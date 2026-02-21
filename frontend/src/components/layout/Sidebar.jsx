@@ -30,7 +30,8 @@ import {
   Radar,
   IndianRupee,
   Linkedin,
-  Shield
+  Shield,
+  ShieldCheck
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
