@@ -20,6 +20,50 @@ logger = logging.getLogger(__name__)
 extension_router = APIRouter(prefix="/api/extension", tags=["Browser Extension"])
 
 
+# ============== CAPTURE LOGGING ==============
+
+async def _log_capture(profile, user, status, action, candidate_id, failure_reason=None, failed_step=None, capture_start=None):
+    """Log every capture attempt to naukri_capture_logs for monitoring."""
+    import time as _time
+    now = datetime.now(timezone.utc).isoformat()
+    duration_ms = round((_time.time() - capture_start) * 1000) if capture_start else 0
+
+    # Determine missing critical fields
+    missing = []
+    if not getattr(profile, 'email', None): missing.append('email')
+    if not getattr(profile, 'phone', None): missing.append('phone')
+    if not getattr(profile, 'current_company', None): missing.append('current_company')
+    if not getattr(profile, 'current_designation', None): missing.append('current_designation')
+    if not getattr(profile, 'total_experience_years', None): missing.append('experience')
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "timestamp": now,
+        "profile_id": getattr(profile, 'naukri_profile_id', None) or '',
+        "profile_url": getattr(profile, 'naukri_profile_url', None) or '',
+        "candidate_name": getattr(profile, 'name', None) or '',
+        "candidate_email": getattr(profile, 'email', None) or '',
+        "candidate_phone": getattr(profile, 'phone', None) or '',
+        "status": status,
+        "action": action,
+        "candidate_id": candidate_id or '',
+        "failure_reason": failure_reason,
+        "failed_step": failed_step,
+        "data_missing_fields": missing,
+        "captured_to_bank": status == "success",
+        "is_recovered": False,
+        "retry_count": 0,
+        "capture_duration_ms": duration_ms,
+        "source": "naukri_extension",
+        "captured_by": user.get("id", "") if user else "",
+        "captured_by_name": user.get("name", "") if user else "",
+    }
+    try:
+        await db.naukri_capture_logs.insert_one(doc)
+    except Exception as e:
+        logger.error(f"[CaptureLog] Failed to log: {e}")
+
+
 # ============== REQUEST/RESPONSE MODELS ==============
 
 class WorkExperienceInput(BaseModel):
