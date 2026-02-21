@@ -220,7 +220,7 @@ async def security_validation(user=Depends(require_role("admin"))):
     }
 
     # Compute overall
-    statuses = [l["status"] for l in layers.values()]
+    statuses = [lyr["status"] for lyr in layers.values()]
     fail_count = statuses.count("FAIL")
     warn_count = statuses.count("WARN")
     pass_count = statuses.count("PASS")
@@ -324,8 +324,8 @@ async def security_posture(user=Depends(require_role("admin"))):
     ]
 
     # Calculate posture score
-    total_weight = sum(l["weight"] for l in protection_layers)
-    active_weight = sum(l["weight"] for l in protection_layers if l["active"])
+    total_weight = sum(pl["weight"] for pl in protection_layers)
+    active_weight = sum(pl["weight"] for pl in protection_layers if pl["active"])
     posture_score = round((active_weight / total_weight) * 100)
 
     # Recent security events (last 7 days)
@@ -361,8 +361,8 @@ async def security_posture(user=Depends(require_role("admin"))):
     return {
         "posture_score": posture_score,
         "protection_layers": protection_layers,
-        "active_count": sum(1 for l in protection_layers if l["active"]),
-        "inactive_count": sum(1 for l in protection_layers if not l["active"]),
+        "active_count": sum(1 for pl in protection_layers if pl["active"]),
+        "inactive_count": sum(1 for pl in protection_layers if not pl["active"]),
         "total_layers": len(protection_layers),
         "recent_events": recent_events,
         "summary_24h": summary_24h,
