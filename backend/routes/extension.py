@@ -501,6 +501,7 @@ async def capture_profile(
         'similar profiles', 'save for later', 'download', 'login', 'sign up',
     ]
     if profile.name and profile.name.lower().strip() in invalid_names:
+        await _log_capture(profile, current_user, "failed", "rejected", "", f"Invalid name: '{profile.name}'", "validation", capture_start)
         return CaptureResponse(
             success=False, action="rejected", candidate_id="",
             message=f"Rejected: '{profile.name}' is not a valid candidate name"
@@ -508,6 +509,7 @@ async def capture_profile(
     
     # Reject names that are too short (< 2 chars) or too long (> 80 chars)
     if not profile.name or len(profile.name.strip()) < 2 or len(profile.name.strip()) > 80:
+        await _log_capture(profile, current_user, "failed", "rejected", "", f"Name length invalid: '{profile.name}'", "validation", capture_start)
         return CaptureResponse(
             success=False, action="rejected", candidate_id="",
             message="Rejected: Invalid candidate name"
