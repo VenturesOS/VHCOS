@@ -644,6 +644,7 @@ async def capture_profile(
             await db.candidate_bank.insert_one(candidate_data)
         except Exception as insert_err:
             logger.error(f"[Extension] Insert FAILED for {profile.name}: {insert_err}")
+            await _log_capture(profile, current_user, "failed", "insert_failed", candidate_id, str(insert_err)[:300], "save_to_bank", capture_start)
             raise
         
         # Invalidate search cache so new profile appears immediately
@@ -653,6 +654,7 @@ async def capture_profile(
         total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
         logger.warning(f"[Extension] INSERT: New profile '{profile.name}' ({candidate_id[:12]}). Total naukri profiles: {total}")
         
+        await _log_capture(profile, current_user, "success", "created", candidate_id, None, None, capture_start)
         return CaptureResponse(
             success=True,
             action="created",
