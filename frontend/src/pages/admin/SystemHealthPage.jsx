@@ -27,6 +27,7 @@ const SERVICE_META = {
   data_sync:           { icon: CircleDot,   label: 'Data Sync',      metricKey: 'sync_errors_24h',metricLabel: 'Errors/24h' },
   naukri_capture:      { icon: Download,    label: 'Naukri Capture',  metricKey: 'success_rate',   metricLabel: 'Success%' },
   security:            { icon: Shield,      label: 'Security',        metricKey: 'events_24h',     metricLabel: 'Events/24h' },
+  virus_scanner:       { icon: Shield,      label: 'Virus Scanner',   metricKey: 'mode',           metricLabel: 'Mode' },
 };
 
 const STATUS_STYLES = {
