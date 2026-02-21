@@ -116,6 +116,10 @@ async def attempt_fix(service_name: str, issue: str):
             action = "restart_automation_check"
             result = "automation pipeline check triggered"
 
+        elif service_name == "diagnostic_test":
+            action = "diagnostic_validation"
+            result = "synthetic warning handled — auto-healer pipeline verified"
+
         else:
             action = "generic_health_check"
             result = "no specific fix available"
