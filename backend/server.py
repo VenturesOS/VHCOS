@@ -217,6 +217,9 @@ async def init_maintenance_bot():
         await db.reliability_events.create_index("timestamp")
         await db.reliability_events.create_index("event_type")
         await db.reliability_buffer.create_index("status")
+        await db.naukri_capture_logs.create_index("timestamp")
+        await db.naukri_capture_logs.create_index("status")
+        await db.naukri_capture_logs.create_index([("status", 1), ("is_recovered", 1)])
         # Start bot background loop
         from services.maintenance_bot import start_bot
         start_bot()
