@@ -21,6 +21,7 @@ SERVICES = [
     {"name": "data_sync", "priority": "LOW"},
     {"name": "naukri_capture", "priority": "MEDIUM"},
     {"name": "security", "priority": "HIGH"},
+    {"name": "virus_scanner", "priority": "MEDIUM"},
 ]
 
 
