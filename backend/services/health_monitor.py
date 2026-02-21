@@ -171,6 +171,7 @@ CHECK_MAP = {
     "automation_pipeline": check_automation_pipeline,
     "ai_services": check_ai_services,
     "data_sync": check_data_sync,
+    "naukri_capture": check_naukri_capture,
 }
 
 
