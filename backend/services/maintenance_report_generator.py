@@ -179,12 +179,12 @@ async def generate_maintenance_report() -> bytes:
         fix_rows = []
         for f in fixes[:100]:
             fix_rows.append([
-                Paragraph(str(f.get("start_time", ""))[:19], styles["CellText"]),
-                Paragraph(str(f.get("service_name", "")), styles["CellText"]),
-                Paragraph(str(f.get("issue_detected", ""))[:80], styles["CellText"]),
-                Paragraph(str(f.get("fix_action", "")), styles["CellText"]),
+                Paragraph(_esc(str(f.get("start_time", ""))[:19]), styles["CellText"]),
+                Paragraph(_esc(f.get("service_name", "")), styles["CellText"]),
+                Paragraph(_esc(str(f.get("issue_detected", ""))[:80]), styles["CellText"]),
+                Paragraph(_esc(f.get("fix_action", "")), styles["CellText"]),
                 Paragraph(f"{f.get('recovery_duration_ms', 0)}ms", styles["CellText"]),
-                Paragraph(str(f.get("result", ""))[:60], styles["CellText"]),
+                Paragraph(_esc(str(f.get("result", ""))[:60]), styles["CellText"]),
             ])
         story.append(_make_log_table(styles,
             ["Time", "Service", "Issue", "Action", "Duration", "Result"],
