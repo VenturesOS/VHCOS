@@ -313,6 +313,13 @@ async def public_parse_resume(
         logger.warning(f"[BOT] Honeypot triggered from {client_ip}")
         return {"success": True, "parsed_data": {}}
     
+    # ─── Security: Validate upload ───
+    content = await resume.read()
+    from services.security_service import validate_upload
+    check = await validate_upload(content, resume.filename, client_ip)
+    if not check["valid"]:
+        raise HTTPException(status_code=400, detail=check["reason"])
+
     # Save resume file temporarily
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     filename = f"temp_{timestamp}_{resume.filename}"
@@ -321,7 +328,6 @@ async def public_parse_resume(
     
     file_path = upload_dir / filename
     async with aiofiles.open(file_path, 'wb') as f:
-        content = await resume.read()
         await f.write(content)
     
     # Extract resume text
