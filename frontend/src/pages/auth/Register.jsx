@@ -122,6 +122,13 @@ export default function Register() {
                   </button>
                 </div>
               </div>
+              {isTurnstileEnabled && (
+                <TurnstileWidget
+                  onVerify={setTurnstileToken}
+                  onExpire={() => setTurnstileToken('')}
+                  className="flex justify-center"
+                />
+              )}
               <Button
                 type="submit"
                 className="w-full bg-[#7CB342] hover:bg-[#689F38] text-white"
