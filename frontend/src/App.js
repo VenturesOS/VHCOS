@@ -140,6 +140,7 @@ function App() {
             <Route path="import-history" element={<ImportHistoryPage />} />
             <Route path="bug-reports" element={<BugReportsPage />} />
             <Route path="system-health" element={<SystemHealthPage />} />
+            <Route path="security-audit" element={<SecurityAuditDashboard />} />
             <Route path="contact-submissions" element={<ContactSubmissionsPage />} />
             <Route path="blog-engine" element={<BlogEnginePage />} />
             <Route path="blog-analytics" element={<BlogAnalyticsPage />} />
