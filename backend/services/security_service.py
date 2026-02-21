@@ -99,6 +99,100 @@ def scan_for_threats(content: bytes, filename: str) -> list:
     return threats
 
 
+async def scan_with_clamav(content: bytes, filename: str) -> dict:
+    """
+    Scan file content using ClamAV daemon via INSTREAM protocol.
+    Returns {"clean": bool, "result": str, "available": bool}
+    """
+    if not CLAMAV_ENABLED or not CLAMAV_HOST:
+        return {"clean": True, "result": "scanner_not_configured", "available": False}
+
+    try:
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, _clamav_instream, content),
+            timeout=30
+        )
+        return result
+    except asyncio.TimeoutError:
+        await log_security_event("clamav_timeout", "system", "MEDIUM",
+                                 f"ClamAV scan timed out for {filename}")
+        return {"clean": True, "result": "scan_timeout", "available": True}
+    except Exception as e:
+        await log_security_event("clamav_error", "system", "MEDIUM",
+                                 f"ClamAV error: {str(e)[:200]}", {"filename": filename})
+        return {"clean": True, "result": f"scan_error: {str(e)[:100]}", "available": False}
+
+
+def _clamav_instream(content: bytes) -> dict:
+    """Synchronous ClamAV INSTREAM scan via socket."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)
+        sock.connect((CLAMAV_HOST, CLAMAV_PORT))
+
+        # INSTREAM protocol: send zINSTREAM\0, then chunks, then zero-length chunk
+        sock.send(b"zINSTREAM\0")
+
+        # Send content in chunks (max 2048 bytes each)
+        chunk_size = 2048
+        for i in range(0, len(content), chunk_size):
+            chunk = content[i:i + chunk_size]
+            sock.send(struct.pack("!L", len(chunk)) + chunk)
+
+        # End with zero-length chunk
+        sock.send(struct.pack("!L", 0))
+
+        # Read response
+        response = b""
+        while True:
+            data = sock.recv(4096)
+            if not data:
+                break
+            response += data
+
+        sock.close()
+        response_str = response.decode("utf-8", errors="ignore").strip()
+
+        if "OK" in response_str and "FOUND" not in response_str:
+            return {"clean": True, "result": "clean", "available": True}
+        elif "FOUND" in response_str:
+            return {"clean": False, "result": response_str, "available": True}
+        else:
+            return {"clean": True, "result": response_str, "available": True}
+
+    except (ConnectionRefusedError, socket.timeout, OSError) as e:
+        return {"clean": True, "result": f"daemon_unavailable: {str(e)[:100]}", "available": False}
+
+
+async def check_clamav_health() -> dict:
+    """Check if ClamAV daemon is reachable. For health monitoring."""
+    if not CLAMAV_ENABLED or not CLAMAV_HOST:
+        return {"status": "disabled", "available": False}
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _clamav_ping)
+        return result
+    except Exception as e:
+        return {"status": "error", "available": False, "error": str(e)[:200]}
+
+
+def _clamav_ping() -> dict:
+    """Ping ClamAV daemon."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((CLAMAV_HOST, CLAMAV_PORT))
+        sock.send(b"zPING\0")
+        response = sock.recv(1024).decode("utf-8", errors="ignore").strip()
+        sock.close()
+        if "PONG" in response:
+            return {"status": "healthy", "available": True}
+        return {"status": "warning", "available": True, "response": response}
+    except (ConnectionRefusedError, socket.timeout, OSError) as e:
+        return {"status": "unavailable", "available": False, "error": str(e)[:100]}
+
+
 def sanitize_text(text: str) -> str:
     """Sanitize extracted CV text to prevent XSS."""
     if not text:
