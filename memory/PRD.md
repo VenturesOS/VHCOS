@@ -70,6 +70,8 @@ Full-stack talent operating system for industrial recruitment with pipeline trac
 - `GET /api/system-health/security-events` — Security event logs with summary
 - `GET /api/system-health/failed-captures` — Failed Naukri capture logs
 - `POST /api/system-health/failed-captures/{id}/recover` — Mark as recovered
+- `GET /api/system-health/security-validation` — Deployment check: PASS/WARN/FAIL per security layer
+- `GET /api/system-health/security-posture` — Full posture data for Security Audit Dashboard
 - `GET /api/system-health/maintenance-report/download` — 8-section PDF
 - `POST /api/system-health/maintenance-run` — Manual maintenance trigger
 - `POST /api/system-health/diagnostic-test` — Diagnostic self-test
