@@ -118,6 +118,30 @@ async def mark_capture_recovered(capture_id: str, user=Depends(require_role("adm
     return {"status": "ok", "message": "Marked as recovered"}
 
 
+@maintenance_router.get("/security-events")
+async def get_security_events(
+    page: int = 1,
+    limit: int = 20,
+    severity: Optional[str] = None,
+    event_type: Optional[str] = None,
+    user=Depends(require_role("admin")),
+):
+    """Get security events for the dashboard."""
+    from services.security_service import get_security_summary
+    query = {}
+    if severity:
+        query["severity"] = severity
+    if event_type:
+        query["event_type"] = event_type
+
+    skip = (page - 1) * limit
+    total = await db.security_events.count_documents(query)
+    events = await db.security_events.find(query, {"_id": 0}).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
+    summary = await get_security_summary(hours=24)
+
+    return {"events": events, "total": total, "page": page, "limit": limit, "summary": summary}
+
+
 @maintenance_router.get("/live-status")
 async def live_status(user=Depends(require_role("admin"))):
     """Returns current services, score history (24h), and latest incidents."""
