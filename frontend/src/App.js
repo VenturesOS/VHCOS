@@ -64,6 +64,7 @@ import MatchHistoryPage from "./pages/shared/MatchHistoryPage";
 import NaukriProfileView from "./pages/shared/NaukriProfileView";
 import BugReportsPage from "./pages/admin/BugReportsPage";
 import SystemHealthPage from "./pages/admin/SystemHealthPage";
+import SecurityAuditDashboard from "./pages/admin/SecurityAuditDashboard";
 import ContactSubmissionsPage from "./pages/admin/ContactSubmissionsPage";
 import BlogEnginePage from "./pages/admin/BlogEnginePage";
 import BlogAnalyticsPage from "./pages/admin/BlogAnalyticsPage";
