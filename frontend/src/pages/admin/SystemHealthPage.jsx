@@ -309,6 +309,62 @@ export default function SystemHealthPage() {
         </Card>
       </div>
 
+      {/* ═══ FAILED NAUKRI CAPTURES ═══ */}
+      {failedCaptures && (failedCaptures.stats?.unrecovered > 0 || failedCaptures.logs?.length > 0) && (
+        <Card data-testid="failed-captures-panel">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="font-heading text-base flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                Failed Naukri Captures
+                {failedCaptures.stats?.unrecovered > 0 && (
+                  <Badge variant="outline" className="text-[10px] text-red-600 border-red-300 ml-1">
+                    {failedCaptures.stats.unrecovered} unrecovered
+                  </Badge>
+                )}
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100">
+              {failedCaptures.logs?.map((fc, i) => (
+                <div key={fc.id || i} className="px-4 py-3 hover:bg-slate-50 flex items-start justify-between gap-3" data-testid={`failed-capture-${i}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-800">{fc.candidate_name || 'Unknown'}</span>
+                      {fc.candidate_email && <span className="text-xs text-slate-400">{fc.candidate_email}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <Badge variant="outline" className="text-[9px] text-red-600 border-red-200">{fc.failed_step || 'unknown'}</Badge>
+                      <span className="text-[11px] text-slate-500 truncate max-w-xs">{fc.failure_reason}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
+                      <span>{fmtDate(fc.timestamp)}</span>
+                      {fc.data_missing_fields?.length > 0 && (
+                        <span className="text-amber-500">Missing: {fc.data_missing_fields.join(', ')}</span>
+                      )}
+                      {fc.profile_url && (
+                        <a href={fc.profile_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[150px]">Profile Link</a>
+                      )}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" className="shrink-0 text-xs h-7 gap-1"
+                    onClick={() => handleRecover(fc.id)} data-testid={`recover-btn-${i}`}>
+                    <CheckCircle2 className="w-3 h-3" /> Recover
+                  </Button>
+                </div>
+              ))}
+              {failedCaptures.logs?.length === 0 && (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-300 mx-auto mb-1" />
+                  All captures recovered
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ═══ EXISTING: Error Stats ═══ */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
