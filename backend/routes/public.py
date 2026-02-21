@@ -422,6 +422,11 @@ async def public_apply(
     if forwarded_for:
         client_ip = forwarded_for.split(",")[0].strip()
     
+    # Turnstile CAPTCHA verification
+    from services.security_service import verify_turnstile
+    if not await verify_turnstile(turnstile_token or "", client_ip):
+        raise HTTPException(status_code=403, detail="CAPTCHA verification failed. Please try again.")
+    
     # Rate limit: 5 applications per minute per IP
     if not check_rate_limit(f"apply:{client_ip}", limit=5, window=60):
         raise HTTPException(status_code=429, detail="Too many applications. Please try again later.")
