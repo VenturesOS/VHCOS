@@ -184,6 +184,11 @@ export default function SystemHealthPage() {
               <span className="text-[10px] text-slate-400">/100</span>
             </div>
           )}
+          <Link to="/admin/security-audit">
+            <Button variant="outline" size="sm" className="gap-1.5" data-testid="security-audit-link">
+              <ShieldCheck className="w-4 h-4" /> <span className="hidden sm:inline">Security Audit</span>
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={handleDownloadReport} disabled={downloading}
             data-testid="download-maintenance-report-btn" className="gap-1.5">
             {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
