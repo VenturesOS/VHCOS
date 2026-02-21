@@ -25,6 +25,7 @@ const SERVICE_META = {
   automation_pipeline: { icon: Radio,       label: 'Automation',     metricKey: 'success_rate',   metricLabel: 'Success' },
   ai_services:         { icon: Brain,       label: 'AI Services',    metricKey: 'ai_errors_1h',   metricLabel: 'Errors/1h' },
   data_sync:           { icon: CircleDot,   label: 'Data Sync',      metricKey: 'sync_errors_24h',metricLabel: 'Errors/24h' },
+  naukri_capture:      { icon: Download,    label: 'Naukri Capture',  metricKey: 'success_rate',   metricLabel: 'Success%' },
 };
 
 const STATUS_STYLES = {
