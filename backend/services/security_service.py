@@ -184,7 +184,7 @@ async def verify_turnstile(token: str, client_ip: str) -> bool:
             data = resp.json()
             if not data.get("success"):
                 await log_security_event("captcha_failed", client_ip, "MEDIUM",
-                                         f"Turnstile verification failed", {"errors": data.get("error-codes", [])})
+                                         "Turnstile verification failed", {"errors": data.get("error-codes", [])})
                 return False
             return True
     except Exception as e:
