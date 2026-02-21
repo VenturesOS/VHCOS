@@ -181,6 +181,29 @@ async def check_security():
         return {"status": "warning", "metrics": {}, "error_details": str(e)}
 
 
+async def check_virus_scanner():
+    """Check ClamAV virus scanner availability."""
+    try:
+        from services.security_service import check_clamav_health, CLAMAV_ENABLED
+        if not CLAMAV_ENABLED:
+            return {
+                "status": "healthy",
+                "metrics": {"enabled": False, "mode": "pattern_scan_only"},
+                "error_details": "ClamAV disabled — using pattern-based scanning"
+            }
+        health = await check_clamav_health()
+        if health["available"]:
+            return {"status": "healthy", "metrics": {"enabled": True, "daemon": "connected"}, "error_details": None}
+        else:
+            return {
+                "status": "warning",
+                "metrics": {"enabled": True, "daemon": "unavailable"},
+                "error_details": health.get("error", "ClamAV daemon not reachable")
+            }
+    except Exception as e:
+        return {"status": "warning", "metrics": {"enabled": False}, "error_details": str(e)}
+
+
 CHECK_MAP = {
     "mongodb": check_mongodb,
     "api_server": check_api_server,
@@ -192,6 +215,7 @@ CHECK_MAP = {
     "data_sync": check_data_sync,
     "naukri_capture": check_naukri_capture,
     "security": check_security,
+    "virus_scanner": check_virus_scanner,
 }
 
 
