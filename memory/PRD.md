@@ -77,9 +77,10 @@ Full-stack talent operating system for industrial recruitment with pipeline trac
 - `POST /api/system-health/diagnostic-test` — Diagnostic self-test
 
 ## Environment Variables (Security)
-- `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY` — Cloudflare Turnstile CAPTCHA
-- `REACT_APP_TURNSTILE_SITE_KEY` — Frontend Turnstile widget
-- `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` — Cloudflare Zero Trust
+- `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY` — Cloudflare Turnstile CAPTCHA (ACTIVE)
+- `REACT_APP_TURNSTILE_SITE_KEY` — Frontend Turnstile widget (ACTIVE)
+- `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` — Cloudflare Zero Trust (ACTIVE, Enforce mode)
+- `CF_ACCESS_ENFORCE` — Zero Trust enforcement mode (true=block, false=audit)
 - `CLAMAV_HOST` / `CLAMAV_PORT` / `CLAMAV_ENABLED` — ClamAV virus scanner
 
 ## Credentials
