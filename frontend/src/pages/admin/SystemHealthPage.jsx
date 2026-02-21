@@ -53,6 +53,12 @@ export default function SystemHealthPage() {
       });
       if (res.ok) setLive(await res.json());
     } catch (_) {}
+    try {
+      const res = await fetch(`${API_URL}/api/system-health/failed-captures?limit=10&recovered=false`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) setFailedCaptures(await res.json());
+    } catch (_) {}
   }, []);
 
   const load = useCallback(async () => {
