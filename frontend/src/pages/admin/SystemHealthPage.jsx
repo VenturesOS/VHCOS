@@ -95,7 +95,19 @@ export default function SystemHealthPage() {
           <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">System Health</h1>
           <p className="text-slate-500 mt-1">Auto-captured errors from frontend and backend</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {mStatus && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 mr-1" data-testid="health-score-badge">
+              <Shield className={`w-4 h-4 ${mStatus.health_score >= 70 ? 'text-emerald-500' : mStatus.health_score >= 40 ? 'text-amber-500' : 'text-red-500'}`} />
+              <span className="text-sm font-semibold text-slate-700">{mStatus.health_score}</span>
+              <span className="text-[10px] text-slate-400">/100</span>
+            </div>
+          )}
+          <Button variant="outline" size="sm" onClick={handleDownloadReport} disabled={downloading}
+            data-testid="download-maintenance-report-btn" className="gap-1.5">
+            {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span className="hidden sm:inline">{downloading ? 'Generating...' : 'Maintenance Report'}</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={load} data-testid="refresh-health-btn">
             <RefreshCw className="w-4 h-4 mr-1" /> Refresh
           </Button>
