@@ -22,6 +22,11 @@ W, H = A4
 LIMIT = 1000
 DAYS = 7
 
+
+def _esc(text):
+    """Escape XML entities to prevent reportlab parse errors."""
+    return xml_escape(str(text)) if text else ""
+
 # ─── Color palette ───
 C_PRIMARY = colors.HexColor("#0f172a")
 C_ACCENT = colors.HexColor("#059669")
