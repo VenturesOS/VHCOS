@@ -271,6 +271,18 @@ async def generate_maintenance_report() -> bytes:
     sec_high = len([e for e in sec_events if e.get("severity") == "HIGH"])
 
     story.append(Paragraph(f"Security Events ({len(sec_events)} total, {sec_critical} critical, {sec_high} high)", styles["SectionTitle"]))
+
+    # ClamAV status note
+    try:
+        from services.security_service import CLAMAV_ENABLED, CLAMAV_HOST
+        if CLAMAV_ENABLED and CLAMAV_HOST:
+            story.append(Paragraph(f"Virus Scanner: ClamAV enabled ({CLAMAV_HOST})", styles["SmallGray"]))
+        else:
+            story.append(Paragraph("Virus Scanner: ClamAV not configured — using pattern-based scanning only", styles["SmallGray"]))
+    except Exception:
+        story.append(Paragraph("Virus Scanner: Status unknown", styles["SmallGray"]))
+    story.append(Spacer(1, 2 * mm))
+
     if sec_events:
         sec_rows = []
         for se in sec_events[:100]:
