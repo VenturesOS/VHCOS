@@ -122,6 +122,23 @@ export default function SystemHealthPage() {
     }
   };
 
+  const handleRecover = async (captureId) => {
+    try {
+      const res = await fetch(`${API_URL}/api/system-health/failed-captures/${captureId}/recover`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) {
+        toast.success('Marked as recovered');
+        fetchLive();
+      } else {
+        toast.error('Failed to mark as recovered');
+      }
+    } catch {
+      toast.error('Recovery action failed');
+    }
+  };
+
   const fmtDate = (ts) => {
     if (!ts) return '-';
     return new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
