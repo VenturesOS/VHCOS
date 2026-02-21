@@ -61,6 +61,12 @@ export default function SystemHealthPage() {
       });
       if (res.ok) setFailedCaptures(await res.json());
     } catch (_) {}
+    try {
+      const res = await fetch(`${API_URL}/api/system-health/security-events?limit=10`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) setSecurityEvents(await res.json());
+    } catch (_) {}
   }, []);
 
   const load = useCallback(async () => {
