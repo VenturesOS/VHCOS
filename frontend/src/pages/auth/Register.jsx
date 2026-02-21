@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { Button } from '../../components/ui/button';
@@ -7,6 +7,7 @@ import { Label } from '../../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { toast } from 'sonner';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import { TurnstileWidget, isTurnstileEnabled } from '../../components/TurnstileWidget';
 
 const LOGO_URL = 'https://customer-assets.emergentagent.com/job_hire-hub-33/artifacts/umsjvfj8_VHC_logo-removebg_edited_edited.png';
 
@@ -22,6 +23,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
 
   // Only redirect if already authenticated AND not in the process of registering
   if (isAuthenticated && user && !justRegistered) {
@@ -35,13 +37,17 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isTurnstileEnabled && !turnstileToken) {
+      toast.error('Please complete the CAPTCHA verification.');
+      return;
+    }
+
     setLoading(true);
     setJustRegistered(true);
 
     try {
-      const userData = await register(formData);
+      const userData = await register({ ...formData, turnstile_token: turnstileToken });
       toast.success(`Welcome to Ventures HRD, ${userData.name}!`);
-      // Use window.location for a clean navigation to avoid React Router race conditions
       window.location.href = `/${userData.role}`;
     } catch (error) {
       const message = error.response?.data?.detail || 'Registration failed. Please try again.';
