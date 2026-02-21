@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { systemErrorsAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -8,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { toast } from 'sonner';
 import {
   Activity, AlertTriangle, Monitor, Server, Clock, Trash2, RefreshCw,
-  Download, Loader2, Shield, Database, Cpu, Zap, Radio, Brain,
+  Download, Loader2, Shield, ShieldCheck, Database, Cpu, Zap, Radio, Brain,
   ArrowUpDown, CircleDot, CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
