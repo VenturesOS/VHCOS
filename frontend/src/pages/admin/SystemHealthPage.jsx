@@ -31,10 +31,41 @@ export default function SystemHealthPage() {
       ]);
       setStats(statsRes.data);
       setErrors(errorsRes.data);
+      // Fetch maintenance status
+      try {
+        const mRes = await fetch(`${API_URL}/api/system-health/maintenance-status`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        if (mRes.ok) setMStatus(await mRes.json());
+      } catch (_) {}
     } catch {
       toast.error('Failed to load system health data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/system-health/maintenance-report/download`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) throw new Error('Failed to generate report');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `VHC_Maintenance_Report_${new Date().toISOString().slice(0,10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Maintenance report downloaded');
+    } catch (e) {
+      toast.error(e.message || 'Failed to download report');
+    } finally {
+      setDownloading(false);
     }
   };
 
