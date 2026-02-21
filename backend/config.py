@@ -96,7 +96,7 @@ else:
 # ============== JWT CONFIGURATION ==============
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'vhc-secret-key')
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('ACCESS_TOKEN_EXPIRE_MINUTES', 1440))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('ACCESS_TOKEN_EXPIRE_MINUTES', 30))
 
 # ============== FILE UPLOAD CONFIGURATION ==============
 UPLOAD_DIR = ROOT_DIR / "uploads"
