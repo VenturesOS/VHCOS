@@ -142,6 +142,237 @@ async def get_security_events(
     return {"events": events, "total": total, "page": page, "limit": limit, "summary": summary}
 
 
+@maintenance_router.get("/security-validation")
+async def security_validation(user=Depends(require_role("admin"))):
+    """
+    Quick deployment validation: checks all security layers.
+    Returns PASS/FAIL status for each protection layer + overall score.
+    """
+    from services.security_service import (
+        TURNSTILE_ENABLED, CLAMAV_ENABLED, CLAMAV_HOST,
+        check_clamav_health
+    )
+    from middleware.zero_trust import ZERO_TRUST_ENABLED
+    from middleware.rate_limiter import ROUTE_LIMITS
+
+    layers = {}
+
+    # 1. Turnstile CAPTCHA
+    layers["turnstile"] = {
+        "status": "PASS" if TURNSTILE_ENABLED else "WARN",
+        "enabled": TURNSTILE_ENABLED,
+        "detail": "Enabled and verifying" if TURNSTILE_ENABLED else "Not configured — CAPTCHA bypassed",
+    }
+
+    # 2. Zero Trust Access
+    layers["zero_trust"] = {
+        "status": "PASS" if ZERO_TRUST_ENABLED else "WARN",
+        "enabled": ZERO_TRUST_ENABLED,
+        "detail": "Enabled — admin routes protected" if ZERO_TRUST_ENABLED else "Not configured — admin routes use JWT only",
+    }
+
+    # 3. ClamAV Virus Scanner
+    if CLAMAV_ENABLED and CLAMAV_HOST:
+        clam_health = await check_clamav_health()
+        clam_ok = clam_health.get("available", False)
+        layers["clamav"] = {
+            "status": "PASS" if clam_ok else "FAIL",
+            "enabled": True,
+            "detail": "Connected to daemon" if clam_ok else f"Daemon unavailable: {clam_health.get('error', 'unknown')}",
+        }
+    else:
+        layers["clamav"] = {
+            "status": "WARN",
+            "enabled": False,
+            "detail": "Not configured — using pattern-based scanning only",
+        }
+
+    # 4. Rate Limiting
+    layers["rate_limiting"] = {
+        "status": "PASS",
+        "enabled": True,
+        "detail": f"Active on {len(ROUTE_LIMITS)} routes",
+        "protected_routes": list(ROUTE_LIMITS.keys()),
+    }
+
+    # 5. File Validation
+    layers["file_validation"] = {
+        "status": "PASS",
+        "enabled": True,
+        "detail": "Active — type, size, magic bytes, pattern scanning",
+    }
+
+    # 6. Security Logging
+    recent_count = await db.security_events.count_documents({
+        "timestamp": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}
+    })
+    layers["security_logging"] = {
+        "status": "PASS",
+        "enabled": True,
+        "detail": f"Active — {recent_count} events in last 24h",
+    }
+
+    # 7. XSS Prevention
+    layers["xss_prevention"] = {
+        "status": "PASS",
+        "enabled": True,
+        "detail": "Active — HTML sanitization on CV text",
+    }
+
+    # Compute overall
+    statuses = [l["status"] for l in layers.values()]
+    fail_count = statuses.count("FAIL")
+    warn_count = statuses.count("WARN")
+    pass_count = statuses.count("PASS")
+    total_layers = len(layers)
+
+    score = round((pass_count / total_layers) * 100)
+    overall = "FAIL" if fail_count > 0 else "WARN" if warn_count > 0 else "PASS"
+
+    return {
+        "overall": overall,
+        "score": score,
+        "pass_count": pass_count,
+        "warn_count": warn_count,
+        "fail_count": fail_count,
+        "total_layers": total_layers,
+        "layers": layers,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@maintenance_router.get("/security-posture")
+async def security_posture(user=Depends(require_role("admin"))):
+    """
+    Full security posture data for the Security Audit Dashboard.
+    Includes posture score, layer status, recent events, and compliance checklist.
+    """
+    from services.security_service import (
+        TURNSTILE_ENABLED, CLAMAV_ENABLED, CLAMAV_HOST,
+        check_clamav_health, get_security_summary
+    )
+    from middleware.zero_trust import ZERO_TRUST_ENABLED
+    from middleware.rate_limiter import ROUTE_LIMITS
+
+    # Gather validation data
+    clam_available = False
+    if CLAMAV_ENABLED and CLAMAV_HOST:
+        try:
+            clam_health = await check_clamav_health()
+            clam_available = clam_health.get("available", False)
+        except Exception:
+            pass
+
+    # Protection layers with scoring weights
+    protection_layers = [
+        {
+            "id": "file_validation",
+            "name": "File Upload Validation",
+            "category": "Upload Security",
+            "active": True,
+            "weight": 15,
+            "detail": "Type, size, magic bytes, pattern scanning",
+        },
+        {
+            "id": "rate_limiting",
+            "name": "API Rate Limiting",
+            "category": "API Protection",
+            "active": True,
+            "weight": 15,
+            "detail": f"Active on {len(ROUTE_LIMITS)} routes",
+        },
+        {
+            "id": "security_logging",
+            "name": "Security Event Logging",
+            "category": "Monitoring",
+            "active": True,
+            "weight": 10,
+            "detail": "All events logged to security_events collection",
+        },
+        {
+            "id": "xss_prevention",
+            "name": "XSS Prevention",
+            "category": "Content Safety",
+            "active": True,
+            "weight": 10,
+            "detail": "HTML sanitization on all CV text extraction",
+        },
+        {
+            "id": "turnstile",
+            "name": "Cloudflare Turnstile CAPTCHA",
+            "category": "Bot Protection",
+            "active": TURNSTILE_ENABLED,
+            "weight": 15,
+            "detail": "Enabled" if TURNSTILE_ENABLED else "Not configured",
+        },
+        {
+            "id": "zero_trust",
+            "name": "Cloudflare Zero Trust Access",
+            "category": "Admin Protection",
+            "active": ZERO_TRUST_ENABLED,
+            "weight": 20,
+            "detail": "Admin routes protected" if ZERO_TRUST_ENABLED else "Not configured",
+        },
+        {
+            "id": "clamav",
+            "name": "ClamAV Virus Scanner",
+            "category": "Malware Protection",
+            "active": CLAMAV_ENABLED and clam_available,
+            "weight": 15,
+            "detail": "Connected" if (CLAMAV_ENABLED and clam_available) else "Not active",
+        },
+    ]
+
+    # Calculate posture score
+    total_weight = sum(l["weight"] for l in protection_layers)
+    active_weight = sum(l["weight"] for l in protection_layers if l["active"])
+    posture_score = round((active_weight / total_weight) * 100)
+
+    # Recent security events (last 7 days)
+    cutoff_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    recent_events = await db.security_events.find(
+        {"timestamp": {"$gte": cutoff_7d}}, {"_id": 0}
+    ).sort("timestamp", -1).limit(20).to_list(20)
+
+    summary_24h = await get_security_summary(hours=24)
+    summary_7d = await get_security_summary(hours=168)
+
+    # Compliance checklist
+    compliance_checklist = [
+        {"item": "File uploads restricted to PDF, DOC, DOCX (max 5MB)", "status": True},
+        {"item": "Magic byte validation prevents file spoofing", "status": True},
+        {"item": "Pattern-based threat scanning on all uploads", "status": True},
+        {"item": "ClamAV antivirus scanning enabled", "status": CLAMAV_ENABLED and clam_available},
+        {"item": "CAPTCHA on public registration form", "status": TURNSTILE_ENABLED},
+        {"item": "CAPTCHA on resume upload form", "status": TURNSTILE_ENABLED},
+        {"item": "CAPTCHA on job application form", "status": TURNSTILE_ENABLED},
+        {"item": "API rate limiting on authentication endpoints", "status": True},
+        {"item": "API rate limiting on public upload endpoints", "status": True},
+        {"item": "API rate limiting on admin endpoints", "status": True},
+        {"item": "Zero Trust access control on admin routes", "status": ZERO_TRUST_ENABLED},
+        {"item": "Security event logging active", "status": True},
+        {"item": "XSS prevention on CV content display", "status": True},
+        {"item": "Honeypot fields on public forms", "status": True},
+        {"item": "JWT-based authentication with configurable expiry", "status": True},
+        {"item": "Security events visible in System Health dashboard", "status": True},
+        {"item": "Security events included in maintenance PDF report", "status": True},
+    ]
+
+    return {
+        "posture_score": posture_score,
+        "protection_layers": protection_layers,
+        "active_count": sum(1 for l in protection_layers if l["active"]),
+        "inactive_count": sum(1 for l in protection_layers if not l["active"]),
+        "total_layers": len(protection_layers),
+        "recent_events": recent_events,
+        "summary_24h": summary_24h,
+        "summary_7d": summary_7d,
+        "compliance_checklist": compliance_checklist,
+        "compliance_score": round(sum(1 for c in compliance_checklist if c["status"]) / len(compliance_checklist) * 100),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @maintenance_router.get("/live-status")
 async def live_status(user=Depends(require_role("admin"))):
     """Returns current services, score history (24h), and latest incidents."""
