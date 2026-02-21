@@ -152,7 +152,7 @@ async def security_validation(user=Depends(require_role("admin"))):
         TURNSTILE_ENABLED, CLAMAV_ENABLED, CLAMAV_HOST,
         check_clamav_health
     )
-    from middleware.zero_trust import ZERO_TRUST_ENABLED
+    from middleware.zero_trust import ZERO_TRUST_ENABLED, CF_ENFORCE
     from middleware.rate_limiter import ROUTE_LIMITS
 
     layers = {}
@@ -165,10 +165,16 @@ async def security_validation(user=Depends(require_role("admin"))):
     }
 
     # 2. Zero Trust Access
+    zt_detail = "Not configured — admin routes use JWT only"
+    if ZERO_TRUST_ENABLED and CF_ENFORCE:
+        zt_detail = "Enabled — admin routes enforced (block mode)"
+    elif ZERO_TRUST_ENABLED:
+        zt_detail = "Enabled — admin routes monitored (audit mode)"
     layers["zero_trust"] = {
         "status": "PASS" if ZERO_TRUST_ENABLED else "WARN",
         "enabled": ZERO_TRUST_ENABLED,
-        "detail": "Enabled — admin routes protected" if ZERO_TRUST_ENABLED else "Not configured — admin routes use JWT only",
+        "enforce": CF_ENFORCE,
+        "detail": zt_detail,
     }
 
     # 3. ClamAV Virus Scanner
