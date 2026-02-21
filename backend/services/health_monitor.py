@@ -247,7 +247,7 @@ async def run_all_checks():
 
 
 def compute_health_score(results):
-    """Compute 0-100 health score from check results."""
+    """Compute 0-100 health score from check results. Penalizes inactive security layers."""
     if not results:
         return 100
     weights = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
@@ -257,4 +257,21 @@ def compute_health_score(results):
         weights.get(r.get("priority", "LOW"), 1) * status_scores.get(r["status"], 0)
         for r in results
     )
-    return round((weighted_sum / max(total_weight, 1)) * 100)
+    base_score = round((weighted_sum / max(total_weight, 1)) * 100)
+
+    # Security layer penalties: check if optional security services are inactive
+    try:
+        from services.security_service import TURNSTILE_ENABLED, CLAMAV_ENABLED
+        from middleware.zero_trust import ZERO_TRUST_ENABLED
+        penalty = 0
+        if not TURNSTILE_ENABLED:
+            penalty += 2
+        if not ZERO_TRUST_ENABLED:
+            penalty += 3
+        if not CLAMAV_ENABLED:
+            penalty += 2
+        base_score = max(0, base_score - penalty)
+    except Exception:
+        pass
+
+    return base_score
