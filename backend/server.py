@@ -168,6 +168,10 @@ app.include_router(maintenance_router)
 from middleware.rate_limiter import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
 
+# ============== ZERO TRUST MIDDLEWARE ==============
+from middleware.zero_trust import ZeroTrustMiddleware
+app.add_middleware(ZeroTrustMiddleware)
+
 # All employer/admin business endpoints extracted to routes/employer_routes.py
 # Endpoints: /api/employers/{id}/companies, /api/employer/my-team, /api/employer/companies,
 #            /api/employer/pipeline, /api/companies/{id}/assign-employer,
