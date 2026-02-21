@@ -281,13 +281,15 @@ class TestSystemHealthRegression:
         assert isinstance(data, list), "Should return list of errors"
 
     def test_admin_dashboard_loads(self, admin_headers):
-        """REGRESSION: Admin can access dashboard data"""
-        # Test a core admin endpoint
+        """REGRESSION: Admin can access analytics dashboard data"""
+        # Test the analytics admin endpoint (correct endpoint)
         response = requests.get(
-            f"{BASE_URL}/api/admin/users",
+            f"{BASE_URL}/api/analytics/admin",
             headers=admin_headers
         )
-        assert response.status_code == 200, f"Admin users endpoint failed: {response.status_code}"
+        assert response.status_code == 200, f"Admin analytics endpoint failed: {response.status_code}"
+        data = response.json()
+        assert "kpis" in data, "Should have KPIs in analytics response"
 
 
 class TestHealthCheckServices:
