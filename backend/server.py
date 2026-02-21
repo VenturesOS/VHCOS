@@ -100,6 +100,7 @@ from routes.blog_digest import router as blog_digest_router
 from routes.seo_dashboard import router as seo_dashboard_router
 from routes.tracker import router as tracker_router
 from routes.compliance_routes import compliance_router
+from routes.maintenance_routes import maintenance_router
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
@@ -161,6 +162,7 @@ app.include_router(employer_router)
 app.include_router(linkedin_router)
 app.include_router(tracker_router)
 app.include_router(compliance_router)
+app.include_router(maintenance_router)
 
 # All employer/admin business endpoints extracted to routes/employer_routes.py
 # Endpoints: /api/employers/{id}/companies, /api/employer/my-team, /api/employer/companies,
