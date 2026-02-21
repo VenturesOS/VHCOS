@@ -373,6 +373,51 @@ export default function SystemHealthPage() {
         </Card>
       )}
 
+      {/* ═══ SECURITY EVENTS PANEL ═══ */}
+      {securityEvents && securityEvents.total > 0 && (
+        <Card data-testid="security-events-panel">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="font-heading text-base flex items-center gap-2">
+                <Shield className="w-4 h-4 text-red-500" />
+                Security Events (24h)
+                {securityEvents.summary?.critical > 0 && (
+                  <Badge variant="outline" className="text-[10px] text-red-600 border-red-300 ml-1">
+                    {securityEvents.summary.critical} critical
+                  </Badge>
+                )}
+              </CardTitle>
+              <span className="text-xs text-slate-400">{securityEvents.total} total</span>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100">
+              {securityEvents.events?.slice(0, 8).map((ev, i) => {
+                const sevColors = {
+                  CRITICAL: 'bg-red-50 text-red-700 border-red-200',
+                  HIGH: 'bg-orange-50 text-orange-700 border-orange-200',
+                  MEDIUM: 'bg-amber-50 text-amber-700 border-amber-200',
+                  LOW: 'bg-slate-50 text-slate-600 border-slate-200',
+                };
+                return (
+                  <div key={ev.id || i} className="px-4 py-2.5 hover:bg-slate-50" data-testid={`security-event-${i}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className={`text-[9px] py-0 px-1.5 ${sevColors[ev.severity] || sevColors.LOW}`}>
+                        {ev.severity}
+                      </Badge>
+                      <span className="text-xs font-medium text-slate-800">{ev.event_type?.replace(/_/g, ' ')}</span>
+                      <span className="text-[10px] text-slate-400 ml-auto">{ev.ip_address}</span>
+                      <span className="text-[10px] text-slate-300">{fmtTime(ev.timestamp)}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5 pl-12">{ev.detail}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ═══ EXISTING: Error Stats ═══ */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
