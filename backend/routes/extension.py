@@ -622,6 +622,7 @@ async def capture_profile(
         total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
         logger.warning(f"[Extension] UPDATE: '{profile.name}' -> existing record {existing['id'][:12]}. Total naukri profiles: {total}")
         
+        await _log_capture(profile, current_user, "success", "updated", existing["id"], None, None, capture_start)
         return CaptureResponse(
             success=True,
             action="updated",
