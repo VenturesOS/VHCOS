@@ -317,7 +317,11 @@ async def security_posture(user=Depends(require_role("admin"))):
             "category": "Admin Protection",
             "active": ZERO_TRUST_ENABLED,
             "weight": 20,
-            "detail": "Admin routes protected" if ZERO_TRUST_ENABLED else "Not configured",
+            "detail": (
+                "Enforcing (block mode)" if ZERO_TRUST_ENABLED and CF_ENFORCE
+                else "Monitoring (audit mode)" if ZERO_TRUST_ENABLED
+                else "Not configured"
+            ),
         },
         {
             "id": "clamav",
