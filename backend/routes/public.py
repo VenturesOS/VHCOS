@@ -293,6 +293,7 @@ async def public_parse_resume(
     request: Request,
     resume: UploadFile = File(...),
     website: Optional[str] = Form(None),  # Honeypot
+    turnstile_token: Optional[str] = Form(None),
 ):
     """
     Parse resume and return extracted data for review (NO LOGIN REQUIRED).
@@ -303,6 +304,11 @@ async def public_parse_resume(
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         client_ip = forwarded_for.split(",")[0].strip()
+    
+    # Turnstile CAPTCHA verification
+    from services.security_service import verify_turnstile
+    if not await verify_turnstile(turnstile_token or "", client_ip):
+        raise HTTPException(status_code=403, detail="CAPTCHA verification failed. Please try again.")
     
     # Rate limit: 10 parses per minute per IP
     if not check_rate_limit(f"parse:{client_ip}", limit=10, window=60):
