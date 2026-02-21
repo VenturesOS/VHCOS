@@ -64,3 +64,67 @@ async def manual_maintenance_run(user=Depends(require_role("admin"))):
     """Manually trigger a maintenance cycle."""
     result = await run_maintenance_cycle()
     return {"status": "ok", **result}
+
+
+@maintenance_router.get("/live-status")
+async def live_status(user=Depends(require_role("admin"))):
+    """Returns current services, score history (24h), and latest incidents."""
+    now = datetime.now(timezone.utc)
+    cutoff_24h = (now - timedelta(hours=24)).isoformat()
+    cutoff_1h = (now - timedelta(hours=1)).isoformat()
+
+    # 1. Latest check per service
+    latest_services = {}
+    async for doc in db.system_health_checks.find(
+        {"timestamp": {"$gte": cutoff_24h}}, {"_id": 0}
+    ).sort("timestamp", -1):
+        sn = doc["service_name"]
+        if sn not in latest_services:
+            latest_services[sn] = doc
+        if len(latest_services) >= 10:
+            break
+
+    # 2. Failure counts per service (last 24h)
+    failure_counts = {}
+    async for doc in db.system_health_checks.find(
+        {"timestamp": {"$gte": cutoff_24h}, "status": {"$in": ["warning", "critical"]}},
+        {"service_name": 1, "_id": 0},
+    ):
+        sn = doc["service_name"]
+        failure_counts[sn] = failure_counts.get(sn, 0) + 1
+
+    for sn, svc in latest_services.items():
+        svc["failure_count_24h"] = failure_counts.get(sn, 0)
+
+    # 3. Health score history — one point per cycle for last 24h
+    score_history = []
+    all_checks = await db.system_health_checks.find(
+        {"timestamp": {"$gte": cutoff_24h}}, {"_id": 0}
+    ).sort("timestamp", 1).to_list(5000)
+
+    # Group by timestamp (each cycle shares the same timestamp)
+    from collections import defaultdict
+    buckets = defaultdict(list)
+    for c in all_checks:
+        buckets[c["timestamp"]].append(c)
+
+    for ts in sorted(buckets.keys()):
+        checks = buckets[ts]
+        score = compute_health_score(checks)
+        score_history.append({"timestamp": ts, "score": score})
+
+    # 4. Latest 5 incidents (critical/warning checks)
+    incidents = await db.system_health_checks.find(
+        {"status": {"$in": ["warning", "critical"]}, "timestamp": {"$gte": cutoff_24h}},
+        {"_id": 0},
+    ).sort("timestamp", -1).limit(5).to_list(5)
+
+    # 5. Current score
+    current_score = compute_health_score(list(latest_services.values())) if latest_services else 100
+
+    return {
+        "services": list(latest_services.values()),
+        "score_history": score_history,
+        "current_score": current_score,
+        "incidents": incidents,
+    }
