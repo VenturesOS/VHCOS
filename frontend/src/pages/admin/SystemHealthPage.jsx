@@ -43,6 +43,7 @@ export default function SystemHealthPage() {
   const [selected, setSelected] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [live, setLive] = useState(null);
+  const [failedCaptures, setFailedCaptures] = useState(null);
   const intervalRef = useRef(null);
 
   const fetchLive = useCallback(async () => {
