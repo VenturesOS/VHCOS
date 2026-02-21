@@ -220,17 +220,17 @@ async def generate_maintenance_report() -> bytes:
         # Summary counts
         from collections import Counter
         event_counts = Counter(e.get("event_type", "unknown") for e in rel_events)
-        rel_summary_rows = [[Paragraph(k, styles["CellText"]), Paragraph(str(v), styles["CellText"])] for k, v in event_counts.most_common(15)]
+        rel_summary_rows = [[Paragraph(_esc(k), styles["CellText"]), Paragraph(str(v), styles["CellText"])] for k, v in event_counts.most_common(15)]
         story.append(_make_log_table(styles, ["Event Type", "Count"], rel_summary_rows, [100 * mm, 70 * mm]))
         story.append(Spacer(1, 3 * mm))
         # Recent events detail
         rel_rows = []
         for ev in rel_events[:50]:
             rel_rows.append([
-                Paragraph(str(ev.get("timestamp", ""))[:19], styles["CellText"]),
-                Paragraph(str(ev.get("event_type", "")), styles["CellText"]),
-                Paragraph(str(ev.get("service", "")), styles["CellText"]),
-                Paragraph(str(ev.get("detail", ""))[:100], styles["CellText"]),
+                Paragraph(_esc(str(ev.get("timestamp", ""))[:19]), styles["CellText"]),
+                Paragraph(_esc(ev.get("event_type", "")), styles["CellText"]),
+                Paragraph(_esc(ev.get("service", "")), styles["CellText"]),
+                Paragraph(_esc(str(ev.get("detail", ""))[:100]), styles["CellText"]),
             ])
         story.append(_make_log_table(styles, ["Time", "Event", "Service", "Detail"], rel_rows, [30 * mm, 35 * mm, 25 * mm, 80 * mm]))
     else:
