@@ -530,6 +530,12 @@ async def public_apply(
         
         # Read file content once
         content = await resume.read()
+
+        # ─── Security: Validate upload ───
+        from services.security_service import validate_upload
+        check = await validate_upload(content, resume.filename, client_ip)
+        if not check["valid"]:
+            raise HTTPException(status_code=400, detail=check["reason"])
         
         # Save locally first (needed for text extraction)
         file_path = upload_dir / filename
