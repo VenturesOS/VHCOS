@@ -161,10 +161,10 @@ async def generate_maintenance_report() -> bytes:
         err_rows = []
         for e in system_errors[:100]:
             err_rows.append([
-                Paragraph(str(e.get("created_at", ""))[:19], styles["CellText"]),
-                Paragraph(str(e.get("source", "")), styles["CellText"]),
-                Paragraph(str(e.get("error_type", "")), styles["CellText"]),
-                Paragraph(str(e.get("message", ""))[:120], styles["CellText"]),
+                Paragraph(_esc(str(e.get("created_at", ""))[:19]), styles["CellText"]),
+                Paragraph(_esc(e.get("source", "")), styles["CellText"]),
+                Paragraph(_esc(e.get("error_type", "")), styles["CellText"]),
+                Paragraph(_esc(str(e.get("message", ""))[:120]), styles["CellText"]),
             ])
         story.append(_make_log_table(styles,
             ["Timestamp", "Source", "Type", "Message"],
