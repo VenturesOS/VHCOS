@@ -232,12 +232,24 @@ async def validate_upload(content: bytes, filename: str, client_ip: str) -> dict
                                  f"File content doesn't match extension {ext}", {"filename": filename})
         return {"valid": False, "reason": "File content doesn't match its extension. Upload rejected.", "threats": []}
 
-    # 4. Threat scan
+    # 4. Pattern-based threat scan
     threats = scan_for_threats(content, filename)
     if threats:
         await log_security_event("malware_detected", client_ip, "CRITICAL",
                                  f"Threats found: {', '.join(threats[:5])}", {"filename": filename, "threats": threats})
         return {"valid": False, "reason": "File contains suspicious content and has been rejected.", "threats": threats}
+
+    # 5. ClamAV virus scan (optional — graceful fallback)
+    clam_result = await scan_with_clamav(content, filename)
+    if not clam_result["available"] and CLAMAV_ENABLED:
+        await log_security_event("clamav_unavailable", client_ip, "MEDIUM",
+                                 f"ClamAV scanner unavailable for upload: {filename}",
+                                 {"filename": filename, "result": clam_result["result"]})
+    if not clam_result["clean"]:
+        await log_security_event("virus_detected", client_ip, "CRITICAL",
+                                 f"ClamAV virus detected: {clam_result['result'][:200]}",
+                                 {"filename": filename, "scan_result": clam_result["result"]})
+        return {"valid": False, "reason": "File flagged by virus scanner. Upload rejected.", "threats": [clam_result["result"]]}
 
     return {"valid": True, "reason": "", "threats": []}
 
