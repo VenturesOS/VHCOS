@@ -33,6 +33,14 @@ async def register(user_data: UserCreate, request: Request):
     # Rate limit registration
     rate_limiter.check_rate_limit(request, "auth")
 
+    # Turnstile CAPTCHA verification
+    from services.security_service import verify_turnstile
+    client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    if not await verify_turnstile(user_data.turnstile_token or "", client_ip):
+        raise HTTPException(status_code=403, detail="CAPTCHA verification failed. Please try again.")
+
     # Only candidate self-registration is allowed; employer/recruiter/admin created by admin
     if user_data.role != "candidate":
         raise HTTPException(status_code=403, detail="Only candidate registration is allowed. Employer and Recruiter accounts are created by admin.")
