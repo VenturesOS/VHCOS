@@ -164,6 +164,10 @@ app.include_router(tracker_router)
 app.include_router(compliance_router)
 app.include_router(maintenance_router)
 
+# ============== RATE LIMITING MIDDLEWARE ==============
+from middleware.rate_limiter import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware)
+
 # All employer/admin business endpoints extracted to routes/employer_routes.py
 # Endpoints: /api/employers/{id}/companies, /api/employer/my-team, /api/employer/companies,
 #            /api/employer/pipeline, /api/companies/{id}/assign-employer,
