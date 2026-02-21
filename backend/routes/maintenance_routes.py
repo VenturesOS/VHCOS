@@ -71,7 +71,6 @@ async def live_status(user=Depends(require_role("admin"))):
     """Returns current services, score history (24h), and latest incidents."""
     now = datetime.now(timezone.utc)
     cutoff_24h = (now - timedelta(hours=24)).isoformat()
-    cutoff_1h = (now - timedelta(hours=1)).isoformat()
 
     # 1. Latest check per service
     latest_services = {}
