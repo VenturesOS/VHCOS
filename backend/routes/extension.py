@@ -482,6 +482,8 @@ async def capture_profile(
     Stores ALL available data for 1:1 profile matching.
     """
     import re as re_module
+    import time as _time
+    capture_start = _time.time()
     now = datetime.now(timezone.utc).isoformat()
     
     # === DATA VALIDATION & CLEANING ===
