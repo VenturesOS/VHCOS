@@ -26,6 +26,7 @@ const SERVICE_META = {
   ai_services:         { icon: Brain,       label: 'AI Services',    metricKey: 'ai_errors_1h',   metricLabel: 'Errors/1h' },
   data_sync:           { icon: CircleDot,   label: 'Data Sync',      metricKey: 'sync_errors_24h',metricLabel: 'Errors/24h' },
   naukri_capture:      { icon: Download,    label: 'Naukri Capture',  metricKey: 'success_rate',   metricLabel: 'Success%' },
+  security:            { icon: Shield,      label: 'Security',        metricKey: 'events_24h',     metricLabel: 'Events/24h' },
 };
 
 const STATUS_STYLES = {
