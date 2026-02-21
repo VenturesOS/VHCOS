@@ -30,11 +30,16 @@ async def _log_capture(profile, user, status, action, candidate_id, failure_reas
 
     # Determine missing critical fields
     missing = []
-    if not getattr(profile, 'email', None): missing.append('email')
-    if not getattr(profile, 'phone', None): missing.append('phone')
-    if not getattr(profile, 'current_company', None): missing.append('current_company')
-    if not getattr(profile, 'current_designation', None): missing.append('current_designation')
-    if not getattr(profile, 'total_experience_years', None): missing.append('experience')
+    if not getattr(profile, 'email', None):
+        missing.append('email')
+    if not getattr(profile, 'phone', None):
+        missing.append('phone')
+    if not getattr(profile, 'current_company', None):
+        missing.append('current_company')
+    if not getattr(profile, 'current_designation', None):
+        missing.append('current_designation')
+    if not getattr(profile, 'total_experience_years', None):
+        missing.append('experience')
 
     doc = {
         "id": str(uuid.uuid4()),
