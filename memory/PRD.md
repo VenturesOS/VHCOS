@@ -45,6 +45,18 @@ Full-stack talent operating system for industrial recruitment with pipeline trac
 - **CV Display Safety:** HTML sanitization of extracted resume text to prevent XSS
 - **Refresh Token Support:** Short JWT expiry configurable via env
 
+### Security Audit Dashboard (COMPLETED Feb 2026)
+- **Security Posture Score:** Weighted 0-100 score ring (File Validation 15, Rate Limiting 15, Turnstile 15, Zero Trust 20, ClamAV 15, Logging 10, XSS 10)
+- **Active/Inactive Layers:** Visual cards showing enabled protections and missing protections with amber warning
+- **Compliance Checklist:** 17-item checklist with PASS/FAIL status and copy-to-clipboard export
+- **Recent Security Events:** Last 7 days events with severity badges and timestamps
+- **Event Breakdown:** Event type distribution with counts
+- **Security Validation API:** `GET /api/system-health/security-validation` returns PASS/WARN/FAIL per layer for deployment checks
+- **Security Posture API:** `GET /api/system-health/security-posture` returns full posture data for dashboard
+- **Health Score Penalty:** System Health score reduced by -7 when security layers inactive (-2 Turnstile, -3 Zero Trust, -2 ClamAV)
+- **Navigation:** Linked from System Health page header + admin sidebar
+- **Production Activation Checklist:** Documentation at `/app/docs/PRODUCTION_ACTIVATION_CHECKLIST.md`
+
 ## DB Collections
 ### Maintenance & Monitoring
 - `system_health_checks`, `maintenance_fixes`, `reliability_events`, `reliability_buffer`
