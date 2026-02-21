@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from utils import require_role
 from services.maintenance_report_generator import generate_maintenance_report
-from services.maintenance_bot import get_bot_status, run_maintenance_cycle
+from services.maintenance_bot import get_bot_status, run_maintenance_cycle, run_diagnostic_self_test
 from services.health_monitor import run_all_checks, compute_health_score
 from services.reliability_layer import get_reliability_summary, is_safe_mode, is_stress_mode
 from datetime import datetime, timezone, timedelta
@@ -63,6 +63,13 @@ async def maintenance_status(user=Depends(require_role("admin"))):
 async def manual_maintenance_run(user=Depends(require_role("admin"))):
     """Manually trigger a maintenance cycle."""
     result = await run_maintenance_cycle()
+    return {"status": "ok", **result}
+
+
+@maintenance_router.post("/diagnostic-test")
+async def run_diagnostic(user=Depends(require_role("admin"))):
+    """Manually trigger the diagnostic self-test."""
+    result = await run_diagnostic_self_test()
     return {"status": "ok", **result}
 
 
