@@ -733,6 +733,13 @@ async def public_upload_resume(
         logger.warning(f"[BOT] Honeypot triggered from {client_ip}")
         return {"success": True, "message": "Resume uploaded successfully"}
     
+    # ─── Security: Validate upload ───
+    content = await resume.read()
+    from services.security_service import validate_upload
+    check = await validate_upload(content, resume.filename, client_ip)
+    if not check["valid"]:
+        raise HTTPException(status_code=400, detail=check["reason"])
+
     # Save and process similar to apply
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     safe_email = email.replace('@', '_at_').replace('.', '_')
@@ -742,7 +749,6 @@ async def public_upload_resume(
     
     file_path = upload_dir / filename
     async with aiofiles.open(file_path, 'wb') as f:
-        content = await resume.read()
         await f.write(content)
     
     # Extract and parse
