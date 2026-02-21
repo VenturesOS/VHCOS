@@ -236,6 +236,33 @@ async def generate_maintenance_report() -> bytes:
     else:
         story.append(Paragraph("No reliability events in the reporting period.", styles["SmallGray"]))
 
+    # SECTION 7 — Naukri Extension Failed Captures
+    failed_captures = await db.naukri_capture_logs.find(
+        {"status": "failed", "timestamp": {"$gte": cutoff}}, {"_id": 0}
+    ).sort("timestamp", -1).limit(LIMIT).to_list(LIMIT)
+    total_captures_period = await db.naukri_capture_logs.count_documents({"timestamp": {"$gte": cutoff}})
+    unrecovered_total = await db.naukri_capture_logs.count_documents({"status": "failed", "is_recovered": False})
+
+    story.append(Paragraph(f"Naukri Extension — Failed Captures ({len(failed_captures)} failed / {total_captures_period} total, {unrecovered_total} unrecovered)", styles["SectionTitle"]))
+    if failed_captures:
+        fc_rows = []
+        for fc in failed_captures[:100]:
+            missing = ", ".join(fc.get("data_missing_fields", [])) or "none"
+            fc_rows.append([
+                Paragraph(_esc(str(fc.get("timestamp", ""))[:19]), styles["CellText"]),
+                Paragraph(_esc(fc.get("candidate_name", "") or "Unknown"), styles["CellText"]),
+                Paragraph(_esc(fc.get("candidate_email", "") or "-"), styles["CellText"]),
+                Paragraph(_esc(str(fc.get("profile_url", ""))[:40]), styles["CellText"]),
+                Paragraph(_esc(fc.get("failure_reason", "") or "-")[:80], styles["CellText"]),
+                Paragraph(_esc(missing)[:40], styles["CellText"]),
+                Paragraph("Yes" if fc.get("is_recovered") else "No", styles["CellText"]),
+            ])
+        story.append(_make_log_table(styles,
+            ["Time", "Name", "Email", "Profile URL", "Failure Reason", "Missing Fields", "Recovered"],
+            fc_rows, [24 * mm, 22 * mm, 25 * mm, 25 * mm, 35 * mm, 22 * mm, 17 * mm]))
+    else:
+        story.append(Paragraph("No failed captures in the reporting period.", styles["SmallGray"]))
+
     # Footer
     story.append(Spacer(1, 10 * mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_GRAY))
