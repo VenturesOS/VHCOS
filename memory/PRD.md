@@ -35,33 +35,35 @@ Build a comprehensive recruitment management portal (Talent OS) for Ventures HRD
 - Cookie consent banner
 - Contact submissions management
 - Bug reports system
-- **Admin Resources page** with Training Manual PDF download (Feb 2026)
+- Admin Resources page with Training Manual PDF download (Feb 2026)
 
-## Recently Completed (Feb 2026)
-- **Training Manual PDF Download**: Created `/admin/resources` page with downloadable PDF training manual covering Employer, Recruiter, and Trainer guides. Backend converts Markdown to styled PDF via pdfkit/wkhtmltopdf. Endpoint: `GET /api/system-health/training-manual/download`.
+## Recently Completed (Feb 22, 2026) — Production Stability Hardening
+1. **Email Normalization**: All user creation, login, and lookup flows now apply `.lower().strip()` to emails. Existing emails in DB were normalized at startup. Prevents case-sensitivity mismatches.
+2. **Environment Badge**: Amber banner "PREVIEW MODE — DATA MAY NOT MATCH LIVE" shown on admin/recruiter/employer dashboards when env != production. Uses `/api/system-health/env-info`.
+3. **Startup Environment Logging**: Logs ENV, DB, MONGO_CLUSTER, IS_PRODUCTION at boot once.
+4. **User Creation Safety Logging**: Logs env, db, user_id, email, role when users are created.
+5. **Centralized Environment Resolver**: `utils/environment.py` — single source of truth for ENV_NAME, IS_PRODUCTION, IS_PREVIEW, normalize_email(), get_environment_info().
+
+## Key Files — Environment Hardening
+- `/app/backend/utils/environment.py` — Centralized environment resolver
+- `/app/backend/routes/auth.py` — Email normalization on register/login/forgot-password
+- `/app/backend/routes/admin.py` — Email normalization on admin user creation
+- `/app/backend/server.py` — Startup env logging + email normalization migration
+- `/app/frontend/src/components/shared/EnvironmentBadge.jsx` — Preview banner
+- `/app/frontend/src/components/layout/DashboardLayout.jsx` — Badge integration
 
 ## Backlog / Future Tasks
 - **P1: AI-driven Analytics and Insights**
 - **P2: Client Dashboard Enhancements**
 - **P3: Advanced Revenue Intelligence**
-- **Blocked: LinkedIn Auto-Posting** (requires `w_organization_social` scope on LinkedIn Developer App)
+- **Blocked: LinkedIn Auto-Posting** (requires `w_organization_social` scope)
 
 ## Key API Endpoints
-- `GET /api/system-health/training-manual/download` — PDF training manual download (admin)
+- `GET /api/system-health/env-info` — Environment metadata for frontend badge
+- `GET /api/system-health/training-manual/download` — PDF training manual download
 - `GET /api/system-health/security-validation` — Security layers PASS/FAIL
 - `GET /api/system-health/security-posture` — Full security audit data
-- `GET /api/system-health/live-status` — Real-time health dashboard
-- `GET /api/system-health/maintenance-status` — Bot status & health score
-- `POST /api/system-health/maintenance-run` — Manual maintenance trigger
-- `POST /api/system-health/diagnostic-test` — Diagnostic self-test
-
-## Key Files
-- `/app/docs/TRAINING_MANUAL.md` — Source training manual
-- `/app/backend/services/training_manual_service.py` — MD→PDF conversion
-- `/app/backend/routes/maintenance_routes.py` — System health & training manual endpoints
-- `/app/frontend/src/pages/admin/AdminResourcesPage.jsx` — Resources & Documentation page
-- `/app/frontend/src/pages/admin/SecurityAuditDashboard.jsx` — Security audit UI
-- `/app/frontend/src/components/layout/Sidebar.jsx` — Navigation sidebar
 
 ## Test Credentials
 - **Admin:** admin@vhc.in / VhcAdmin@2024
+- **Recruiter:** bhumika@vhc.in / 12345678
