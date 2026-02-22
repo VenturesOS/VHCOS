@@ -9,7 +9,7 @@ import {
   RefreshCw, ChevronLeft, ChevronRight, Search, Activity
 } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = '';
 function getToken() { return localStorage.getItem('vhc_token'); }
 
 const SEVERITY_CONFIG = {

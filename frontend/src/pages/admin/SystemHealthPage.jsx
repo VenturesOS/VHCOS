@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = '';
 function getToken() { return localStorage.getItem('vhc_token'); }
 
 const SERVICE_META = {

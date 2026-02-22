@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_URL = '';
 function getToken() { return localStorage.getItem('vhc_token'); }
 
 const LAYER_ICONS = {

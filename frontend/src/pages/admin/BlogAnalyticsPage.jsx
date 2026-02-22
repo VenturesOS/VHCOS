@@ -10,7 +10,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { BarChart3, Eye, MousePointerClick, FileText, Clock, Rss, Play, Loader2, TrendingUp, Mail, Map } from 'lucide-react';
 import { blogAPI } from '../../lib/api';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = '';
 
 export default function BlogAnalyticsPage() {
   const [activeTab, setActiveTab] = useState('overview');
