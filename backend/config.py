@@ -37,16 +37,21 @@ if not mongodb_uri:
 
 # ── PRODUCTION DATABASE SAFETY GUARD ──
 # Prevents production from ever starting with a non-Atlas database.
-from utils.environment import ENV_NAME, MONGO_HOST
-_is_production = ENV_NAME == "production"
+# Inlined to avoid circular import with utils.environment.
+_app_url = os.environ.get("APP_URL", "").lower()
+_app_env = os.environ.get("APP_ENV", "").lower()
+_is_preview = "preview" in _app_url or "emergent" in _app_url or _app_env == "preview"
+_is_local = "localhost" in os.environ.get("CORS_ORIGINS", "") or _app_env == "local"
+_is_production = not _is_preview and not _is_local
 _is_atlas = "mongodb.net" in mongodb_uri.lower() or "mongodb+srv" in mongodb_uri.lower()
 if _is_production and not _is_atlas:
     _safe_host = mongodb_uri.split("@")[-1].split("/")[0].split("?")[0] if "@" in mongodb_uri else "unknown"
+    _db = os.environ.get('DB_NAME', 'vhc_talent_os')
     logging.critical(
         f"PRODUCTION DB SAFETY GUARD FAILED\n"
-        f"  ENV={ENV_NAME}\n"
+        f"  ENV=production\n"
         f"  Mongo host={_safe_host}\n"
-        f"  DB={os.environ.get('DB_NAME', 'vhc_talent_os')}\n"
+        f"  DB={_db}\n"
         f"  Expected: Atlas (mongodb.net) — Got: non-Atlas URI"
     )
     raise RuntimeError("INVALID PRODUCTION DATABASE")
