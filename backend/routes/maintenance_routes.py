@@ -12,7 +12,11 @@ from services.health_monitor import run_all_checks, compute_health_score
 from services.reliability_layer import get_reliability_summary, is_safe_mode, is_stress_mode
 from datetime import datetime, timezone, timedelta
 from config import db
-from utils.environment import get_environment_info
+try:
+    from utils.environment import get_environment_info
+except ImportError:
+    def get_environment_info():
+        return {"environment": "unknown", "is_production": False, "database": "vhc_talent_os", "mongo_cluster": "unknown"}
 
 maintenance_router = APIRouter(prefix="/api/system-health", tags=["maintenance"])
 

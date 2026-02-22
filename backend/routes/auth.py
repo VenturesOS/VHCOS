@@ -24,8 +24,13 @@ from utils import (
 # Import rate limiter
 from services.rate_limiter import rate_limiter
 
-# Import environment resolver
-from utils.environment import normalize_email, ENV_NAME, DB_NAME
+# Import environment resolver (with fallback)
+try:
+    from utils.environment import normalize_email, ENV_NAME, DB_NAME
+except ImportError:
+    normalize_email = lambda e: e.strip().lower() if e else ""
+    ENV_NAME = "unknown"
+    DB_NAME = "vhc_talent_os"
 
 logger = logging.getLogger(__name__)
 
