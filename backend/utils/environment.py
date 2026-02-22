@@ -20,24 +20,22 @@ PRODUCTION_DOMAINS = ("ventureshrd.com", "www.ventureshrd.com")
 
 def _detect_environment() -> str:
     """Detect environment reliably.
-    - Emergent preview pods have 'preview_endpoint' in env.
-    - Production (ventureshrd.com) has neither of these signals.
+    - Emergent preview pods inject APP_URL with 'preview.emergentagent.com'.
+    - Production (ventureshrd.com) does not have this signal.
     """
-    # Explicit override always wins
     explicit = os.environ.get("APP_ENV", "").lower()
     if explicit in ("production", "preview", "local", "staging"):
         return explicit
 
-    # Emergent preview pod detection
-    if os.environ.get("preview_endpoint") or "emergent" in os.environ.get("HOSTNAME", "").lower():
+    # Emergent preview pod: supervisor injects APP_URL containing 'preview.emergentagent'
+    app_url = os.environ.get("APP_URL", "").lower()
+    if "preview" in app_url or "emergent" in app_url:
         return "preview"
 
-    # Localhost detection
     cors = _cors_origins.lower()
     if "localhost" in cors or "127.0.0.1" in cors:
         return "local"
 
-    # If production domains are the only CORS origins, it's production
     if any(d in cors for d in PRODUCTION_DOMAINS):
         return "production"
 
