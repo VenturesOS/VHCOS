@@ -19,15 +19,14 @@ PRODUCTION_DOMAINS = ("ventureshrd.com", "www.ventureshrd.com")
 
 
 def _detect_environment() -> str:
-    """Detect environment from available signals."""
-    combined = f"{_frontend_url} {_cors_origins}".lower()
-    if any(d in combined for d in PRODUCTION_DOMAINS):
-        if "preview" in combined or "emergent" in combined:
-            return "preview"
+    """Detect environment from the primary backend/frontend URL only.
+    CORS_ORIGINS is excluded — it's a whitelist containing ALL allowed origins."""
+    primary = _frontend_url.lower()
+    if any(d in primary for d in PRODUCTION_DOMAINS):
         return "production"
-    if "localhost" in combined or "127.0.0.1" in combined:
+    if "localhost" in primary or "127.0.0.1" in primary:
         return "local"
-    if "preview" in combined or "emergent" in combined:
+    if "preview" in primary or "emergent" in primary:
         return "preview"
     return "unknown"
 
