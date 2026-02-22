@@ -2,6 +2,7 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '../ui/sonner';
+import EnvironmentBadge from '../shared/EnvironmentBadge';
 
 export const DashboardLayout = ({ allowedRoles }) => {
   const { user, loading, isAuthenticated } = useAuth();
@@ -23,10 +24,13 @@ export const DashboardLayout = ({ allowedRoles }) => {
     return <Navigate to={`/${user?.role}`} replace />;
   }
 
+  const showBadge = ['admin', 'recruiter', 'employer'].includes(user?.role);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
+      {showBadge && <EnvironmentBadge />}
       <Sidebar />
-      <main className="lg:pl-64 min-h-screen">
+      <main className={`lg:pl-64 min-h-screen ${showBadge ? 'pt-6' : ''}`}>
         <div className="px-4 pb-6 pt-16 lg:px-8 lg:pb-8 lg:pt-8">
           <Outlet />
         </div>
@@ -34,6 +38,7 @@ export const DashboardLayout = ({ allowedRoles }) => {
       <Toaster position="top-right" />
     </div>
   );
+};
 };
 
 export default DashboardLayout;
