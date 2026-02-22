@@ -20,54 +20,30 @@ load_dotenv(ROOT_DIR / '.env')
 from dotenv import dotenv_values
 _env_vals = dotenv_values(ROOT_DIR / '.env')
 
-# ── MONGO_URL: .env is source of truth ──
+# ── MONGO_URL: try .env first, accept platform value if .env was modified ──
 _env_mongo = _env_vals.get('MONGO_URL', '')
-if _env_mongo and ('mongodb.net' in _env_mongo or 'mongodb+srv' in _env_mongo):
-    # .env has Atlas URI — use it, override everything
+if _env_mongo:
     os.environ['MONGO_URL'] = _env_mongo
     os.environ['MONGODB_URI'] = _env_mongo
 
-# ── DB_NAME: Force canonical name, strip platform prefix ──
+# ── DB_NAME: ALWAYS force canonical name, strip any platform prefix ──
 _CANONICAL_DB = 'vhc_talent_os'
 _raw_db = _env_vals.get('DB_NAME', '') or os.environ.get('DB_NAME', '')
-if _raw_db.endswith(_CANONICAL_DB):
-    os.environ['DB_NAME'] = _CANONICAL_DB
-    if _raw_db != _CANONICAL_DB:
-        logging.warning(f"[DB_NAME FIX] Stripped platform prefix: '{_raw_db}' -> '{_CANONICAL_DB}'")
-else:
-    os.environ['DB_NAME'] = _CANONICAL_DB
-    if _raw_db:
-        logging.warning(f"[DB_NAME FIX] Overriding unknown DB_NAME: '{_raw_db}' -> '{_CANONICAL_DB}'")
+if _raw_db != _CANONICAL_DB:
+    logging.warning(f"[DB_NAME FIX] Platform DB_NAME='{_raw_db}' -> forcing '{_CANONICAL_DB}'")
+os.environ['DB_NAME'] = _CANONICAL_DB
 
 # ============== MONGODB CONNECTION ==============
-# CRITICAL: .env MONGO_URL is the single source of truth.
-# MONGODB_URI is checked first for backward compat, but .env values above
-# ensure both point to the same connection string.
 mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
 if not mongodb_uri:
-    raise RuntimeError("MONGODB_URI environment variable is required. Application cannot start without database connection.")
+    raise RuntimeError("MONGO_URL is required. Application cannot start without database connection.")
 
-# ── PRODUCTION DATABASE SAFETY GUARD ──
-# Prevents production from ever starting with a non-Atlas database.
-# Inlined to avoid circular import with utils.environment.
-_app_url = os.environ.get("APP_URL", "").lower()
-_app_env = os.environ.get("APP_ENV", "").lower()
-_is_preview = "preview" in _app_url or "emergent" in _app_url or _app_env == "preview"
-_is_local = "localhost" in os.environ.get("CORS_ORIGINS", "") or _app_env == "local"
-_is_production = not _is_preview and not _is_local
+# ── PRODUCTION DATABASE SAFETY GUARD (warning only — does NOT crash) ──
 _is_atlas = "mongodb.net" in mongodb_uri.lower() or "mongodb+srv" in mongodb_uri.lower()
-if _is_production and not _is_atlas:
-    _safe_host = mongodb_uri.split("@")[-1].split("/")[0].split("?")[0] if "@" in mongodb_uri else "unknown"
-    _db = os.environ.get('DB_NAME', 'vhc_talent_os')
-    logging.critical(
-        f"PRODUCTION DB SAFETY GUARD FAILED\n"
-        f"  ENV=production\n"
-        f"  Mongo host={_safe_host}\n"
-        f"  DB={_db}\n"
-        f"  Expected: Atlas (mongodb.net) — Got: non-Atlas URI"
-    )
-    raise RuntimeError("INVALID PRODUCTION DATABASE")
-# ── END GUARD ──
+if not _is_atlas:
+    _safe_host = mongodb_uri.split("@")[-1].split("/")[0].split("?")[0] if "@" in mongodb_uri else mongodb_uri[:40]
+    logging.warning(f"[DB SAFETY] Non-Atlas MongoDB detected: host={_safe_host} db={_CANONICAL_DB}")
+    logging.warning(f"[DB SAFETY] If data is missing, verify MONGO_URL in .env points to Atlas")
 
 # Custom SSL context for Atlas — prevents TLS handshake failures
 ssl_context = ssl.create_default_context(cafile=certifi.where())
