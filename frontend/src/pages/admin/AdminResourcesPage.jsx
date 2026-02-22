@@ -14,7 +14,7 @@ export default function AdminResourcesPage() {
     setDownloading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API}/api/admin/training-manual/download`, {
+      const res = await fetch(`${API}/api/system-health/training-manual/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
