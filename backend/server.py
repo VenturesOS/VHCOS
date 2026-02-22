@@ -198,11 +198,18 @@ async def validate_mongodb_connection():
         try:
             await client.admin.command("ping")
             # Log connection target for deployment verification (WARNING level for visibility)
-            mongo_host = os.environ.get('MONGO_URL', '')[:60]
-            is_atlas = 'mongodb+srv' in mongo_host or 'mongodb.net' in mongo_host
-            logging.warning(f"MongoDB connected: {'ATLAS' if is_atlas else 'LOCAL'} | DB: {db_name} | Host: {mongo_host}...")
+            mongo_url_env = os.environ.get('MONGO_URL', '')
+            mongodb_uri_env = os.environ.get('MONGODB_URI', '')
+            active_uri = mongo_url_env or mongodb_uri_env
+            is_atlas = 'mongodb+srv' in active_uri or 'mongodb.net' in active_uri
+            host_preview = active_uri[:60] if active_uri else 'EMPTY'
+            logging.warning(f"MongoDB connected: {'ATLAS' if is_atlas else 'LOCAL'} | DB: {db_name} | Host: {host_preview}...")
+            logging.warning(f"  MONGO_URL set: {bool(mongo_url_env)} | MONGODB_URI set: {bool(mongodb_uri_env)} | Match: {mongo_url_env == mongodb_uri_env if mongo_url_env and mongodb_uri_env else 'N/A'}")
             if not is_atlas:
                 logging.warning("CRITICAL: Connected to LOCAL MongoDB, NOT Atlas! Check MONGO_URL in .env")
+            # Verify user count as sanity check
+            user_count = await db.users.count_documents({})
+            logging.warning(f"  DB sanity: users collection has {user_count} documents")
             return
         except Exception as e:
             logging.warning(f"MongoDB connection attempt {attempt+1}/3 failed: {e}")
