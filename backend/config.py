@@ -21,12 +21,17 @@ from dotenv import dotenv_values
 _env_vals = dotenv_values(ROOT_DIR / '.env')
 if 'MONGO_URL' in _env_vals and _env_vals['MONGO_URL']:
     os.environ['MONGO_URL'] = _env_vals['MONGO_URL']
+    # CRITICAL: Also override MONGODB_URI to prevent platform-injected values
+    # from silently connecting to a different database
+    os.environ['MONGODB_URI'] = _env_vals['MONGO_URL']
 if 'DB_NAME' in _env_vals and _env_vals['DB_NAME']:
     os.environ['DB_NAME'] = _env_vals['DB_NAME']
 
 # ============== MONGODB CONNECTION ==============
-# CRITICAL: Connection string MUST be provided via environment variable
-mongodb_uri = os.environ.get('MONGODB_URI') or os.environ.get('MONGO_URL')
+# CRITICAL: .env MONGO_URL is the single source of truth.
+# MONGODB_URI is checked first for backward compat, but .env values above
+# ensure both point to the same connection string.
+mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
 if not mongodb_uri:
     raise RuntimeError("MONGODB_URI environment variable is required. Application cannot start without database connection.")
 
