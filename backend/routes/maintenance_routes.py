@@ -12,8 +12,16 @@ from services.health_monitor import run_all_checks, compute_health_score
 from services.reliability_layer import get_reliability_summary, is_safe_mode, is_stress_mode
 from datetime import datetime, timezone, timedelta
 from config import db
+from utils.environment import get_environment_info
 
 maintenance_router = APIRouter(prefix="/api/system-health", tags=["maintenance"])
+
+
+@maintenance_router.get("/env-info")
+async def env_info(user=Depends(require_role(["admin", "recruiter", "employer"]))):
+    """Return non-sensitive environment metadata for the frontend badge."""
+    info = get_environment_info()
+    return {"environment": info["environment"], "is_production": info["is_production"]}
 
 LIMIT = 1000
 DAYS = 7
