@@ -19,15 +19,28 @@ PRODUCTION_DOMAINS = ("ventureshrd.com", "www.ventureshrd.com")
 
 
 def _detect_environment() -> str:
-    """Detect environment from the primary backend/frontend URL only.
-    CORS_ORIGINS is excluded — it's a whitelist containing ALL allowed origins."""
-    primary = _frontend_url.lower()
-    if any(d in primary for d in PRODUCTION_DOMAINS):
-        return "production"
-    if "localhost" in primary or "127.0.0.1" in primary:
-        return "local"
-    if "preview" in primary or "emergent" in primary:
+    """Detect environment reliably.
+    - Emergent preview pods have 'preview_endpoint' in env.
+    - Production (ventureshrd.com) has neither of these signals.
+    """
+    # Explicit override always wins
+    explicit = os.environ.get("APP_ENV", "").lower()
+    if explicit in ("production", "preview", "local", "staging"):
+        return explicit
+
+    # Emergent preview pod detection
+    if os.environ.get("preview_endpoint") or "emergent" in os.environ.get("HOSTNAME", "").lower():
         return "preview"
+
+    # Localhost detection
+    cors = _cors_origins.lower()
+    if "localhost" in cors or "127.0.0.1" in cors:
+        return "local"
+
+    # If production domains are the only CORS origins, it's production
+    if any(d in cors for d in PRODUCTION_DOMAINS):
+        return "production"
+
     return "unknown"
 
 
