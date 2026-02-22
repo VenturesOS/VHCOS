@@ -65,6 +65,7 @@ const navItems = {
     { icon: Activity, label: 'System Health', path: '/admin/system-health' },
     { icon: ShieldCheck, label: 'Security Audit', path: '/admin/security-audit' },
     { icon: Shield, label: 'Compliance', path: '/admin/compliance-dashboard' },
+    { icon: Download, label: 'Resources', path: '/admin/resources' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
   recruiter: [

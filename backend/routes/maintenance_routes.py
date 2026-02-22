@@ -383,6 +383,23 @@ async def security_posture(user=Depends(require_role("admin"))):
     }
 
 
+@maintenance_router.get("/training-manual/download")
+async def download_training_manual(user=Depends(require_role("admin"))):
+    """Generate and download the training manual as a styled PDF."""
+    from services.training_manual_service import generate_training_manual_pdf
+    try:
+        pdf_bytes = await generate_training_manual_pdf()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Training manual source file not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="VHC_Training_Manual.pdf"'},
+    )
+
+
 @maintenance_router.get("/live-status")
 async def live_status(user=Depends(require_role("admin"))):
     """Returns current services, score history (24h), and latest incidents."""

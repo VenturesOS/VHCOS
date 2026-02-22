@@ -79,6 +79,7 @@ import EmployerCompaniesPage from "./pages/employer/EmployerCompaniesPage";
 import EmployerPipelinePage from "./pages/employer/EmployerPipelinePage";
 import EmployerTrackerPage from "./pages/employer/EmployerTrackerPage";
 import ComplianceDashboardPage from "./pages/admin/ComplianceDashboardPage";
+import AdminResourcesPage from "./pages/admin/AdminResourcesPage";
 import { PrivacyPolicyPage, TermsOfUsePage, CookiePolicyPage } from "./pages/policy/PolicyPages";
 import CookieConsentBanner from "./components/compliance/CookieConsentBanner";
 
@@ -149,6 +150,7 @@ function App() {
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
             <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="compliance-dashboard" element={<ComplianceDashboardPage />} />
+            <Route path="resources" element={<AdminResourcesPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
