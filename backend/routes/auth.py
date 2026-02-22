@@ -3,6 +3,7 @@ VHC Talent OS - Authentication Routes
 Handles user registration, login, and password management.
 """
 import uuid
+import logging
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
@@ -22,6 +23,11 @@ from utils import (
 
 # Import rate limiter
 from services.rate_limiter import rate_limiter
+
+# Import environment resolver
+from utils.environment import normalize_email, ENV_NAME, DB_NAME
+
+logger = logging.getLogger(__name__)
 
 
 # Create router for auth endpoints
@@ -45,7 +51,9 @@ async def register(user_data: UserCreate, request: Request):
     if user_data.role != "candidate":
         raise HTTPException(status_code=403, detail="Only candidate registration is allowed. Employer and Recruiter accounts are created by admin.")
 
-    existing = await db.users.find_one({"email": user_data.email})
+    email = normalize_email(user_data.email)
+
+    existing = await db.users.find_one({"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -58,7 +66,7 @@ async def register(user_data: UserCreate, request: Request):
     
     user_doc = {
         "id": user_id,
-        "email": user_data.email,
+        "email": email,
         "name": user_data.name,
         "role": user_data.role,
         "password": hash_password(user_data.password),
@@ -70,6 +78,7 @@ async def register(user_data: UserCreate, request: Request):
     }
     
     await db.users.insert_one(user_doc)
+    logger.info("[USER_CREATED] env=%s db=%s id=%s email=%s role=%s", ENV_NAME, DB_NAME, user_id, email, user_data.role)
     
     # Create candidate profile if role is candidate
     if user_data.role == "candidate":
@@ -77,7 +86,7 @@ async def register(user_data: UserCreate, request: Request):
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "name": user_data.name,
-            "email": user_data.email,
+            "email": email,
             "phone": None,
             "headline": None,
             "summary": None,
@@ -94,7 +103,7 @@ async def register(user_data: UserCreate, request: Request):
     
     user_response = UserResponse(
         id=user_id,
-        email=user_data.email,
+        email=email,
         name=user_data.name,
         role=user_data.role,
         created_at=now,
@@ -109,7 +118,8 @@ async def login(credentials: UserLogin, request: Request):
     # Rate limit login attempts
     rate_limiter.check_rate_limit(request, "auth")
     
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    email = normalize_email(credentials.email)
+    user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user or not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
@@ -180,7 +190,7 @@ class ForgotPasswordResetRequest(BaseModel):
 async def forgot_password(req: ForgotPasswordRequest, request: Request):
     """Public: send a password reset link to the user's email."""
     rate_limiter.check_rate_limit(request, "auth")
-    user = await db.users.find_one({"email": req.email}, {"_id": 0, "id": 1, "name": 1, "email": 1})
+    user = await db.users.find_one({"email": normalize_email(req.email)}, {"_id": 0, "id": 1, "name": 1, "email": 1})
     # Always return success to prevent email enumeration
     if not user:
         return {"message": "If an account with that email exists, a reset link has been sent."}

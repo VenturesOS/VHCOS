@@ -3,6 +3,7 @@ VHC Talent OS - Admin Routes
 Handles user management and admin-only operations.
 """
 import uuid
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -21,6 +22,11 @@ from utils import hash_password, require_role
 
 # Import Zero Trust middleware
 from middleware.zero_trust import require_zero_trust
+
+# Import environment resolver
+from utils.environment import normalize_email, ENV_NAME, DB_NAME
+
+logger = logging.getLogger(__name__)
 
 
 # Create router for admin endpoints (Zero Trust applied at router level)
@@ -399,8 +405,11 @@ async def admin_create_user(user_data: AdminUserCreate, current_user: dict = Dep
     if user_data.role not in allowed_roles:
         raise HTTPException(status_code=400, detail=f"Role must be one of: {', '.join(allowed_roles)}")
     
+    # Normalize email
+    email = normalize_email(user_data.email)
+
     # Check if email already exists
-    existing = await db.users.find_one({"email": user_data.email})
+    existing = await db.users.find_one({"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -409,7 +418,7 @@ async def admin_create_user(user_data: AdminUserCreate, current_user: dict = Dep
     
     user_doc = {
         "id": user_id,
-        "email": user_data.email,
+        "email": email,
         "name": user_data.name,
         "role": user_data.role,
         "password": hash_password(user_data.password),
@@ -422,6 +431,7 @@ async def admin_create_user(user_data: AdminUserCreate, current_user: dict = Dep
     }
     
     await db.users.insert_one(user_doc)
+    logger.info("[USER_CREATED] env=%s db=%s id=%s email=%s role=%s created_by=%s", ENV_NAME, DB_NAME, user_id, email, user_data.role, current_user["id"])
     
     # Create candidate profile if role is candidate
     if user_data.role == "candidate":
@@ -429,7 +439,7 @@ async def admin_create_user(user_data: AdminUserCreate, current_user: dict = Dep
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "name": user_data.name,
-            "email": user_data.email,
+            "email": email,
             "phone": user_data.phone,
             "headline": None,
             "summary": None,
