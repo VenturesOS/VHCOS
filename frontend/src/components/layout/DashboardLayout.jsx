@@ -39,6 +39,5 @@ export const DashboardLayout = ({ allowedRoles }) => {
     </div>
   );
 };
-};
 
 export default DashboardLayout;
