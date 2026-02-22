@@ -17,21 +17,25 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # Force MONGO_URL and DB_NAME from .env file (overrides platform-injected values)
-from dotenv import dotenv_values
-_env_vals = dotenv_values(ROOT_DIR / '.env')
+# Wrapped in try/except — MUST NEVER crash the server
+try:
+    from dotenv import dotenv_values
+    _env_vals = dotenv_values(ROOT_DIR / '.env')
 
-# ── MONGO_URL: try .env first, accept platform value if .env was modified ──
-_env_mongo = _env_vals.get('MONGO_URL', '')
-if _env_mongo:
-    os.environ['MONGO_URL'] = _env_mongo
-    os.environ['MONGODB_URI'] = _env_mongo
+    # ── MONGO_URL: try .env first ──
+    _env_mongo = _env_vals.get('MONGO_URL', '')
+    if _env_mongo:
+        os.environ['MONGO_URL'] = _env_mongo
+        os.environ['MONGODB_URI'] = _env_mongo
 
-# ── DB_NAME: ALWAYS force canonical name, strip any platform prefix ──
-_CANONICAL_DB = 'vhc_talent_os'
-_raw_db = _env_vals.get('DB_NAME', '') or os.environ.get('DB_NAME', '')
-if _raw_db != _CANONICAL_DB:
-    logging.warning(f"[DB_NAME FIX] Platform DB_NAME='{_raw_db}' -> forcing '{_CANONICAL_DB}'")
-os.environ['DB_NAME'] = _CANONICAL_DB
+    # ── DB_NAME: force canonical name ──
+    _CANONICAL_DB = 'vhc_talent_os'
+    _raw_db = _env_vals.get('DB_NAME', '') or os.environ.get('DB_NAME', '')
+    if _raw_db != _CANONICAL_DB:
+        logging.warning(f"[DB_NAME FIX] Platform DB_NAME='{_raw_db}' -> forcing '{_CANONICAL_DB}'")
+    os.environ['DB_NAME'] = _CANONICAL_DB
+except Exception as _cfg_err:
+    logging.warning(f"[CONFIG] .env override failed (non-fatal): {_cfg_err}")
 
 # ============== MONGODB CONNECTION ==============
 mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
