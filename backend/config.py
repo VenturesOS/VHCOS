@@ -19,13 +19,25 @@ load_dotenv(ROOT_DIR / '.env')
 # Force MONGO_URL and DB_NAME from .env file (overrides platform-injected values)
 from dotenv import dotenv_values
 _env_vals = dotenv_values(ROOT_DIR / '.env')
-if 'MONGO_URL' in _env_vals and _env_vals['MONGO_URL']:
-    os.environ['MONGO_URL'] = _env_vals['MONGO_URL']
-    # CRITICAL: Also override MONGODB_URI to prevent platform-injected values
-    # from silently connecting to a different database
-    os.environ['MONGODB_URI'] = _env_vals['MONGO_URL']
-if 'DB_NAME' in _env_vals and _env_vals['DB_NAME']:
-    os.environ['DB_NAME'] = _env_vals['DB_NAME']
+
+# ── MONGO_URL: .env is source of truth ──
+_env_mongo = _env_vals.get('MONGO_URL', '')
+if _env_mongo and ('mongodb.net' in _env_mongo or 'mongodb+srv' in _env_mongo):
+    # .env has Atlas URI — use it, override everything
+    os.environ['MONGO_URL'] = _env_mongo
+    os.environ['MONGODB_URI'] = _env_mongo
+
+# ── DB_NAME: Force canonical name, strip platform prefix ──
+_CANONICAL_DB = 'vhc_talent_os'
+_raw_db = _env_vals.get('DB_NAME', '') or os.environ.get('DB_NAME', '')
+if _raw_db.endswith(_CANONICAL_DB):
+    os.environ['DB_NAME'] = _CANONICAL_DB
+    if _raw_db != _CANONICAL_DB:
+        logging.warning(f"[DB_NAME FIX] Stripped platform prefix: '{_raw_db}' -> '{_CANONICAL_DB}'")
+else:
+    os.environ['DB_NAME'] = _CANONICAL_DB
+    if _raw_db:
+        logging.warning(f"[DB_NAME FIX] Overriding unknown DB_NAME: '{_raw_db}' -> '{_CANONICAL_DB}'")
 
 # ============== MONGODB CONNECTION ==============
 # CRITICAL: .env MONGO_URL is the single source of truth.
