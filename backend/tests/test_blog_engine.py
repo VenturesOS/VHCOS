@@ -11,7 +11,7 @@ from datetime import datetime
 # Base URL from environment
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://security-verify.preview.emergentagent.com"
+    BASE_URL = "https://portal-training-docs.preview.emergentagent.com"
 
 # Admin credentials
 ADMIN_EMAIL = "admin@vhc.in"

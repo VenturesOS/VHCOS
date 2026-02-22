@@ -24,7 +24,7 @@ import time
 import io
 import csv
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://security-verify.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://portal-training-docs.preview.emergentagent.com')
 
 # Test credentials
 ADMIN_EMAIL = "admin@vhc.in"
