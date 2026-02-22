@@ -35,6 +35,23 @@ mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
 if not mongodb_uri:
     raise RuntimeError("MONGODB_URI environment variable is required. Application cannot start without database connection.")
 
+# ── PRODUCTION DATABASE SAFETY GUARD ──
+# Prevents production from ever starting with a non-Atlas database.
+from utils.environment import ENV_NAME, MONGO_HOST
+_is_production = ENV_NAME == "production"
+_is_atlas = "mongodb.net" in mongodb_uri.lower() or "mongodb+srv" in mongodb_uri.lower()
+if _is_production and not _is_atlas:
+    _safe_host = mongodb_uri.split("@")[-1].split("/")[0].split("?")[0] if "@" in mongodb_uri else "unknown"
+    logging.critical(
+        f"PRODUCTION DB SAFETY GUARD FAILED\n"
+        f"  ENV={ENV_NAME}\n"
+        f"  Mongo host={_safe_host}\n"
+        f"  DB={os.environ.get('DB_NAME', 'vhc_talent_os')}\n"
+        f"  Expected: Atlas (mongodb.net) — Got: non-Atlas URI"
+    )
+    raise RuntimeError("INVALID PRODUCTION DATABASE")
+# ── END GUARD ──
+
 # Custom SSL context for Atlas — prevents TLS handshake failures
 ssl_context = ssl.create_default_context(cafile=certifi.where())
 ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
