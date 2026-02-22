@@ -23,6 +23,44 @@ async def env_info(user=Depends(require_role(["admin", "recruiter", "employer"])
     info = get_environment_info()
     return {"environment": info["environment"], "is_production": info["is_production"]}
 
+
+@maintenance_router.get("/diagnostic/users")
+async def diagnostic_users(user=Depends(require_role("admin"))):
+    """
+    Diagnostic: returns live user counts and list directly from DB.
+    Use this on LIVE to verify data matches preview.
+    NOT protected by Zero Trust (under /api/system-health/).
+    """
+    total = await db.users.count_documents({})
+    active = await db.users.count_documents({"is_active": True})
+    users = await db.users.find(
+        {}, {"_id": 0, "password": 0}
+    ).sort("created_at", 1).to_list(200)
+
+    roles = {}
+    for u in users:
+        r = u.get("role", "unknown")
+        roles[r] = roles.get(r, 0) + 1
+
+    return {
+        "total": total,
+        "active": active,
+        "by_role": roles,
+        "users": [
+            {
+                "email": u.get("email"),
+                "name": u.get("name"),
+                "role": u.get("role"),
+                "is_active": u.get("is_active"),
+                "created_at": u.get("created_at"),
+            }
+            for u in users
+        ],
+        "db": get_environment_info()["database"],
+        "env": get_environment_info()["environment"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
 LIMIT = 1000
 DAYS = 7
 
