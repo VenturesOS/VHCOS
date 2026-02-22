@@ -182,6 +182,13 @@ app.add_middleware(ZeroTrustMiddleware)
 # ============== SEED ADMIN ==============
 
 @app.on_event("startup")
+async def log_environment_report():
+    """Log environment details once at startup for deployment auditing."""
+    from utils.environment import log_environment_banner
+    log_environment_banner()
+
+
+@app.on_event("startup")
 async def validate_mongodb_connection():
     """
     Validates MongoDB connectivity on startup. Non-blocking: logs warning if unavailable.
@@ -288,6 +295,23 @@ async def validate_r2_connection():
         logging.info("Cloudflare R2 not configured - using local storage")
 
 @app.on_event("startup")
+async def normalize_existing_emails():
+    """One-time: ensure all stored emails are lowercase + trimmed for consistency."""
+    try:
+        cursor = db.users.find({"email": {"$regex": "[A-Z\\s]"}}, {"_id": 1, "email": 1})
+        count = 0
+        async for doc in cursor:
+            normalised = doc["email"].strip().lower()
+            if normalised != doc["email"]:
+                await db.users.update_one({"_id": doc["_id"]}, {"$set": {"email": normalised}})
+                count += 1
+        if count:
+            logging.warning(f"[EMAIL_NORM] Normalised {count} existing user emails to lowercase")
+    except Exception as e:
+        logging.warning(f"[EMAIL_NORM] Skipped: {e}")
+
+
+@app.on_event("startup")
 async def seed_admin():
     """
     Seeds admin user from environment variables on first run.
@@ -299,6 +323,8 @@ async def seed_admin():
         logging.warning("ADMIN_EMAIL or ADMIN_PASSWORD not set - skipping admin seeding")
         return
     
+    admin_email = admin_email.strip().lower()
+
     try:
         existing_admin = await db.users.find_one({"email": admin_email})
         if not existing_admin:
