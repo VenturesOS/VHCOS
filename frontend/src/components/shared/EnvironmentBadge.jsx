@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
-
 export default function EnvironmentBadge() {
   const [env, setEnv] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("vhc_token");
     if (!token) return;
-    fetch(`${API}/api/system-health/env-info`, {
+    fetch(`/api/system-health/env-info`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))

@@ -4,8 +4,6 @@ import { Button } from "../../components/ui/button";
 import { useAuth } from "../../lib/auth";
 import { toast } from "sonner";
 
-const API = process.env.REACT_APP_BACKEND_URL;
-
 export default function AdminResourcesPage() {
   const { user } = useAuth();
   const [downloading, setDownloading] = useState(false);
@@ -14,7 +12,7 @@ export default function AdminResourcesPage() {
     setDownloading(true);
     try {
       const token = localStorage.getItem("vhc_token");
-      const res = await fetch(`${API}/api/system-health/training-manual/download`, {
+      const res = await fetch(`/api/system-health/training-manual/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
