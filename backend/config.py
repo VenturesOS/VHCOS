@@ -42,12 +42,14 @@ mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
 if not mongodb_uri:
     raise RuntimeError("MONGO_URL is required. Application cannot start without database connection.")
 
-# ── PRODUCTION DATABASE SAFETY GUARD (warning only — does NOT crash) ──
-_is_atlas = "mongodb.net" in mongodb_uri.lower() or "mongodb+srv" in mongodb_uri.lower()
-if not _is_atlas:
-    _safe_host = mongodb_uri.split("@")[-1].split("/")[0].split("?")[0] if "@" in mongodb_uri else mongodb_uri[:40]
-    logging.warning(f"[DB SAFETY] Non-Atlas MongoDB detected: host={_safe_host} db={_CANONICAL_DB}")
-    logging.warning(f"[DB SAFETY] If data is missing, verify MONGO_URL in .env points to Atlas")
+# ── Safety log (never crashes) ──
+try:
+    _is_atlas = "mongodb.net" in mongodb_uri.lower() or "mongodb+srv" in mongodb_uri.lower()
+    if not _is_atlas:
+        _safe_host = mongodb_uri.split("@")[-1].split("/")[0].split("?")[0] if "@" in mongodb_uri else "unknown"
+        logging.warning(f"[DB SAFETY] Non-Atlas MongoDB: host={_safe_host}")
+except Exception:
+    pass
 
 # Custom SSL context for Atlas — prevents TLS handshake failures
 ssl_context = ssl.create_default_context(cafile=certifi.where())
