@@ -13,7 +13,7 @@ export default function AdminResourcesPage() {
   const handleDownloadManual = async () => {
     setDownloading(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("vhc_token");
       const res = await fetch(`${API}/api/system-health/training-manual/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
