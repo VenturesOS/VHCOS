@@ -452,7 +452,12 @@ _hardcoded_origins = [
     "https://www.ventureshrd.com",
 ]
 _env_origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()]
-_all_origins = list(set(_hardcoded_origins + _env_origins))
+
+# If wildcard is specified, use it directly (Starlette reflects actual origin with credentials)
+if "*" in _env_origins:
+    _all_origins = ["*"]
+else:
+    _all_origins = list(set(_hardcoded_origins + _env_origins))
 
 app.add_middleware(
     CORSMiddleware,
