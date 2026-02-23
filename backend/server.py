@@ -184,8 +184,11 @@ app.add_middleware(ZeroTrustMiddleware)
 @app.on_event("startup")
 async def log_environment_report():
     """Log environment details once at startup for deployment auditing."""
-    from utils.environment import log_environment_banner
-    log_environment_banner()
+    try:
+        from utils.environment import log_environment_banner
+        log_environment_banner()
+    except Exception as e:
+        logging.warning(f"[ENV] Environment report skipped: {e}")
 
 
 @app.on_event("startup")
