@@ -15,32 +15,30 @@ Build a comprehensive recruitment management portal (Talent OS) for Ventures HRD
 ## Recent Fix — P0 Backend Crash Resolution (Feb 23, 2026)
 
 ### Problem
-LIVE production backend was crashing on startup (502/520 errors). The previous agent had added complex .env override logic, DB_NAME prefix stripping, Atlas safety guards, and defensive try/except blocks to `config.py`. These changes worked in preview but crashed the LIVE server.
+LIVE production backend was crashing on startup (502/520 errors). Previous agent had added complex .env override logic, DB_NAME prefix stripping, Atlas safety guards, and defensive try/except blocks to `config.py`.
 
-### Fix Applied
-**Simplified `config.py` to bare essentials:**
-- Removed `dotenv_values` double-read and MONGODB_URI override hack
-- Removed `DB_NAME` prefix stripping and canonical name forcing
-- Removed unused `ssl_context` block and `ssl` import
-- Removed Atlas safety log block
-- Now uses only: `load_dotenv()` → `os.environ.get('MONGO_URL')` → connect
+### Fixes Applied
+1. **Simplified `config.py`** — Removed dotenv_values double-read, MONGODB_URI override, DB_NAME prefix stripping, unused ssl_context. Now uses only `load_dotenv()` → `os.environ.get()` → connect.
+2. **CORS wildcard** — Updated CORS_ORIGINS to `*` for Emergent deployment compatibility. Server.py now detects wildcard and uses it directly.
 
-### Key Files Changed
-- `/app/backend/config.py` — Simplified to ~100 lines (was ~140+ with defensive code)
-
-### Previous Stability Fixes (Still in Place)
-1. **Cache-Busting Headers** (`server.py`): All `/api/` responses include no-cache headers
-2. **Diagnostic Endpoint** (`maintenance_routes.py`): `/api/system-health/diagnostic/users`
-3. **Email Normalization** (`auth.py`, `admin.py`): `.lower().strip()` on all user flows
-4. **Environment Badge** (`EnvironmentBadge.jsx`): Shows "PREVIEW MODE" banner
-5. **Centralized Environment Resolver** (`utils/environment.py`)
-6. **Zero Trust in AUDIT mode** (`backend/.env`)
+### Deployment Readiness
+- Backend starts clean, login works, CORS allows all origins
+- Supervisor config valid for both frontend + backend
+- LinkedIn OAuth redirect hardcoded to ventureshrd.com (known limitation)
 
 ### Deployment Steps for LIVE
-1. Deploy latest backend code (the simplified `config.py` is the critical change)
+1. Deploy latest backend code
 2. Verify backend starts (no 502 errors)
-3. Test login: `curl https://ventureshrd.com/api/auth/login -X POST -H "Content-Type: application/json" -d '{"email":"admin@vhc.in","password":"VhcAdmin@2024"}'`
-4. Once LIVE is stable, apply a clean minimal DB fix if needed (ensure correct Atlas DB)
+3. Test login endpoint
+4. Once LIVE stable, apply clean minimal DB fix if connecting to wrong DB
+
+## Previous Stability Fixes (Still in Place)
+- Cache-Busting Headers on all /api/ responses
+- Diagnostic Endpoint: `/api/system-health/diagnostic/users`
+- Email Normalization in auth/admin routes
+- Environment Badge (PREVIEW MODE banner)
+- Centralized Environment Resolver (`utils/environment.py`)
+- Zero Trust in AUDIT mode
 
 ## Backlog / Future Tasks
 - **P1: AI-driven Analytics and Insights**
