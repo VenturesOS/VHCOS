@@ -33,10 +33,11 @@ def _detect_environment() -> str:
         return "preview"
 
     cors = _cors_origins.lower()
+    frontend = _frontend_url.lower()
     if "localhost" in cors or "127.0.0.1" in cors:
         return "local"
 
-    if any(d in cors for d in PRODUCTION_DOMAINS):
+    if any(d in cors for d in PRODUCTION_DOMAINS) or any(d in frontend for d in PRODUCTION_DOMAINS):
         return "production"
 
     return "unknown"
