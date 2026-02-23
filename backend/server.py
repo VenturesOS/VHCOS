@@ -200,31 +200,44 @@ async def log_environment_report():
 @app.on_event("startup")
 async def validate_mongodb_connection():
     """
-    Validates MongoDB connectivity on startup. Non-blocking: logs warning if unavailable.
-    Motor will auto-reconnect on subsequent requests.
+    Validates MongoDB connectivity and logs full connection diagnostics.
     """
+    def _mask(uri: str) -> str:
+        """Mask credentials in URI for safe logging."""
+        if not uri:
+            return "(empty)"
+        if "://" in uri and "@" in uri:
+            scheme_end = uri.index("://") + 3
+            at_pos = uri.index("@")
+            return uri[:scheme_end] + "***:***@" + uri[at_pos + 1:]
+        return uri[:30] + "..."
+
+    mongo_url_env = os.environ.get('MONGO_URL', '')
+    mongodb_uri_env = os.environ.get('MONGODB_URI', '')
+    db_name_env = os.environ.get('DB_NAME', '')
+
+    logging.warning("=" * 60)
+    logging.warning("  MONGO CONNECTION DIAGNOSTICS")
+    logging.warning(f"  MONGO_URL     = {_mask(mongo_url_env)}")
+    logging.warning(f"  MONGODB_URI   = {_mask(mongodb_uri_env)}")
+    logging.warning(f"  DB_NAME (env) = {db_name_env or '(not set)'}")
+    logging.warning(f"  DB_NAME (used)= {db_name}")
+    logging.warning(f"  Active URI    = {'MONGO_URL' if mongo_url_env else 'MONGODB_URI' if mongodb_uri_env else 'NONE'}")
+    logging.warning("=" * 60)
+
     for attempt in range(3):
         try:
             await client.admin.command("ping")
-            # Log connection target for deployment verification (WARNING level for visibility)
-            mongo_url_env = os.environ.get('MONGO_URL', '')
-            mongodb_uri_env = os.environ.get('MONGODB_URI', '')
-            active_uri = mongo_url_env or mongodb_uri_env
-            is_atlas = 'mongodb+srv' in active_uri or 'mongodb.net' in active_uri
-            host_preview = active_uri[:60] if active_uri else 'EMPTY'
-            logging.warning(f"MongoDB connected: {'ATLAS' if is_atlas else 'LOCAL'} | DB: {db_name} | Host: {host_preview}...")
-            logging.warning(f"  MONGO_URL set: {bool(mongo_url_env)} | MONGODB_URI set: {bool(mongodb_uri_env)} | Match: {mongo_url_env == mongodb_uri_env if mongo_url_env and mongodb_uri_env else 'N/A'}")
-            if not is_atlas:
-                logging.warning("CRITICAL: Connected to LOCAL MongoDB, NOT Atlas! Check MONGO_URL in .env")
-            # Verify user count as sanity check
             user_count = await db.users.count_documents({})
-            logging.warning(f"  DB sanity: users collection has {user_count} documents")
+            logging.warning(f"  MongoDB OK | users={user_count} | db={db_name}")
+            if user_count < 19:
+                logging.warning(f"  WARNING: Expected 19 users but found {user_count}. Likely connected to WRONG database!")
             return
         except Exception as e:
-            logging.warning(f"MongoDB connection attempt {attempt+1}/3 failed: {e}")
+            logging.warning(f"  MongoDB attempt {attempt+1}/3 failed: {e}")
             if attempt < 2:
                 await asyncio.sleep(5)
-    logging.warning("MongoDB not available at startup. Motor will auto-reconnect on first request.")
+    logging.warning("  MongoDB not available at startup. Motor will auto-reconnect on first request.")
 
 
 @app.on_event("startup")
