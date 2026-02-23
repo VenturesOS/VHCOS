@@ -32,10 +32,10 @@ def _detect_environment() -> str:
     if "preview" in app_url or "emergent" in app_url:
         return "preview"
 
-    # If FORCE_ATLAS is active, we're on production Atlas
+    # Check if connected to production Atlas via actual URI
     try:
-        from config import FORCE_ATLAS
-        if FORCE_ATLAS:
+        from config import mongodb_uri as _uri
+        if "cluster0.vuhdiod.mongodb.net" in _uri:
             return "production"
     except ImportError:
         pass

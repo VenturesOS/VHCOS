@@ -216,10 +216,9 @@ async def validate_mongodb_connection():
     mongodb_uri_env = os.environ.get('MONGODB_URI', '')
     db_name_env = os.environ.get('DB_NAME', '')
 
-    from config import FORCE_ATLAS, mongodb_uri as _actual_uri
+    from config import mongodb_uri as _actual_uri
     logging.warning("=" * 60)
     logging.warning("  MONGO CONNECTION DIAGNOSTICS")
-    logging.warning(f"  FORCE_ATLAS   = {FORCE_ATLAS}")
     logging.warning(f"  ACTUAL URI    = {_mask(_actual_uri)}")
     logging.warning(f"  ENV MONGO_URL = {_mask(mongo_url_env)}")
     logging.warning(f"  DB_NAME (used)= {db_name}")
