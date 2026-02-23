@@ -511,3 +511,39 @@ async def live_status(user=Depends(require_role("admin"))):
         "current_score": current_score,
         "incidents": incidents,
     }
+
+
+@maintenance_router.post("/migrate-users")
+async def migrate_users(user=Depends(require_role("admin"))):
+    """
+    One-time migration: seed missing users from the bundled seed file.
+    Compares by email — only inserts users that don't already exist.
+    """
+    import json
+    from pathlib import Path
+
+    seed_path = Path(__file__).resolve().parent.parent / "data" / "seed_users.json"
+    if not seed_path.exists():
+        raise HTTPException(status_code=404, detail="Seed file not found")
+
+    seed_users = json.loads(seed_path.read_text())
+    existing_emails = set()
+    async for doc in db.users.find({}, {"email": 1, "_id": 0}):
+        existing_emails.add(doc["email"].strip().lower())
+
+    inserted = []
+    skipped = []
+    for su in seed_users:
+        email = su.get("email", "").strip().lower()
+        if email in existing_emails:
+            skipped.append(email)
+            continue
+        await db.users.insert_one({k: v for k, v in su.items() if k != "_id"})
+        inserted.append(email)
+
+    return {
+        "inserted": len(inserted),
+        "skipped": len(skipped),
+        "inserted_emails": inserted,
+        "total_after": await db.users.count_documents({}),
+    }
