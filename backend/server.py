@@ -328,55 +328,6 @@ async def normalize_existing_emails():
 
 
 @app.on_event("startup")
-async def seed_canonical_users():
-    """
-    Seeds all canonical users on startup. Idempotent — skips existing emails.
-    This ensures the LIVE DB always has the full user set regardless of which
-    Atlas cluster is backing it.
-    """
-    CANONICAL_USERS = [
-        {"id": "eb962d6f-ad6f-454a-bd7b-edc68f8b4ff7", "email": "admin@vhc.in", "name": "System Admin", "role": "admin", "password": "$2b$12$ZtGVQr6p.odISa05QSX4ZOGbol0ekJsSxbGahfxz86MngEYoIdmsy", "phone": None, "company_id": None, "is_active": True, "requires_password_reset": False, "created_at": "2026-01-18T08:01:29.570417+00:00"},
-        {"id": "cf36890a-b8fa-47e2-abf3-d4600f04c831", "email": "ajit@vhc.in", "name": "Ajit Yadav", "role": "employer", "password": "$2b$12$dfrxtnSOfX0FYNfOK4ITyO5OaIsXh1BHsOQpi.hu044mI6BdKwb1m", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-01-24T11:12:03.591922+00:00"},
-        {"id": "f2a32556-f910-453a-8a2d-961211a17c46", "email": "maneet@vhc.in", "name": "Maneet Siwach", "role": "employer", "password": "$2b$12$T/HoymVbxL594waHsMd9T.TSJaDaErcPAyk18scejB1.sej/7.x3K", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-01-24T11:12:28.421906+00:00"},
-        {"id": "8dc5f7b9-be24-4e65-81d7-7af78fd07c18", "email": "bikash@vhc.in", "name": "Bikash Das", "role": "employer", "password": "$2b$12$lusoc9qdSgZ4pA5X1N2NPuMwITAkhXFhjRuGyK3hMHiQZz7C.bdvW", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-01-24T11:12:50.979012+00:00"},
-        {"id": "e9e33bd0-db62-4db2-86ea-495a6230e222", "email": "avinash@vhc.in", "name": "Avinash D", "role": "employer", "password": "$2b$12$.OpYhQeiSoZDxvv8dKx8kOwoYcxxsXHEMkfL3YbQ0i33oPVR1t6zO", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-01-24T11:13:23.080204+00:00"},
-        {"id": "06b70e35-bb06-41b9-a5f1-d9111112ae78", "email": "yamini@vhc.in", "name": "Yamini gupta", "role": "recruiter", "password": "$2b$12$TltmwBE9zX/2EnrfFBWE9.u14NZw0RKKUC0c68Ku2qnQzusHRPzFO", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-01-27T06:31:07.218244+00:00"},
-        {"id": "839f5e28-f97e-4e0d-ae18-091e0636fa60", "email": "jatin@vhc.in", "name": "Jatin Yadav", "role": "recruiter", "password": "$2b$12$FqyCMbLAqndTOH8GdI6w7el./csjxH/uunI2Pfdf2cjtDB7gc7YoG", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-01-28T04:47:27.495354+00:00"},
-        {"id": "3bee4bf4-02cb-4b81-8e40-7d8224f1fc94", "email": "yatharth@vhc.in", "name": "Yatharth rao", "role": "candidate", "password": "$2b$12$0AckEwRnz4gIEAnOuL3vxeemKfP.Swvj9lklolBeOk8Pm4tRVQz.y", "phone": None, "company_id": None, "is_active": False, "requires_password_reset": False, "created_at": "2026-02-08T12:12:07.205594+00:00"},
-        {"id": "a792bb92-84dc-4fd3-be03-ec1940296dfc", "email": "admin@ventureshrd.com", "name": "System Admin", "role": "admin", "password": "$2b$12$XBS4GQKWbdntQiCpJJtzHuum60trpcvQuZRSxD8RKGWTH3/3/tquu", "phone": None, "company_id": None, "is_active": True, "requires_password_reset": False, "created_at": "2026-02-12T17:35:37.397223+00:00"},
-        {"id": "f412d7aa-c3f1-436f-aaea-91600905f486", "email": "siddharth@vhc.in", "name": "Siddharth Rao", "role": "admin", "password": "$2b$12$okpacLfjsOC9WIPxGZ0uZuFYRpns/cKJGauIpRXYAzlNcr9.HWBR2", "phone": "9810557485", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-02-16T05:03:36.884013+00:00"},
-        {"id": "a39a318f-a107-4a5b-b6ff-03232a4d2289", "email": "rohit@vhc.in", "name": "Rohit Yadav", "role": "employer", "password": "$2b$12$fRYVuQ1uLgh7Tb2vxMkDSO4lS19xv0CwiMRW4EePCPeV3Ns0dwROe", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": True, "created_at": "2026-02-16T08:08:13.909837+00:00"},
-        {"id": "10f2023f-1404-4ae6-afea-884384e020fd", "email": "manorma@vhc.in", "name": "Manorma yadav", "role": "employer", "password": "$2b$12$JUkE1doXQs9txyHaubcuy.Fh1IDj8bPsI0.tpKJtjyoEr4F5JxePW", "phone": "", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-02-16T08:08:57.878577+00:00"},
-        {"id": "a8f2f035-8d4b-4c90-ae53-ef64a0fd7c0c", "email": "rohitjakhmola28@yahoo.com", "name": "ROHIT JAKHMOLA", "role": "candidate", "password": "$2b$12$vI7BxZzUE2UEdOs.3T0ft.EKXz0CpB3hMA2Voiku2crI/k52/IjpO", "phone": None, "company_id": None, "is_active": True, "requires_password_reset": True, "created_at": "2026-02-16T12:07:09.594698+00:00"},
-        {"id": "67ac3ae1-5b14-4a1c-aedf-0cbbbb58e629", "email": "yatharthrao9@gmail.com", "name": "Nehul Singhania", "role": "candidate", "password": "$2b$12$eYUSvOjtfWAJnIzSOqG9X.FIwiKUj12wglU9WOdmvjey3ObXIPZKq", "phone": None, "company_id": None, "is_active": True, "requires_password_reset": True, "created_at": "2026-02-16T12:41:50.545989+00:00"},
-        {"id": "57eec150-0f3f-4922-9dfc-b4dbbcf1d28f", "email": "durainaidu1@gmail.com", "name": "G.DURAI", "role": "candidate", "password": "$2b$12$rW/kR1mhfYl7AF4.2x1ELOuHkJMchr1i8NlCtNZxHH05Kzjq323wu", "phone": "9940719536", "company_id": None, "is_active": True, "requires_password_reset": False, "created_at": "2026-02-17T14:15:57.033202+00:00"},
-        {"id": "218de586-9494-4b42-a2ed-6dabc411ce2c", "email": "khatrianandd@gmail.com", "name": "Anand  Khatri", "role": "candidate", "password": "$2b$12$X2DBwgMdAWAV/dTzrki24uPC3GEfUqadmGzlUme4LtHMbbrvyW2I.", "phone": "6377361515", "company_id": None, "is_active": True, "requires_password_reset": False, "created_at": "2026-02-19T07:41:24.740221+00:00"},
-        {"id": "0ce74b21-6950-402a-a91f-846586ee4a21", "email": "bhumika@vhc.in", "name": "Bhumika Anand", "role": "recruiter", "password": "$2b$12$4XtD.DbBIZccrGnv7vKbKu5QlDRq399CNtQljvTABLl2TwgtLjkTG", "phone": "8800555880", "company_id": "", "is_active": True, "requires_password_reset": False, "created_at": "2026-02-20T05:00:11.904178+00:00"},
-        {"id": "6be69a8a-e0ba-46fd-9a1b-f403edd54d3f", "email": "employer@vhc.in", "name": "Demo Employer", "role": "employer", "password": "$2b$12$./lJf/SWtP8m01Yg1r/EgubWOECAVabgBYShCqbEVsgawBweQgCG6", "phone": None, "company_id": None, "is_active": True, "requires_password_reset": False, "created_at": "2026-02-20T11:27:46.843891+00:00"},
-        {"id": "68c2a939-e10b-4442-bc9e-2f9e757d9729", "email": "test_turnstile_bypass_61c488d7@example.com", "name": "Turnstile Bypass Test", "role": "candidate", "password": "$2b$12$OMVjeqLVJS9Gdh9nFEqbNe/h38ut0VLgMq2YRFnM4I2.JFutJ12IC", "phone": None, "company_id": None, "is_active": True, "requires_password_reset": False, "created_at": "2026-02-21T13:24:55.554289+00:00"},
-    ]
-
-    try:
-        existing_emails = set()
-        async for doc in db.users.find({}, {"email": 1, "_id": 0}):
-            existing_emails.add(doc.get("email", "").strip().lower())
-
-        inserted = 0
-        for user in CANONICAL_USERS:
-            if user["email"].strip().lower() not in existing_emails:
-                await db.users.insert_one(user)
-                inserted += 1
-                logging.info(f"[USER_SEED] Inserted missing user: {user['email']}")
-
-        total = await db.users.count_documents({})
-        if inserted:
-            logging.warning(f"[USER_SEED] Seeded {inserted} missing users. Total now: {total}")
-        else:
-            logging.info(f"[USER_SEED] All {total} canonical users already present")
-    except Exception as e:
-        logging.warning(f"[USER_SEED] Skipped (DB not available): {e}")
-
-@app.on_event("startup")
 async def ensure_pillar_pages_index():
     """Create unique index on pillar_pages.slug."""
     try:
