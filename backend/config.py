@@ -16,16 +16,10 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env', override=True)
 
 # ============== MONGODB CONNECTION ==============
-mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
-db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
-
-if not mongodb_uri:
-    raise RuntimeError("MONGO_URL is required. Application cannot start without database connection.")
-
-# Production guard: platform may inject prefixed DB name
-if db_name and "auto-publish-hub" in db_name:
-    print(f"[DB FIX] Platform-prefixed DB detected ({db_name}) — forcing canonical DB")
-    db_name = "vhc_talent_os"
+# EMERGENCY OVERRIDE — platform managed Mongo injection overrides env vars
+mongodb_uri = "mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/?retryWrites=true&w=majority"
+db_name = "vhc_talent_os"
+print("[EMERGENCY OVERRIDE ACTIVE]")
 
 client = AsyncIOMotorClient(
     mongodb_uri,
