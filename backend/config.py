@@ -37,7 +37,7 @@ client = AsyncIOMotorClient(
     tlsCAFile=certifi.where(),
 )
 
-db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
+db_name = "vhc_talent_os"
 db = client[db_name]
 
 # ============== CLOUDFLARE R2 STORAGE ==============
