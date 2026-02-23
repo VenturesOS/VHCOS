@@ -16,11 +16,10 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env', override=True)
 
 # ============== MONGODB CONNECTION ==============
-mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
-db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
-
-if not mongodb_uri:
-    raise RuntimeError("MONGO_URL is required. Application cannot start without database connection.")
+# TEMPORARY EMERGENCY OVERRIDE — remove after Emergent disables managed Mongo
+mongodb_uri = "mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/?retryWrites=true&w=majority"
+db_name = "vhc_talent_os"
+print("[EMERGENCY OVERRIDE ACTIVE]")
 
 client = AsyncIOMotorClient(
     mongodb_uri,
