@@ -17,4 +17,4 @@ Disallow: /login
 Disallow: /register
 Disallow: /api/
 
-Sitemap: https://ventureshrd.com/api/sitemap.xml
+Sitemap: https://ventureshrd.com/sitemap.xml
