@@ -8,7 +8,7 @@ import os
 import io
 import csv
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://portal-training-docs.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://crash-root-cause.preview.emergentagent.com').rstrip('/')
 
 
 class TestTrackerWizardAPIs:
