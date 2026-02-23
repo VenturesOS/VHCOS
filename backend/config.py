@@ -22,8 +22,8 @@ if not mongodb_uri:
 
 client = AsyncIOMotorClient(
     mongodb_uri,
-    maxPoolSize=50,
-    minPoolSize=5,
+    maxPoolSize=10,
+    minPoolSize=1,
     maxIdleTimeMS=30000,
     waitQueueTimeoutMS=15000,
     serverSelectionTimeoutMS=15000,
@@ -31,7 +31,7 @@ client = AsyncIOMotorClient(
     socketTimeoutMS=30000,
     retryWrites=True,
     retryReads=True,
-    maxConnecting=3,
+    maxConnecting=2,
     tls=True,
     tlsInsecure=True,
     tlsCAFile=certifi.where(),
