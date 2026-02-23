@@ -110,6 +110,12 @@ from botocore.config import Config
 # Create the main app
 app = FastAPI(title="VHC Talent OS API")
 
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
 # Include auth routes (extracted to routes/auth.py)
 app.include_router(auth_router)
 
