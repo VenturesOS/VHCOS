@@ -32,6 +32,14 @@ def _detect_environment() -> str:
     if "preview" in app_url or "emergent" in app_url:
         return "preview"
 
+    # If FORCE_ATLAS is active, we're on production Atlas
+    try:
+        from config import FORCE_ATLAS
+        if FORCE_ATLAS:
+            return "production"
+    except ImportError:
+        pass
+
     cors = _cors_origins.lower()
     frontend = _frontend_url.lower()
     if "localhost" in cors or "127.0.0.1" in cors:
