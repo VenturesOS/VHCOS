@@ -12,42 +12,35 @@ Build a comprehensive recruitment management portal (Talent OS) for Ventures HRD
 - **Email:** Resend
 - **Cache:** Upstash Redis
 
-## Recently Completed — Production Stability Hardening (Feb 22, 2026)
+## Recent Fix — P0 Backend Crash Resolution (Feb 23, 2026)
 
-### Root Cause: LIVE vs Preview Data Mismatch
-**Problem:** `bhumika@vhc.in` (recruiter) visible in preview but not on LIVE.
-**Root Cause:** `config.py` line 29 checked `MONGODB_URI` before `MONGO_URL`. If the LIVE deployment platform injects `MONGODB_URI` (pointing to a different/local DB), it silently overrides the Atlas connection string from `.env`. This caused the LIVE backend to connect to a different database with different user data.
+### Problem
+LIVE production backend was crashing on startup (502/520 errors). The previous agent had added complex .env override logic, DB_NAME prefix stripping, Atlas safety guards, and defensive try/except blocks to `config.py`. These changes worked in preview but crashed the LIVE server.
 
-### Fixes Applied
-1. **DB Connection Priority Fix** (`config.py`): `.env` `MONGO_URL` now forcibly sets BOTH `MONGO_URL` AND `MONGODB_URI` env vars. Connection string lookup now checks `MONGO_URL` first. Platform-injected `MONGODB_URI` can no longer override.
-
-2. **API Cache-Busting** (`server.py`): All `/api/` responses now include `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`, `CDN-Cache-Control: no-store`, `Cloudflare-CDN-Cache-Control: no-store`. Prevents Cloudflare/browser from serving stale API data.
-
-3. **Diagnostic Endpoint** (`maintenance_routes.py`): `GET /api/system-health/diagnostic/users` — returns live user counts, list, DB name, and environment. NOT behind Zero Trust. Use on LIVE to verify data matches.
-
-4. **Startup DB Audit** (`server.py`): Logs which connection string is active, whether MONGO_URL and MONGODB_URI match, and a user count sanity check on every boot.
-
-5. **Email Normalization** (`auth.py`, `admin.py`): All user creation/login flows apply `.lower().strip()`.
-
-6. **Environment Badge** (`EnvironmentBadge.jsx`): Shows "PREVIEW MODE" banner only when `APP_URL` (Emergent pod signal) is detected. Won't show on production.
-
-7. **Centralized Environment Resolver** (`utils/environment.py`): Single source of truth for environment detection.
-
-### Deployment Steps Required for LIVE
-1. **Deploy latest backend code** — the `config.py` fix is critical
-2. **Purge Cloudflare cache** for ventureshrd.com
-3. **Check startup logs** — should show `ATLAS | DB: vhc_talent_os | sanity: 19 documents`
-4. **Test diagnostic endpoint**: `curl https://ventureshrd.com/api/system-health/diagnostic/users -H "Authorization: Bearer <token>"`
+### Fix Applied
+**Simplified `config.py` to bare essentials:**
+- Removed `dotenv_values` double-read and MONGODB_URI override hack
+- Removed `DB_NAME` prefix stripping and canonical name forcing
+- Removed unused `ssl_context` block and `ssl` import
+- Removed Atlas safety log block
+- Now uses only: `load_dotenv()` → `os.environ.get('MONGO_URL')` → connect
 
 ### Key Files Changed
-- `/app/backend/config.py` — DB connection priority fix
-- `/app/backend/server.py` — Cache headers, startup audit
-- `/app/backend/routes/maintenance_routes.py` — Diagnostic endpoint
-- `/app/backend/routes/auth.py` — Email normalization
-- `/app/backend/routes/admin.py` — Email normalization
-- `/app/backend/utils/environment.py` — Centralized env resolver
-- `/app/frontend/src/components/shared/EnvironmentBadge.jsx` — Preview banner
-- `/app/frontend/src/components/layout/DashboardLayout.jsx` — Badge integration
+- `/app/backend/config.py` — Simplified to ~100 lines (was ~140+ with defensive code)
+
+### Previous Stability Fixes (Still in Place)
+1. **Cache-Busting Headers** (`server.py`): All `/api/` responses include no-cache headers
+2. **Diagnostic Endpoint** (`maintenance_routes.py`): `/api/system-health/diagnostic/users`
+3. **Email Normalization** (`auth.py`, `admin.py`): `.lower().strip()` on all user flows
+4. **Environment Badge** (`EnvironmentBadge.jsx`): Shows "PREVIEW MODE" banner
+5. **Centralized Environment Resolver** (`utils/environment.py`)
+6. **Zero Trust in AUDIT mode** (`backend/.env`)
+
+### Deployment Steps for LIVE
+1. Deploy latest backend code (the simplified `config.py` is the critical change)
+2. Verify backend starts (no 502 errors)
+3. Test login: `curl https://ventureshrd.com/api/auth/login -X POST -H "Content-Type: application/json" -d '{"email":"admin@vhc.in","password":"VhcAdmin@2024"}'`
+4. Once LIVE is stable, apply a clean minimal DB fix if needed (ensure correct Atlas DB)
 
 ## Backlog / Future Tasks
 - **P1: AI-driven Analytics and Insights**
