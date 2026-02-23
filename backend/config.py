@@ -3,7 +3,6 @@ VHC Talent OS - Configuration Module
 Handles environment variables, database connection, and R2 storage client.
 """
 import os
-import ssl
 import logging
 import certifi
 from pathlib import Path
@@ -16,48 +15,11 @@ from botocore.config import Config
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# Force MONGO_URL and DB_NAME from .env file (overrides platform-injected values)
-# Wrapped in try/except — MUST NEVER crash the server
-try:
-    from dotenv import dotenv_values
-    _env_vals = dotenv_values(ROOT_DIR / '.env')
-
-    # ── MONGO_URL: try .env first ──
-    _env_mongo = _env_vals.get('MONGO_URL', '')
-    if _env_mongo:
-        os.environ['MONGO_URL'] = _env_mongo
-        os.environ['MONGODB_URI'] = _env_mongo
-
-    # ── DB_NAME: force canonical name ──
-    _CANONICAL_DB = 'vhc_talent_os'
-    _raw_db = _env_vals.get('DB_NAME', '') or os.environ.get('DB_NAME', '')
-    if _raw_db != _CANONICAL_DB:
-        logging.warning(f"[DB_NAME FIX] Platform DB_NAME='{_raw_db}' -> forcing '{_CANONICAL_DB}'")
-    os.environ['DB_NAME'] = _CANONICAL_DB
-except Exception as _cfg_err:
-    logging.warning(f"[CONFIG] .env override failed (non-fatal): {_cfg_err}")
-
 # ============== MONGODB CONNECTION ==============
 mongodb_uri = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI')
 if not mongodb_uri:
     raise RuntimeError("MONGO_URL is required. Application cannot start without database connection.")
 
-# ── Safety log (never crashes) ──
-try:
-    _is_atlas = "mongodb.net" in mongodb_uri.lower() or "mongodb+srv" in mongodb_uri.lower()
-    if not _is_atlas:
-        _safe_host = mongodb_uri.split("@")[-1].split("/")[0].split("?")[0] if "@" in mongodb_uri else "unknown"
-        logging.warning(f"[DB SAFETY] Non-Atlas MongoDB: host={_safe_host}")
-except Exception:
-    pass
-
-# Custom SSL context for Atlas — prevents TLS handshake failures
-ssl_context = ssl.create_default_context(cafile=certifi.where())
-ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
-
-# OPTIMIZED: Connection pooling for high concurrency (Atlas-safe limits)
 client = AsyncIOMotorClient(
     mongodb_uri,
     maxPoolSize=50,
@@ -75,10 +37,7 @@ client = AsyncIOMotorClient(
     tlsCAFile=certifi.where(),
 )
 
-# Database name - MUST be vhc_talent_os (production database)
 db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
-if db_name != 'vhc_talent_os':
-    logging.warning(f"DB_NAME is set to '{db_name}' but production database is 'vhc_talent_os'")
 db = client[db_name]
 
 # ============== CLOUDFLARE R2 STORAGE ==============
