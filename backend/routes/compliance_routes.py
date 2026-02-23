@@ -21,7 +21,11 @@ compliance_router = APIRouter(prefix="/api/compliance", tags=["compliance"])
 
 @compliance_router.on_event("startup")
 async def setup_compliance():
-    await ensure_compliance_indexes()
+    try:
+        await ensure_compliance_indexes()
+    except Exception as e:
+        import logging
+        logging.warning(f"Compliance index setup skipped: {e}")
 
 
 @compliance_router.get("/dashboard-stats")
