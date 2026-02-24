@@ -224,3 +224,86 @@ export default function AttendanceSettingsPage() {
     </div>
   );
 }
+
+function PreLaunchResetSection() {
+  const [showReset, setShowReset] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleReset = async () => {
+    if (confirmText !== 'RESET DATA') return toast.error("Type 'RESET DATA' exactly to confirm.");
+    setResetting(true);
+    try {
+      const res = await attendanceAPI.preLaunchReset({ confirmation: confirmText });
+      setResult(res.data);
+      toast.success('Pre-launch reset completed!');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Reset failed'); }
+    finally { setResetting(false); }
+  };
+
+  return (
+    <>
+      <Card className="border-red-200" data-testid="reset-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2 text-red-700"><ShieldAlert className="h-4 w-4" /> Pre-Launch Reset</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-1">Permanently delete all operational data before team launch:</p>
+          <ul className="text-xs text-muted-foreground mb-3 space-y-0.5 ml-4 list-disc">
+            <li>Attendance records, leave requests, leave balances, health scores</li>
+            <li>Notification events, delivery logs, cron job logs</li>
+            <li>Jobs, revenue entries, invoices</li>
+          </ul>
+          <p className="text-xs text-red-600 font-medium mb-3">Users, settings, and holidays will NOT be affected.</p>
+          <Button variant="destructive" size="sm" onClick={() => setShowReset(true)} data-testid="open-reset-btn">
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Pre-Launch Reset
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={showReset} onOpenChange={(v) => { setShowReset(v); setConfirmText(''); setResult(null); }}>
+        <DialogContent className="max-w-md" data-testid="reset-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-red-700 flex items-center gap-2"><ShieldAlert className="h-5 w-5" /> Pre-Launch Data Reset</DialogTitle>
+            <DialogDescription>This action is irreversible. All operational data will be permanently deleted.</DialogDescription>
+          </DialogHeader>
+          {result ? (
+            <div className="py-3 space-y-2">
+              <p className="text-sm font-medium text-green-700">Reset completed successfully.</p>
+              <div className="text-xs space-y-1 bg-slate-50 rounded-lg p-3">
+                {Object.entries(result.deleted || {}).map(([k, v]) => (
+                  <div key={k} className="flex justify-between"><span className="text-muted-foreground">{k}</span><span className="font-medium">{v} deleted</span></div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="py-2 space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-xs text-red-700">Type <strong>RESET DATA</strong> below to confirm:</p>
+              </div>
+              <Input
+                value={confirmText}
+                onChange={e => setConfirmText(e.target.value)}
+                placeholder="Type RESET DATA"
+                className="font-mono text-center"
+                data-testid="reset-confirm-input"
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowReset(false); setConfirmText(''); setResult(null); }}>
+              {result ? 'Close' : 'Cancel'}
+            </Button>
+            {!result && (
+              <Button variant="destructive" onClick={handleReset} disabled={resetting || confirmText !== 'RESET DATA'} data-testid="confirm-reset-btn">
+                {resetting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                Reset All Data
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
