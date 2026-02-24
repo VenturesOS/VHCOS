@@ -28,6 +28,7 @@ export default function AdminAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [showMarkDialog, setShowMarkDialog] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -35,13 +36,15 @@ export default function AdminAttendancePage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [rep, all] = await Promise.all([
+      const [rep, all, status] = await Promise.all([
         attendanceAPI.getMonthlyReport({ month, year }),
         attendanceAPI.getAllAttendance({ month, year }),
+        attendanceAPI.getStatus(),
       ]);
       setReport(rep.data);
       setRecords(all.data.records || []);
       setUsers(all.data.users || []);
+      setIsPaused(status.data.is_paused || false);
     } catch { toast.error('Failed to load attendance'); }
     finally { setLoading(false); }
   }, [month, year]);
