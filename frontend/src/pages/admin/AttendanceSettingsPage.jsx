@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Settings, Clock, AlertTriangle, Calendar, Timer, Save, Loader2, RotateCcw } from 'lucide-react';
+import { Settings, Clock, AlertTriangle, Calendar, Timer, Save, Loader2, RotateCcw, PauseCircle, PlayCircle, Trash2, ShieldAlert } from 'lucide-react';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
