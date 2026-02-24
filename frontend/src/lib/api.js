@@ -535,4 +535,36 @@ export const bulkImportAPI = {
   },
 };
 
+// Attendance & Leave Management APIs
+export const attendanceAPI = {
+  // Attendance
+  checkIn: (data) => api.post('/attendance/check-in', data),
+  checkOut: (data) => api.post('/attendance/check-out', data),
+  getMyAttendance: (params) => api.get('/attendance/my', { params }),
+  getTodayStatus: () => api.get('/attendance/today'),
+  getTeamAttendance: (params) => api.get('/attendance/team', { params }),
+  getAllAttendance: (params) => api.get('/attendance/all', { params }),
+  adminMark: (data) => api.post('/attendance/admin/mark', data),
+  getMonthlyReport: (params) => api.get('/attendance/report/monthly', { params }),
+  exportExcel: (params) => api.get('/attendance/report/export', { params, responseType: 'blob' }),
+  getSettings: () => api.get('/attendance/settings'),
+  updateSettings: (data) => api.put('/attendance/settings', data),
+  // Leave
+  requestLeave: (data) => api.post('/attendance/leave/request', data),
+  getMyLeaveRequests: (params) => api.get('/attendance/leave/requests/my', { params }),
+  getPendingLeaves: () => api.get('/attendance/leave/requests/pending'),
+  getAllLeaveRequests: (params) => api.get('/attendance/leave/requests/all', { params }),
+  approveLeave: (id, data) => api.put(`/attendance/leave/requests/${id}/approve`, data || {}),
+  rejectLeave: (id, data) => api.put(`/attendance/leave/requests/${id}/reject`, data || {}),
+  getMyLeaveBalance: (params) => api.get('/attendance/leave/balance', { params }),
+  getUserLeaveBalance: (userId, params) => api.get(`/attendance/leave/balance/${userId}`, { params }),
+  setUserLeaveBalance: (userId, data, params) => api.put(`/attendance/leave/admin/balance/${userId}`, data, { params }),
+  getAllLeaveBalances: (params) => api.get('/attendance/leave/admin/balances', { params }),
+  // Holidays
+  getHolidays: (params) => api.get('/attendance/holidays', { params }),
+  createHoliday: (data) => api.post('/attendance/holidays', data),
+  updateHoliday: (id, data) => api.put(`/attendance/holidays/${id}`, data),
+  deleteHoliday: (id) => api.delete(`/attendance/holidays/${id}`),
+};
+
 export default api;
