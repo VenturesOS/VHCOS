@@ -4,10 +4,10 @@
 Full-stack React + FastAPI recruitment management platform for Ventures HRD Consulting. Features include job management, candidate tracking, submission trackers, pipeline management, AI-powered candidate matching, Chrome extension for Naukri integration, blog engine, SEO tools, revenue dashboards, and compliance management.
 
 ## Core Architecture
-- **Frontend**: React (CRA) with Shadcn/UI, React Router
+- **Frontend**: React (CRA with CRACO) with Shadcn/UI, React Router
 - **Backend**: FastAPI with MongoDB Atlas
 - **Auth**: JWT-based, role-based access control (admin, employer, recruiter, candidate)
-- **3rd Party**: Cloudflare Turnstile, Cloudflare Zero Trust, MongoDB Atlas, Upstash Redis, Resend Email, OpenAI GPT-4o-mini
+- **3rd Party**: Cloudflare Turnstile, Cloudflare Zero Trust, MongoDB Atlas, Upstash Redis, Resend Email, OpenAI GPT-4o-mini, Cloudflare R2
 
 ## User Roles
 - **Admin**: Full system access, sees all data
@@ -29,16 +29,19 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 
 ## Recent Changes
 
+### Feb 24, 2026 — Deployment Fix
+- Removed temporary emergency hardcoded MongoDB override from `backend/config.py`
+- Changed `load_dotenv(override=True)` to `load_dotenv()` so K8s-injected env vars take precedence
+- MongoDB URI and DB name now read from environment variables (`MONGO_URL`, `DB_NAME`)
+- Deployment agent re-scan: All checks passed, status READY
+
 ### Feb 24, 2026 — Submission Tracker Role Access + Visibility Filtering
-1. **Role Access**: Granted employer and recruiter full CRUD access to Submission Tracker (15 backend routes updated in `tracker.py`, frontend routing in `App.js`, sidebar in `Sidebar.jsx`)
-2. **Visibility Filtering**: Implemented role-based filtering:
-   - Admin: Sees all trackers
-   - Recruiter: Sees trackers they created + trackers linked to mandates they're assigned to
-   - Employer: Sees trackers they created + where employer_id matches + mandates they posted + matching company_id
+1. **Role Access**: Granted employer and recruiter full CRUD access to Submission Tracker
+2. **Visibility Filtering**: Admin sees all trackers, recruiters see own + assigned mandates, employers see own + posted mandates
 3. **Access Control**: `GET /trackers/{id}` returns 403 for unauthorized users
 
 ## Known Technical Debt
-- **P0 (BLOCKED)**: Temporary emergency hardcoded MongoDB override in `backend/config.py`. Awaiting Emergent Support to disable managed MongoDB auto-binding.
+- None currently (emergency override has been removed)
 
 ## Backlog (Prioritized)
 - P1: AI-driven Analytics and Insights
@@ -48,16 +51,14 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - P4: Training Manual PDF refinement
 
 ## Key Files
-- `backend/config.py` — Contains temporary DB override (critical)
+- `backend/config.py` — Environment-based config (fixed)
 - `backend/routes/tracker.py` — Submission tracker API with role-based filtering
 - `frontend/src/App.js` — Frontend routing
 - `frontend/src/components/layout/Sidebar.jsx` — Navigation
-- `frontend/src/pages/admin/SubmissionTrackerPage.jsx` — Full CRUD tracker page (shared by all roles)
 
 ## Test Credentials
 - Admin: admin@vhc.in / VhcAdmin@2024
 - Recruiter: yamini@vhc.in / VhcAdmin@2024
-- Employer accounts: maneet@vhc.in (password differs from admin)
 
 ## Test Reports
 - `/app/test_reports/iteration_88.json` — Role access tests (100% pass)
