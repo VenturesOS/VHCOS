@@ -24,7 +24,7 @@ import time
 import io
 import csv
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://mongo-stabilization.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pause-reset-deploy.preview.emergentagent.com')
 
 # Test credentials
 ADMIN_EMAIL = "admin@vhc.in"

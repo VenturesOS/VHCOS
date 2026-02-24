@@ -8,7 +8,7 @@ import os
 import uuid
 
 # Test configuration - use public URL
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://mongo-stabilization.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pause-reset-deploy.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
