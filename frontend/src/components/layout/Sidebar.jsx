@@ -31,7 +31,9 @@ import {
   IndianRupee,
   Linkedin,
   Shield,
-  ShieldCheck
+  ShieldCheck,
+  Clock,
+  CalendarDays
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -65,6 +67,8 @@ const navItems = {
     { icon: Activity, label: 'System Health', path: '/admin/system-health' },
     { icon: ShieldCheck, label: 'Security Audit', path: '/admin/security-audit' },
     { icon: Shield, label: 'Compliance', path: '/admin/compliance-dashboard' },
+    { icon: Clock, label: 'Attendance', path: '/admin/attendance' },
+    { icon: CalendarDays, label: 'Leave Management', path: '/admin/leave-management' },
     { icon: Download, label: 'Resources', path: '/admin/resources' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],
@@ -78,6 +82,8 @@ const navItems = {
     { icon: History, label: 'Match History', path: '/recruiter/match-history' },
     { icon: Database, label: 'Candidate Bank', path: '/recruiter/candidate-bank' },
     { icon: FileText, label: 'Submission Tracker', path: '/recruiter/submission-tracker' },
+    { icon: Clock, label: 'Attendance', path: '/recruiter/attendance' },
+    { icon: CalendarDays, label: 'Leaves', path: '/recruiter/leaves' },
   ],
   employer: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/employer' },
@@ -92,6 +98,8 @@ const navItems = {
     { icon: Database, label: 'Candidate Bank', path: '/employer/candidate-bank' },
     { icon: Sparkles, label: 'Find Candidates', path: '/employer/find-candidates' },
     { icon: History, label: 'Match History', path: '/employer/match-history' },
+    { icon: Clock, label: 'Attendance', path: '/employer/attendance' },
+    { icon: CalendarDays, label: 'Leaves', path: '/employer/leaves' },
   ],
   candidate: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/candidate' },
