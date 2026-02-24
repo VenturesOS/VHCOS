@@ -390,10 +390,30 @@ async def list_trackers(
 
 @router.get("/trackers/{tracker_id}")
 async def get_tracker(tracker_id: str, user=Depends(require_role(["admin", "recruiter", "employer"]))):
-    """Get tracker with all rows."""
+    """Get tracker with all rows. Enforces role-based visibility."""
     tracker = await db.submission_trackers.find_one({"id": tracker_id}, {"_id": 0})
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
+
+    # Visibility check for non-admin users
+    role = user.get("role", "")
+    user_id = user.get("id", "")
+    if role in ("recruiter", "employer"):
+        allowed = tracker.get("created_by") == user_id or tracker.get("employer_id") == user_id
+        if not allowed:
+            mandate_id = tracker.get("mandate_id")
+            if mandate_id:
+                if role == "recruiter":
+                    job = await db.jobs.find_one({"id": mandate_id, "assigned_recruiters": user_id}, {"_id": 0, "id": 1})
+                else:
+                    job = await db.jobs.find_one({"id": mandate_id, "posted_by": user_id}, {"_id": 0, "id": 1})
+                allowed = job is not None
+            if not allowed and role == "employer":
+                user_company_id = user.get("company_id")
+                if user_company_id and tracker.get("client_id") == user_company_id:
+                    allowed = True
+        if not allowed:
+            raise HTTPException(status_code=403, detail="Access denied to this tracker")
 
     rows = await db.tracker_rows.find(
         {"tracker_id": tracker_id}, {"_id": 0}
