@@ -20,6 +20,13 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - Notification system: `notification_events` + `notification_delivery_logs`, email via Resend
 - Cron infrastructure: job locks, execution logging, APScheduler, 14 DB indexes
 
+### Pause & Pre-Launch Reset (Feb 24, 2026)
+- **Pause toggle**: Global `is_paused` flag in attendance_settings, guards check-in/out APIs (403), cron jobs skip when paused
+- **UI indicators**: Amber banner on AttendancePage when paused, "System: Active/Paused" badge on AdminAttendancePage
+- **Pre-Launch Reset**: Admin-only endpoint clears 10 operational collections, preserves users/settings/holidays
+- **Safety**: Typed "RESET DATA" confirmation, audit log with admin ID + timestamp in `system_audit_logs`
+- Collections cleared: attendance_records, leave_requests, leave_balances, attendance_health_scores, notification_events, notification_delivery_logs, cron_job_logs, jobs, revenue_entries, invoices, revenue_analytics
+
 ### Other Features
 - Submission Tracker (CRUD, role-based visibility filtering)
 - Job CRUD, candidate pipeline, AI matching
@@ -40,3 +47,4 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - iteration_90: Attendance CRUD (95%/100%)
 - iteration_91: Attendance Intelligence (100%)
 - iteration_92: Attendance Settings (100%)
+- iteration_93: Pause & Pre-Launch Reset (100% backend 16/16, 100% frontend)
