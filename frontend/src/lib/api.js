@@ -565,6 +565,15 @@ export const attendanceAPI = {
   createHoliday: (data) => api.post('/attendance/holidays', data),
   updateHoliday: (id, data) => api.put(`/attendance/holidays/${id}`, data),
   deleteHoliday: (id) => api.delete(`/attendance/holidays/${id}`),
+  // Analytics & Intelligence
+  getAnalytics: (params) => api.get('/attendance/analytics', { params }),
+  getHealthScores: (params) => api.get('/attendance/analytics/health-scores', { params }),
+  getNotifications: (params) => api.get('/attendance/analytics/notifications', { params }),
+  markNotificationRead: (id) => api.put(`/attendance/analytics/notifications/${id}/read`),
+  markAllRead: () => api.put('/attendance/analytics/notifications/read-all'),
+  getCronLogs: (params) => api.get('/attendance/analytics/cron-logs', { params }),
+  triggerReminders: () => api.post('/attendance/analytics/cron/trigger-reminders'),
+  triggerAutoAbsent: () => api.post('/attendance/analytics/cron/trigger-auto-absent'),
 };
 
 export default api;
