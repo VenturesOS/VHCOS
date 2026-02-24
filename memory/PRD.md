@@ -1,51 +1,54 @@
 # VHC Talent OS — Product Requirements Document
 
 ## Original Problem Statement
-Build a comprehensive recruitment management portal (Talent OS) for Ventures HRD, covering industrial hiring with a 7-stage pipeline, multi-role dashboards, AI-powered features, enterprise compliance, and security hardening.
+Full-stack React + FastAPI recruitment management platform for Ventures HRD Consulting. Features include job management, candidate tracking, submission trackers, pipeline management, AI-powered candidate matching, Chrome extension for Naukri integration, blog engine, SEO tools, revenue dashboards, and compliance management.
 
 ## Core Architecture
-- **Frontend:** React 18 + Shadcn/UI + Tailwind CSS
-- **Backend:** FastAPI (Python) + MongoDB Atlas
-- **Storage:** Cloudflare R2
-- **Security:** Cloudflare Turnstile (CAPTCHA), Cloudflare Zero Trust, Rate Limiting, File Validation
-- **AI:** OpenAI GPT-4o-mini (blog, matching, search)
-- **Email:** Resend
-- **Cache:** Upstash Redis
+- **Frontend**: React (CRA) with Shadcn/UI, React Router
+- **Backend**: FastAPI with MongoDB Atlas
+- **Auth**: JWT-based, role-based access control (admin, employer, recruiter, candidate)
+- **3rd Party**: Cloudflare Turnstile, Cloudflare Zero Trust, MongoDB Atlas, Upstash Redis, Resend Email, OpenAI GPT-4o-mini
 
-## Recent Fix — P0 Backend Crash Resolution (Feb 23, 2026)
+## User Roles
+- **Admin**: Full system access
+- **Employer**: Company-specific job/candidate management
+- **Recruiter**: Mandate-based recruitment operations
+- **Candidate**: Job browsing, applications, profile management
 
-### Problem
-LIVE production backend was crashing on startup (502/520 errors). Previous agent had added complex .env override logic, DB_NAME prefix stripping, Atlas safety guards, and defensive try/except blocks to `config.py`.
+## Key Features Implemented
+- Job CRUD with approval workflows
+- Candidate pipeline management
+- Submission Tracker (full CRUD for admin, employer, recruiter)
+- AI candidate matching & screening
+- Chrome Extension for Naukri (v3.9.2)
+- Blog engine with SEO optimization
+- Revenue dashboard
+- Compliance (DPDP) management
+- Bulk import/export
+- Team hierarchy management
 
-### Fixes Applied
-1. **Simplified `config.py`** — Removed dotenv_values double-read, MONGODB_URI override, DB_NAME prefix stripping, unused ssl_context. Now uses only `load_dotenv()` → `os.environ.get()` → connect.
-2. **CORS wildcard** — Updated CORS_ORIGINS to `*` for Emergent deployment compatibility. Server.py now detects wildcard and uses it directly.
+## Recent Changes (Feb 24, 2026)
+- **Submission Tracker Access**: Granted employer and recruiter roles full CRUD access to Submission Tracker (previously admin-only). Updated 15 backend routes in `tracker.py`, frontend routing in `App.js`, and sidebar navigation in `Sidebar.jsx`.
 
-### Deployment Readiness
-- Backend starts clean, login works, CORS allows all origins
-- Supervisor config valid for both frontend + backend
-- LinkedIn OAuth redirect hardcoded to ventureshrd.com (known limitation)
+## Known Technical Debt
+- **P0 (BLOCKED)**: Temporary emergency hardcoded MongoDB override in `backend/config.py`. Awaiting Emergent Support to disable managed MongoDB auto-binding before this can be removed.
 
-### Deployment Steps for LIVE
-1. Deploy latest backend code
-2. Verify backend starts (no 502 errors)
-3. Test login endpoint
-4. Once LIVE stable, apply clean minimal DB fix if connecting to wrong DB
+## Backlog (Prioritized)
+- P1: AI-driven Analytics and Insights
+- P2: Client Dashboard enhancements
+- P3: Advanced Revenue Intelligence
+- P4: LinkedIn Auto-Posting (blocked on API scope approval)
+- P4: Training Manual PDF refinement
+- P5: Chrome extension backup files organization
 
-## Previous Stability Fixes (Still in Place)
-- Cache-Busting Headers on all /api/ responses
-- Diagnostic Endpoint: `/api/system-health/diagnostic/users`
-- Email Normalization in auth/admin routes
-- Environment Badge (PREVIEW MODE banner)
-- Centralized Environment Resolver (`utils/environment.py`)
-- Zero Trust in AUDIT mode
-
-## Backlog / Future Tasks
-- **P1: AI-driven Analytics and Insights**
-- **P2: Client Dashboard Enhancements**
-- **P3: Advanced Revenue Intelligence**
-- **Blocked: LinkedIn Auto-Posting** (requires `w_organization_social` scope)
+## Key Files
+- `backend/config.py` — Contains temporary DB override (critical)
+- `backend/routes/tracker.py` — Submission tracker API
+- `frontend/src/App.js` — Frontend routing
+- `frontend/src/components/layout/Sidebar.jsx` — Navigation
+- `frontend/src/pages/admin/SubmissionTrackerPage.jsx` — Full CRUD tracker page
 
 ## Test Credentials
-- **Admin:** admin@vhc.in / VhcAdmin@2024
-- **Recruiter:** bhumika@vhc.in / 12345678
+- Admin: admin@vhc.in / VhcAdmin@2024
+- Recruiter: yamini@vhc.in / VhcAdmin@2024
+- Employer accounts: maneet@vhc.in (password differs from admin)
