@@ -1,84 +1,88 @@
 # VHC Talent OS — Product Requirements Document
 
 ## Original Problem Statement
-Full-stack React + FastAPI recruitment management platform for Ventures HRD Consulting. Features include job management, candidate tracking, submission trackers, pipeline management, AI-powered candidate matching, Chrome extension for Naukri integration, blog engine, SEO tools, revenue dashboards, compliance management, and attendance/leave management.
+Full-stack React + FastAPI recruitment management platform for Ventures HRD Consulting. Features include job management, candidate tracking, submission trackers, pipeline management, AI-powered candidate matching, Chrome extension for Naukri integration, blog engine, SEO tools, revenue dashboards, compliance management, attendance/leave management, and AI-driven attendance intelligence.
 
 ## Core Architecture
-- **Frontend**: React (CRA with CRACO) with Shadcn/UI, React Router
-- **Backend**: FastAPI with MongoDB Atlas
+- **Frontend**: React (CRA with CRACO) with Shadcn/UI, React Router, Recharts
+- **Backend**: FastAPI with MongoDB Atlas, APScheduler for cron jobs
 - **Auth**: JWT-based, role-based access control (admin, employer, recruiter, candidate)
 - **3rd Party**: Cloudflare Turnstile, Cloudflare Zero Trust, MongoDB Atlas, Upstash Redis, Resend Email, OpenAI GPT-4o-mini, Cloudflare R2
 
-## User Roles & Visibility
-- **Admin**: Full system access, sees all data, manages leave banks & holidays
-- **Employer**: Company-specific access, sees own + team (recruiters) attendance
-- **Recruiter**: Mandate-based operations, sees own attendance only
-- **Candidate**: Job browsing, applications, profile management
+## User Roles & Access
+| Feature | Admin | Employer | Recruiter |
+|---------|-------|----------|-----------|
+| Attendance Dashboard | All users | Team only | Own only |
+| Attendance Insights | Full analytics | Team insights | No access |
+| Leave Management | Approve + Set banks | Request own | Request own |
+| Holidays | CRUD | View | View |
+| Automation Controls | Full | No | No |
 
 ## Key Features Implemented
 
-### Attendance & Leave Management (NEW - Feb 24, 2026)
-- **Self Check-in/Check-out**: Work mode (Office/WFH/Field), IP logging, late/overtime tracking
-- **Admin Override**: Admin can mark/override attendance for any user
-- **Leave Request Workflow**: Request → Pending → Approved/Rejected. Leave types: Casual, Sick, Earned, Comp-Off
-- **Leave Balance Bank**: Admin sets per-user quotas. Auto-deducted on approval.
-- **Holiday Calendar**: Admin-managed (National/Festival/Company/Optional)
-- **Monthly Reports**: Admin dashboard + Excel export
-- **Backend**: `/app/backend/routes/attendance.py`
-- **Frontend**: `AttendancePage.jsx`, `LeaveManagementPage.jsx`, `AdminAttendancePage.jsx`, `AdminLeaveManagementPage.jsx`
+### Attendance Intelligence System (Feb 24, 2026)
+**Phase 1 — Foundation**
+- Notification service: `notification_events` + `notification_delivery_logs` collections
+- Cron infrastructure: Job-lock mechanism, execution logging, APScheduler
+- 14 DB indexes for performance at scale
+- Extended configurable settings: reminder_time, auto_absent_time, overtime_threshold, grace_window, weekend_days
 
-### Submission Tracker (Updated - Feb 24, 2026)
-- Full CRUD for admin, employer, recruiter
-- Role-based visibility filtering (admin sees all, recruiter sees own + assigned mandates, employer sees own + posted)
-- Access control on individual tracker view (403 for unauthorized)
+**Phase 2 — Automation**
+- Attendance reminders: Daily cron (10AM IST) with `should_remind()` decision layer
+- Auto-absent marking: Daily cron (6:30PM IST) with grace window, reason=`auto_absent`
+- Both respect holidays, weekends, approved leaves, existing check-ins
 
-### Other Features
+**Phase 3 — Analytics**
+- Extensible API returning `{metrics, charts, insights}` payload
+- Metrics: headcount, attendance_rate, absentee_rate, late_rate, avg_hours, overtime
+- Charts: daily_trend, weekly_late, team_comparison, work_mode_distribution
+- Attendance Health Score: 0-100 per user (punctuality, consistency, absenteeism, overtime)
+
+**Phase 4 — Dashboard UI**
+- AttendanceInsightsPage with 5 tabs: Trends, Team, Patterns, Health Scores, Automation
+- Line/Bar/Pie charts via Recharts
+- Pattern detection insight cards (critical/warning/info)
+- Admin trigger buttons for reminders and auto-absent
+- Cron execution log viewer
+
+**Phase 5 — Pattern Detection**
+- Rule-based: chronic lateness (>5), overtime spikes (>5 days), frequent absences (>3), short check-ins (<4h)
+- Severity: critical, warning, info
+- Architecture allows future ML upgrade
+
+### Previous Features
+- Submission Tracker with role-based visibility filtering
 - Job CRUD with approval workflows
 - Candidate pipeline management
 - AI candidate matching & screening
 - Chrome Extension for Naukri (v3.9.2)
-- Blog engine with SEO optimization
+- Blog engine with SEO
 - Revenue dashboard
 - Compliance (DPDP) management
-- Bulk import/export
-- Team hierarchy management
 
 ## Known Technical Debt
-- **P0 (BLOCKED)**: Temporary emergency hardcoded MongoDB override in `backend/config.py`. Awaiting Emergent Support to disable managed MongoDB auto-binding.
+- **P0 (BLOCKED)**: Temporary emergency hardcoded MongoDB override in `backend/config.py`
 
-## Backlog (Prioritized)
-- P1: AI-driven Analytics and Insights
+## Backlog
 - P2: Client Dashboard enhancements
 - P3: Advanced Revenue Intelligence
-- P4: LinkedIn Auto-Posting (blocked on API scope approval)
+- P4: LinkedIn Auto-Posting (blocked)
 - P4: Training Manual PDF refinement
+- P5: Attendance Settings UI page
+- P5: WhatsApp/Push notification channels
 
-## DB Collections (Attendance)
-- `attendance_records`: id, user_id, date, check_in, check_out, status, work_mode, hours_worked, late_minutes, overtime_minutes, is_late, ip_address, notes, marked_by
-- `leave_requests`: id, user_id, leave_type, start_date, end_date, days, half_day, reason, status, approved_by
-- `leave_balances`: user_id, year, {casual/sick/earned/comp_off}_leave_{total/used}
-- `holidays`: id, name, date, holiday_type, is_optional
-- `attendance_settings`: work_start_time, work_end_time, late_threshold_minutes, half_day_hours
-
-## Key API Endpoints (Attendance)
-- `POST /api/attendance/check-in` — Self check-in
-- `POST /api/attendance/check-out` — Self check-out
-- `GET /api/attendance/my` — My records
-- `GET /api/attendance/today` — Today's status
-- `POST /api/attendance/admin/mark` — Admin override
-- `GET /api/attendance/all` — All records (admin)
-- `GET /api/attendance/report/monthly` — Monthly summary
-- `GET /api/attendance/report/export` — Excel export
-- `POST /api/attendance/leave/request` — Request leave
-- `PUT /api/attendance/leave/requests/{id}/approve` — Approve leave
-- `PUT /api/attendance/leave/admin/balance/{user_id}` — Set leave balance
-- CRUD `/api/attendance/holidays` — Holiday management
-
-## Test Credentials
-- Admin: admin@vhc.in / VhcAdmin@2024
-- Recruiter: yamini@vhc.in / VhcAdmin@2024
+## Key Files
+- `backend/services/attendance_cron_service.py` — Cron jobs, locks, notifications, health scores
+- `backend/routes/attendance_analytics.py` — Analytics, patterns, notifications, cron triggers
+- `backend/routes/attendance.py` — Core attendance CRUD + settings
+- `frontend/src/pages/admin/AttendanceInsightsPage.jsx` — Intelligence dashboard
+- `frontend/src/pages/shared/AttendancePage.jsx` — Self-service attendance
+- `frontend/src/pages/shared/LeaveManagementPage.jsx` — Leave requests
+- `frontend/src/pages/admin/AdminAttendancePage.jsx` — Admin attendance overview
+- `frontend/src/pages/admin/AdminLeaveManagementPage.jsx` — Leave approvals + banks + holidays
 
 ## Test Reports
-- `/app/test_reports/iteration_88.json` — Submission tracker role access (100% pass)
-- `/app/test_reports/iteration_89.json` — Visibility filtering (100% pass)
-- `/app/test_reports/iteration_90.json` — Attendance & Leave Management (95%/100% pass)
+- `/app/test_reports/iteration_88.json` — Submission tracker role access (100%)
+- `/app/test_reports/iteration_89.json` — Visibility filtering (100%)
+- `/app/test_reports/iteration_90.json` — Attendance CRUD (95%/100%)
+- `/app/test_reports/iteration_91.json` — Attendance Intelligence (100%/100%)
