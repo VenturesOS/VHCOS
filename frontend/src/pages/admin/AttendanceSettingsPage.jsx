@@ -177,6 +177,34 @@ export default function AttendanceSettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Pause Toggle */}
+      <Card className={draft?.is_paused ? 'border-amber-300 bg-amber-50/30' : ''} data-testid="pause-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            {draft?.is_paused ? <PauseCircle className="h-4 w-4 text-amber-500" /> : <PlayCircle className="h-4 w-4 text-green-500" />}
+            Attendance Tracking — {draft?.is_paused ? 'Paused' : 'Active'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">
+            {draft?.is_paused
+              ? 'Check-in/check-out is disabled for all employees. Cron jobs (reminders, auto-absent) are skipped. Admin can still view data.'
+              : 'Attendance tracking is active. Employees can check in and out. Cron jobs run on schedule.'}
+          </p>
+          <Button
+            variant={draft?.is_paused ? 'default' : 'outline'}
+            onClick={() => update('is_paused', !draft?.is_paused)}
+            className={draft?.is_paused ? 'bg-green-600 hover:bg-green-700' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}
+            data-testid="pause-toggle-btn"
+          >
+            {draft?.is_paused ? <><PlayCircle className="h-4 w-4 mr-1" /> Resume Tracking</> : <><PauseCircle className="h-4 w-4 mr-1" /> Pause Tracking</>}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Pre-Launch Reset */}
+      <PreLaunchResetSection />
+
       {/* Confirmation Dialog */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-sm" data-testid="confirm-dialog">
