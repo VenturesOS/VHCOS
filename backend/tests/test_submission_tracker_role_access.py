@@ -33,16 +33,18 @@ def admin_token(api_client):
     """Get admin authentication token"""
     response = api_client.post(f"{BASE_URL}/api/auth/login", json=ADMIN_CREDS)
     if response.status_code == 200:
-        return response.json().get("token")
+        return response.json().get("access_token")
     pytest.skip(f"Admin authentication failed: {response.status_code} - {response.text[:200]}")
 
 
 @pytest.fixture(scope="module")
 def recruiter_token(api_client):
     """Get recruiter authentication token"""
+    import time
+    time.sleep(2)  # Avoid rate limiting
     response = api_client.post(f"{BASE_URL}/api/auth/login", json=RECRUITER_CREDS)
     if response.status_code == 200:
-        return response.json().get("token")
+        return response.json().get("access_token")
     pytest.skip(f"Recruiter authentication failed: {response.status_code} - {response.text[:200]}")
 
 
