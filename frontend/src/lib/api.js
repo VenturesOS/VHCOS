@@ -574,6 +574,9 @@ export const attendanceAPI = {
   getCronLogs: (params) => api.get('/attendance/analytics/cron-logs', { params }),
   triggerReminders: () => api.post('/attendance/analytics/cron/trigger-reminders'),
   triggerAutoAbsent: () => api.post('/attendance/analytics/cron/trigger-auto-absent'),
+  // Pause & Reset
+  getStatus: () => api.get('/attendance/status'),
+  preLaunchReset: (data) => api.post('/attendance/admin/pre-launch-reset', data),
 };
 
 export default api;
