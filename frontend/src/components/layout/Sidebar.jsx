@@ -69,6 +69,7 @@ const navItems = {
     { icon: Shield, label: 'Compliance', path: '/admin/compliance-dashboard' },
     { icon: Clock, label: 'Attendance', path: '/admin/attendance' },
     { icon: CalendarDays, label: 'Leave Management', path: '/admin/leave-management' },
+    { icon: BarChart3, label: 'Attendance Insights', path: '/admin/attendance-insights' },
     { icon: Download, label: 'Resources', path: '/admin/resources' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ],

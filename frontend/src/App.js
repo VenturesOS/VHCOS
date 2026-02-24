@@ -81,6 +81,7 @@ import ComplianceDashboardPage from "./pages/admin/ComplianceDashboardPage";
 import AdminResourcesPage from "./pages/admin/AdminResourcesPage";
 import AdminAttendancePage from "./pages/admin/AdminAttendancePage";
 import AdminLeaveManagementPage from "./pages/admin/AdminLeaveManagementPage";
+import AttendanceInsightsPage from "./pages/admin/AttendanceInsightsPage";
 import AttendancePage from "./pages/shared/AttendancePage";
 import LeaveManagementPage from "./pages/shared/LeaveManagementPage";
 import { PrivacyPolicyPage, TermsOfUsePage, CookiePolicyPage } from "./pages/policy/PolicyPages";
@@ -156,6 +157,7 @@ function App() {
             <Route path="resources" element={<AdminResourcesPage />} />
             <Route path="attendance" element={<AdminAttendancePage />} />
             <Route path="leave-management" element={<AdminLeaveManagementPage />} />
+            <Route path="attendance-insights" element={<AttendanceInsightsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
