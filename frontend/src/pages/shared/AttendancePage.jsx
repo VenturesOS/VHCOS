@@ -110,8 +110,14 @@ export default function AttendancePage() {
       </div>
 
       {/* Today's Check-in/out Card */}
-      <Card className="border-green-200 bg-gradient-to-r from-green-50/50 to-white" data-testid="today-card">
+      <Card className={`${isPaused ? 'border-amber-300 bg-amber-50/30' : 'border-green-200 bg-gradient-to-r from-green-50/50 to-white'}`} data-testid="today-card">
         <CardContent className="pt-6">
+          {isPaused && (
+            <div className="flex items-center gap-2 bg-amber-100 text-amber-800 text-sm px-3 py-2 rounded-lg mb-4" data-testid="pause-banner">
+              <Clock className="h-4 w-4 shrink-0" />
+              Attendance tracking is temporarily paused by admin.
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Today — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
