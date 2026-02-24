@@ -166,6 +166,7 @@ function App() {
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
+            <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
           </Route>
 
           {/* Employer Routes */}
@@ -175,7 +176,7 @@ function App() {
             <Route path="my-team" element={<EmployerMyTeamPage />} />
             <Route path="companies" element={<EmployerCompaniesPage />} />
             <Route path="pipeline" element={<EmployerPipelinePage />} />
-            <Route path="submission-tracker" element={<EmployerTrackerPage />} />
+            <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="jobs" element={<EmployerJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />

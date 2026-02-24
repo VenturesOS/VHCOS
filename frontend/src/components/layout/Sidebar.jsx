@@ -77,6 +77,7 @@ const navItems = {
     { icon: Sparkles, label: 'AI Screening', path: '/recruiter/find-candidates' },
     { icon: History, label: 'Match History', path: '/recruiter/match-history' },
     { icon: Database, label: 'Candidate Bank', path: '/recruiter/candidate-bank' },
+    { icon: FileText, label: 'Submission Tracker', path: '/recruiter/submission-tracker' },
   ],
   employer: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/employer' },

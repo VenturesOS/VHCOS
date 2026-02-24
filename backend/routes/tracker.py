@@ -95,7 +95,7 @@ async def get_master_columns(user=Depends(require_role(["admin", "recruiter", "e
 @router.post("/parse-template-file")
 async def parse_template_file(
     file: UploadFile = File(...),
-    user=Depends(require_role(["admin", "recruiter"])),
+    user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Parse an uploaded Excel/CSV file and return header mapping suggestions for template creation."""
     filename = file.filename or ""
@@ -160,7 +160,7 @@ async def parse_template_file(
 # ── Template CRUD ──
 
 @router.post("/templates")
-async def create_template(req: TemplateCreate, user=Depends(require_role(["admin", "recruiter"]))):
+async def create_template(req: TemplateCreate, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Create a new tracker template."""
     if not req.columns:
         raise HTTPException(status_code=400, detail="Template must have at least one column")
@@ -209,7 +209,7 @@ async def get_template(template_id: str, user=Depends(require_role(["admin", "re
 
 
 @router.put("/templates/{template_id}")
-async def update_template(template_id: str, req: TemplateUpdate, user=Depends(require_role(["admin", "recruiter"]))):
+async def update_template(template_id: str, req: TemplateUpdate, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Update a template."""
     updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if req.name is not None:
@@ -226,7 +226,7 @@ async def update_template(template_id: str, req: TemplateUpdate, user=Depends(re
 
 
 @router.post("/templates/{template_id}/clone")
-async def clone_template(template_id: str, name: str = Query(...), user=Depends(require_role(["admin", "recruiter"]))):
+async def clone_template(template_id: str, name: str = Query(...), user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Clone a template with a new name."""
     original = await db.tracker_templates.find_one({"id": template_id}, {"_id": 0})
     if not original:
@@ -247,7 +247,7 @@ async def clone_template(template_id: str, name: str = Query(...), user=Depends(
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: str, user=Depends(require_role(["admin"]))):
+async def delete_template(template_id: str, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Delete a template."""
     result = await db.tracker_templates.delete_one({"id": template_id})
     if result.deleted_count == 0:
@@ -258,7 +258,7 @@ async def delete_template(template_id: str, user=Depends(require_role(["admin"])
 # ── Tracker CRUD ──
 
 @router.post("/trackers")
-async def create_tracker(req: TrackerCreate, user=Depends(require_role(["admin", "recruiter"]))):
+async def create_tracker(req: TrackerCreate, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Create a new submission tracker for a mandate."""
     template = await db.tracker_templates.find_one({"id": req.template_id}, {"_id": 0})
     if not template:
@@ -295,7 +295,7 @@ class DuplicateTrackerRequest(BaseModel):
 
 
 @router.post("/trackers/{tracker_id}/duplicate")
-async def duplicate_tracker(tracker_id: str, req: DuplicateTrackerRequest, user=Depends(require_role(["admin", "recruiter"]))):
+async def duplicate_tracker(tracker_id: str, req: DuplicateTrackerRequest, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Duplicate a tracker's structure (columns, template) for a new mandate. No rows are copied."""
     source = await db.submission_trackers.find_one({"id": tracker_id}, {"_id": 0})
     if not source:
@@ -368,7 +368,7 @@ async def get_tracker(tracker_id: str, user=Depends(require_role(["admin", "recr
 
 
 @router.delete("/trackers/{tracker_id}")
-async def delete_tracker(tracker_id: str, user=Depends(require_role(["admin"]))):
+async def delete_tracker(tracker_id: str, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Delete tracker and all its rows."""
     result = await db.submission_trackers.delete_one({"id": tracker_id})
     if result.deleted_count == 0:
@@ -380,7 +380,7 @@ async def delete_tracker(tracker_id: str, user=Depends(require_role(["admin"])))
 # ── Row Operations ──
 
 @router.post("/trackers/{tracker_id}/rows")
-async def add_row(tracker_id: str, req: AddRowRequest, user=Depends(require_role(["admin", "recruiter"]))):
+async def add_row(tracker_id: str, req: AddRowRequest, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Add a candidate to the tracker. Auto-syncs pipeline to submitted_to_client."""
     tracker = await db.submission_trackers.find_one({"id": tracker_id}, {"_id": 0})
     if not tracker:
@@ -411,7 +411,7 @@ async def add_row(tracker_id: str, req: AddRowRequest, user=Depends(require_role
 @router.put("/trackers/{tracker_id}/rows/{row_id}")
 async def update_row(
     tracker_id: str, row_id: str, req: UpdateRowRequest,
-    user=Depends(require_role(["admin", "recruiter"])),
+    user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Inline edit a tracker row's data fields."""
     now = datetime.now(timezone.utc).isoformat()
@@ -430,7 +430,7 @@ async def update_row(
 @router.put("/trackers/{tracker_id}/rows/{row_id}/status")
 async def update_row_status(
     tracker_id: str, row_id: str, req: UpdateRowStatusRequest,
-    user=Depends(require_role(["admin", "recruiter"])),
+    user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Update row submission status — triggers pipeline sync."""
     row = await db.tracker_rows.find_one(
@@ -478,7 +478,7 @@ async def update_row_status(
 @router.delete("/trackers/{tracker_id}/rows/{row_id}")
 async def delete_row(
     tracker_id: str, row_id: str,
-    user=Depends(require_role(["admin", "recruiter"])),
+    user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Remove a candidate row from tracker."""
     result = await db.tracker_rows.delete_one({"id": row_id, "tracker_id": tracker_id})
@@ -548,7 +548,7 @@ async def get_tracker_events(
     application_id: Optional[str] = None,
     mandate_id: Optional[str] = None,
     limit: int = Query(50, le=200),
-    user=Depends(require_role(["admin", "recruiter"])),
+    user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Get tracker/pipeline events for audit."""
     query = {}
@@ -717,7 +717,7 @@ STATUS_MAP_LABEL = {
 async def upload_tracker_data(
     tracker_id: str,
     file: UploadFile = File(...),
-    user=Depends(require_role(["admin", "recruiter"])),
+    user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """
     Upload Excel/CSV to a tracker. Auto-detects headers and maps to master columns.
