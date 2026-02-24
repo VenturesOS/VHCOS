@@ -120,3 +120,7 @@ frontend/node_modules/.cache/default-development/3.pack_
 *.env
 *.env.*
 frontend/node_modules/.cache/default-development/7.pack_
+-e 
+# Environment files
+*.env
+*.env.*
