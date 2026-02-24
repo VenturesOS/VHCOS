@@ -574,6 +574,8 @@ async def update_attendance_settings(req: AttendanceSettingsUpdate, user=Depends
         updates["grace_window_minutes"] = req.grace_window_minutes
     if req.weekend_days is not None:
         updates["weekend_days"] = req.weekend_days
+    if req.is_paused is not None:
+        updates["is_paused"] = req.is_paused
 
     await db.attendance_settings.update_one(
         {"id": "global"}, {"$set": updates}, upsert=True
