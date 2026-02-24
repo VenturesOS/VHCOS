@@ -353,10 +353,11 @@ async def list_trackers(
         ).to_list(500)
         assigned_mandate_ids = [j["id"] for j in assigned_jobs]
 
-        role_filter = {"$or": [
-            {"created_by": user_id},
-            {"mandate_id": {"$in": assigned_mandate_ids}} if assigned_mandate_ids else {"created_by": user_id},
-        ]}
+        or_conditions = [{"created_by": user_id}]
+        if assigned_mandate_ids:
+            or_conditions.append({"mandate_id": {"$in": assigned_mandate_ids}})
+
+        role_filter = {"$or": or_conditions}
         query = {**query, **role_filter} if not query else {"$and": [query, role_filter]}
 
     elif role == "employer":
