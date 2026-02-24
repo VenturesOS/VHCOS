@@ -263,6 +263,13 @@ async def run_attendance_reminders():
 
     try:
         settings = await _get_settings()
+
+        # Skip if attendance is paused
+        if settings.get("is_paused"):
+            await log_job_execution(job_name, "skipped", {"reason": "attendance_paused"})
+            logger.info(f"[CRON] {job_name}: Skipped — attendance is paused.")
+            return
+
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         # Get all active employers/recruiters
@@ -358,6 +365,13 @@ async def run_auto_absent_marking():
 
     try:
         settings = await _get_settings()
+
+        # Skip if attendance is paused
+        if settings.get("is_paused"):
+            await log_job_execution(job_name, "skipped", {"reason": "attendance_paused"})
+            logger.info(f"[CRON] {job_name}: Skipped — attendance is paused.")
+            return
+
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         users = await db.users.find(
