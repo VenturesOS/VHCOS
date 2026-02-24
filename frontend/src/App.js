@@ -77,7 +77,6 @@ import EmployerAnalyticsPage from "./pages/employer/EmployerAnalyticsPage";
 import EmployerMyTeamPage from "./pages/employer/EmployerMyTeamPage";
 import EmployerCompaniesPage from "./pages/employer/EmployerCompaniesPage";
 import EmployerPipelinePage from "./pages/employer/EmployerPipelinePage";
-import EmployerTrackerPage from "./pages/employer/EmployerTrackerPage";
 import ComplianceDashboardPage from "./pages/admin/ComplianceDashboardPage";
 import AdminResourcesPage from "./pages/admin/AdminResourcesPage";
 import { PrivacyPolicyPage, TermsOfUsePage, CookiePolicyPage } from "./pages/policy/PolicyPages";
