@@ -101,6 +101,7 @@ from routes.seo_dashboard import router as seo_dashboard_router
 from routes.tracker import router as tracker_router
 from routes.compliance_routes import compliance_router
 from routes.maintenance_routes import maintenance_router
+from routes.attendance import router as attendance_router
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
@@ -169,6 +170,7 @@ app.include_router(linkedin_router)
 app.include_router(tracker_router)
 app.include_router(compliance_router)
 app.include_router(maintenance_router)
+app.include_router(attendance_router)
 
 # ============== RATE LIMITING MIDDLEWARE ==============
 from middleware.rate_limiter import RateLimitMiddleware
