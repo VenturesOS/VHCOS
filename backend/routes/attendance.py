@@ -73,6 +73,11 @@ class AttendanceSettingsUpdate(BaseModel):
     late_threshold_minutes: Optional[int] = None
     half_day_hours: Optional[float] = None
     full_day_hours: Optional[float] = None
+    reminder_time: Optional[str] = None  # HH:MM (default 10:00)
+    auto_absent_time: Optional[str] = None  # HH:MM (default 18:30)
+    overtime_threshold_minutes: Optional[int] = None  # default 60
+    grace_window_minutes: Optional[int] = None  # default 30
+    weekend_days: Optional[list] = None  # [0,6] = Sun,Sat
 
 
 # ── Helper Functions ──
@@ -80,16 +85,22 @@ class AttendanceSettingsUpdate(BaseModel):
 async def _get_settings():
     """Get attendance settings or return defaults."""
     settings = await db.attendance_settings.find_one({"id": "global"}, {"_id": 0})
-    if not settings:
-        settings = {
-            "id": "global",
-            "work_start_time": "09:00",
-            "work_end_time": "18:00",
-            "late_threshold_minutes": 15,
-            "half_day_hours": 4.5,
-            "full_day_hours": 9.0,
-        }
-    return settings
+    defaults = {
+        "id": "global",
+        "work_start_time": "09:00",
+        "work_end_time": "18:00",
+        "late_threshold_minutes": 15,
+        "half_day_hours": 4.5,
+        "full_day_hours": 9.0,
+        "reminder_time": "10:00",
+        "auto_absent_time": "18:30",
+        "overtime_threshold_minutes": 60,
+        "grace_window_minutes": 30,
+        "weekend_days": [0, 6],  # Sunday=0, Saturday=6
+    }
+    if settings:
+        defaults.update(settings)
+    return defaults
 
 def _calc_hours(check_in_str, check_out_str):
     """Calculate hours between check-in and check-out."""
@@ -540,6 +551,16 @@ async def update_attendance_settings(req: AttendanceSettingsUpdate, user=Depends
         updates["half_day_hours"] = req.half_day_hours
     if req.full_day_hours is not None:
         updates["full_day_hours"] = req.full_day_hours
+    if req.reminder_time is not None:
+        updates["reminder_time"] = req.reminder_time
+    if req.auto_absent_time is not None:
+        updates["auto_absent_time"] = req.auto_absent_time
+    if req.overtime_threshold_minutes is not None:
+        updates["overtime_threshold_minutes"] = req.overtime_threshold_minutes
+    if req.grace_window_minutes is not None:
+        updates["grace_window_minutes"] = req.grace_window_minutes
+    if req.weekend_days is not None:
+        updates["weekend_days"] = req.weekend_days
 
     await db.attendance_settings.update_one(
         {"id": "global"}, {"$set": updates}, upsert=True
