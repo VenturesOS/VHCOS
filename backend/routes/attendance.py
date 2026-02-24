@@ -818,6 +818,14 @@ async def set_user_leave_balance(
     if req.comp_off is not None:
         updates["comp_off_total"] = req.comp_off
 
+    # Initialize _used fields if not already present
+    existing_balance = await db.leave_balances.find_one({"user_id": target_user_id, "year": y})
+    if not existing_balance:
+        updates.setdefault("casual_leave_used", 0)
+        updates.setdefault("sick_leave_used", 0)
+        updates.setdefault("earned_leave_used", 0)
+        updates.setdefault("comp_off_used", 0)
+
     await db.leave_balances.update_one(
         {"user_id": target_user_id, "year": y},
         {"$set": updates},
