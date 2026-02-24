@@ -101,6 +101,7 @@ const navItems = {
     { icon: History, label: 'Match History', path: '/employer/match-history' },
     { icon: Clock, label: 'Attendance', path: '/employer/attendance' },
     { icon: CalendarDays, label: 'Leaves', path: '/employer/leaves' },
+    { icon: BarChart3, label: 'Team Insights', path: '/employer/attendance-insights' },
   ],
   candidate: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/candidate' },
