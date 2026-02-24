@@ -78,6 +78,10 @@ class AttendanceSettingsUpdate(BaseModel):
     overtime_threshold_minutes: Optional[int] = None  # default 60
     grace_window_minutes: Optional[int] = None  # default 30
     weekend_days: Optional[list] = None  # [0,6] = Sun,Sat
+    is_paused: Optional[bool] = None
+
+class PreLaunchResetRequest(BaseModel):
+    confirmation: str  # Must be "RESET DATA"
 
 
 # ── Helper Functions ──
