@@ -255,6 +255,29 @@ async def init_compliance_indexes():
 
 
 @app.on_event("startup")
+async def init_attendance_indexes():
+    """Create indexes for attendance, leave, notification collections."""
+    try:
+        await db.attendance_records.create_index([("user_id", 1), ("date", 1)], unique=True)
+        await db.attendance_records.create_index("date")
+        await db.attendance_records.create_index("status")
+        await db.leave_requests.create_index([("user_id", 1), ("start_date", 1)])
+        await db.leave_requests.create_index("status")
+        await db.leave_balances.create_index([("user_id", 1), ("year", 1)], unique=True)
+        await db.holidays.create_index("date", unique=True)
+        await db.notification_events.create_index([("recipient_id", 1), ("created_at", -1)])
+        await db.notification_events.create_index("event_type")
+        await db.notification_delivery_logs.create_index([("event_id", 1), ("channel", 1)])
+        await db.cron_job_locks.create_index("job_name", unique=True)
+        await db.cron_job_logs.create_index([("job_name", 1), ("executed_at", -1)])
+        await db.attendance_health_scores.create_index("user_id", unique=True)
+        logging.info("Attendance DB indexes initialized")
+    except Exception as e:
+        logging.warning(f"Attendance index init failed: {e}")
+
+
+
+@app.on_event("startup")
 async def init_maintenance_bot():
     try:
         # Create indexes for maintenance collections
