@@ -38,20 +38,23 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [workMode, setWorkMode] = useState('office');
+  const [isPaused, setIsPaused] = useState(false);
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
   const loadData = useCallback(async () => {
     try {
-      const [att, today, hol] = await Promise.all([
+      const [att, today, hol, status] = await Promise.all([
         attendanceAPI.getMyAttendance({ month, year }),
         attendanceAPI.getTodayStatus(),
         attendanceAPI.getHolidays({ year }),
+        attendanceAPI.getStatus(),
       ]);
       setRecords(att.data.records || []);
       setTodayRecord(today.data.today);
       setHolidays(hol.data.holidays || []);
+      setIsPaused(status.data.is_paused || false);
     } catch { toast.error('Failed to load attendance'); }
     finally { setLoading(false); }
   }, [month, year]);
