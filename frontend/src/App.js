@@ -159,6 +159,7 @@ function App() {
             <Route path="attendance" element={<AdminAttendancePage />} />
             <Route path="leave-management" element={<AdminLeaveManagementPage />} />
             <Route path="attendance-insights" element={<AttendanceInsightsPage />} />
+            <Route path="attendance-settings" element={<AttendanceSettingsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
           </Route>
 
