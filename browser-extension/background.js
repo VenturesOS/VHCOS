@@ -265,11 +265,18 @@ async function updateStats(action) {
       if (stats.last_reset !== today) {
         stats.captured_today = 0;
         stats.last_reset = today;
-        
-        // Reset weekly on Sunday
-        if (new Date().getDay() === 0) {
-          stats.captured_week = 0;
-        }
+      }
+
+      // Reset weekly counter independently every Sunday (not tied to daily reset)
+      const lastWeekReset = stats.last_week_reset || '';
+      const thisWeekSunday = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - d.getDay()); // roll back to this week's Sunday
+        return d.toDateString();
+      })();
+      if (lastWeekReset !== thisWeekSunday) {
+        stats.captured_week = 0;
+        stats.last_week_reset = thisWeekSunday;
       }
       
       // Update counters
@@ -291,19 +298,18 @@ async function updateStats(action) {
  */
 async function getStats() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['stats'], (result) => {
-      resolve(result.stats || {
+    chrome.storage.sync.get(['stats'], (syncResult) => {
+      const stats = syncResult.stats || {
         captured_today: 0,
         captured_week: 0,
         captured_total: 0,
         updated_total: 0
+      };
+      // Also get queue size and include it in the response
+      chrome.storage.local.get(['offlineQueue'], (localResult) => {
+        stats.queue_size = (localResult.offlineQueue || []).length;
+        resolve(stats);
       });
-    });
-    
-    // Also get queue size
-    chrome.storage.local.get(['offlineQueue'], (result) => {
-      const queueSize = (result.offlineQueue || []).length;
-      // Stats will include queue size
     });
   });
 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VHC Talent OS - Naukri Auto Capture",
-  "version": "3.9.1",
+  "version": "3.9.2",
   "description": "Automatically capture candidate profiles from Naukri.com to VHC Talent OS",
   "permissions": [
     "storage",

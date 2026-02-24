@@ -19,10 +19,10 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '3.9.1';
+  const VERSION = '3.9.2';
   const CONFIG = {
-    CAPTURE_DELAY: 4000,
-    SCROLL_DELAY: 600,
+    CAPTURE_DELAY: 2000,   // was 4000 — page is usually ready sooner
+    SCROLL_DELAY: 150,     // was 600 — instant scroll needs less wait
     TOAST_DURATION: 5000,
   };
 
@@ -38,10 +38,22 @@
       console.log(`[VHC v${VERSION}] URL changed: ${lastPageUrl} -> ${window.location.href}`);
       lastPageUrl = window.location.href;
       lastCapturedUrl = null; // Allow re-capture on new page
+
+      // Clean up any lingering UI from previous page capture
+      const oldBar = document.getElementById('vhc-progress-bar');
+      if (oldBar) oldBar.remove();
+      const oldToast = document.getElementById('vhc-toast');
+      if (oldToast) oldToast.remove();
+      isCapturing = false; // Reset in case previous capture was mid-flight
+
       // Re-trigger auto-capture if navigated to a profile page
       if (isProfilePage() && !isCapturing) {
-        console.log(`[VHC v${VERSION}] Navigated to profile page, scheduling auto-capture`);
-        setTimeout(() => autoCapture(), CONFIG.CAPTURE_DELAY);
+        getSettings().then(settings => {
+          if (settings.enabled && settings.autoCapture) {
+            console.log(`[VHC v${VERSION}] Navigated to profile page, scheduling auto-capture`);
+            setTimeout(() => autoCapture(), CONFIG.CAPTURE_DELAY);
+          }
+        });
       }
     }
   }, 1000);
@@ -127,22 +139,41 @@
   
   /**
    * Wait for the page DOM to stabilize after SPA navigation.
-   * Reads the page title twice with a gap — if it changes, waits more.
-   * Returns the stable title.
+   * Uses MutationObserver to detect when DOM activity quiets down.
+   * Falls back to a 300ms minimum wait. Much faster than fixed 1500-3500ms sleeps.
    */
   async function waitForDOMStability() {
     const title1 = document.title;
     console.log(`[VHC v${VERSION}] DOM stability check: title1="${title1}"`);
-    await sleep(1500);
-    const title2 = document.title;
-    if (title1 !== title2) {
-      console.log(`[VHC v${VERSION}] Title changed during wait: "${title1}" -> "${title2}", waiting more...`);
-      await sleep(2000);
-      const title3 = document.title;
-      console.log(`[VHC v${VERSION}] Final title: "${title3}"`);
-      return title3;
-    }
-    return title2;
+
+    await new Promise((resolve) => {
+      let quietTimer = null;
+      const QUIET_PERIOD = 300; // resolve if no DOM mutations for 300ms
+      const MAX_WAIT = 2500;    // never wait more than 2.5s regardless
+      const maxTimer = setTimeout(resolve, MAX_WAIT);
+
+      const observer = new MutationObserver(() => {
+        clearTimeout(quietTimer);
+        quietTimer = setTimeout(() => {
+          observer.disconnect();
+          clearTimeout(maxTimer);
+          resolve();
+        }, QUIET_PERIOD);
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true, attributes: false });
+
+      // If DOM is already quiet, resolve after one quiet period
+      quietTimer = setTimeout(() => {
+        observer.disconnect();
+        clearTimeout(maxTimer);
+        resolve();
+      }, QUIET_PERIOD);
+    });
+
+    const stableTitle = document.title;
+    console.log(`[VHC v${VERSION}] DOM stable. Title: "${stableTitle}"`);
+    return stableTitle;
   }
 
   // ===================== RECRUITER BLOCKLIST =====================
@@ -410,8 +441,26 @@
     }
 
     if (clicked) {
-      await sleep(2000);
-      console.log(`[VHC v${VERSION}] Waited 2s for contact reveal`);
+      // Wait for contact to appear using MutationObserver instead of fixed 2000ms sleep
+      await new Promise((resolve) => {
+        let quietTimer = null;
+        const maxTimer = setTimeout(resolve, 1500); // cap at 1.5s (was 2s)
+        const observer = new MutationObserver(() => {
+          clearTimeout(quietTimer);
+          quietTimer = setTimeout(() => {
+            observer.disconnect();
+            clearTimeout(maxTimer);
+            resolve();
+          }, 250);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        quietTimer = setTimeout(() => {
+          observer.disconnect();
+          clearTimeout(maxTimer);
+          resolve();
+        }, 250);
+      });
+      console.log(`[VHC v${VERSION}] Contact reveal settled`);
     } else {
       console.log(`[VHC v${VERSION}] No "View Contact" button found (contact may already be visible)`);
     }
@@ -421,10 +470,10 @@
 
   function extractNaukriProfileId() {
     const urlParams = new URLSearchParams(window.location.search);
-    // 1. Naukri v3 preview: uresid is the unique resume/profile ID per candidate
+    // 1. uresid is the unique resume/profile ID per candidate (most reliable)
     const uresid = urlParams.get('uresid');
     if (uresid) return `naukri_${uresid}`;
-    // 2. storageKey often has format "sid-tupleIndex" making it unique per profile in a search
+    // 2. storageKey often has format "sid-tupleIndex" making it unique per profile
     const storageKey = urlParams.get('storageKey');
     if (storageKey) return `naukri_sk_${storageKey}`;
     // 3. Classic Naukri URL params
@@ -433,10 +482,17 @@
     // 4. uniqId is another candidate-specific param in v3 URLs
     const uniqId = urlParams.get('uniqId');
     if (uniqId) return `naukri_uq_${uniqId}`;
-    // 5. sid is a search SESSION id (shared across profiles) — combine with timestamp as last resort
+    // 5. sid is a search SESSION id — combine with the full path for better uniqueness
+    //    Do NOT use Date.now() here — it would create duplicate records on re-capture
     const sid = urlParams.get('sid');
-    if (sid) return `naukri_sid_${sid}_${Date.now()}`;
-    return `naukri_${Date.now()}`;
+    if (sid) {
+      // Use pathname + sid as a stable fingerprint (same candidate = same URL)
+      const pathHash = window.location.pathname.replace(/\//g, '_').replace(/^_/, '');
+      return `naukri_sid_${sid}_${pathHash}`;
+    }
+    // Last resort: hash of the full URL (stable, no timestamp)
+    const urlHash = btoa(window.location.href.substring(0, 100)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    return `naukri_url_${urlHash}`;
   }
 
   // ===================== MULTI-SOURCE CONTACT EXTRACTION =====================
@@ -807,46 +863,59 @@
   }
 
   async function scrollToLoadContent() {
-    console.log(`[VHC v${VERSION}] Scrolling to load ALL content including CV preview...`);
+    console.log(`[VHC v${VERSION}] Smart scroll: trigger lazy-load without slow smooth scrolling...`);
 
-    const step = window.innerHeight * 0.5;
-    let pos = 0;
-    let currentHeight = document.documentElement.scrollHeight;
+    const MAX_SCROLL_TIME = 5000; // hard cap: never scroll for more than 5s total
+    const startTime = Date.now();
 
-    while (pos < currentHeight) {
-      pos += step;
-      window.scrollTo({ top: pos, behavior: 'smooth' });
-      await sleep(CONFIG.SCROLL_DELAY);
-      currentHeight = document.documentElement.scrollHeight;
-    }
-
-    await sleep(2500);
-
-    let newHeight = document.documentElement.scrollHeight;
-    if (newHeight > currentHeight + 100) {
-      console.log(`[VHC v${VERSION}] Page grew ${currentHeight} -> ${newHeight}, scrolling more...`);
-      while (pos < newHeight) {
-        pos += step;
-        window.scrollTo({ top: pos, behavior: 'smooth' });
-        await sleep(CONFIG.SCROLL_DELAY);
-      }
-      await sleep(2000);
-    }
-
-    const textBefore = (document.body.innerText || '').length;
+    // Strategy 1: Jump to bottom instantly — triggers all lazy-load observers at once
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
-    await sleep(1500);
-    const textAfter = (document.body.innerText || '').length;
+    await sleep(400);
 
-    if (textAfter > textBefore + 200) {
-      console.log(`[VHC v${VERSION}] Late content detected (+${textAfter - textBefore} chars), waiting more...`);
-      await sleep(2000);
+    // Strategy 2: Wait for content to settle using MutationObserver (instead of fixed sleeps)
+    await new Promise((resolve) => {
+      let quietTimer = null;
+      const QUIET_PERIOD = 400; // content settled if no new DOM nodes for 400ms
+      const remaining = MAX_SCROLL_TIME - (Date.now() - startTime);
+      const maxTimer = setTimeout(resolve, Math.max(remaining, 500));
+
+      const observer = new MutationObserver(() => {
+        clearTimeout(quietTimer);
+        quietTimer = setTimeout(() => {
+          observer.disconnect();
+          clearTimeout(maxTimer);
+          resolve();
+        }, QUIET_PERIOD);
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      quietTimer = setTimeout(() => {
+        observer.disconnect();
+        clearTimeout(maxTimer);
+        resolve();
+      }, QUIET_PERIOD);
+    });
+
+    // Strategy 3: If page grew significantly, do one more targeted scroll
+    const heightAfter = document.documentElement.scrollHeight;
+    const textLen = (document.body.innerText || '').length;
+    console.log(`[VHC v${VERSION}] After instant-scroll: height=${heightAfter}px, text=${textLen}chars`);
+
+    // Strategy 4: Scroll through in 3 large jumps to hit any remaining lazy sections
+    // (much faster than 600ms-per-step smooth scroll)
+    const thirds = [0.33, 0.66, 1.0];
+    for (const fraction of thirds) {
+      window.scrollTo({ top: heightAfter * fraction, behavior: 'instant' });
+      await sleep(CONFIG.SCROLL_DELAY); // now 150ms each = 450ms total for 3 jumps
     }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    await sleep(500);
+    // Return to top so UI looks normal
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    await sleep(200);
 
-    console.log(`[VHC v${VERSION}] Scroll complete. Final page height: ${document.documentElement.scrollHeight}px, text: ${(document.body.innerText || '').length} chars`);
+    const elapsed = Date.now() - startTime;
+    console.log(`[VHC v${VERSION}] Scroll complete in ${elapsed}ms. text: ${(document.body.innerText || '').length} chars`);
   }
 
   /**
@@ -865,7 +934,7 @@
 
     // Step 2: Scroll to load ALL content including CV iframe
     await scrollToLoadContent();
-    await sleep(1000);
+    // No extra sleep needed — scrollToLoadContent already settles via MutationObserver
 
     // Step 3: Extract name from title
     updateProgress(15, 'Extracting candidate name...');
