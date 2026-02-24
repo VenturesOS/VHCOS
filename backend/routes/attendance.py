@@ -97,6 +97,7 @@ async def _get_settings():
         "overtime_threshold_minutes": 60,
         "grace_window_minutes": 30,
         "weekend_days": [0, 6],  # Sunday=0, Saturday=6
+        "is_paused": False,
     }
     if settings:
         defaults.update(settings)
@@ -143,6 +144,10 @@ def _calc_overtime(check_out_str, work_end_str):
 @router.post("/check-in")
 async def check_in(req: CheckInRequest, request: Request, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Self check-in. One check-in per day."""
+    settings = await _get_settings()
+    if settings.get("is_paused"):
+        raise HTTPException(status_code=403, detail="Attendance tracking is temporarily paused by admin.")
+
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     user_id = user.get("id", "")
 
@@ -197,6 +202,10 @@ async def check_in(req: CheckInRequest, request: Request, user=Depends(require_r
 @router.post("/check-out")
 async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Self check-out. Must have checked in first."""
+    settings = await _get_settings()
+    if settings.get("is_paused"):
+        raise HTTPException(status_code=403, detail="Attendance tracking is temporarily paused by admin.")
+
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     user_id = user.get("id", "")
 
