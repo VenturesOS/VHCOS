@@ -309,6 +309,28 @@ async def start_blog_scheduler():
     except Exception as e:
         logging.warning(f"[BlogScheduler] Failed to start scheduler: {e}")
 
+
+@app.on_event("startup")
+async def start_attendance_scheduler():
+    """Start the APScheduler cron jobs for attendance automation."""
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from services.attendance_cron_service import run_attendance_reminders, run_auto_absent_marking
+
+        scheduler = AsyncIOScheduler()
+
+        # Reminder: Daily at 04:30 UTC (10:00 AM IST)
+        scheduler.add_job(run_attendance_reminders, 'cron', hour=4, minute=30, id='attendance_reminder')
+        # Auto-absent: Daily at 13:00 UTC (6:30 PM IST)
+        scheduler.add_job(run_auto_absent_marking, 'cron', hour=13, minute=0, id='auto_absent')
+
+        scheduler.start()
+        app.state.attendance_scheduler = scheduler
+        logging.info("[AttendanceScheduler] Cron jobs started (Reminder: 10AM IST, Auto-absent: 6:30PM IST)")
+    except Exception as e:
+        logging.warning(f"[AttendanceScheduler] Failed to start: {e}")
+
+
 @app.on_event("startup")
 async def validate_r2_connection():
     """
