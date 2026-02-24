@@ -149,14 +149,14 @@ export default function AttendancePage() {
                       {WORK_MODES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Button onClick={handleCheckIn} disabled={checking} className="bg-green-600 hover:bg-green-700" data-testid="check-in-btn">
+                  <Button onClick={handleCheckIn} disabled={checking || isPaused} className="bg-green-600 hover:bg-green-700" data-testid="check-in-btn">
                     {checking ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <LogIn className="h-4 w-4 mr-1" />}
                     Check In
                   </Button>
                 </>
               )}
               {hasCheckedIn && !hasCheckedOut && (
-                <Button onClick={handleCheckOut} disabled={checking} variant="destructive" data-testid="check-out-btn">
+                <Button onClick={handleCheckOut} disabled={checking || isPaused} variant="destructive" data-testid="check-out-btn">
                   {checking ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <LogOut className="h-4 w-4 mr-1" />}
                   Check Out
                 </Button>
