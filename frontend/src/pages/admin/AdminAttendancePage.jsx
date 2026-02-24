@@ -98,6 +98,30 @@ export default function AdminAttendancePage() {
         </div>
       </div>
 
+      {/* Pause Status Indicator */}
+      {isPaused && (
+        <div className="flex items-center gap-2 bg-amber-100 border border-amber-300 text-amber-800 text-sm px-4 py-2.5 rounded-lg" data-testid="admin-pause-banner">
+          <PauseCircle className="h-4 w-4 shrink-0" />
+          <span className="font-medium">Attendance Paused</span>
+          <span className="text-amber-600">— Check-in/out disabled for all employees. Cron jobs are skipped.</span>
+        </div>
+      )}
+
+      {/* System Status Badge */}
+      <div className="flex items-center gap-2" data-testid="system-status-badge">
+        {isPaused ? (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium bg-red-50 text-red-700 border-red-200">
+            <PauseCircle className="h-3.5 w-3.5" />
+            <span>System: Paused</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium bg-green-50 text-green-700 border-green-200">
+            <PlayCircle className="h-3.5 w-3.5" />
+            <span>System: Active</span>
+          </div>
+        )}
+      </div>
+
       {/* Month Selector + Stats */}
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2">
