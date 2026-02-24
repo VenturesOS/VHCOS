@@ -8,7 +8,7 @@ import { Label } from '../../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Users, Download, ChevronLeft, ChevronRight, Loader2, Clock, Calendar, UserCheck, UserX, AlertTriangle, Building2 } from 'lucide-react';
+import { Users, Download, ChevronLeft, ChevronRight, Loader2, Clock, Calendar, UserCheck, UserX, AlertTriangle, Building2, PauseCircle, PlayCircle } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
