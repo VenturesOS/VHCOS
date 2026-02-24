@@ -974,3 +974,65 @@ async def delete_holiday(holiday_id: str, user=Depends(require_role(["admin"])))
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Holiday not found")
     return {"message": "Holiday deleted"}
+
+
+# ═══════════════════════════════════════
+# PAUSE STATUS & PRE-LAUNCH RESET
+# ═══════════════════════════════════════
+
+@router.get("/status")
+async def get_attendance_status(user=Depends(require_role(["admin", "recruiter", "employer"]))):
+    """Get attendance system status (paused/active)."""
+    settings = await _get_settings()
+    return {"is_paused": settings.get("is_paused", False)}
+
+
+@router.post("/admin/pre-launch-reset")
+async def pre_launch_reset(req: PreLaunchResetRequest, user=Depends(require_role(["admin"]))):
+    """Admin: Clear all operational data for pre-launch reset. Requires 'RESET DATA' confirmation."""
+    if req.confirmation != "RESET DATA":
+        raise HTTPException(status_code=400, detail="Invalid confirmation. Type 'RESET DATA' to proceed.")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    results = {}
+
+    # Attendance & Leave
+    r = await db.attendance_records.delete_many({})
+    results["attendance_records"] = r.deleted_count
+    r = await db.leave_requests.delete_many({})
+    results["leave_requests"] = r.deleted_count
+    r = await db.leave_balances.delete_many({})
+    results["leave_balances"] = r.deleted_count
+    r = await db.attendance_health_scores.delete_many({})
+    results["attendance_health_scores"] = r.deleted_count
+
+    # Notifications & Automation
+    r = await db.notification_events.delete_many({})
+    results["notification_events"] = r.deleted_count
+    r = await db.notification_delivery_logs.delete_many({})
+    results["notification_delivery_logs"] = r.deleted_count
+    r = await db.cron_job_logs.delete_many({})
+    results["cron_job_logs"] = r.deleted_count
+
+    # Business / Operational Data
+    r = await db.jobs.delete_many({})
+    results["jobs"] = r.deleted_count
+    for coll_name in ["revenue_entries", "invoices", "revenue_analytics"]:
+        try:
+            r = await db[coll_name].delete_many({})
+            results[coll_name] = r.deleted_count
+        except Exception:
+            results[coll_name] = 0
+
+    # Log the reset action
+    await db.system_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "pre_launch_reset",
+        "performed_by": user.get("id", ""),
+        "performed_by_name": user.get("name", user.get("email", "")),
+        "results": results,
+        "timestamp": now_iso,
+    })
+
+    return {"message": "Pre-launch reset completed", "deleted": results, "timestamp": now_iso}
+
