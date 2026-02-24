@@ -1,147 +1,148 @@
-<analysis>
-**original_problem_statement:**
-The user initially requested a downloadable PDF training manual. After implementing this, a critical bug emerged: a recruiter account () was visible in the preview environment but not on the LIVE production site. This led to an extensive debugging session revealing the LIVE backend was connecting to the wrong MongoDB database due to environment variable overrides by the deployment platform.
+<analysis>**original_problem_statement:**
+The user initially requested a downloadable PDF training manual. A subsequent critical bug investigation revealed the LIVE production backend was connecting to the wrong MongoDB database due to environment variable overrides by the deployment platform. This led to a prolonged debugging process involving multiple backend crashes (502/520 errors) and attempted fixes.
 
-The agent implemented numerous fixes to force the correct database connection, harden the application against environment differences, and fix other related bugs (like hardcoded API URLs and a missing PDF dependency). However, these fixes, while working in the preview environment, are causing the backend on the LIVE server to crash on startup, resulting in 502/520 errors and a completely non-functional live application. The user is currently unable to log in or use the LIVE site at all.
+The agent eventually stabilized the LIVE application by implementing a temporary, hardcoded emergency override in the backend configuration to force a connection to the correct database. The agent also upgraded the project's Chrome Extension to a significantly improved version (v3.9.2), generated a  for SEO, and fixed several other deployment-related bugs.
+
+The user's latest request is to grant employer and recruiter user roles full access to the Submission Tracker feature, which is currently restricted to admins.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The preview environment contains a version of the application with numerous stability and environment-hardening fixes. Key changes include:
-- **:** Heavily modified to force the correct MongoDB connection from  and strip platform-specific prefixes from the database name. It includes extensive  blocks to prevent startup crashes.
-- **:** A new centralized module for detecting the current environment (production vs. preview).
-- **Frontend Refactoring:** All frontend API calls now use relative paths (e.g., ) instead of a hardcoded , making the frontend domain-agnostic.
-- **PDF Generation Fallback:** The training manual service () now uses  to generate a basic PDF if the  binary is not found on the server.
-- **Zero Trust Middleware:** The Cloudflare Zero Trust middleware in  has been switched to AUDIT mode to stop blocking admin API calls.
-
-The LIVE production environment is currently DOWN, serving 502/520 errors because the backend process fails to start.
+The application is a full-stack React and FastAPI web app. The LIVE production site is stable and connects to the correct MongoDB Atlas database (), showing the correct data (19 users). However, this stability relies on a **temporary emergency hardcoded override** in . The project's Chrome Extension () has been updated to version , with backups of the previous version () stored in the  directory. A  has been created and is accessible. The Submission Tracker feature is implemented but is currently only accessible to users with the admin role.
 
 **Last working item**:
-- Last item agent was working: Diagnosing why the LIVE backend is crashing on startup. The agent correctly identified that one of its recent code changes is the cause, as the application works in preview but not on the live server. The last actions involved making the startup code in  and module imports in various routes crash-proof by wrapping them in  blocks. This did not solve the problem.
-- Status: BLOCKED
-- Agent Testing Done: Y (in the preview environment only)
-- Which testing method agent to use? The next agent must focus on debugging the backend startup process. A systematic approach is required:
-    1.  Comment out recent changes in  section by section.
-    2.  Deploy each small change to LIVE to see if the server starts.
-    3.  This will isolate the exact line of code that fails in the LIVE environment.
-    Using the  is an option if the main agent remains stuck.
-- User Testing Done: Y (and it confirmed the LIVE site is completely down via screen recording)
+- Last item agent was working: The user requested to give employer and recruiter roles access to all features of the submission tracker. The agent was investigating the current access control logic by viewing frontend routing in  and , and backend API routes like .
+- Status: NOT STARTED
+- Agent Testing Done: N
+- Which testing method agent to use? frontend testing agent
+- User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1: **(P0) LIVE Backend Crashes on Startup, Causing 502/520 Errors**
-     - Attempted fixes: The agent wrapped almost all new startup logic in  and module imports in  blocks. This was a defensive measure but did not identify or fix the root cause of the crash.
-     - Next debug checklist:
-        1.  Open .
-        2.  Systematically comment out the recently added logic blocks (e.g., the  file reading, the  prefix stripping, the production safety guard).
-        3.  After commenting out one block, deploy the change to the LIVE backend.
-        4.  Check if the LIVE backend starts (i.e., 502 errors disappear).
-        5.  Repeat this process until the server starts, which will identify the exact block of code causing the crash. The issue is almost certainly in .
-     - Why fix this issue and what will be achieved with the fix? The entire LIVE production application is down. Fixing this is the only priority.
-     - Status:  BLOCKED
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? Backend
-     - Blocked on other issue: None. This is the blocker for everything else.
+- Issue 1:  **(P0) Remove temporary emergency MongoDB override and replace with a permanent solution.**
+  - **Description**: The application's production stability depends on a hardcoded MongoDB URI in . This was an emergency fix to bypass the deployment platform's automatic injection of incorrect database credentials. The permanent solution is blocked pending action from Emergent Support.
+  - **Attempted fixes**: Using  and a conditional production guard to check the database name both failed, leading to server crashes. The hardcoded override was the only successful workaround.
+  - **Next debug checklist**:
+    1. Wait for user confirmation that Emergent Support has disabled the managed MongoDB auto-binding for the deployment.
+    2. Once confirmed, remove the emergency override block from .
+    3. Re-implement a clean configuration using  and .
+    4. Remove any related hardcoded logic from .
+    5. Deploy and verify the LIVE site connects to the correct Atlas cluster without the hardcode.
+  - **Why fix this issue and what will be achieved with the fix?**: This will remove hardcoded credentials from the codebase, resolving the core platform-vs-code conflict and making the application secure and maintainable.
+  - **Status**: BLOCKED
+  - **Is recurring issue?**: Y
+  - **Should Test frontend/backend/both after fix?**: Backend
+  - **Blocked on other issue**: Blocked on external action from the user and Emergent Support.
 
 **In progress Task List**:
-- None. All work is blocked by the P0 startup crash.
+- Task 1:  **(P0) Grant Employer/Recruiter access to Submission Tracker.**
+  - **Where to resume**:
+    1.  **Backend**: Modify the role-checking dependency (likely ) in the relevant API routes (, , etc.) to create a new dependency that accepts , , and  roles.
+    2.  **Frontend**: Update the React Router configuration in  to render the  component for users with the employer and recruiter roles, in addition to admin.
+  - **What will be achieved with this?**: Users with employer and recruiter roles will gain full access to the Submission Tracker feature.
+  - **Status**: IN PROGRESS
+  - **Should Test frontend/backend/both after fix?**: Both
+  - **Blocked on something**: None
 
 **Upcoming and Future Tasks**
-- P1: AI-driven Analytics and Insights
-- P2: Client Dashboard enhancements
-- P3: Advanced Revenue Intelligence
+- **Upcoming Tasks:**
+  - P1: AI-driven Analytics and Insights
+  - P2: Client Dashboard enhancements
+  - P3: Advanced Revenue Intelligence
+- **Future Tasks:**
+  - LinkedIn Auto-Posting (BLOCKED on external user action for API scope approval).
+  - Training Manual PDF feature refinement.
 
 **Completed work in this session**
-- **Training Manual PDF Download Feature:**
-  - Created a backend service and API to generate a PDF from a Markdown file.
-  - Added a  fallback for robustness.
-- **Production Stability Hardening (in preview environment):**
-  - **Database Connection Fix:** Overhauled  to prioritize  variables and handle platform-specific modifications, ensuring connection to the correct Atlas DB.
-  - **Environment-Aware Frontend:** Removed all hardcoded  dependencies, making all API calls relative.
-  - **Centralized Environment Resolver:** Created .
-  - **Email Normalization:** Added to auth routes for case-insensitive logins.
-  - **Diagnostic Endpoints:** Added  and .
-  - **Cache-Busting:** Added  headers to all API responses.
-  - **Zero Trust Deactivation:** Switched middleware from  to  mode.
+- **LIVE Server Stability Restored:** Diagnosed and fixed multiple backend startup crashes (502/520 errors) and stabilized the LIVE environment.
+- **Database Connection Fixed:** Implemented a temporary emergency override in  to force connection to the correct MongoDB Atlas cluster, resolving a critical data discrepancy issue on the LIVE site.
+- **Resource Usage Optimized:** Reduced the MongoDB connection pool size and removed a duplicate DB client instance to lower memory usage and improve stability.
+- **Chrome Extension Upgraded:** Evaluated and integrated , which is significantly faster and more reliable. Backups of v3.9.1 were created.
+- **Sitemap Generated:** Created  and updated  for SEO purposes.
+- **Environment Detection Fixed:** Corrected the logic in  to properly detect the production environment, removing an erroneous UNKNOWN MODE banner from the live site.
+- **Deployment-Blocking Bugs Fixed:** Resolved multiple issues preventing successful deployment, including adding a  endpoint and handling database permission errors on startup.
 
 **Earlier issues found/mentioned but not fixed**
-   - **Issue 1: LinkedIn API Auto-Posting Blocked**
-     - The user's LinkedIn Developer App lacks the necessary  scope.
-     - Status: BLOCKED (on external user action).
+- **Issue 1: LinkedIn API Auto-Posting Blocked**
+  - The user's LinkedIn Developer App lacks the necessary  scope.
+  - **Status:** BLOCKED (on external user action).
 
 **Known issue recurrence from previous fork**
-- None.
+- The core issue of the LIVE environment behaving differently from the preview environment due to platform-injected variables was a major recurring theme. The emergency override is a workaround, not a final solution.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Environment Drift:** The core problem where the production environment behaves differently from preview/local due to platform-injected environment variables () or different installed binaries ().
-- **Defensive Startup:** The agent's attempt to prevent server crashes by wrapping critical initialization code in  blocks. While well-intentioned, this hid the actual error instead of fixing it.
-- **Relative API Paths:** A crucial frontend fix to ensure the application works on any domain by using relative paths like  instead of absolute URLs.
+- **Environment Variable Overriding:** The central conflict where the deployment platform injects its own  and , which take precedence over  files unless a specific override strategy is used.
+- **Emergency Hardcoded Override:** The temporary but currently effective solution in  to force the application to use the correct database URI, bypassing the platform's injected variables.
+- **Chrome Extension Lifecycle:** Understanding that Chrome extensions are loaded locally (Load unpacked) and changes can be tested without a full server deployment.
+- **MutationObserver:** A key browser API used in the new Chrome extension () to replace fragile  calls with responsive, DOM-aware waits, dramatically improving performance and reliability.
 
 **key DB schema**
-- No changes to DB schema.
+  - No changes to the database schema were made in this session.
 
 **changes in tech stack**
-- , ,  added to .
+- No changes were made to the core tech stack.
 
 **All files of reference**
-- ****: This is the most critical file and the most likely source of the production crash.
-- ****: Contains startup hooks and middleware registration.
-- ****: New module that is imported during startup.
-- ****: List of dependencies that must be installed correctly on the LIVE server.
-- ****: Contains the configuration that should be taking precedence.
+- : Most critical file; contains the temporary DB override.
+- : Contains frontend routing logic for the next task.
+- : The component for the next task.
+-  and : Likely contain the backend API logic for the next task.
+- : Directory containing the newly updated Chrome extension files.
 
 **Areas that need refactoring**:
--  is overly complex and filled with defensive  blocks. Once the crash is fixed, this file should be simplified to make the connection logic clear and maintainable.
+-  must have the temporary emergency override removed once the underlying platform issue is resolved by Emergent Support. This is the top priority for technical debt.
 
 **key api endpoints**
-- : Returns DB user count and environment info. Crucial for verifying a fix.
-- : The login endpoint, currently returning 502/520 on LIVE.
-- : Downloads the training manual PDF.
+- : Used extensively to debug the database connection.
+- : The main login endpoint, which was frequently failing due to server instability.
+- : A new health check endpoint added to satisfy Kubernetes probes and fix deployment timeouts.
+- , : Endpoints related to the upcoming Submission Tracker access control task.
 
 **Critical Info for New Agent**
-- **Your ONLY priority is to fix the 502 error on the LIVE site.** The backend is crashing on startup. Nothing else matters until the server is running.
-- **The problem is in your code, not the platform.** The code works in preview but fails on LIVE, meaning there's an environmental assumption in one of the recent changes.
-- **The most likely culprit is .** The logic for reading  files, stripping prefixes, and choosing the MongoDB URI is complex and was added recently.
-- **Strategy:** Do not add more defensive code. Instead, **find the single breaking line.** Systematically comment out the recent changes in , deploy to LIVE, and see if the server starts. This process of elimination is the fastest way to find the root cause.
+- The LIVE server's stability and correct database connection are dependent on a **temporary hardcoded emergency override in **. Do not remove this until the user confirms that Emergent Support has disabled the platform's managed MongoDB auto-binding.
+- The next task is to grant 'employer' and 'recruiter' roles access to the 'Submission Tracker' feature. This will require modifying both backend API route dependencies and frontend React Router configuration.
+- The Chrome Extension was successfully updated to v3.9.2. The files are in the  directory, and backups of v3.9.1 are present.
 
 **documents and test reports created in this job**
 - 
 - 
+- 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Reports the login is still not working and the PDF download is failing on LIVE (with screenshot). Status: IN PROGRESS.
-2.  **User:** Asks for confirmation on deployment plan. Status: ADDRESSED.
-3.  **User:** Confirms understanding of the DB connection issue and authorizes deployment. Status: ADDRESSED.
-4.  **User:** Asks for a final pre-deploy check. Status: COMPLETED.
-5.  **User:** Reports login/data is still missing. Status: IN PROGRESS.
-6.  **User:** Confirms understanding of the diagnosis and requests a production safety guard. Status: COMPLETED.
-7.  **User:** Asks why login is still missing (with screenshot). Status: IN PROGRESS.
-8.  **User:** Reports LIVE is now loading but still shows the wrong user count (15 instead of 19). Status: IN PROGRESS.
-9.  **User:** Asks if the build is via Emergent or Cloudflare Pages. Status: ADDRESSED.
-10. **User:** Reports the frontend is showing stale data and not making API calls, indicating an outdated build. Status: IN PROGRESS.
+1.  **User:** Requests to have the platform's managed MongoDB DB_name auto-prefix injection disabled. **Status:** BLOCKED (requires support ticket).
+2.  **User:** Shared clean deployment logs. **Status:** ADDRESSED.
+3.  **User:** Asks to give 'employer' and 'recruiter' roles full access to the submission tracker. **Status:** IN PROGRESS (this is the current ).
+4.  **User:** Confirmed the new v3.9.2 extension works. **Status:** COMPLETED.
+5.  **User:** Asked if they need to save to GitHub to test the new extension. **Status:** ADDRESSED (agent explained local testing).
+6.  **User:** Approves trying the new v3.9.2 extension on the live website. **Status:** COMPLETED.
+7.  **User:** Provided a new version of the Chrome extension (v3.9.2) and asked for a detailed comparison and evaluation against the current version. **Status:** COMPLETED.
+8.  **User:** Shared deployment logs (which were clean), confirming the app was working. **Status:** ADDRESSED.
+9.  **User:** Asked for the sitemap URL. **Status:** COMPLETED.
+10. **User:** yes - confirming the sitemap generation. **Status:** COMPLETED.
 
 **Project Health Check:**
-- **Broken:** The entire LIVE production application is down (backend crashing on startup).
+- **Broken**: Nothing is currently broken; the live site is stable.
+- **Mocked/Hardcoded**: The MongoDB connection in  is hardcoded as a temporary emergency fix. This is the primary piece of technical debt.
 
 **3rd Party Integrations**
 - Cloudflare Turnstile (CAPTCHA)
-- Cloudflare Zero Trust (now in AUDIT mode)
+- Cloudflare Zero Trust
 - MongoDB Atlas
 - Upstash Redis
 - Resend (Email)
 - OpenAI GPT-4o-mini
 
 **Testing status**
-- Testing agent used after significant changes: NO (not for the recent stability fixes).
+- Testing agent used after significant changes: NO
 - Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: None.
-- Known regressions: The entire LIVE backend is a regression.
+- Test files created: None
+- Known regressions: None at present. All major regressions from this session have been resolved.
 
 **Credentials to test flow:**
 - **Admin:**  / 
+- You will need to create 'employer' and 'recruiter' test accounts to verify the submission tracker access task.
 
 **What agent forgot to execute**
-The agent got stuck in a loop of adding defensive code () rather than using a process of elimination (commenting out code blocks) to find the single line causing the production environment to crash.
-</analysis>
+- The agent did not organize the backup files for the old Chrome extension version into a dedicated  sub-folder within , leaving them in the root of the directory.</analysis>

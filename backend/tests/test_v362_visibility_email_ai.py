@@ -18,7 +18,7 @@ import zipfile
 import io
 import time
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://crash-root-cause.preview.emergentagent.com")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://mongo-stabilization.preview.emergentagent.com")
 
 # Test credentials from review request
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
