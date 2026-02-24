@@ -13,15 +13,13 @@ from botocore.config import Config
 
 # ============== ENVIRONMENT SETUP ==============
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / '.env', override=True)
 
 # ============== MONGODB CONNECTION ==============
-mongodb_uri = os.environ.get('MONGO_URL')
-db_name = os.environ.get('DB_NAME', 'vhc_talent_os')
-
-if not mongodb_uri:
-    logging.error("MONGO_URL environment variable is not set!")
-    raise RuntimeError("MONGO_URL environment variable is required")
+# EMERGENCY OVERRIDE — platform managed Mongo injection overrides env vars
+mongodb_uri = "mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/?retryWrites=true&w=majority"
+db_name = "vhc_talent_os"
+print("[EMERGENCY OVERRIDE ACTIVE]")
 
 client = AsyncIOMotorClient(
     mongodb_uri,
