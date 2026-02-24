@@ -82,6 +82,7 @@ import AdminResourcesPage from "./pages/admin/AdminResourcesPage";
 import AdminAttendancePage from "./pages/admin/AdminAttendancePage";
 import AdminLeaveManagementPage from "./pages/admin/AdminLeaveManagementPage";
 import AttendanceInsightsPage from "./pages/admin/AttendanceInsightsPage";
+import AttendanceSettingsPage from "./pages/admin/AttendanceSettingsPage";
 import AttendancePage from "./pages/shared/AttendancePage";
 import LeaveManagementPage from "./pages/shared/LeaveManagementPage";
 import { PrivacyPolicyPage, TermsOfUsePage, CookiePolicyPage } from "./pages/policy/PolicyPages";
