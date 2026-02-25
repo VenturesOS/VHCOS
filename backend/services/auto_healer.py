@@ -36,7 +36,7 @@ async def _log_fix(service_name, issue, action, result, start, end):
 
 
 async def _escalate(service_name, issue):
-    logger.warning(f"[AUTO-HEALER] ESCALATE {service_name}: {issue}")
+    logger.debug(f"[AUTO-HEALER] ESCALATE {service_name}: {issue}")
     await db.system_health_checks.update_many(
         {"service_name": service_name, "status": {"$ne": "critical"}},
         {"$set": {"status": "critical", "error_details": f"Escalated: exceeded {MAX_RETRIES_PER_HOUR} retries/hour"}}

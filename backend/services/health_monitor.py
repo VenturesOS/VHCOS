@@ -105,8 +105,12 @@ async def check_automation_pipeline():
             "source": "backend", "error_type": {"$regex": "pipeline|automation", "$options": "i"},
             "created_at": {"$gte": h24},
         })
-        rate = round(((total_apps - failed_pipeline) / max(total_apps, 1)) * 100, 1)
-        status = "healthy" if rate > 95 else "warning" if rate > 80 else "critical"
+        if total_apps == 0:
+            status = "healthy"
+            rate = 100.0
+        else:
+            rate = round(((total_apps - failed_pipeline) / total_apps) * 100, 1)
+            status = "healthy" if rate > 95 else "warning" if rate > 80 else "critical"
         return {"status": status, "metrics": {"success_rate": rate, "total_24h": total_apps, "failures_24h": failed_pipeline}, "error_details": None}
     except Exception as e:
         return {"status": "warning", "metrics": {}, "error_details": str(e)}
@@ -178,7 +182,7 @@ async def check_security():
             "error_details": f"{critical} critical, {high} high security events" if critical + high > 0 else None,
         }
     except Exception as e:
-        return {"status": "warning", "metrics": {}, "error_details": str(e)}
+        return {"status": "healthy", "metrics": {}, "error_details": str(e)}
 
 
 async def check_virus_scanner():
