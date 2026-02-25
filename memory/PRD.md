@@ -36,10 +36,37 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - P0 (BLOCKED): Hardcoded MongoDB override in `config.py`
 
 ## Backlog
+
+### ATS Gap Audit (Feb 24, 2026) — from RecruitChamp comparison
+**P0 — Competitive Blockers**
+- Interview Scheduling (calendar integration, reminders, no-show tracking)
+- Candidate Activity Log (calls, emails, notes, status changes per candidate)
+- Hiring Funnel KPIs (time-to-fill, source effectiveness, pipeline conversion)
+- In-App Notification Center (UI for existing notification_events DB)
+
+**P1 — High Impact**
+- Client CRM (leads, deals, sales pipeline, revenue forecasting)
+- Invoicing & Billing Calendar (auto-generate invoices, track payments)
+- Candidate Duplicate Detection (auto-merge, dedup on import)
+- Email Template Management (user-facing create/edit/share templates)
+- Team Collaboration — Notes/Comments on candidates
+- Boolean Search (AND/OR/NOT operators for power recruiters)
+
+**P2 — Long-Term Differentiation**
+- Onboarding Module (post-hire workflows, checklists)
+- Vendor Management System (external recruiter management)
+- P&L / Cost Tracking (placement profitability analysis)
+- Multi-Board Job Posting (Indeed, Monster, Naukri integration)
+- Branded Career Portals (per-company career pages)
+- Mobile PWA
+- Custom Report Builder (self-service analytics)
+
+### Existing Backlog
 - P2: Client Dashboard enhancements
 - P3: Advanced Revenue Intelligence
-- P4: LinkedIn Auto-Posting (blocked), Training Manual PDF
+- P4: LinkedIn Auto-Posting (blocked on LinkedIn API scope), Training Manual PDF
 - P5: WhatsApp/Push notifications
+- P5: Chrome Extension backup cleanup
 
 ## Test Reports
 - iteration_88: Submission tracker access (100%)
