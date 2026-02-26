@@ -325,6 +325,19 @@ async def get_employer_pipeline(
 
     all_stages = ["applied", "shortlisted", "submitted_to_client", "interview", "offered", "hired", "joined", "rejected", "on_hold"]
 
+    # Batch-fetch candidate_bank profiles for enrichment
+    candidate_ids = list({app.get("candidate_id") for app in applications if app.get("candidate_id")})
+    candidates_map = {}
+    if candidate_ids:
+        cands = await db.candidate_bank.find(
+            {"id": {"$in": candidate_ids}},
+            {"_id": 0, "id": 1, "location": 1, "current_employer": 1, "designation": 1,
+             "industry": 1, "education": 1, "ug_course": 1, "headline": 1,
+             "expected_salary": 1, "current_salary": 1, "experience_years": 1,
+             "notice_period": 1, "phone": 1, "name": 1, "email": 1}
+        ).to_list(len(candidate_ids))
+        candidates_map = {c["id"]: c for c in cands}
+
     pipeline_data = {stage: [] for stage in all_stages}
 
     for app in applications:
@@ -333,21 +346,22 @@ async def get_employer_pipeline(
             stage = "applied"
 
         job = jobs_map.get(app.get("job_id"), {})
+        cb = candidates_map.get(app.get("candidate_id"), {})
 
         pipeline_data[stage].append({
             "id": app.get("id"),
             "candidate_id": app.get("candidate_id"),
-            "candidate_name": app.get("candidate_name", "Unknown"),
-            "candidate_email": app.get("candidate_email"),
-            "candidate_phone": app.get("candidate_phone"),
+            "candidate_name": app.get("candidate_name") or cb.get("name", "Unknown"),
+            "candidate_email": app.get("candidate_email") or cb.get("email"),
+            "candidate_phone": app.get("candidate_phone") or cb.get("phone"),
             "job_id": app.get("job_id"),
             "job_title": app.get("job_title") or job.get("title", "Unknown"),
             "company_name": job.get("company_name", ""),
             "match_score": app.get("match_score", 0),
-            "current_salary": app.get("current_salary"),
-            "expected_salary": app.get("expected_salary"),
-            "notice_period": app.get("notice_period"),
-            "experience_years": app.get("experience_years"),
+            "current_salary": app.get("current_salary") or cb.get("current_salary"),
+            "expected_salary": app.get("expected_salary") or cb.get("expected_salary"),
+            "notice_period": app.get("notice_period") or cb.get("notice_period"),
+            "experience_years": app.get("experience_years") or cb.get("experience_years"),
             "resume_url": app.get("resume_url"),
             "applied_at": app.get("created_at"),
             "updated_at": app.get("updated_at"),
@@ -356,6 +370,13 @@ async def get_employer_pipeline(
             "offered_ctc": app.get("offered_ctc"),
             "offer_date": app.get("offer_date"),
             "join_date": app.get("join_date"),
+            "location": app.get("location") or cb.get("location"),
+            "current_employer": app.get("current_employer") or cb.get("current_employer"),
+            "designation": app.get("designation") or cb.get("designation"),
+            "industry": app.get("industry") or cb.get("industry"),
+            "education": app.get("education") or cb.get("education"),
+            "ug_course": app.get("ug_course") or cb.get("ug_course"),
+            "headline": app.get("headline") or cb.get("headline"),
         })
 
     stage_counts = {stage: len(apps) for stage, apps in pipeline_data.items()}
