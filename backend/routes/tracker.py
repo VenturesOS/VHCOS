@@ -628,7 +628,7 @@ async def get_tracker_events(
 
 async def _auto_fill_row(row_data: dict, candidate_id: str, application_id: str, mandate_id: str, user: dict):
     """Auto-fill row data from candidate profile and application data."""
-    candidate = await db.candidates.find_one({"id": candidate_id}, {"_id": 0})
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
     application = await db.applications.find_one({"id": application_id}, {"_id": 0})
     job = await db.jobs.find_one({"id": mandate_id}, {"_id": 0}) if mandate_id else {}
 
@@ -646,14 +646,14 @@ async def _auto_fill_row(row_data: dict, candidate_id: str, application_id: str,
         "submission_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "mobile_number": c.get("phone", ""),
         "email": c.get("email", a.get("candidate_email", "")),
-        "current_company": c.get("current_company", a.get("current_company", "")),
-        "current_designation": c.get("current_designation", a.get("current_title", "")),
-        "total_experience": c.get("total_experience", a.get("experience_summary", "")),
-        "current_location": c.get("current_location", a.get("location", "")),
+        "current_company": c.get("current_employer", a.get("current_employer", "")),
+        "current_designation": c.get("designation", a.get("designation", "")),
+        "total_experience": str(c.get("experience_years", "")) or a.get("experience_summary", ""),
+        "current_location": c.get("location", a.get("location", "")),
         "current_ctc": c.get("current_salary") or a.get("current_salary", ""),
         "expected_ctc": c.get("expected_salary") or a.get("expected_salary", ""),
         "notice_period": c.get("notice_period", a.get("notice_period", "")),
-        "highest_qualification": c.get("highest_qualification", ""),
+        "highest_qualification": c.get("ug_course", ""),
         "primary_skills": ", ".join(c.get("skills", [])) if isinstance(c.get("skills"), list) else c.get("skills", ""),
         "ai_resume_score": a.get("match_score", ""),
     }
