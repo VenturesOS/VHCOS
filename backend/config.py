@@ -23,36 +23,37 @@ load_dotenv(ROOT_DIR / ".env", override=False)
 
 # ============== MONGODB CONNECTION ==============
 # [EMERGENCY OVERRIDE] Force external Atlas cluster.
-# The Emergent platform may inject its own MONGO_URL at the process level.
-# This override ensures we ALWAYS use the .env value pointing to the
-# production Atlas cluster (cluster0.vuhdiod.mongodb.net / vhc_talent_os).
-# TEMP OVERRIDE — remove once platform env injection is stable.
+# The Emergent platform overwrites .env AND injects env vars with its managed MongoDB.
+# This override reads from mongo_override.conf (which the platform does NOT touch)
+# to ensure we ALWAYS connect to the production Atlas cluster.
+# TEMP OVERRIDE — remove once platform supports external MongoDB config.
 
-_dotenv_uri = None
-_dotenv_path = ROOT_DIR / ".env"
-if _dotenv_path.exists():
-    with open(_dotenv_path) as _f:
+_override_active = False
+_override_uri = None
+_override_db = None
+_override_path = ROOT_DIR / "mongo_override.conf"
+if _override_path.exists():
+    with open(_override_path) as _f:
         for _line in _f:
             _line = _line.strip()
             if _line.startswith("MONGO_URL="):
-                _dotenv_uri = _line.split("=", 1)[1].strip().strip('"').strip("'")
-                break
+                _override_uri = _line.split("=", 1)[1].strip().strip('"').strip("'")
+            elif _line.startswith("DB_NAME="):
+                _override_db = _line.split("=", 1)[1].strip().strip('"').strip("'")
 
-_env_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
-
-if _dotenv_uri and "cluster0.vuhdiod.mongodb.net" in _dotenv_uri:
-    mongodb_uri = _dotenv_uri
+if _override_uri and "cluster0.vuhdiod.mongodb.net" in _override_uri:
+    mongodb_uri = _override_uri
+    db_name = _override_db or "vhc_talent_os"
     _override_active = True
-elif _env_uri:
-    mongodb_uri = _env_uri
-    _override_active = False
 else:
-    raise RuntimeError(
-        "MONGODB_URI (or MONGO_URL) environment variable is not set. "
-        "Add it to your .env file or deployment environment."
-    )
-
-db_name = os.environ.get("DB_NAME", "vhc_talent_os")
+    _env_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
+    if not _env_uri:
+        raise RuntimeError(
+            "MONGODB_URI (or MONGO_URL) environment variable is not set. "
+            "Add it to your .env file or deployment environment."
+        )
+    mongodb_uri = _env_uri
+    db_name = os.environ.get("DB_NAME", "vhc_talent_os")
 
 # Build client options — TLS only for Atlas/SRV connections
 _client_opts = dict(
