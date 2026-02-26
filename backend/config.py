@@ -1,6 +1,12 @@
 """
 VHC Talent OS - Configuration Module
 Handles environment variables, database connection, and R2 storage client.
+
+FIXED:
+- MongoDB URI loaded from environment variable (MONGODB_URI)
+- Hardcoded credentials removed
+- tlsInsecure=True removed (was disabling TLS certificate validation)
+- Startup raises RuntimeError if MONGODB_URI is not set
 """
 import os
 import logging
@@ -13,13 +19,18 @@ from botocore.config import Config
 
 # ============== ENVIRONMENT SETUP ==============
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env', override=True)
+load_dotenv(ROOT_DIR / ".env", override=True)
 
 # ============== MONGODB CONNECTION ==============
-# EMERGENCY OVERRIDE — platform managed Mongo injection overrides env vars
-mongodb_uri = "mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/?retryWrites=true&w=majority"
-db_name = "vhc_talent_os"
-print("[EMERGENCY OVERRIDE ACTIVE]")
+mongodb_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
+if not mongodb_uri:
+    raise RuntimeError(
+        "MONGODB_URI environment variable is not set. "
+        "Add it to your .env file or deployment environment. "
+        "Example: MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/dbname"
+    )
+
+db_name = os.environ.get("MONGODB_DB_NAME", "vhc_talent_os")
 
 client = AsyncIOMotorClient(
     mongodb_uri,
@@ -34,20 +45,23 @@ client = AsyncIOMotorClient(
     retryReads=True,
     maxConnecting=2,
     tls=True,
-    tlsInsecure=True,
     tlsCAFile=certifi.where(),
+    # NOTE: tlsInsecure is intentionally NOT set.
+    # It was previously set to True, which disabled TLS certificate validation
+    # and made the connection vulnerable to man-in-the-middle attacks.
 )
 
 db = client[db_name]
 
-# ============== CLOUDFLARE R2 STORAGE ==============
-R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID')
-R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
-R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
-R2_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME', 'vhc-talent-os-storage')
-R2_ENDPOINT = os.environ.get('R2_ENDPOINT')
+logging.info(f"MongoDB client initialized. DB: {db_name}")
 
-# R2 client - only initialize if credentials are provided
+# ============== CLOUDFLARE R2 STORAGE ==============
+R2_ACCOUNT_ID      = os.environ.get("R2_ACCOUNT_ID")
+R2_ACCESS_KEY_ID   = os.environ.get("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
+R2_BUCKET_NAME     = os.environ.get("R2_BUCKET_NAME", "vhc-talent-os-storage")
+R2_ENDPOINT        = os.environ.get("R2_ENDPOINT")
+
 r2_client = None
 R2_ENABLED = False
 
@@ -55,15 +69,15 @@ if R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY:
     try:
         r2_endpoint = R2_ENDPOINT or f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
         r2_client = boto3.client(
-            's3',
+            "s3",
             endpoint_url=r2_endpoint,
             aws_access_key_id=R2_ACCESS_KEY_ID,
             aws_secret_access_key=R2_SECRET_ACCESS_KEY,
             config=Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'path'}
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
             ),
-            region_name='auto'
+            region_name="auto",
         )
         R2_ENABLED = True
         logging.info(f"Cloudflare R2 client initialized. Bucket: {R2_BUCKET_NAME}")
@@ -74,28 +88,34 @@ else:
     logging.info("Cloudflare R2 credentials not configured. Using local storage.")
 
 # ============== JWT CONFIGURATION ==============
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'vhc-secret-key')
-JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('ACCESS_TOKEN_EXPIRE_MINUTES', 30))
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    logging.warning(
+        "JWT_SECRET_KEY not set in environment — using insecure default. "
+        "Set JWT_SECRET_KEY in production."
+    )
+    JWT_SECRET_KEY = "vhc-secret-key-CHANGE-IN-PRODUCTION"
+
+JWT_ALGORITHM              = os.environ.get("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
 # ============== FILE UPLOAD CONFIGURATION ==============
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# Also check parent uploads directory (for backward compatibility)
 PARENT_UPLOAD_DIR = ROOT_DIR.parent / "uploads"
 PARENT_UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ============== SERVICES INITIALIZATION ==============
-# Initialize services that need DB connection
+
 def init_services():
     """Initialize services that require DB connection."""
     try:
         from services.job_queue import job_queue
         job_queue.set_db(db)
-        logging.info("✅ Job queue service initialized with DB")
+        logging.info("Job queue service initialized with DB")
     except Exception as e:
-        logging.warning(f"⚠️ Job queue service initialization failed: {e}")
+        logging.warning(f"Job queue service initialization failed: {e}")
 
-# Call initialization
+
 init_services()
