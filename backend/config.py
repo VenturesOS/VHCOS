@@ -52,7 +52,7 @@ else:
         "Add it to your .env file or deployment environment."
     )
 
-db_name = "vhc_talent_os"
+db_name = os.environ.get("DB_NAME", "vhc_talent_os")
 
 # Build client options — TLS only for Atlas/SRV connections
 _client_opts = dict(
