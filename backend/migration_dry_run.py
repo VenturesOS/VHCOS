@@ -13,7 +13,7 @@ from pymongo import MongoClient
 from datetime import datetime
 
 # --- Configuration ---
-MONGO_URL = os.environ.get('MONGO_URL', 'mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/?retryWrites=true&w=majority')
+MONGO_URL = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI', '')
 DB_NAME = 'vhc_talent_os'
 PROD_SNAPSHOT_DIR = '/app/backup/production_snapshot_20260218'
 REPORT_PATH = '/app/memory/MIGRATION_DRY_RUN_RESULTS.md'
@@ -425,7 +425,7 @@ def main():
     log(f"{'commercials':<20} {len(atlas_commercials):<10} {final_comm:<10} +{final_comm - len(atlas_commercials)}")
 
     log("\n--- Rollback Commands ---")
-    log("mongorestore --uri='mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/vhc_talent_os' \\")
+    log("mongorestore --uri='$MONGO_URL' \\")
     log("  --drop --dir='/app/backup/atlas_pre_merge_20260218/vhc_talent_os'")
     log("Estimated rollback time: < 5 minutes")
 
