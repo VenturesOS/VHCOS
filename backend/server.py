@@ -497,7 +497,11 @@ app.add_middleware(
 # SEO & Security Headers Middleware
 @app.middleware("http")
 async def seo_security_headers(request: Request, call_next):
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except RuntimeError:
+        from starlette.responses import JSONResponse as _JSONResp
+        return _JSONResp(status_code=500, content={"detail": "Internal server error"})
     # HTTPS enforcement headers
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
     response.headers["X-Content-Type-Options"] = "nosniff"
