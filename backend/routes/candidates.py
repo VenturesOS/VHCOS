@@ -40,6 +40,7 @@ from services.cache import cache
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/candidates", tags=["candidates"])
+candidates_router = router
 
 
 # ---------------------------------------------------------------------------
@@ -51,9 +52,7 @@ async def get_db():
     return db
 
 
-async def get_current_user(token: str = Depends(lambda: None)):
-    """Placeholder — replace with your actual auth dependency."""
-    return {"id": "system", "role": "admin", "name": "System"}
+from utils.auth import get_current_user
 
 
 # ---------------------------------------------------------------------------
