@@ -29,12 +29,14 @@ load_dotenv(ROOT_DIR / ".env", override=True)
 # TEMP OVERRIDE — remove once platform env injection is stable.
 
 _dotenv_uri = None
-with open(ROOT_DIR / ".env") as _f:
-    for _line in _f:
-        _line = _line.strip()
-        if _line.startswith("MONGO_URL="):
-            _dotenv_uri = _line.split("=", 1)[1].strip().strip('"').strip("'")
-            break
+_dotenv_path = ROOT_DIR / ".env"
+if _dotenv_path.exists():
+    with open(_dotenv_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line.startswith("MONGO_URL="):
+                _dotenv_uri = _line.split("=", 1)[1].strip().strip('"').strip("'")
+                break
 
 _env_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
 
