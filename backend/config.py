@@ -19,7 +19,7 @@ from botocore.config import Config
 
 # ============== ENVIRONMENT SETUP ==============
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / ".env", override=False)
+load_dotenv(ROOT_DIR / ".env", override=True)
 
 # ============== MONGODB CONNECTION ==============
 # [EMERGENCY OVERRIDE] Force external Atlas cluster.
