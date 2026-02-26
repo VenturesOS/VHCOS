@@ -828,7 +828,13 @@ async def get_job_applicants(
             "notes": app.get("notes", []),
             "edit_history": app.get("edit_history", []),
             "last_edited_by": app.get("last_edited_by"),
-            "manually_edited": app.get("manually_edited", False)
+            "manually_edited": app.get("manually_edited", False),
+            "current_employer": app.get("current_employer") or (candidate_data.get("current_employer") if candidate_data else None),
+            "designation": app.get("designation") or (candidate_data.get("designation") if candidate_data else None),
+            "industry": app.get("industry") or (candidate_data.get("industry") if candidate_data else None),
+            "education": app.get("education") or (candidate_data.get("education") if candidate_data else None),
+            "ug_course": app.get("ug_course") or (candidate_data.get("ug_course") if candidate_data else None),
+            "expected_salary": app.get("expected_salary") or (candidate_data.get("expected_salary") if candidate_data else None),
         }
         
         enriched_applicants.append(enriched)
