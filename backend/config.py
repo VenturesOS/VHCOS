@@ -22,15 +22,15 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env", override=True)
 
 # ============== MONGODB CONNECTION ==============
-mongodb_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
+mongodb_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
 if not mongodb_uri:
     raise RuntimeError(
-        "MONGODB_URI environment variable is not set. "
+        "MONGODB_URI (or MONGO_URL) environment variable is not set. "
         "Add it to your .env file or deployment environment. "
         "Example: MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/dbname"
     )
 
-db_name = os.environ.get("MONGODB_DB_NAME", "vhc_talent_os")
+db_name = os.environ.get("DB_NAME") or os.environ.get("MONGODB_DB_NAME", "vhc_talent_os")
 
 client = AsyncIOMotorClient(
     mongodb_uri,
