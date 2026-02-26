@@ -76,9 +76,9 @@ db = client[db_name]
 # Startup diagnostics (masked)
 import warnings
 _masked_uri = mongodb_uri[:20] + "***" + mongodb_uri[-30:] if len(mongodb_uri) > 50 else "***"
-warnings.warn(f"\n{'='*60}\n  VHC TALENT OS — ENVIRONMENT REPORT\n  DB           = {db_name}\n  MONGO_SOURCE = env\n{'='*60}")
-warnings.warn(f"{'='*60}\n  MONGO CONNECTION DIAGNOSTICS\n  ACTUAL URI    = {_masked_uri}\n  DB_NAME (used)= {db_name}\n{'='*60}")
-logging.info(f"MongoDB client initialized. DB: {db_name}")
+_override_label = "[EMERGENCY OVERRIDE ACTIVE]" if _override_active else "[ENV-BASED CONFIG]"
+warnings.warn(f"\n{'='*60}\n  {_override_label}\n  ACTUAL URI    = {_masked_uri}\n  DB_NAME       = {db_name}\n  MONGO_SOURCE  = {'dotenv override' if _override_active else 'env var'}\n{'='*60}")
+logging.info(f"MongoDB client initialized. DB: {db_name} | Override: {_override_active}")
 
 # ============== CLOUDFLARE R2 STORAGE ==============
 R2_ACCOUNT_ID      = os.environ.get("R2_ACCOUNT_ID")
