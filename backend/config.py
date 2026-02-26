@@ -5,7 +5,7 @@ Handles environment variables, database connection, and R2 storage client.
 FIXED:
 - MongoDB URI loaded from environment variable (MONGODB_URI)
 - Hardcoded credentials removed
-- tlsInsecure=True removed (was disabling TLS certificate validation)
+- tlsInsecure removed (was disabling TLS certificate validation)
 - Startup raises RuntimeError if MONGODB_URI is not set
 """
 import os
