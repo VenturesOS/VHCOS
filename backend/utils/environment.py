@@ -20,25 +20,29 @@ PRODUCTION_DOMAINS = ("ventureshrd.com", "www.ventureshrd.com")
 
 def _detect_environment() -> str:
     """Detect environment reliably.
-    - Emergent preview pods inject APP_URL with 'preview.emergentagent.com'.
-    - Production (ventureshrd.com) does not have this signal.
+    Priority: explicit APP_ENV > production DB cluster > preview pod > domain heuristics.
+    The MongoDB cluster is the authoritative source of truth for data identity:
+    if connected to the production Atlas cluster, data IS production regardless
+    of where the code is running (preview pod, local, etc.).
     """
     explicit = os.environ.get("APP_ENV", "").lower()
     if explicit in ("production", "preview", "local", "staging"):
         return explicit
 
-    # Emergent preview pod: supervisor injects APP_URL containing 'preview.emergentagent'
+    # Check if connected to production Atlas cluster — authoritative for data identity.
+    # This MUST run before the preview-pod check: a preview pod connected to production
+    # data should report "production" so the warning banner does not appear.
+    try:
+        mongo_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL") or ""
+        if "cluster0.vuhdiod.mongodb.net" in mongo_uri:
+            return "production"
+    except Exception:
+        pass
+
+    # Emergent preview pod with non-production DB
     app_url = os.environ.get("APP_URL", "").lower()
     if "preview" in app_url or "emergent" in app_url:
         return "preview"
-
-    # Check if connected to production Atlas via actual URI
-    try:
-        from config import mongodb_uri as _uri
-        if "cluster0.vuhdiod.mongodb.net" in _uri:
-            return "production"
-    except ImportError:
-        pass
 
     cors = _cors_origins.lower()
     frontend = _frontend_url.lower()
