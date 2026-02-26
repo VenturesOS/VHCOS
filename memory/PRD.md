@@ -7,7 +7,7 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - **Frontend**: React (CRA/CRACO) + Shadcn/UI + React Router + Recharts
 - **Backend**: FastAPI + MongoDB Atlas + APScheduler
 - **Auth**: JWT, RBAC (admin, employer, recruiter, candidate)
-- **3rd Party**: Cloudflare Turnstile/Zero Trust, MongoDB Atlas, Upstash Redis, Resend, OpenAI GPT-4o-mini, Cloudflare R2
+- **3rd Party**: Cloudflare Turnstile/Zero Trust, MongoDB Atlas, Upstash Redis, Resend, OpenAI GPT-4o-mini, Cloudflare R2, Emergent LLM Key (GPT-5.2)
 
 ## Features Implemented
 
@@ -25,7 +25,17 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - **UI indicators**: Amber banner on AttendancePage when paused, "System: Active/Paused" badge on AdminAttendancePage
 - **Pre-Launch Reset**: Admin-only endpoint clears 10 operational collections, preserves users/settings/holidays
 - **Safety**: Typed "RESET DATA" confirmation, audit log with admin ID + timestamp in `system_audit_logs`
-- Collections cleared: attendance_records, leave_requests, leave_balances, attendance_health_scores, notification_events, notification_delivery_logs, cron_job_logs, jobs, revenue_entries, invoices, revenue_analytics
+
+### Data Mapping & Enrichment (Feb 24, 2026)
+- Fixed candidate details (education, employer, designation) not showing in pipelines/trackers
+- Enriched APIs: `/api/employer/pipeline`, `/api/admin/pipeline`, `/api/jobs/{job_id}/applicants`
+- Fixed application creation logic to denormalize candidate fields
+- Backfill endpoint for tracker education data
+
+### AI Screening System Code Handoff (Feb 25, 2026)
+- Complete extraction of 16 AI screening files for external audit
+- Identified 5 architectural risks: duplicate parse_resume_with_ai, inconsistent scoring, non-idempotent bulk import, field mismatches, non-process-safe cache
+- Full audit documented in `/app/memory/AI_SCREENING_AUDIT.md`
 
 ### Other Features
 - Submission Tracker (CRUD, role-based visibility filtering)
@@ -34,8 +44,20 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 
 ## Known Debt
 - P0 (BLOCKED): Hardcoded MongoDB override in `config.py`
+- P1: Duplicate `parse_resume_with_ai()` in matching_engine.py vs candidates.py
+- P1: Inconsistent scoring in Full AI Match mode
+- P2: Bulk CV import not idempotent
+- P2: Field name mismatches (summary/profile_summary, skills/key_skills)
+- P2: In-memory cache not process-safe for multi-worker scaling
 
 ## Backlog
+
+### AI Audit Issues (Feb 25, 2026)
+- P1: Deduplicate `parse_resume_with_ai()` — consolidate to matching_engine.py
+- P1: Fix inconsistent scoring — `calculate_candidate_job_match` reads `skills`/`summary` but matching_engine outputs `key_skills`/`profile_summary`
+- P2: Make bulk CV import idempotent (check existing before insert)
+- P2: Standardize field names across all services
+- P2: Replace in-memory `_embedding_cache` + `_match_cache` with Redis
 
 ### ATS Gap Audit (Feb 24, 2026) — from RecruitChamp comparison
 **P0 — Competitive Blockers**
