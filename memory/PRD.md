@@ -75,3 +75,4 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - iteration_91: Attendance Intelligence (100%)
 - iteration_92: Attendance Settings (100%)
 - iteration_93: Pause & Pre-Launch Reset (100% backend 16/16, 100% frontend)
+- iteration_94: Pipeline Enrichment Bug Fix (100% backend 11/11, 100% frontend)
