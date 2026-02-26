@@ -22,15 +22,35 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env", override=True)
 
 # ============== MONGODB CONNECTION ==============
-mongodb_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
-if not mongodb_uri:
+# [EMERGENCY OVERRIDE] Force external Atlas cluster.
+# The Emergent platform may inject its own MONGO_URL at the process level.
+# This override ensures we ALWAYS use the .env value pointing to the
+# production Atlas cluster (cluster0.vuhdiod.mongodb.net / vhc_talent_os).
+# TEMP OVERRIDE — remove once platform env injection is stable.
+
+_dotenv_uri = None
+with open(ROOT_DIR / ".env") as _f:
+    for _line in _f:
+        _line = _line.strip()
+        if _line.startswith("MONGO_URL="):
+            _dotenv_uri = _line.split("=", 1)[1].strip().strip('"').strip("'")
+            break
+
+_env_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
+
+if _dotenv_uri and "cluster0.vuhdiod.mongodb.net" in _dotenv_uri:
+    mongodb_uri = _dotenv_uri
+    _override_active = True
+elif _env_uri:
+    mongodb_uri = _env_uri
+    _override_active = False
+else:
     raise RuntimeError(
         "MONGODB_URI (or MONGO_URL) environment variable is not set. "
-        "Add it to your .env file or deployment environment. "
-        "Example: MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/dbname"
+        "Add it to your .env file or deployment environment."
     )
 
-db_name = os.environ.get("DB_NAME") or os.environ.get("MONGODB_DB_NAME", "vhc_talent_os")
+db_name = "vhc_talent_os"
 
 client = AsyncIOMotorClient(
     mongodb_uri,
