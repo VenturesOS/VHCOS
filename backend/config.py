@@ -54,8 +54,8 @@ else:
 
 db_name = "vhc_talent_os"
 
-client = AsyncIOMotorClient(
-    mongodb_uri,
+# Build client options — TLS only for Atlas/SRV connections
+_client_opts = dict(
     maxPoolSize=10,
     minPoolSize=1,
     maxIdleTimeMS=30000,
@@ -66,12 +66,14 @@ client = AsyncIOMotorClient(
     retryWrites=True,
     retryReads=True,
     maxConnecting=2,
-    tls=True,
-    tlsCAFile=certifi.where(),
-    # NOTE: tlsInsecure is intentionally NOT set.
-    # It was previously set to True, which disabled TLS certificate validation
-    # and made the connection vulnerable to man-in-the-middle attacks.
 )
+
+# Atlas (mongodb+srv) requires TLS; platform-local MongoDB does not
+if "mongodb+srv" in mongodb_uri or "mongodb.net" in mongodb_uri:
+    _client_opts["tls"] = True
+    _client_opts["tlsCAFile"] = certifi.where()
+
+client = AsyncIOMotorClient(mongodb_uri, **_client_opts)
 
 db = client[db_name]
 
