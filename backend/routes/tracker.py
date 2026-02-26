@@ -653,7 +653,7 @@ async def _auto_fill_row(row_data: dict, candidate_id: str, application_id: str,
         "current_ctc": c.get("current_salary") or a.get("current_salary", ""),
         "expected_ctc": c.get("expected_salary") or a.get("expected_salary", ""),
         "notice_period": c.get("notice_period", a.get("notice_period", "")),
-        "highest_qualification": c.get("ug_course", ""),
+        "highest_qualification": c.get("ug_course") or (c.get("education", [{}])[0].get("degree") if c.get("education") else "") or "",
         "primary_skills": ", ".join(c.get("skills", [])) if isinstance(c.get("skills"), list) else c.get("skills", ""),
         "ai_resume_score": a.get("match_score", ""),
     }
