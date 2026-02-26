@@ -92,7 +92,10 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
 
         # Skip if not configured or not an admin path
         if not ZERO_TRUST_ENABLED or not _is_admin_path(path):
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except RuntimeError:
+                return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
         from services.security_service import log_security_event
 
@@ -110,7 +113,10 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
                     status_code=403,
                     content={"detail": "Access denied. Cloudflare Access required."}
                 )
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except RuntimeError:
+                return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
         # Token present — validate it
         claims = await verify_cf_access_token(cf_token)
@@ -126,7 +132,10 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
                     status_code=403,
                     content={"detail": "Invalid Cloudflare Access token."}
                 )
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except RuntimeError:
+                return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
         # Valid token — log access
         await log_security_event(
@@ -134,7 +143,10 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
             f"CF Access verified for {path}",
             {"path": path, "email": claims.get("email", "unknown")}
         )
-        return await call_next(request)
+        try:
+            return await call_next(request)
+        except RuntimeError:
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 # Legacy dependency (no-op since middleware handles enforcement)
