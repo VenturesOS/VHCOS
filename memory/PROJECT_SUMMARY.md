@@ -402,7 +402,7 @@ RESEND_API_KEY=re_placeholder_key
 
 ### Frontend (.env)
 ```env
-REACT_APP_BACKEND_URL=https://pause-reset-deploy.preview.emergentagent.com
+REACT_APP_BACKEND_URL=https://ai-screening-audit.preview.emergentagent.com
 WDS_SOCKET_PORT=443
 ```
 
