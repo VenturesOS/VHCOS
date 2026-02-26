@@ -220,7 +220,11 @@ async def handle_cv_parse_job(job: BackgroundJob, queue: JobQueueService) -> Dic
         progress_message="Parsing with AI...",
     )
 
-    parse_result = await parse_resume_with_ai(content, job.input_data.get("file_name", ""))
+    file_name = job.input_data.get("file_name", "resume.pdf")
+    resume_text = extract_text_from_file(content, file_name)
+    if not resume_text or len(resume_text) < 50:
+        raise Exception(f"Could not extract readable text from {file_name}")
+    parse_result = await parse_resume_with_ai(resume_text[:8000])
 
     if not parse_result.get("success"):
         raise Exception(parse_result.get("error", "Failed to parse resume"))
