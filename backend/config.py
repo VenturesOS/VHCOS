@@ -53,6 +53,11 @@ client = AsyncIOMotorClient(
 
 db = client[db_name]
 
+# Startup diagnostics (masked)
+import warnings
+_masked_uri = mongodb_uri[:20] + "***" + mongodb_uri[-30:] if len(mongodb_uri) > 50 else "***"
+warnings.warn(f"\n{'='*60}\n  VHC TALENT OS — ENVIRONMENT REPORT\n  DB           = {db_name}\n  MONGO_SOURCE = env\n  IS_PRODUCTION= {os.environ.get('IS_PRODUCTION', 'False')}\n{'='*60}")
+warnings.warn(f"{'='*60}\n  MONGO CONNECTION DIAGNOSTICS\n  ACTUAL URI    = {_masked_uri}\n  DB_NAME (used)= {db_name}\n{'='*60}")
 logging.info(f"MongoDB client initialized. DB: {db_name}")
 
 # ============== CLOUDFLARE R2 STORAGE ==============
