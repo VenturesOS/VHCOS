@@ -32,6 +32,18 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - Fixed application creation logic to denormalize candidate fields
 - Backfill endpoint for tracker education data
 
+### Production Stabilization (Feb 25, 2026)
+- Applied 12-file stabilization patch from external audit (Claude)
+- Removed hardcoded MongoDB credentials from config.py + migration scripts
+- Removed tlsInsecure=True (was disabling TLS validation)
+- Added schema_normalizer.py — single source of truth for dual-write schema
+- Fixed duplicate parse_resume_with_ai() — consolidated to matching_engine.py
+- AI Search now queries BOTH canonical + alias field names (no invisible candidates)
+- Embeddings cache moved from module-level dict to Redis (process-safe)
+- Chunked upload sessions moved to Redis (multi-worker safe)
+- Bulk import now uses upsert (idempotent, no duplicates on retry)
+- All 9 validation steps PASSED — SYSTEM STABILIZATION REPORT at /app/memory/SYSTEM_STABILIZATION_REPORT.md
+
 ### AI Screening System Code Handoff (Feb 25, 2026)
 - Complete extraction of 16 AI screening files for external audit
 - Identified 5 architectural risks: duplicate parse_resume_with_ai, inconsistent scoring, non-idempotent bulk import, field mismatches, non-process-safe cache
@@ -43,12 +55,8 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - Chrome Extension v3.9.2, blog engine, revenue dashboard, compliance
 
 ## Known Debt
-- P0 (BLOCKED): Hardcoded MongoDB override in `config.py`
-- P1: Duplicate `parse_resume_with_ai()` in matching_engine.py vs candidates.py
-- P1: Inconsistent scoring in Full AI Match mode
-- P2: Bulk CV import not idempotent
-- P2: Field name mismatches (summary/profile_summary, skills/key_skills)
-- P2: In-memory cache not process-safe for multi-worker scaling
+- P2: LinkedIn Auto-Posting (blocked on LinkedIn API scope `w_organization_social`)
+- P3: Cloudflare R2 ListBuckets returns AccessDenied (uploads may still work)
 
 ## Backlog
 
