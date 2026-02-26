@@ -665,6 +665,40 @@ async def _auto_fill_row(row_data: dict, candidate_id: str, application_id: str,
 
 
 
+# ── Backfill Existing Rows ──
+
+@router.post("/trackers/backfill-education")
+async def backfill_tracker_education(user=Depends(require_role(["admin"]))):
+    """Backfill highest_qualification for existing tracker rows from candidate_bank.education."""
+    rows = await db.tracker_rows.find(
+        {"$or": [
+            {"data.highest_qualification": {"$in": [None, "", "None"]}},
+            {"data.highest_qualification": {"$exists": False}},
+        ]},
+        {"_id": 0, "id": 1, "candidate_id": 1, "data": 1}
+    ).to_list(10000)
+
+    updated = 0
+    for row in rows:
+        cid = row.get("candidate_id")
+        if not cid:
+            continue
+        c = await db.candidate_bank.find_one({"id": cid}, {"_id": 0, "ug_course": 1, "education": 1})
+        if not c:
+            continue
+        qual = c.get("ug_course") or (c["education"][0].get("degree") if c.get("education") else None)
+        if not qual:
+            continue
+        await db.tracker_rows.update_one(
+            {"id": row["id"]},
+            {"$set": {"data.highest_qualification": qual}}
+        )
+        updated += 1
+
+    return {"message": f"Backfilled {updated} of {len(rows)} rows", "updated": updated, "total_checked": len(rows)}
+
+
+
 # ── Excel Export ──
 
 @router.get("/trackers/{tracker_id}/export")
