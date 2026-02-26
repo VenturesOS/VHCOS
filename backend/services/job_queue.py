@@ -201,7 +201,7 @@ job_queue = JobQueueService()
 
 async def handle_cv_parse_job(job: BackgroundJob, queue: JobQueueService) -> Dict[str, Any]:
     """Handler for single CV parsing jobs."""
-    from services.matching_engine import parse_resume_with_ai
+    from services.matching_engine import parse_resume_with_ai, extract_text_from_file
     from config import db
 
     file_path = job.input_data.get("file_path")
