@@ -24,8 +24,12 @@ maintenance_router = APIRouter(prefix="/api/system-health", tags=["maintenance"]
 @maintenance_router.get("/env-info")
 async def env_info(user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Return non-sensitive environment metadata for the frontend badge."""
+    from fastapi.responses import JSONResponse
     info = get_environment_info()
-    return {"environment": info["environment"], "is_production": info["is_production"]}
+    return JSONResponse(
+        content={"environment": info["environment"], "is_production": info["is_production"]},
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @maintenance_router.get("/diagnostic/users")
