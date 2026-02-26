@@ -13,7 +13,7 @@ import sys
 from pymongo import MongoClient
 from datetime import datetime, timezone
 
-MONGO_URL = os.environ.get('MONGO_URL', 'mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/?retryWrites=true&w=majority')
+MONGO_URL = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URI', '')
 DB_NAME = 'vhc_talent_os'
 PROD_SNAPSHOT_DIR = '/app/backup/production_snapshot_20260218'
 REPORT_PATH = '/app/memory/MIGRATION_EXECUTION_LOG.md'
