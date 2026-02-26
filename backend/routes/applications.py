@@ -319,11 +319,19 @@ async def create_application(app_data: ApplicationCreate, current_user: dict = D
     # Include candidate bank data if available
     if candidate_bank:
         app_doc["current_salary"] = candidate_bank.get("current_salary")
+        app_doc["expected_salary"] = candidate_bank.get("expected_salary")
         app_doc["notice_period"] = candidate_bank.get("notice_period")
         app_doc["location"] = candidate_bank.get("location")
         app_doc["experience_years"] = candidate_bank.get("experience_years")
         app_doc["skills"] = candidate_bank.get("skills", [])
         app_doc["resume_url"] = candidate_bank.get("resume_url")
+        app_doc["current_employer"] = candidate_bank.get("current_employer")
+        app_doc["designation"] = candidate_bank.get("designation")
+        app_doc["industry"] = candidate_bank.get("industry")
+        app_doc["education"] = candidate_bank.get("education")
+        app_doc["ug_course"] = candidate_bank.get("ug_course")
+        app_doc["headline"] = candidate_bank.get("headline")
+        app_doc["candidate_phone"] = candidate_bank.get("phone")
     
     await db.applications.insert_one(app_doc)
     
@@ -1517,11 +1525,19 @@ async def shortlist_candidate_from_screening(
         "notes": [{"text": req.notes, "by": current_user["name"], "at": now}] if req.notes else [],
         "edit_history": [],
         "current_salary": candidate.get("current_salary"),
+        "expected_salary": candidate.get("expected_salary"),
         "notice_period": candidate.get("notice_period"),
         "location": candidate.get("location"),
         "experience_years": candidate.get("experience_years"),
         "skills": candidate.get("skills", []),
         "resume_url": candidate.get("resume_url"),
+        "current_employer": candidate.get("current_employer"),
+        "designation": candidate.get("designation"),
+        "industry": candidate.get("industry"),
+        "education": candidate.get("education"),
+        "ug_course": candidate.get("ug_course"),
+        "headline": candidate.get("headline"),
+        "candidate_phone": candidate.get("phone"),
         "created_at": now,
         "updated_at": now,
     }
