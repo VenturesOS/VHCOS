@@ -60,12 +60,12 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 
 ## Backlog
 
-### AI Audit Issues (Feb 25, 2026)
-- P1: Deduplicate `parse_resume_with_ai()` — consolidate to matching_engine.py
-- P1: Fix inconsistent scoring — `calculate_candidate_job_match` reads `skills`/`summary` but matching_engine outputs `key_skills`/`profile_summary`
-- P2: Make bulk CV import idempotent (check existing before insert)
-- P2: Standardize field names across all services
-- P2: Replace in-memory `_embedding_cache` + `_match_cache` with Redis
+### AI Audit Issues — RESOLVED (Feb 25, 2026)
+- ✅ P1: Deduplicated `parse_resume_with_ai()` — consolidated to matching_engine.py
+- ✅ P1: Fixed inconsistent scoring — all scoring reads via schema_normalizer helpers
+- ✅ P2: Bulk CV import now idempotent (upsert logic)
+- ✅ P2: Standardized field names (dual-write schema via normalize_candidate())
+- ✅ P2: Replaced in-memory caches with Redis (embedding_cache, upload sessions)
 
 ### ATS Gap Audit (Feb 24, 2026) — from RecruitChamp comparison
 **P0 — Competitive Blockers**
