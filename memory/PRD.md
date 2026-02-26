@@ -32,6 +32,12 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - Fixed application creation logic to denormalize candidate fields
 - Backfill endpoint for tracker education data
 
+### ENV Mode Detection Fix (Feb 26, 2026)
+- Fixed environment detection priority: MongoDB cluster check now runs BEFORE preview pod URL check
+- Root cause: Emergent pod injects APP_URL with "preview.emergentagent.com", which was checked before the DB cluster identity
+- Result: Dashboard now correctly shows production mode, amber warning banner removed
+- File changed: utils/environment.py (detection order only)
+
 ### Production Stabilization (Feb 25, 2026)
 - Applied 12-file stabilization patch from external audit (Claude)
 - Removed hardcoded MongoDB credentials from config.py + migration scripts
