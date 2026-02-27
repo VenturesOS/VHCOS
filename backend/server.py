@@ -143,6 +143,7 @@ app = FastAPI(title="VHC Talent OS API")
 
 
 @app.get("/api/health")
+@app.get("/health")
 async def health_check():
     return {"status": "ok", "import_failures": len(_route_imports_failed)}
 
