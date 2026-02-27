@@ -89,7 +89,6 @@ _route_imports_failed = []
 def _safe_import(module_path, attr_name):
     """Import a router safely; return None on failure so the server can still start."""
     try:
-        parts = module_path.rsplit(".", 1)
         mod = __import__(module_path, fromlist=[attr_name])
         return getattr(mod, attr_name)
     except Exception as e:
