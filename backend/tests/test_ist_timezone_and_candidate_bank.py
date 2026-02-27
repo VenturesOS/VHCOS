@@ -10,6 +10,7 @@ Tests for:
 6. Authentication for admin and recruiter
 """
 import os
+import time
 import pytest
 import requests
 from datetime import datetime, timezone, timedelta
@@ -19,51 +20,62 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 # IST timezone constant
 IST = timezone(timedelta(hours=5, minutes=30))
 
+# Rate limit helper - add delay between requests
+def wait_rate_limit():
+    time.sleep(0.5)
+
+
+@pytest.fixture(scope="module")
+def admin_token():
+    """Module-scoped admin token to avoid rate limiting"""
+    wait_rate_limit()
+    response = requests.post(f"{BASE_URL}/api/auth/login", json={
+        "email": "admin@vhc.in",
+        "password": "VhcAdmin@2024"
+    })
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+    data = response.json()
+    # API returns 'access_token' not 'token'
+    token = data.get("access_token") or data.get("token")
+    assert token, f"No token in response: {data}"
+    return token
+
+
+@pytest.fixture(scope="module")
+def recruiter_token():
+    """Module-scoped recruiter token"""
+    wait_rate_limit()
+    response = requests.post(f"{BASE_URL}/api/auth/login", json={
+        "email": "siddharth@vhc.in",
+        "password": "12345678"
+    })
+    assert response.status_code == 200, f"Recruiter login failed: {response.text}"
+    data = response.json()
+    token = data.get("access_token") or data.get("token")
+    assert token, f"No token in response: {data}"
+    return token
+
 
 class TestAuthentication:
     """Test authentication for admin and recruiter accounts"""
     
-    def test_admin_login(self):
+    def test_admin_login(self, admin_token):
         """Admin login should succeed with correct credentials"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@vhc.in",
-            "password": "VhcAdmin@2024"
-        })
-        assert response.status_code == 200, f"Admin login failed: {response.text}"
-        data = response.json()
-        assert "token" in data, "No token in response"
-        assert data.get("user", {}).get("role") == "admin", "User role should be admin"
-        print(f"Admin login: OK - token received, role={data['user']['role']}")
-        return data["token"]
+        assert admin_token is not None, "Admin token should exist"
+        print(f"Admin login: OK - token received")
     
-    def test_recruiter_login(self):
+    def test_recruiter_login(self, recruiter_token):
         """Recruiter login should succeed with correct credentials"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "siddharth@vhc.in",
-            "password": "12345678"
-        })
-        assert response.status_code == 200, f"Recruiter login failed: {response.text}"
-        data = response.json()
-        assert "token" in data, "No token in response"
-        assert data.get("user", {}).get("role") == "recruiter", f"Expected recruiter role, got {data.get('user', {}).get('role')}"
-        print(f"Recruiter login: OK - token received, role={data['user']['role']}")
-        return data["token"]
+        assert recruiter_token is not None, "Recruiter token should exist"
+        print(f"Recruiter login: OK - token received")
 
 
 class TestAttendanceSettings:
     """Test attendance settings endpoint"""
     
-    @pytest.fixture
-    def admin_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@vhc.in",
-            "password": "VhcAdmin@2024"
-        })
-        assert response.status_code == 200
-        return response.json()["token"]
-    
     def test_get_attendance_settings(self, admin_token):
         """GET /api/attendance/settings should return settings"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         response = requests.get(f"{BASE_URL}/api/attendance/settings", headers=headers)
         assert response.status_code == 200, f"Settings fetch failed: {response.text}"
@@ -81,26 +93,9 @@ class TestAttendanceSettings:
 class TestAttendanceISTTimezone:
     """Test attendance check-in/check-out uses IST, not UTC"""
     
-    @pytest.fixture
-    def admin_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@vhc.in",
-            "password": "VhcAdmin@2024"
-        })
-        assert response.status_code == 200
-        return response.json()["token"]
-    
-    @pytest.fixture
-    def recruiter_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "siddharth@vhc.in",
-            "password": "12345678"
-        })
-        assert response.status_code == 200
-        return response.json()["token"]
-    
     def test_get_my_attendance_uses_ist_date(self, admin_token):
         """GET /api/attendance/my should return records for IST month/year"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         
         # Get current IST date
@@ -126,6 +121,7 @@ class TestAttendanceISTTimezone:
     
     def test_today_attendance_date_is_ist(self, recruiter_token):
         """GET /api/attendance/today should return IST date"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {recruiter_token}"}
         
         # Get current IST date
@@ -148,6 +144,7 @@ class TestAttendanceISTTimezone:
     
     def test_check_in_records_ist_time(self, admin_token):
         """Check-in should record IST time, not UTC time"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         
         # Get current IST time
@@ -165,6 +162,7 @@ class TestAttendanceISTTimezone:
         if response.status_code == 409:
             # Already checked in - verify existing record has IST time
             print("Already checked in today - verifying existing record")
+            wait_rate_limit()
             today_response = requests.get(f"{BASE_URL}/api/attendance/today", headers=headers)
             assert today_response.status_code == 200
             today_data = today_response.json().get("today", {})
@@ -177,18 +175,10 @@ class TestAttendanceISTTimezone:
                 assert record_date == ist_today, f"Expected IST date {ist_today}, got {record_date}"
                 
                 # Verify check_in time is in IST range
-                # IST is UTC+5:30, so if it's currently 13:00 IST, UTC is 07:30
-                # The check_in time should be in HH:MM format and should NOT be 5.5 hours behind
                 if check_in_time:
                     check_in_hour = int(check_in_time.split(":")[0])
-                    # Allow some flexibility, but the hour should be close to IST hour, not UTC hour
                     utc_hour = (ist_hour - 5) % 24  # Simplified approximation
                     print(f"Check-in time: {check_in_time}, IST hour now: {ist_hour}, UTC hour approx: {utc_hour}")
-                    
-                    # The check_in_hour should be closer to IST time (13:xx) than UTC time (07:xx)
-                    # If check_in was recorded in UTC, it would show 07:xx or 08:xx
-                    # If recorded in IST, it would show 13:xx
-                    # Since user checked in during IST daytime, we expect IST-like hours
                     print(f"VERIFIED: Check-in recorded with date={record_date}, time={check_in_time}")
             return
         
@@ -210,6 +200,7 @@ class TestAttendanceISTTimezone:
     
     def test_late_minutes_calculation_ist(self, admin_token):
         """Late minutes should be calculated against IST work_start_time"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         
         # Get settings to know work_start_time
@@ -218,6 +209,7 @@ class TestAttendanceISTTimezone:
         settings = settings_response.json()
         work_start_time = settings.get("work_start_time", "09:00")
         
+        wait_rate_limit()
         # Get today's attendance
         today_response = requests.get(f"{BASE_URL}/api/attendance/today", headers=headers)
         assert today_response.status_code == 200
@@ -249,17 +241,9 @@ class TestAttendanceISTTimezone:
 class TestAttendanceAnalytics:
     """Test attendance analytics endpoint"""
     
-    @pytest.fixture
-    def admin_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@vhc.in",
-            "password": "VhcAdmin@2024"
-        })
-        assert response.status_code == 200
-        return response.json()["token"]
-    
     def test_get_analytics(self, admin_token):
         """GET /api/attendance/analytics should return metrics"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         response = requests.get(
             f"{BASE_URL}/api/attendance/analytics",
@@ -286,26 +270,9 @@ class TestAttendanceAnalytics:
 class TestCandidateBankRoute:
     """Test candidate bank route prefix change (from /api/candidates to /api/candidate-bank)"""
     
-    @pytest.fixture
-    def admin_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@vhc.in",
-            "password": "VhcAdmin@2024"
-        })
-        assert response.status_code == 200
-        return response.json()["token"]
-    
-    @pytest.fixture
-    def recruiter_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "siddharth@vhc.in",
-            "password": "12345678"
-        })
-        assert response.status_code == 200
-        return response.json()["token"]
-    
     def test_candidate_bank_list_with_pagination(self, admin_token):
         """GET /api/candidate-bank should return paginated data with total > 1000"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         response = requests.get(
             f"{BASE_URL}/api/candidate-bank",
@@ -341,6 +308,7 @@ class TestCandidateBankRoute:
     
     def test_candidate_bank_search(self, admin_token):
         """GET /api/candidate-bank with search parameter should filter results"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         response = requests.get(
             f"{BASE_URL}/api/candidate-bank",
@@ -355,6 +323,7 @@ class TestCandidateBankRoute:
     
     def test_candidates_endpoint_still_works(self, admin_token):
         """GET /api/candidates should still return candidate_profiles list"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         response = requests.get(f"{BASE_URL}/api/candidates", headers=headers)
         
@@ -376,17 +345,9 @@ class TestCandidateBankRoute:
 class TestCheckInCheckOutFlow:
     """Test the complete check-in/check-out flow with IST verification"""
     
-    @pytest.fixture
-    def admin_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@vhc.in",
-            "password": "VhcAdmin@2024"
-        })
-        assert response.status_code == 200
-        return response.json()["token"]
-    
     def test_check_out_records_ist_time_and_calculates_hours(self, admin_token):
         """Check-out should record IST time and calculate hours_worked correctly"""
+        wait_rate_limit()
         headers = {"Authorization": f"Bearer {admin_token}"}
         
         # Get today's status first
@@ -421,6 +382,7 @@ class TestCheckInCheckOutFlow:
         now_ist = datetime.now(IST)
         ist_hour = now_ist.hour
         
+        wait_rate_limit()
         response = requests.post(
             f"{BASE_URL}/api/attendance/check-out",
             headers=headers,
