@@ -428,32 +428,32 @@ export const candidateBankAPI = {
     formData.append('file', file);
     if (email) formData.append('email', email);
     if (name) formData.append('name', name);
-    return api.post('/candidate-bank/add', formData, {
+    return api.post('/candidates/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  getAll: (params) => api.get('/candidate-bank', { params }),
-  getById: (id) => api.get(`/candidate-bank/${id}`),
-  update: (id, data) => api.put(`/candidate-bank/${id}`, data),
-  getAuditLog: (id) => api.get(`/candidate-bank/${id}/audit-log`),
-  getResumeHistory: (id) => api.get(`/candidate-bank/${id}/resume-history`),
+  getAll: (params) => api.get('/candidates', { params }),
+  getById: (id) => api.get(`/candidates/${id}`),
+  update: (id, data) => api.patch(`/candidates/${id}`, data),
+  getAuditLog: (id) => api.get(`/candidates/${id}/audit-log`),
+  getResumeHistory: (id) => api.get(`/candidates/${id}/resume-history`),
   // Data Governance: Get candidate activity history (internal only)
-  getHistory: (id) => api.get(`/candidate-bank/${id}/history`),
+  getHistory: (id) => api.get(`/candidates/${id}/history`),
   // Resume download URL (use window.open or anchor tag)
-  getResumeDownloadUrl: (id) => `${API_BASE}/candidate-bank/${id}/download-resume`,
-  getAtsCvUrl: (id) => `${API_BASE}/candidate-bank/${id}/ats-cv`,
+  getResumeDownloadUrl: (id) => `${API_BASE}/candidates/${id}/download-resume`,
+  getAtsCvUrl: (id) => `${API_BASE}/candidates/${id}/ats-cv`,
   // Phase-2: Batch upload
   batchParse: (files) => {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
-    return api.post('/candidate-bank/batch-parse', formData, {
+    return api.post('/candidates/batch-parse', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  batchSave: (candidates) => api.post('/candidate-bank/batch-save', { candidates }),
+  batchSave: (candidates) => api.post('/candidates/batch-save', { candidates }),
   // Data Governance: Update mandatory fields (salary, notice, location, experience)
   updateMandatoryFields: (id, data) => 
-    api.put(`/candidate-bank/${id}/salary-notice`, null, { 
+    api.put(`/candidates/${id}/salary-notice`, null, { 
       params: { 
         current_salary: data.currentSalary, 
         notice_period: data.noticePeriod,
@@ -463,7 +463,7 @@ export const candidateBankAPI = {
     }),
   // Backward compatible alias
   updateSalaryNotice: (id, currentSalary, noticePeriod, location, experienceYears) => 
-    api.put(`/candidate-bank/${id}/salary-notice`, null, { 
+    api.put(`/candidates/${id}/salary-notice`, null, { 
       params: { 
         current_salary: currentSalary, 
         notice_period: noticePeriod,
