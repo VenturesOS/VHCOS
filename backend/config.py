@@ -2,18 +2,17 @@
 VHC Talent OS - Configuration Module
 Handles environment variables, database connection, and R2 storage client.
 
-FIXED:
-- MongoDB URI loaded from environment variable (MONGODB_URI)
-- Hardcoded credentials removed
-- tlsInsecure removed (was disabling TLS certificate validation)
-- Startup raises RuntimeError if MONGODB_URI is not set
+DEPLOYMENT-SAFE: MongoDB client is NOT created at import time.
+A lazy proxy pattern is used so that all `from config import db` references
+work transparently — the real AsyncIOMotorClient is created only when
+initialize_db() is called from a background task after the server has bound
+to its port.
 """
 import os
 import logging
 import certifi
 from pathlib import Path
 from dotenv import load_dotenv
-from motor.motor_asyncio import AsyncIOMotorClient
 import boto3
 from botocore.config import Config
 
@@ -21,12 +20,7 @@ from botocore.config import Config
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env", override=False)
 
-# ============== MONGODB CONNECTION ==============
-# [EMERGENCY OVERRIDE] Force external Atlas cluster.
-# The Emergent platform overwrites .env AND injects env vars with its managed MongoDB.
-# Python files are guaranteed to be deployed, so we import from a Python module.
-# TEMP OVERRIDE — remove once platform supports external MongoDB config.
-
+# ============== MONGODB URI RESOLUTION (no network calls) ==============
 _override_active = False
 try:
     from mongo_production_override import MONGO_URL as _override_url, DB_NAME as _override_db
@@ -47,7 +41,7 @@ if not _override_active:
     mongodb_uri = _env_uri
     db_name = os.environ.get("DB_NAME", "vhc_talent_os")
 
-# Build client options — TLS only for Atlas/SRV connections
+# Client options — computed once, used later by initialize_db()
 _client_opts = dict(
     maxPoolSize=10,
     minPoolSize=1,
@@ -61,21 +55,66 @@ _client_opts = dict(
     maxConnecting=2,
 )
 
-# Atlas (mongodb+srv) requires TLS; platform-local MongoDB does not
 if "mongodb+srv" in mongodb_uri or "mongodb.net" in mongodb_uri:
     _client_opts["tls"] = True
     _client_opts["tlsCAFile"] = certifi.where()
 
-client = AsyncIOMotorClient(mongodb_uri, **_client_opts)
 
-db = client[db_name]
+# ============== LAZY PROXY (deployment-safe) ==============
+class _MongoProxy:
+    """Forwards attribute/item access to a real Motor object set later via .set_target()."""
+    __slots__ = ("_target",)
 
-# Startup diagnostics (masked)
-import warnings
-_masked_uri = mongodb_uri[:20] + "***" + mongodb_uri[-30:] if len(mongodb_uri) > 50 else "***"
-_override_label = "[EMERGENCY OVERRIDE ACTIVE]" if _override_active else "[ENV-BASED CONFIG]"
-warnings.warn(f"\n{'='*60}\n  {_override_label}\n  ACTUAL URI    = {_masked_uri}\n  DB_NAME       = {db_name}\n  MONGO_SOURCE  = {'dotenv override' if _override_active else 'env var'}\n{'='*60}")
-logging.info(f"MongoDB client initialized. DB: {db_name} | Override: {_override_active}")
+    def __init__(self):
+        object.__setattr__(self, "_target", None)
+
+    def set_target(self, target):
+        object.__setattr__(self, "_target", target)
+
+    def _get(self):
+        t = object.__getattribute__(self, "_target")
+        if t is None:
+            raise RuntimeError("Database not initialized yet — initialize_db() has not been called")
+        return t
+
+    def __getattr__(self, name):
+        return getattr(self._get(), name)
+
+    def __getitem__(self, key):
+        return self._get()[key]
+
+    def __bool__(self):
+        return object.__getattribute__(self, "_target") is not None
+
+    def __repr__(self):
+        t = object.__getattribute__(self, "_target")
+        return f"<_MongoProxy target={t!r}>"
+
+
+# Proxy objects — importable immediately, zero network cost
+client = _MongoProxy()
+db = _MongoProxy()
+
+
+def initialize_db():
+    """Create the real AsyncIOMotorClient and wire up the proxies.
+    Call this ONCE from a background task after the server has bound to its port."""
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    real_client = AsyncIOMotorClient(mongodb_uri, **_client_opts)
+    real_db = real_client[db_name]
+
+    client.set_target(real_client)
+    db.set_target(real_db)
+
+    _masked = mongodb_uri[:20] + "***" + mongodb_uri[-30:] if len(mongodb_uri) > 50 else "***"
+    _label = "[EMERGENCY OVERRIDE ACTIVE]" if _override_active else "[ENV-BASED CONFIG]"
+    logging.warning(
+        f"\n{'='*60}\n  {_label}\n  ACTUAL URI    = {_masked}\n"
+        f"  DB_NAME       = {db_name}\n  MONGO_SOURCE  = "
+        f"{'dotenv override' if _override_active else 'env var'}\n{'='*60}"
+    )
+    logging.info(f"MongoDB client initialized. DB: {db_name} | Override: {_override_active}")
 
 # ============== CLOUDFLARE R2 STORAGE ==============
 R2_ACCOUNT_ID      = os.environ.get("R2_ACCOUNT_ID")
