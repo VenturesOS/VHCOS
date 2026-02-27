@@ -228,7 +228,6 @@ async def deferred_db_init():
             return uri[:30] + "..."
 
         mongo_url_env = os.environ.get('MONGO_URL', '')
-        mongodb_uri_env = os.environ.get('MONGODB_URI', '')
         db_name_env = os.environ.get('DB_NAME', '')
 
         logging.warning("=" * 60)
