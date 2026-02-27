@@ -13,6 +13,9 @@ from services.email_service import send_email
 
 logger = logging.getLogger(__name__)
 
+# Indian Standard Time (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
+
 
 # ═══════════════════════════════════════
 # JOB LOCK MECHANISM
