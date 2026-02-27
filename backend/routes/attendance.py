@@ -217,7 +217,7 @@ async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "r
     if settings.get("is_paused"):
         raise HTTPException(status_code=403, detail="Attendance tracking is temporarily paused by admin.")
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = _now_ist().strftime("%Y-%m-%d")
     user_id = user.get("id", "")
 
     record = await db.attendance_records.find_one(
@@ -229,7 +229,7 @@ async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "r
         raise HTTPException(status_code=409, detail="Already checked out today")
 
     settings = await _get_settings()
-    now_time = datetime.now(timezone.utc).strftime("%H:%M")
+    now_time = _now_ist().strftime("%H:%M")
     hours = _calc_hours(record["check_in"], now_time)
     overtime = _calc_overtime(now_time, settings.get("work_end_time", "18:00"))
 
@@ -245,7 +245,7 @@ async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "r
             "overtime_minutes": overtime,
             "status": status,
             "notes": req.notes or record.get("notes", ""),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": _now_ist().isoformat(),
         }}
     )
 
