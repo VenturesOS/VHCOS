@@ -32,6 +32,15 @@ Full-stack React + FastAPI recruitment management platform for Ventures HRD Cons
 - Fixed application creation logic to denormalize candidate fields
 - Backfill endpoint for tracker education data
 
+### Deployment-Safe Startup Fix (Feb 2026)
+- Replaced blocking `AsyncIOMotorClient` instantiation at module-level in `config.py` with a lazy proxy pattern
+- `db` and `client` are now lightweight proxy objects at import time (zero network cost)
+- Real MongoDB client created in deferred background task (`server.py`) after server binds to port 8001
+- Removed blocking `init_services()` call from module level; deferred to background task
+- All 40+ files importing `from config import db` work transparently via proxy forwarding
+- Health check responds instantly; MongoDB connects 1s later in background
+- Fixes production "Connection refused" outage caused by SRV DNS lookup blocking server startup
+
 ### ENV Mode Detection Fix (Feb 26, 2026)
 - Fixed environment detection priority: MongoDB cluster check now runs BEFORE preview pod URL check
 - Root cause: Emergent pod injects APP_URL with "preview.emergentagent.com", which was checked before the DB cluster identity
