@@ -195,6 +195,21 @@ async def deferred_db_init():
     async def _run_deferred():
         await asyncio.sleep(1)  # Let the server fully bind first
 
+        # --- Initialize MongoDB client (the ONLY place this happens) ---
+        import config as _cfg
+        try:
+            _cfg.initialize_db()
+            logging.info("[DEFERRED INIT] MongoDB client created successfully")
+        except Exception as e:
+            logging.error(f"[DEFERRED INIT] FATAL: MongoDB client creation failed: {e}")
+            return  # Nothing else can work without the DB
+
+        # --- Initialize services that depend on DB ---
+        try:
+            _cfg.init_services()
+        except Exception as e:
+            logging.warning(f"[DEFERRED INIT] init_services failed: {e}")
+
         # --- Environment report ---
         try:
             from utils.environment import log_environment_banner
@@ -216,10 +231,9 @@ async def deferred_db_init():
         mongodb_uri_env = os.environ.get('MONGODB_URI', '')
         db_name_env = os.environ.get('DB_NAME', '')
 
-        from config import mongodb_uri as _actual_uri
         logging.warning("=" * 60)
         logging.warning("  MONGO CONNECTION DIAGNOSTICS")
-        logging.warning(f"  ACTUAL URI    = {_mask(_actual_uri)}")
+        logging.warning(f"  ACTUAL URI    = {_mask(_cfg.mongodb_uri)}")
         logging.warning(f"  ENV MONGO_URL = {_mask(mongo_url_env)}")
         logging.warning(f"  DB_NAME (used)= {db_name}")
         logging.warning(f"  DB_NAME (env) = {db_name_env or '(not set)'}")
