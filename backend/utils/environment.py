@@ -34,6 +34,15 @@ def _detect_environment() -> str:
     # data should report "production" so the warning banner does not appear.
     try:
         mongo_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL") or ""
+        # Also check the Python override file (survives platform .env overwrites).
+        # config.py uses this same file to connect, so env detection must match.
+        if "cluster0.vuhdiod.mongodb.net" not in mongo_uri:
+            try:
+                from mongo_production_override import MONGO_URL as _ov_url
+                if _ov_url and "cluster0.vuhdiod.mongodb.net" in _ov_url:
+                    mongo_uri = _ov_url
+            except ImportError:
+                pass
         if "cluster0.vuhdiod.mongodb.net" in mongo_uri:
             return "production"
     except Exception:
