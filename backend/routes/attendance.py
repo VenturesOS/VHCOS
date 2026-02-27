@@ -159,7 +159,7 @@ async def check_in(req: CheckInRequest, request: Request, user=Depends(require_r
     if settings.get("is_paused"):
         raise HTTPException(status_code=403, detail="Attendance tracking is temporarily paused by admin.")
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = _now_ist().strftime("%Y-%m-%d")
     user_id = user.get("id", "")
 
     existing = await db.attendance_records.find_one(
@@ -169,12 +169,12 @@ async def check_in(req: CheckInRequest, request: Request, user=Depends(require_r
         raise HTTPException(status_code=409, detail="Already checked in today")
 
     settings = await _get_settings()
-    now_time = datetime.now(timezone.utc).strftime("%H:%M")
+    now_time = _now_ist().strftime("%H:%M")
     late_minutes = _calc_late_minutes(now_time, settings.get("work_start_time", "09:00"))
 
     client_ip = request.client.host if request.client else ""
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = _now_ist().isoformat()
     record = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
