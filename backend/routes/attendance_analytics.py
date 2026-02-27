@@ -21,6 +21,9 @@ from services.attendance_cron_service import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/attendance/analytics", tags=["Attendance Analytics"])
 
+# Indian Standard Time (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
+
 
 # ═══════════════════════════════════════
 # ANALYTICS ENDPOINT
