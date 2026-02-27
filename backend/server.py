@@ -245,180 +245,155 @@ async def validate_mongodb_connection():
 
 
 @app.on_event("startup")
-async def init_compliance_indexes():
-    try:
-        from services.compliance_service import ensure_compliance_indexes
-        await ensure_compliance_indexes()
-        logging.info("Compliance DB indexes initialized")
-    except Exception as e:
-        logging.warning(f"Compliance index init failed: {e}")
-
-
-@app.on_event("startup")
-async def init_attendance_indexes():
-    """Create indexes for attendance, leave, notification collections."""
-    try:
-        await db.attendance_records.create_index([("user_id", 1), ("date", 1)], unique=True)
-        await db.attendance_records.create_index("date")
-        await db.attendance_records.create_index("status")
-        await db.leave_requests.create_index([("user_id", 1), ("start_date", 1)])
-        await db.leave_requests.create_index("status")
-        await db.leave_balances.create_index([("user_id", 1), ("year", 1)], unique=True)
-        await db.holidays.create_index("date", unique=True)
-        await db.notification_events.create_index([("recipient_id", 1), ("created_at", -1)])
-        await db.notification_events.create_index("event_type")
-        await db.notification_delivery_logs.create_index([("event_id", 1), ("channel", 1)])
-        await db.cron_job_locks.create_index("job_name", unique=True)
-        await db.cron_job_logs.create_index([("job_name", 1), ("executed_at", -1)])
-        await db.attendance_health_scores.create_index("user_id", unique=True)
-        logging.info("Attendance DB indexes initialized")
-    except Exception as e:
-        logging.warning(f"Attendance index init failed: {e}")
-
-
-
-@app.on_event("startup")
-async def init_maintenance_bot():
-    try:
-        # Create indexes for maintenance collections
-        await db.system_health_checks.create_index("timestamp")
-        await db.system_health_checks.create_index("service_name")
-        await db.maintenance_fixes.create_index("start_time")
-        await db.maintenance_fixes.create_index("service_name")
-        await db.reliability_events.create_index("timestamp")
-        await db.reliability_events.create_index("event_type")
-        await db.reliability_buffer.create_index("status")
-        await db.naukri_capture_logs.create_index("timestamp")
-        await db.naukri_capture_logs.create_index("status")
-        await db.naukri_capture_logs.create_index([("status", 1), ("is_recovered", 1)])
-        await db.security_events.create_index("timestamp")
-        await db.security_events.create_index("event_type")
-        await db.security_events.create_index("severity")
-        # Start bot background loop
-        from services.maintenance_bot import start_bot
-        start_bot()
-        logging.info("Maintenance bot started")
-    except Exception as e:
-        logging.warning(f"Maintenance bot init failed: {e}")
-
-
-@app.on_event("startup")
-async def start_blog_scheduler():
-    """Start the APScheduler background jobs for blog auto-publishing."""
-    try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from services.blog_scheduler import auto_publish_blog, get_schedule_config
-
-        scheduler = AsyncIOScheduler()
-
-        async def run_employer_publish():
-            config = await get_schedule_config()
-            if config.get("employer", {}).get("enabled"):
-                await auto_publish_blog("employer")
-
-        async def run_candidate_publish():
-            config = await get_schedule_config()
-            if config.get("candidate", {}).get("enabled"):
-                await auto_publish_blog("candidate")
-
-        # Employer: Mon, Wed, Fri at 03:30 UTC (9:00 AM IST)
-        scheduler.add_job(run_employer_publish, 'cron', day_of_week='mon,wed,fri', hour=3, minute=30, id='employer_blog')
-        # Candidate: Tue, Thu at 04:30 UTC (10:00 AM IST)
-        scheduler.add_job(run_candidate_publish, 'cron', day_of_week='tue,thu', hour=4, minute=30, id='candidate_blog')
-
-        scheduler.start()
-        app.state.blog_scheduler = scheduler
-        logging.info("[BlogScheduler] Auto-publish scheduler started (Employer: Mon/Wed/Fri 9AM IST, Candidate: Tue/Thu 10AM IST)")
-    except Exception as e:
-        logging.warning(f"[BlogScheduler] Failed to start scheduler: {e}")
-
-
-@app.on_event("startup")
-async def start_attendance_scheduler():
-    """Start the APScheduler cron jobs for attendance automation."""
-    try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from services.attendance_cron_service import run_attendance_reminders, run_auto_absent_marking
-
-        scheduler = AsyncIOScheduler()
-
-        # Reminder: Daily at 04:30 UTC (10:00 AM IST)
-        scheduler.add_job(run_attendance_reminders, 'cron', hour=4, minute=30, id='attendance_reminder')
-        # Auto-absent: Daily at 13:00 UTC (6:30 PM IST)
-        scheduler.add_job(run_auto_absent_marking, 'cron', hour=13, minute=0, id='auto_absent')
-
-        scheduler.start()
-        app.state.attendance_scheduler = scheduler
-        logging.info("[AttendanceScheduler] Cron jobs started (Reminder: 10AM IST, Auto-absent: 6:30PM IST)")
-    except Exception as e:
-        logging.warning(f"[AttendanceScheduler] Failed to start: {e}")
-
-
-@app.on_event("startup")
-async def validate_r2_connection():
+async def deferred_db_init():
     """
-    Validates Cloudflare R2 connectivity on application startup.
-    Non-blocking: Falls back to local storage if R2 is not available.
+    Run all heavy DB operations (indexes, bots, schedulers) in the BACKGROUND
+    so the server binds to port 8001 immediately and passes health checks.
+    Previously these were 12+ separate startup events that could take 60s+ total.
     """
-    if R2_ENABLED:
+    async def _run_deferred():
+        await asyncio.sleep(2)  # Let the server fully bind first
+
+        # --- Compliance indexes ---
         try:
-            # List buckets to verify connectivity
-            r2_client.list_buckets()
-            logging.info("Cloudflare R2 successfully connected and operational")
-            logging.info(f"R2 Bucket: {R2_BUCKET_NAME}")
+            from services.compliance_service import ensure_compliance_indexes
+            await ensure_compliance_indexes()
+            logging.info("Compliance DB indexes initialized")
         except Exception as e:
-            logging.warning(f"Cloudflare R2 connectivity check failed: {e}")
-            logging.warning("R2 may still work - some operations may succeed despite list_buckets failure")
-    else:
-        logging.info("Cloudflare R2 not configured - using local storage")
+            logging.warning(f"Compliance index init failed: {e}")
 
-@app.on_event("startup")
-async def normalize_existing_emails():
-    """One-time: ensure all stored emails are lowercase + trimmed for consistency."""
-    try:
-        cursor = db.users.find({"email": {"$regex": "[A-Z\\s]"}}, {"_id": 1, "email": 1})
-        count = 0
-        async for doc in cursor:
-            normalised = doc["email"].strip().lower()
-            if normalised != doc["email"]:
-                await db.users.update_one({"_id": doc["_id"]}, {"$set": {"email": normalised}})
-                count += 1
-        if count:
-            logging.warning(f"[EMAIL_NORM] Normalised {count} existing user emails to lowercase")
-    except Exception as e:
-        logging.warning(f"[EMAIL_NORM] Skipped: {e}")
+        # --- Attendance indexes ---
+        try:
+            await db.attendance_records.create_index([("user_id", 1), ("date", 1)], unique=True)
+            await db.attendance_records.create_index("date")
+            await db.attendance_records.create_index("status")
+            await db.leave_requests.create_index([("user_id", 1), ("start_date", 1)])
+            await db.leave_requests.create_index("status")
+            await db.leave_balances.create_index([("user_id", 1), ("year", 1)], unique=True)
+            await db.holidays.create_index("date", unique=True)
+            await db.notification_events.create_index([("recipient_id", 1), ("created_at", -1)])
+            await db.notification_events.create_index("event_type")
+            await db.notification_delivery_logs.create_index([("event_id", 1), ("channel", 1)])
+            await db.cron_job_locks.create_index("job_name", unique=True)
+            await db.cron_job_logs.create_index([("job_name", 1), ("executed_at", -1)])
+            await db.attendance_health_scores.create_index("user_id", unique=True)
+            logging.info("Attendance DB indexes initialized")
+        except Exception as e:
+            logging.warning(f"Attendance index init failed: {e}")
 
+        # --- Maintenance bot indexes + start ---
+        try:
+            await db.system_health_checks.create_index("timestamp")
+            await db.system_health_checks.create_index("service_name")
+            await db.maintenance_fixes.create_index("start_time")
+            await db.maintenance_fixes.create_index("service_name")
+            await db.reliability_events.create_index("timestamp")
+            await db.reliability_events.create_index("event_type")
+            await db.reliability_buffer.create_index("status")
+            await db.naukri_capture_logs.create_index("timestamp")
+            await db.naukri_capture_logs.create_index("status")
+            await db.naukri_capture_logs.create_index([("status", 1), ("is_recovered", 1)])
+            await db.security_events.create_index("timestamp")
+            await db.security_events.create_index("event_type")
+            await db.security_events.create_index("severity")
+            from services.maintenance_bot import start_bot
+            start_bot()
+            logging.info("Maintenance bot started")
+        except Exception as e:
+            logging.warning(f"Maintenance bot init failed: {e}")
 
-@app.on_event("startup")
-async def ensure_pillar_pages_index():
-    """Create unique index on pillar_pages.slug."""
-    try:
-        await db.pillar_pages.create_index("slug", unique=True)
-        logging.info("pillar_pages.slug unique index ensured")
-    except Exception as e:
-        logging.warning(f"pillar_pages index creation skipped: {e}")
+        # --- Blog scheduler ---
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            from services.blog_scheduler import auto_publish_blog, get_schedule_config
 
-@app.on_event("startup")
-async def ensure_blog_digests_index():
-    """Create indexes on blog_digests and seo collections."""
-    try:
-        await db.blog_digests.create_index("week_key", unique=True)
-        await db.blog_digests.create_index([("generated_at", -1)])
-        await db.seo_snapshots.create_index([("snapshot_date", -1)])
-        await db.seo_alerts.create_index("status")
-        await db.seo_alerts.create_index("severity")
-        logging.info("blog_digests + seo indexes ensured")
-    except Exception as e:
-        logging.warning(f"Index creation skipped: {e}")
+            scheduler = AsyncIOScheduler()
 
-@app.on_event("startup")
-async def start_background_scheduler():
-    """Start APScheduler for background jobs."""
-    from services.scheduler import start_scheduler
-    try:
-        start_scheduler()
-    except Exception as e:
-        logging.error(f"Scheduler startup failed: {e}", exc_info=True)
+            async def run_employer_publish():
+                config = await get_schedule_config()
+                if config.get("employer", {}).get("enabled"):
+                    await auto_publish_blog("employer")
+
+            async def run_candidate_publish():
+                config = await get_schedule_config()
+                if config.get("candidate", {}).get("enabled"):
+                    await auto_publish_blog("candidate")
+
+            scheduler.add_job(run_employer_publish, 'cron', day_of_week='mon,wed,fri', hour=3, minute=30, id='employer_blog')
+            scheduler.add_job(run_candidate_publish, 'cron', day_of_week='tue,thu', hour=4, minute=30, id='candidate_blog')
+            scheduler.start()
+            app.state.blog_scheduler = scheduler
+            logging.info("[BlogScheduler] Auto-publish scheduler started")
+        except Exception as e:
+            logging.warning(f"[BlogScheduler] Failed to start scheduler: {e}")
+
+        # --- Attendance scheduler ---
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            from services.attendance_cron_service import run_attendance_reminders, run_auto_absent_marking
+
+            scheduler = AsyncIOScheduler()
+            scheduler.add_job(run_attendance_reminders, 'cron', hour=4, minute=30, id='attendance_reminder')
+            scheduler.add_job(run_auto_absent_marking, 'cron', hour=13, minute=0, id='auto_absent')
+            scheduler.start()
+            app.state.attendance_scheduler = scheduler
+            logging.info("[AttendanceScheduler] Cron jobs started")
+        except Exception as e:
+            logging.warning(f"[AttendanceScheduler] Failed to start: {e}")
+
+        # --- R2 validation ---
+        if R2_ENABLED:
+            try:
+                r2_client.list_buckets()
+                logging.info("Cloudflare R2 successfully connected")
+            except Exception as e:
+                logging.warning(f"Cloudflare R2 connectivity check failed: {e}")
+                logging.warning("R2 may still work - some operations may succeed despite list_buckets failure")
+        else:
+            logging.info("Cloudflare R2 not configured - using local storage")
+
+        # --- Email normalization ---
+        try:
+            cursor = db.users.find({"email": {"$regex": "[A-Z\\s]"}}, {"_id": 1, "email": 1})
+            count = 0
+            async for doc in cursor:
+                normalised = doc["email"].strip().lower()
+                if normalised != doc["email"]:
+                    await db.users.update_one({"_id": doc["_id"]}, {"$set": {"email": normalised}})
+                    count += 1
+            if count:
+                logging.warning(f"[EMAIL_NORM] Normalised {count} existing user emails to lowercase")
+        except Exception as e:
+            logging.warning(f"[EMAIL_NORM] Skipped: {e}")
+
+        # --- Pillar pages index ---
+        try:
+            await db.pillar_pages.create_index("slug", unique=True)
+        except Exception as e:
+            logging.warning(f"pillar_pages index creation skipped: {e}")
+
+        # --- Blog digests + SEO indexes ---
+        try:
+            await db.blog_digests.create_index("week_key", unique=True)
+            await db.blog_digests.create_index([("generated_at", -1)])
+            await db.seo_snapshots.create_index([("snapshot_date", -1)])
+            await db.seo_alerts.create_index("status")
+            await db.seo_alerts.create_index("severity")
+            logging.info("blog_digests + seo indexes ensured")
+        except Exception as e:
+            logging.warning(f"Index creation skipped: {e}")
+
+        # --- Background scheduler ---
+        try:
+            from services.scheduler import start_scheduler
+            start_scheduler()
+        except Exception as e:
+            logging.error(f"Scheduler startup failed: {e}", exc_info=True)
+
+        logging.info("[DEFERRED INIT] All background services initialized")
+
+    # Fire and forget — server can start accepting requests immediately
+    asyncio.create_task(_run_deferred())
 
 @app.on_event("shutdown")
 async def stop_background_scheduler():
