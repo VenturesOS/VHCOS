@@ -1,304 +1,542 @@
 /**
- * VHC Talent OS - Popup Script v3.8.0
+ * VHC Talent OS - Popup Script v4.2.0
+ * Queue-aware: shows live captureQueue, offlineQueue, deadLetterQueue
+ * v4.1: Bulk capture from search/list pages
+ * v4.2: Capture history cards + persistent session (never logs out)
  */
 
+// Approx seconds per candidate in background (AI extract + POST)
+const AVG_SECONDS_PER_CANDIDATE = 8;
+
 document.addEventListener('DOMContentLoaded', async () => {
-  // Elements
-  const loginSection = document.getElementById('loginSection');
-  const dashboardSection = document.getElementById('dashboardSection');
-  const loginBtn = document.getElementById('loginBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const loginError = document.getElementById('loginError');
-  const manualCaptureBtn = document.getElementById('manualCaptureBtn');
-  const captureStatus = document.getElementById('captureStatus');
-  const statusDot = document.getElementById('statusDot');
-  const pageStatusText = document.getElementById('pageStatusText');
-  
-  // Progress bar elements
-  const taskProgress = document.getElementById('taskProgress');
-  const progressFill = document.getElementById('progressFill');
-  const progressStepText = document.getElementById('progressStepText');
-  const progressPercent = document.getElementById('progressPercent');
-  const progressTick = document.getElementById('progressTick');
-  
-  // Check auth status
+
+  // ── Auth check ────────────────────────────────────────────────────────────
   const authStatus = await chrome.runtime.sendMessage({ action: 'checkAuth' });
-  
   if (authStatus.authenticated) {
     showDashboard(authStatus.user);
   } else {
     showLogin();
   }
-  
-  // Login handler
-  loginBtn.addEventListener('click', async () => {
-    const apiUrl = document.getElementById('apiUrl').value.trim().replace(/\/$/, '');
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    
-    if (!apiUrl || !email || !password) {
-      showError('Please fill in all fields');
-      return;
+
+  // ── Detect page type & show/hide bulk button ──────────────────────────────
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.url && tab.url.includes('naukri.com')) {
+      const pageInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getPageInfo' }).catch(() => null);
+      if (pageInfo?.isSearchPage) {
+        document.getElementById('bulkCaptureBtn').style.display = 'block';
+        document.getElementById('bulkCaptureInfo').style.display = 'block';
+        document.getElementById('bulkCaptureInfo').textContent = 'Queues all visible candidates on this search page';
+        document.getElementById('manualCaptureBtn').style.display = 'none';
+      }
     }
-    
-    loginBtn.disabled = true;
-    loginBtn.innerHTML = '<span class="loading"></span> Logging in...';
-    
+  } catch (_) {}
+
+  // ── Tab switching ─────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      if (tab === 'queue')   refreshQueueStatus();
+      if (tab === 'history') refreshHistory();
+    });
+  });
+
+  // ── Login handler ─────────────────────────────────────────────────────────
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const apiUrl    = document.getElementById('apiUrl').value.trim().replace(/\/$/, '');
+    const email     = document.getElementById('email').value.trim();
+    const password  = document.getElementById('password').value;
+
+    if (!apiUrl || !email || !password) { showLoginError('Please fill in all fields'); return; }
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> Logging in...';
+
     try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'login',
-        data: { apiUrl, email, password }
-      });
-      
+      const response = await chrome.runtime.sendMessage({ action: 'login', data: { apiUrl, email, password } });
       if (response.success) {
         showDashboard({ name: response.user?.name || email, role: response.user?.role || 'user' });
       } else {
-        showError(response.error || 'Login failed');
+        showLoginError(response.error || 'Login failed');
       }
-    } catch (error) {
-      showError('Connection error. Please try again.');
-    }
-    
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'Login to VHC';
+    } catch (e) { showLoginError('Connection error. Please try again.'); }
+
+    btn.disabled = false;
+    btn.textContent = 'Login to Ventures HRD';
   });
-  
-  // Logout handler
-  logoutBtn.addEventListener('click', async () => {
+
+  // ── Logout ────────────────────────────────────────────────────────────────
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ action: 'logout' });
     showLogin();
   });
-  
-  // Progress bar helpers
-  function setProgress(percent, stepText) {
-    taskProgress.classList.add('visible');
-    progressFill.style.width = percent + '%';
-    progressStepText.textContent = stepText;
-    progressPercent.textContent = percent + '%';
-    
-    if (percent >= 100) {
-      progressTick.classList.add('show');
-    } else {
-      progressTick.classList.remove('show');
-    }
-  }
-  
-  function resetProgress() {
-    taskProgress.classList.remove('visible');
-    progressFill.style.width = '0%';
-    progressStepText.textContent = '';
-    progressPercent.textContent = '0%';
-    progressTick.classList.remove('show');
-  }
-  
-  // Manual capture handler
-  manualCaptureBtn.addEventListener('click', async () => {
-    manualCaptureBtn.disabled = true;
-    manualCaptureBtn.innerHTML = '<span class="loading"></span> Capturing...';
+
+  // ── Manual capture ────────────────────────────────────────────────────────
+  document.getElementById('manualCaptureBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('manualCaptureBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> Capturing...';
     hideCaptureStatus();
-    
-    // Start progress animation
     setProgress(10, 'Scrolling page...');
-    
+
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
+
       if (!tab) {
         showCaptureStatus('error', 'No active tab found');
         resetProgress();
-        manualCaptureBtn.disabled = false;
-        manualCaptureBtn.textContent = 'Capture This Profile';
         return;
       }
-      
       if (!tab.url.includes('naukri.com')) {
         showCaptureStatus('error', 'Not a Naukri page. Open a Naukri profile first.');
         resetProgress();
-        manualCaptureBtn.disabled = false;
-        manualCaptureBtn.textContent = 'Capture This Profile';
         return;
       }
-      
-      // Simulate progress steps while capture runs
+
       setProgress(20, 'Loading page content...');
-      
-      const progressTimer1 = setTimeout(() => setProgress(40, 'Extracting contacts...'), 3000);
-      const progressTimer2 = setTimeout(() => setProgress(60, 'AI analyzing profile...'), 7000);
-      const progressTimer3 = setTimeout(() => setProgress(80, 'Saving to VHC...'), 15000);
-      
-      const responsePromise = chrome.tabs.sendMessage(tab.id, { action: 'manualCapture' });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 30000)
-      );
-      
+      const t1 = setTimeout(() => setProgress(45, 'Extracting contacts...'),  2500);
+      const t2 = setTimeout(() => setProgress(70, 'Building profile data...'), 5000);
+
+      let response;
       try {
-        const response = await Promise.race([responsePromise, timeoutPromise]);
-        
-        // Clear pending timers
-        clearTimeout(progressTimer1);
-        clearTimeout(progressTimer2);
-        clearTimeout(progressTimer3);
-        
-        if (response && response.success) {
-          setProgress(100, 'Complete');
-          
-          if (response.action === 'created') {
-            showCaptureStatus('success', `${response.name || 'Profile'} added to VHC!`);
-          } else if (response.action === 'updated') {
-            showCaptureStatus('success', `${response.name || 'Profile'} updated in VHC!`);
-          } else if (response.action === 'exists') {
-            showCaptureStatus('info', `${response.name || 'Profile'} already up-to-date`);
-            setProgress(100, 'Already captured');
-          } else if (response.action === 'queued') {
-            showCaptureStatus('info', `${response.name || 'Profile'} queued for sync`);
-            setProgress(100, 'Queued');
-          }
-        } else if (response) {
-          clearTimeout(progressTimer1);
-          clearTimeout(progressTimer2);
-          clearTimeout(progressTimer3);
-          resetProgress();
-          showCaptureStatus('error', response.error || 'Capture failed.');
-        }
-      } catch (raceError) {
-        clearTimeout(progressTimer1);
-        clearTimeout(progressTimer2);
-        clearTimeout(progressTimer3);
-        
-        if (raceError.message === 'timeout') {
-          setProgress(90, 'Still processing...');
-          showCaptureStatus('info', 'Capture running on page. Check the page for results.');
-        } else {
-          throw raceError;
-        }
+        response = await Promise.race([
+          chrome.tabs.sendMessage(tab.id, { action: 'manualCapture' }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 30000))
+        ]);
+      } finally {
+        clearTimeout(t1); clearTimeout(t2);
       }
-      
+
+      if (response?.success) {
+        setProgress(100, 'Complete');
+
+        if (response.action === 'queued') {
+          showCaptureStatus('success', `✅ ${response.name || 'Profile'} queued for AI processing (${response.queued} in queue)`);
+          // Switch to queue tab to show it
+          setTimeout(() => {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+              b.classList.toggle('active', b.dataset.tab === 'queue');
+            });
+            document.querySelectorAll('.tab-panel').forEach(p => {
+              p.classList.toggle('active', p.id === 'tab-queue');
+            });
+            refreshQueueStatus();
+          }, 1500);
+        } else if (response.action === 'duplicate') {
+          showCaptureStatus('info', `${response.name || 'Profile'} already in queue`);
+        } else {
+          showCaptureStatus('success', `${response.name || 'Profile'} captured!`);
+        }
+      } else if (response) {
+        resetProgress();
+        showCaptureStatus('error', response.error || 'Capture failed.');
+      }
     } catch (error) {
       resetProgress();
-      
-      if (error.message && error.message.includes('Receiving end does not exist')) {
-        showCaptureStatus('error', 'Extension not active. Please refresh the Naukri page.');
-      } else if (error.message && error.message.includes('Could not establish connection')) {
+      if (error.message === 'timeout') {
+        setProgress(90, 'Still processing...');
+        showCaptureStatus('info', 'Capture running on page. Check the Queue tab.');
+        refreshQueueStatus();
+      } else if (error.message?.includes('Receiving end') || error.message?.includes('Could not establish')) {
         showCaptureStatus('error', 'Content script not loaded. Refresh the Naukri page.');
       } else {
-        showCaptureStatus('info', 'Capture triggered. Check the page for results.');
+        showCaptureStatus('info', 'Capture triggered. Check the Queue tab for status.');
       }
     } finally {
-      manualCaptureBtn.disabled = false;
-      manualCaptureBtn.textContent = 'Capture This Profile';
+      btn.disabled = false;
+      btn.textContent = 'Capture This Profile';
     }
   });
-  
-  // Settings handlers
+
+  // ── Bulk capture handler ──────────────────────────────────────────────────
+  document.getElementById('bulkCaptureBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('bulkCaptureBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> Scanning page...';
+    hideCaptureStatus();
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) { showCaptureStatus('error', 'No active tab found'); return; }
+      if (!tab.url.includes('naukri.com')) {
+        showCaptureStatus('error', 'Not a Naukri page.'); return;
+      }
+
+      const response = await Promise.race([
+        chrome.tabs.sendMessage(tab.id, { action: 'bulkCapture' }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
+      ]);
+
+      if (response?.success) {
+        const eta = Math.ceil((response.queued * AVG_SECONDS_PER_CANDIDATE) / 60);
+        showCaptureStatus('success',
+          `⚡ ${response.queued} candidates queued${response.duplicates ? `, ${response.duplicates} skipped` : ''}.\n` +
+          `Est. ~${eta} min to process all.`
+        );
+        // Auto-switch to queue tab
+        setTimeout(() => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'queue'));
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-queue'));
+          refreshQueueStatus();
+        }, 1500);
+      } else {
+        showCaptureStatus('error', response?.error || 'Bulk capture failed.');
+      }
+    } catch (err) {
+      if (err.message === 'timeout') {
+        showCaptureStatus('info', 'Bulk scan running. Check Queue tab.');
+        refreshQueueStatus();
+      } else {
+        showCaptureStatus('error', err.message || 'Unexpected error');
+      }
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '⚡ Bulk Capture All on Page';
+    }
+  });
+
+  // ── Queue actions ─────────────────────────────────────────────────────────
+  document.getElementById('refreshQueueBtn').addEventListener('click', refreshQueueStatus);
+
+  document.getElementById('retryDeadBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('retryDeadBtn');
+    btn.disabled = true;
+    const result = await chrome.runtime.sendMessage({ action: 'retryDeadLetter' });
+    if (result.success) {
+      showQueueToast(`↺ ${result.requeued} failed profile(s) re-queued for retry`);
+    }
+    btn.disabled = false;
+    refreshQueueStatus();
+  });
+
+  document.getElementById('clearDeadBtn').addEventListener('click', async () => {
+    if (!confirm('Clear all failed profiles? This cannot be undone.')) return;
+    await chrome.runtime.sendMessage({ action: 'clearDeadLetter' });
+    refreshQueueStatus();
+  });
+
+  // ── Clear history ─────────────────────────────────────────────────────────
+  document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+    if (!confirm('Clear all capture history?')) return;
+    await chrome.runtime.sendMessage({ action: 'clearHistory' });
+    refreshHistory();
+  });
+
+  // ── Settings ──────────────────────────────────────────────────────────────
   document.getElementById('settingEnabled').addEventListener('change', (e) => {
     chrome.storage.sync.set({ enabled: e.target.checked });
   });
-  
   document.getElementById('settingNotifications').addEventListener('change', (e) => {
     chrome.storage.sync.set({ showNotifications: e.target.checked });
   });
-  
-  // Functions
-  function showLogin() {
-    loginSection.style.display = 'flex';
-    dashboardSection.style.display = 'none';
-    
-    chrome.storage.sync.get(['vhc_api_url'], (result) => {
-      if (result.vhc_api_url) {
-        document.getElementById('apiUrl').value = result.vhc_api_url;
+
+  // ── Background messages (live queue updates) ──────────────────────────────
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.from !== 'background') return;
+
+    if (msg.action === 'queueUpdated') {
+      refreshQueueStatus();
+      updateQueueBadge();
+    }
+    if (msg.action === 'captureComplete') {
+      refreshQueueStatus();
+      updateQueueBadge();
+      // Refresh history if user is on that tab
+      if (document.getElementById('tab-history').classList.contains('active')) {
+        refreshHistory();
       }
+      const label = { created: '✅ Added', updated: '🔄 Updated', exists: '✓ Up-to-date' };
+      showQueueToast(`${label[msg.result] || '✅'} ${msg.name || 'Profile'}`);
+    }
+    if (msg.action === 'sessionRefreshed') {
+      // Token was silently refreshed — show a subtle indicator
+      showQueueToast('🔒 Session renewed');
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FUNCTIONS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function showLogin() {
+    document.getElementById('loginSection').style.display = 'flex';
+    document.getElementById('dashboardSection').style.display = 'none';
+    chrome.storage.sync.get(['vhc_api_url'], (r) => {
+      if (r.vhc_api_url) document.getElementById('apiUrl').value = r.vhc_api_url;
     });
   }
-  
+
   async function showDashboard(user) {
-    loginSection.style.display = 'none';
-    dashboardSection.style.display = 'block';
-    
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('dashboardSection').style.display = 'block';
     document.getElementById('userName').textContent = user.name || 'User';
     document.getElementById('userRole').textContent = user.role || 'Member';
-    
-    chrome.storage.sync.get(['vhc_api_url'], (result) => {
-      document.getElementById('apiUrlDisplay').textContent = result.vhc_api_url || '-';
+
+    chrome.storage.sync.get(['vhc_api_url'], (r) => {
+      document.getElementById('apiUrlDisplay').textContent = r.vhc_api_url || '–';
     });
-    
-    chrome.storage.sync.get(['enabled', 'showNotifications'], (result) => {
-      document.getElementById('settingEnabled').checked = result.enabled !== false;
-      document.getElementById('settingNotifications').checked = result.showNotifications !== false;
+    chrome.storage.sync.get(['enabled', 'showNotifications'], (r) => {
+      document.getElementById('settingEnabled').checked     = r.enabled !== false;
+      document.getElementById('settingNotifications').checked = r.showNotifications !== false;
     });
-    
-    // Check queue
-    chrome.storage.local.get(['offlineQueue'], (result) => {
-      const queue = result.offlineQueue || [];
-      const queueStatus = document.getElementById('queueStatus');
-      
-      if (queue.length > 0) {
-        queueStatus.classList.add('visible');
-        document.getElementById('queueCount').textContent = queue.length;
-      } else {
-        queueStatus.classList.remove('visible');
-      }
-    });
-    
+
     checkPageStatus();
+    refreshQueueStatus();
+    updateQueueBadge();
+    refreshHistory(); // pre-load history in background
+
+    // Auto-refresh queue every 3s while popup is open
+    setInterval(() => {
+      const queueTabActive = document.getElementById('tab-queue').classList.contains('active');
+      if (queueTabActive) refreshQueueStatus();
+      updateQueueBadge();
+    }, 3000);
   }
-  
+
   async function checkPageStatus() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      if (!tab || !tab.url) {
-        setPageStatus('gray', 'Unknown page');
-        return;
-      }
-      
+      const captureBtn = document.getElementById('manualCaptureBtn');
+
+      if (!tab?.url) { setPageStatus('gray', 'Unknown page'); return; }
+
       if (tab.url.includes('naukri.com')) {
-        if ((tab.url.includes('/v3/preview') && tab.url.includes('tabKey=profile')) ||
-            tab.url.includes('viewResume') || tab.url.includes('view-resume') || 
-            tab.url.includes('cvPreview')) {
-          setPageStatus('green', 'Naukri profile page detected');
-          manualCaptureBtn.disabled = false;
+        const isProfile =
+          (tab.url.includes('/v3/preview') && tab.url.includes('tabKey=profile')) ||
+          /viewResume|view-resume|cvPreview/.test(tab.url);
+
+        if (isProfile) {
+          setPageStatus('green', 'Naukri profile — ready to capture');
+          captureBtn.disabled = false;
         } else {
-          setPageStatus('yellow', 'Naukri page (not a profile)');
-          manualCaptureBtn.disabled = true;
+          setPageStatus('yellow', 'Naukri page (navigate to a profile)');
+          captureBtn.disabled = true;
         }
       } else {
         setPageStatus('gray', 'Not a Naukri page');
-        manualCaptureBtn.disabled = true;
+        captureBtn.disabled = true;
       }
-    } catch (error) {
-      setPageStatus('red', 'Error checking page');
+    } catch (_) { setPageStatus('red', 'Error checking page'); }
+  }
+
+  function setPageStatus(color, text) {
+    document.getElementById('statusDot').className = `status-dot ${color}`;
+    document.getElementById('pageStatusText').textContent = text;
+  }
+
+  // ── Queue rendering ────────────────────────────────────────────────────────
+
+  async function refreshQueueStatus() {
+    const status = await chrome.runtime.sendMessage({ action: 'getQueueStatus' });
+    if (!status) return;
+
+    const { captureQueue, offlineQueue, deadLetterQueue } = status;
+
+    // Update stat numbers
+    document.getElementById('qsCaptureTotal').textContent = captureQueue.total;
+    document.getElementById('qsOfflineTotal').textContent = offlineQueue.total;
+    document.getElementById('qsDeadTotal').textContent    = deadLetterQueue.total;
+
+    // Live dot
+    const liveDot = document.getElementById('liveDot');
+    liveDot.className = captureQueue.processing > 0 ? 'live-dot' : 'live-dot idle';
+
+    // Render queue item list (captureQueue items + dead letter)
+    const listEl = document.getElementById('queueList');
+    const allItems = [
+      ...captureQueue.items,
+      ...deadLetterQueue.items.map(i => ({ ...i, status: 'failed' }))
+    ];
+
+    if (allItems.length === 0) {
+      listEl.innerHTML = '<div class="queue-empty">Queue is empty</div>';
+    } else {
+      listEl.innerHTML = allItems.map(item => {
+        const status = item.status || 'pending';
+        const badge  = { pending: 'Pending', processing: 'Processing', retry: 'Retry', failed: 'Failed' }[status] || status;
+        const errorHint = item.error ? ` — ${item.error.substring(0, 40)}` : (item.reason ? ` — ${item.reason.substring(0, 40)}` : '');
+        return `
+          <div class="queue-item" title="${item.name}${errorHint}">
+            <span class="qi-dot ${status}"></span>
+            <span class="qi-name">${item.name || item.profileId || 'Unknown'}</span>
+            <span class="qi-badge ${status}">${badge}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ETA row
+    const pendingCount = captureQueue.pending + captureQueue.retry + captureQueue.processing;
+    const etaRow = document.getElementById('queueEtaRow');
+    if (pendingCount > 0) {
+      const etaSec = pendingCount * AVG_SECONDS_PER_CANDIDATE;
+      const etaText = etaSec < 60 ? `~${etaSec}s` : `~${Math.ceil(etaSec / 60)} min`;
+      document.getElementById('queueEta').textContent = `${etaText} (${pendingCount} remaining)`;
+      etaRow.style.display = 'block';
+    } else {
+      etaRow.style.display = 'none';
+    }
+
+    // Show/hide dead letter actions
+    document.getElementById('retryDeadBtn').style.display = deadLetterQueue.total > 0 ? 'inline-block' : 'none';
+    document.getElementById('clearDeadBtn').style.display = deadLetterQueue.total > 0 ? 'inline-block' : 'none';
+
+    // Offline queue note
+    const offlineNote = document.getElementById('offlineQueueNote');
+    if (offlineQueue.total > 0) {
+      offlineNote.style.display = 'block';
+      document.getElementById('offlineQueueCount').textContent = offlineQueue.total;
+    } else {
+      offlineNote.style.display = 'none';
     }
   }
-  
-  function setPageStatus(color, text) {
-    statusDot.className = `status-dot ${color}`;
-    pageStatusText.textContent = text;
+
+  // ── Capture History rendering ──────────────────────────────────────────────
+
+  async function refreshHistory() {
+    const res = await chrome.runtime.sendMessage({ action: 'getHistory' });
+    const history = res?.history || [];
+
+    const listEl = document.getElementById('historyList');
+
+    // Summary chips
+    const counts = { created: 0, updated: 0, exists: 0, failed: 0 };
+    history.forEach(h => { if (counts[h.action] !== undefined) counts[h.action]++; });
+    const summaryEl = document.getElementById('historySummary');
+    summaryEl.innerHTML = `
+      <span class="hist-chip chip-added">${counts.created} Added</span>
+      <span class="hist-chip chip-updated">${counts.updated} Updated</span>
+      <span class="hist-chip chip-exists">${counts.exists} Exists</span>
+      <span class="hist-chip chip-failed">${counts.failed} Failed</span>
+    `;
+
+    if (history.length === 0) {
+      listEl.innerHTML = '<div class="queue-empty">No captures yet</div>';
+      return;
+    }
+
+    const icons = { created: '✓', updated: '↑', exists: '=', failed: '✕' };
+    const labels = { created: 'Added', updated: 'Updated', exists: 'Exists', failed: 'Failed' };
+
+    listEl.innerHTML = history.map(item => {
+      const action = item.action || 'exists';
+      const icon   = icons[action] || '?';
+      const label  = labels[action] || action;
+      const time   = item.timestamp ? formatTime(item.timestamp) : '';
+      const meta   = [
+        item.bulk ? '⚡ Bulk' : '📄 Single',
+        time,
+        item.error ? `⚠ ${item.error.substring(0, 45)}` : ''
+      ].filter(Boolean).join(' · ');
+      const profileLink = item.profileUrl
+        ? `<a href="${item.profileUrl}" target="_blank" style="color:#7CB342;text-decoration:none;font-size:10px;" title="Open profile">↗</a>`
+        : '';
+
+      return `
+        <div class="hist-card hc-${action}">
+          <div class="hist-icon">${icon}</div>
+          <div class="hist-body">
+            <div class="hist-name">${escHtml(item.name || 'Unknown')} ${profileLink}</div>
+            <div class="hist-meta">${escHtml(meta)}</div>
+          </div>
+          <div class="hist-status">${label}</div>
+        </div>
+      `;
+    }).join('');
   }
-  
-  function showError(message) {
-    loginError.textContent = message;
-    loginError.style.display = 'block';
-    setTimeout(() => {
-      loginError.style.display = 'none';
-    }, 5000);
+
+  function formatTime(iso) {
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const diffMs = now - d;
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1)  return 'just now';
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24)  return `${diffHr}h ago`;
+      return d.toLocaleDateString();
+    } catch (_) { return ''; }
   }
-  
-  function showCaptureStatus(type, message) {
-    captureStatus.textContent = message;
-    captureStatus.className = `capture-result visible ${type}`;
-    
+
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function updateQueueBadge() {
+    const status = await chrome.runtime.sendMessage({ action: 'getQueueStatus' });
+    if (!status) return;
+    const total = status.captureQueue.total + status.deadLetterQueue.total;
+    const badge = document.getElementById('queueBadge');
+    if (total > 0) {
+      badge.textContent = `(${total})`;
+      badge.style.color = status.deadLetterQueue.total > 0 ? '#ef4444' : '#7CB342';
+    } else {
+      badge.textContent = '';
+    }
+  }
+
+  // ── Toast for queue events ─────────────────────────────────────────────────
+  function showQueueToast(msg) {
+    let toast = document.getElementById('queueToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'queueToast';
+      toast.style.cssText = `
+        position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+        background:#1e293b;color:white;padding:7px 14px;border-radius:20px;
+        font-size:12px;font-weight:500;z-index:9999;white-space:nowrap;
+        opacity:0;transition:opacity 0.25s;pointer-events:none;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+  }
+
+  // ── Progress bar ──────────────────────────────────────────────────────────
+  function setProgress(pct, text) {
+    const tp = document.getElementById('taskProgress');
+    tp.classList.add('visible');
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressStepText').textContent = text;
+    document.getElementById('progressPercent').textContent  = pct + '%';
+    document.getElementById('progressTick').classList.toggle('show', pct >= 100);
+  }
+  function resetProgress() {
+    document.getElementById('taskProgress').classList.remove('visible');
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('progressPercent').textContent = '0%';
+    document.getElementById('progressTick').classList.remove('show');
+  }
+
+  function showLoginError(msg) {
+    const el = document.getElementById('loginError');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 5000);
+  }
+
+  function showCaptureStatus(type, msg) {
+    const el = document.getElementById('captureStatus');
+    el.textContent = msg;
+    el.className = `capture-result visible ${type}`;
     if (type !== 'error') {
       setTimeout(() => {
-        captureStatus.classList.remove('visible');
-        // Also hide progress bar after success fades
-        if (type === 'success') {
-          setTimeout(() => resetProgress(), 500);
-        }
-      }, 8000);
+        el.classList.remove('visible');
+        if (type === 'success') setTimeout(() => resetProgress(), 500);
+      }, 7000);
     }
   }
-  
   function hideCaptureStatus() {
-    captureStatus.className = 'capture-result';
+    document.getElementById('captureStatus').className = 'capture-result';
   }
+
 });

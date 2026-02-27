@@ -19,11 +19,13 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '3.9.2';
+  const VERSION = '4.1.0';
   const CONFIG = {
-    CAPTURE_DELAY: 2000,   // was 4000 — page is usually ready sooner
-    SCROLL_DELAY: 150,     // was 600 — instant scroll needs less wait
+    CAPTURE_DELAY: 2000,
+    SCROLL_DELAY: 150,
     TOAST_DURATION: 5000,
+    BULK_SCROLL_DELAY: 600,     // wait per scroll step when loading list pages
+    BULK_MAX_CANDIDATES: 100,   // cap per bulk sweep
   };
 
   let isCapturing = false;
@@ -52,6 +54,16 @@
           if (settings.enabled && settings.autoCapture) {
             console.log(`[VHC v${VERSION}] Navigated to profile page, scheduling auto-capture`);
             setTimeout(() => autoCapture(), CONFIG.CAPTURE_DELAY);
+          }
+        });
+      }
+
+      // Show bulk button if navigated to a search/list page
+      if (isSearchPage()) {
+        getAuthToken().then(auth => {
+          if (auth) {
+            console.log(`[VHC v${VERSION}] Navigated to search page, showing bulk capture button`);
+            setTimeout(() => addBulkCaptureButton(), 1500);
           }
         });
       }
@@ -852,6 +864,197 @@
 
   // ===================== CAPTURE FLOW =====================
 
+  // ===================== SEARCH/LIST PAGE DETECTION =====================
+
+  function isSearchPage() {
+    const pathname = window.location.pathname;
+    const search   = window.location.search;
+    // Naukri Resdex search results / candidate listing pages
+    if (pathname.includes('/v3/search') || pathname.includes('/resdex')) return true;
+    if (search.includes('searchId') || search.includes('srcPage')) return true;
+    if (document.querySelector('[class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"]')) return true;
+    return false;
+  }
+
+  // ===================== BULK CAPTURE FROM SEARCH/LIST PAGE =====================
+
+  /**
+   * Scrape all candidate cards visible on a Naukri search results page.
+   * Extracts shallow profile data (name, id, url, headline, location, experience)
+   * — these are pre-queued immediately; background worker does full AI extraction.
+   */
+  async function bulkCapture() {
+    if (!isExtensionValid()) return { success: false, error: 'Extension context invalid. Refresh.' };
+
+    showToast('🔍 Scanning candidate list...', 'info');
+
+    // Scroll to load all lazy-rendered cards
+    await scrollToLoadList();
+
+    const candidates = scrapeSearchListCandidates();
+
+    if (candidates.length === 0) {
+      showToast('No candidates found on this page. Open a Naukri search results page.', 'error');
+      return { success: false, error: 'No candidates found on page' };
+    }
+
+    showToast(`📋 Found ${candidates.length} candidates — queuing...`, 'info');
+
+    const recruiterCreds = await getRecruiterCredentials();
+
+    const profiles = candidates.map(c => ({
+      naukri_profile_id:  c.profileId,
+      naukri_profile_url: c.profileUrl,
+      page_title:         c.name,
+      name:               c.name,
+      email:              null,
+      phone:              null,
+      raw_text:           buildShallowText(c),
+      recruiter_email:    recruiterCreds.email || null,
+      recruiter_phone:    recruiterCreds.phone || null,
+      scraped_at:         new Date().toISOString(),
+      extension_version:  VERSION,
+      _source:            'bulk_list',
+      // Extra fields to help AI when it processes this
+      _hint_headline:     c.headline || null,
+      _hint_experience:   c.experience || null,
+      _hint_location:     c.location || null,
+      _hint_company:      c.company || null,
+    }));
+
+    try {
+      const result = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ action: 'bulkEnqueue', data: profiles }, response => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(response);
+        });
+      });
+
+      if (result.success) {
+        const msg = `✅ ${result.queued} queued, ${result.duplicates} dupes skipped${result.dropped ? `, ${result.dropped} dropped (queue full)` : ''}`;
+        showToast(msg, 'success');
+        return { success: true, ...result };
+      } else {
+        showToast(`Bulk queue failed: ${result.error}`, 'error');
+        return result;
+      }
+    } catch (err) {
+      showToast(`Bulk capture error: ${err.message}`, 'error');
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Scroll list page to trigger all lazy-loaded candidate cards
+   */
+  async function scrollToLoadList() {
+    const total = document.documentElement.scrollHeight;
+    const step  = Math.max(600, Math.floor(window.innerHeight * 0.8));
+    for (let y = 0; y < total; y += step) {
+      window.scrollTo({ top: y, behavior: 'instant' });
+      await sleep(CONFIG.BULK_SCROLL_DELAY);
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    await sleep(300);
+  }
+
+  /**
+   * Scrape candidate summary cards from Naukri search results DOM.
+   * Handles both classic and SPA-rendered Resdex layouts.
+   */
+  function scrapeSearchListCandidates() {
+    const candidates = [];
+
+    // Try multiple card selectors for different Naukri layouts
+    const cardSelectors = [
+      '[class*="candidateCard"]',
+      '[class*="candidate-card"]',
+      '[class*="resumeCard"]',
+      '[class*="srp-tuple"]',
+      '[class*="srpTuple"]',
+      '[data-target-id]',     // older Resdex
+      '.tupleCard',
+    ];
+
+    let cards = [];
+    for (const sel of cardSelectors) {
+      cards = Array.from(document.querySelectorAll(sel));
+      if (cards.length > 0) break;
+    }
+
+    if (cards.length === 0) return [];
+
+    for (const card of cards.slice(0, CONFIG.BULK_MAX_CANDIDATES)) {
+      try {
+        // ── Profile URL & ID ──
+        const linkEl = card.querySelector('a[href*="profile"], a[href*="resume"], a[href*="preview"], a[href*="resdex"]');
+        const profileUrl = linkEl ? linkEl.href : null;
+        if (!profileUrl) continue;
+
+        const profileId = extractIdFromUrl(profileUrl) || `bulk_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+
+        // ── Name ──
+        const nameEl = card.querySelector(
+          '[class*="name"], [class*="candidateName"], h2, h3, [class*="title"]:first-of-type'
+        );
+        const name = cleanText(nameEl?.innerText) || 'Unknown';
+
+        // ── Headline / Designation ──
+        const headlineEl = card.querySelector('[class*="headline"], [class*="designation"], [class*="currentTitle"]');
+        const headline = cleanText(headlineEl?.innerText) || null;
+
+        // ── Experience ──
+        const expEl = card.querySelector('[class*="experience"], [class*="exp"], [class*="workex"]');
+        const experience = cleanText(expEl?.innerText) || null;
+
+        // ── Location ──
+        const locEl = card.querySelector('[class*="location"], [class*="loc"], [class*="city"]');
+        const location = cleanText(locEl?.innerText) || null;
+
+        // ── Current Company ──
+        const compEl = card.querySelector('[class*="company"], [class*="employer"], [class*="currentCompany"]');
+        const company = cleanText(compEl?.innerText) || null;
+
+        candidates.push({ profileId, profileUrl, name, headline, experience, location, company });
+      } catch (_) {
+        // skip broken card
+      }
+    }
+
+    return candidates;
+  }
+
+  /**
+   * Build a shallow text blob so background AI has some context even for list-sourced profiles
+   */
+  function buildShallowText(c) {
+    return [
+      c.name      ? `Name: ${c.name}` : '',
+      c.headline  ? `Current Role: ${c.headline}` : '',
+      c.company   ? `Current Company: ${c.company}` : '',
+      c.experience ? `Experience: ${c.experience}` : '',
+      c.location  ? `Location: ${c.location}` : '',
+      c.profileUrl ? `Profile URL: ${c.profileUrl}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  /**
+   * Extract a Naukri profile ID from a URL string
+   */
+  function extractIdFromUrl(url) {
+    if (!url) return null;
+    // /v3/preview?..&candidateId=XXX
+    const cidMatch = url.match(/[?&](?:candidateId|profileId|pid)=([^&]+)/i);
+    if (cidMatch) return cidMatch[1];
+    // /resdex/resume/XXX or path segment
+    const pathMatch = url.match(/\/(?:resume|profile|cv|preview)\/([a-zA-Z0-9_-]+)/i);
+    if (pathMatch) return pathMatch[1];
+    // sid param
+    const sidMatch = url.match(/[?&]sid=([^&]+)/i);
+    if (sidMatch) return sidMatch[1];
+    return null;
+  }
+
   function isProfilePage() {
     const pathname = window.location.pathname;
     const search = window.location.search;
@@ -971,7 +1174,7 @@
     const merged = mergeContacts(cvData, diff, domSelectorData, recruiterCreds, beforeSnapshot);
     console.log(`[VHC v${VERSION}] === FINAL: email=${merged.email || 'NONE'}, phone=${merged.phone || 'NONE'} ===`);
 
-    // Step 10: Capture text and send to AI
+    // Step 10: Capture raw text
     updateProgress(60, 'Capturing page text...');
     const rawText = getRawPageText();
 
@@ -982,15 +1185,13 @@
     }
 
     const naukriId = extractNaukriProfileId();
-    updateProgress(70, 'AI analyzing profile...');
 
-    // Combine page text + CV text for richer AI extraction
-    // CV text is the PRIMARY source — it's the candidate's actual resume
+    // Build combined text (CV as primary, page text as secondary)
     let combinedText = '';
     if (cvData.text.length > 100) {
       combinedText += '=== CANDIDATE CV/RESUME (PRIMARY SOURCE - most reliable) ===\n';
       combinedText += cvData.text.substring(0, 8000);
-      if (cvData.sections.linkedin) {
+      if (cvData.sections && cvData.sections.linkedin) {
         combinedText += `\nLinkedIn: ${cvData.sections.linkedin}`;
       }
       combinedText += '\n\n=== NAUKRI PROFILE PAGE TEXT (secondary source) ===\n';
@@ -999,143 +1200,50 @@
       combinedText = rawText.substring(0, 15000);
     }
 
-    let aiResult;
-    for (let attempt = 0; attempt <= 2; attempt++) {
-      try {
-        if (attempt > 0) await sleep(2000 * attempt);
-        aiResult = await new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage({
-            action: 'apiProxy',
-            data: {
-              path: '/api/extension/ai-extract',
-              method: 'POST',
-              body: {
-                raw_text: combinedText.substring(0, 15000),
-                page_url: window.location.href,
-                page_title: stableTitle,
-                naukri_profile_id: naukriId,
-                dom_extracted_name: domName || null,
-                dom_extracted_email: merged.email || null,
-                dom_extracted_phone: merged.phone || null,
-                recruiter_email: recruiterCreds.email || null,
-                recruiter_phone: recruiterCreds.phone || null
-              }
-            }
-          }, response => {
-            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-            else resolve(response);
-          });
-        });
-        if (aiResult.success) break;
-        if (aiResult.error?.includes('429') || aiResult.error?.includes('rate')) continue;
-        break;
-      } catch (e) {
-        if (attempt === 2) { updateProgress(0, 'AI failed'); hideProgressBar(2000); return { success: false, error: e.message }; }
-      }
-    }
+    // Step 11: Enqueue to background worker — INSTANT return, no blocking AI wait
+    updateProgress(80, 'Adding to queue...');
 
-    if (!aiResult?.success || !aiResult?.profile_data) {
-      updateProgress(0, 'AI extraction failed');
-      hideProgressBar(2000);
-      return { success: false, error: aiResult?.error || 'AI extraction returned no data' };
-    }
-
-    const profileData = aiResult.profile_data;
-    if (!profileData.name) {
-      updateProgress(0, 'Could not find candidate name');
-      hideProgressBar(2000);
-      return { success: false, error: 'AI could not find candidate name.' };
-    }
-
-    updateProgress(85, 'Saving to VHC...');
-
-    // Step 11: Build capture payload — MERGED contacts override AI
-    // Safety: filter recruiter's own phone/email from AI fallback too
-    const rPhone = cleanPhone(recruiterCreds.phone || '');
-    const rEmail = (recruiterCreds.email || '').toLowerCase().trim();
-    const aiFallbackEmail = profileData.email && profileData.email.toLowerCase().trim() !== rEmail ? profileData.email : null;
-    const aiFallbackPhone = profileData.phone && cleanPhone(profileData.phone) !== rPhone ? profileData.phone : null;
-
-    const finalName = domName || profileData.name;
-    const capturePayload = {
-      naukri_profile_id: naukriId,
-      naukri_profile_url: window.location.href,
-      name: finalName,
-      first_name: finalName?.split(/[\s.]+/)[0] || null,
-      last_name: finalName?.split(/[\s.]+/).slice(-1)[0] || null,
-      email: merged.email || aiFallbackEmail || null,
-      phone: merged.phone || aiFallbackPhone || null,
-      headline: profileData.headline || null,
-      resume_headline: profileData.headline || null,
-      profile_summary: profileData.profile_summary || null,
-      current_company: profileData.current_company || null,
-      current_designation: profileData.current_designation || null,
-      current_industry: profileData.current_industry || null,
-      total_experience_years: profileData.total_experience_years || null,
-      total_experience_months: profileData.total_experience_years ? Math.round(profileData.total_experience_years * 12) : null,
-      total_experience_display: profileData.total_experience_years ? `${profileData.total_experience_years} years` : null,
-      work_experience: profileData.work_experience || [],
-      education: profileData.education || [],
-      key_skills: profileData.key_skills || [],
-      it_skills: profileData.it_skills || [],
-      certifications: profileData.certifications || [],
-      projects: profileData.projects || [],
-      languages: profileData.languages || [],
-      online_profiles: profileData.online_profiles || [],
-      linkedin_url: (profileData.online_profiles || []).find(p => p.platform === 'LinkedIn')?.url || null,
-      personal_details: {
-        date_of_birth: profileData.date_of_birth || null,
-        gender: profileData.gender || null,
-        marital_status: profileData.marital_status || null,
-        nationality: profileData.nationality || null,
-        category: profileData.category || null,
-      },
-      career_preferences: {
-        current_salary: profileData.current_salary || null,
-        expected_salary: profileData.expected_salary || null,
-        notice_period: profileData.notice_period || null,
-        current_location: profileData.location || null,
-        preferred_locations: profileData.preferred_locations || [],
-      },
-      highest_qualification: (profileData.education || [])[0]?.degree || null,
-      scraped_at: new Date().toISOString(),
-      raw_profile_text: rawText.substring(0, 8000),
-      extension_version: VERSION
+    const enqueuePayload = {
+      naukri_profile_id:    naukriId,
+      naukri_profile_url:   window.location.href,
+      page_title:           stableTitle,
+      name:                 domName || null,
+      email:                merged.email || null,
+      phone:                merged.phone || null,
+      raw_text:             combinedText.substring(0, 15000),
+      recruiter_email:      recruiterCreds.email || null,
+      recruiter_phone:      recruiterCreds.phone || null,
+      scraped_at:           new Date().toISOString(),
+      extension_version:    VERSION,
     };
 
-    console.log(`[VHC v${VERSION}] Capture payload:`, { name: capturePayload.name, email: capturePayload.email, phone: capturePayload.phone, skills: capturePayload.key_skills?.length });
-
-    // Step 12: Send to capture endpoint via background script (bypasses CORS)
     try {
       const result = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          action: 'apiProxy',
-          data: {
-            path: '/api/extension/capture',
-            method: 'POST',
-            body: capturePayload
+        chrome.runtime.sendMessage(
+          { action: 'enqueueCapture', data: enqueuePayload },
+          response => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(response);
           }
-        }, response => {
-          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-          else resolve(response);
-        });
+        );
       });
 
-      if (result.error) {
-        updateProgress(0, `Error: ${result.error}`);
+      lastCapturedUrl = window.location.href;
+
+      if (result.action === 'duplicate') {
+        updateProgress(100, `${domName || 'Profile'} already in queue`);
         hideProgressBar(3000);
-        return { success: false, error: result.error };
+        return { success: true, action: 'duplicate', name: domName };
       }
 
-      lastCapturedUrl = window.location.href;
-      const msgs = { created: 'added to VHC!', updated: 'profile updated!', exists: 'up-to-date' };
-      updateProgress(100, `${capturePayload.name} ${msgs[result.action] || 'captured'}`);
-      hideProgressBar(4000);
-      return { success: true, action: result.action, name: capturePayload.name };
-    } catch (captureError) {
-      updateProgress(0, `Failed: ${captureError.message}`);
+      updateProgress(100, `${domName || 'Profile'} queued (#${result.queued} in queue)`);
+      hideProgressBar(3500);
+      return { success: true, action: 'queued', name: domName, queued: result.queued };
+
+    } catch (enqueueError) {
+      updateProgress(0, `Failed to queue: ${enqueueError.message}`);
       hideProgressBar(3000);
-      return { success: false, error: captureError.message };
+      return { success: false, error: enqueueError.message };
     }
   }
 
@@ -1169,11 +1277,70 @@
   if (isExtensionValid()) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'manualCapture') { manualCapture().then(sendResponse); return true; }
-      if (request.action === 'getPageInfo') { sendResponse({ url: window.location.href, isProfilePage: isProfilePage() }); return true; }
+      if (request.action === 'bulkCapture')   { bulkCapture().then(sendResponse); return true; }
+      if (request.action === 'getPageInfo')   {
+        sendResponse({
+          url: window.location.href,
+          isProfilePage: isProfilePage(),
+          isSearchPage: isSearchPage(),
+        });
+        return true;
+      }
     });
   }
 
   // ===================== UI =====================
+  function addBulkCaptureButton() {
+    const existing = document.getElementById('vhc-bulk-btn');
+    if (existing) existing.remove();
+
+    const btn = document.createElement('button');
+    btn.id = 'vhc-bulk-btn';
+    btn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      Bulk Capture All
+    `;
+    btn.style.cssText = `
+      position: fixed; bottom: 20px; right: 80px; z-index: 999999;
+      background: linear-gradient(135deg, #7CB342, #558B2F);
+      color: white; border: none; border-radius: 24px;
+      padding: 10px 16px; font-size: 13px; font-weight: 600;
+      cursor: pointer; box-shadow: 0 4px 14px rgba(124,179,66,0.45);
+      display: flex; align-items: center; gap: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      transition: filter 0.2s, transform 0.1s;
+    `;
+    btn.onmouseenter = () => { btn.style.filter = 'brightness(1.1)'; };
+    btn.onmouseleave = () => { btn.style.filter = ''; };
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.innerHTML = `<span style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-radius:50%;border-top-color:transparent;animation:vhcSpin 0.8s linear infinite;"></span> Queuing...`;
+      const result = await bulkCapture();
+      btn.disabled = false;
+      btn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Bulk Capture All
+      `;
+    });
+
+    // Add spin keyframes
+    if (!document.getElementById('vhc-bulk-style')) {
+      const style = document.createElement('style');
+      style.id = 'vhc-bulk-style';
+      style.textContent = '@keyframes vhcSpin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(btn);
+  }
+
   function addFloatingButton() {
     const existing = document.getElementById('vhc-floating-btn');
     if (existing) existing.remove();
@@ -1218,6 +1385,13 @@
     if (!settings.enabled) return;
     const auth = await getAuthToken();
     if (!auth) { console.log(`[VHC v${VERSION}] Not authenticated`); return; }
+
+    if (isSearchPage()) {
+      console.log(`[VHC v${VERSION}] Search/list page detected — bulk capture ready`);
+      addBulkCaptureButton();
+      return;
+    }
+
     if (!isProfilePage()) { console.log(`[VHC v${VERSION}] Not a profile page`); return; }
     if (document.readyState !== 'complete') await new Promise(r => window.addEventListener('load', r));
     setTimeout(() => autoCapture(), CONFIG.CAPTURE_DELAY);
