@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ventures HRD</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 320px;
+      min-height: 380px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #7CB342 0%, #558B2F 100%);
+      color: white;
+      padding: 16px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    
+    .version-badge {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      padding: 2px 10px;
+      border-radius: 4px;
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 6px;
+      letter-spacing: 0.3px;
+    }
+    
+    .content {
+      padding: 16px;
+    }
+    
+    /* Login Form */
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .form-group label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #64748b;
+    }
+    
+    .form-group input {
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    
+    .form-group input:focus {
+      border-color: #7CB342;
+    }
+    
+    .btn {
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #7CB342;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #689F38;
+    }
+    
+    .btn-primary:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+    
+    .btn-capture {
+      background: linear-gradient(135deg, #7CB342 0%, #558B2F 100%);
+      color: white;
+      font-weight: 600;
+    }
+    
+    .btn-capture:hover {
+      background: linear-gradient(135deg, #689F38 0%, #4A7A28 100%);
+    }
+    
+    .btn-capture:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    
+    .error {
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: center;
+    }
+    
+    /* Dashboard */
+    .dashboard {
+      display: none;
+    }
+    
+    .user-info {
+      background: white;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .user-info .user-details .name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    
+    .user-info .user-details .role {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: capitalize;
+    }
+    
+    .user-info .api-url {
+      font-size: 10px;
+      color: #94a3b8;
+      max-width: 120px;
+      text-align: right;
+      word-break: break-all;
+      line-height: 1.3;
+    }
+    
+    /* Page Status */
+    .page-status {
+      background: white;
+      border-radius: 12px;
+      padding: 10px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    
+    .status-dot.green { background: #22c55e; }
+    .status-dot.yellow { background: #eab308; }
+    .status-dot.red { background: #ef4444; }
+    .status-dot.gray { background: #94a3b8; }
+    
+    .page-status .text {
+      font-size: 12px;
+      color: #475569;
+    }
+    
+    /* Capture Section */
+    .capture-section {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    
+    .capture-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #1e293b;
+    }
+    
+    .capture-section p {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+    
+    /* Task Progress Bar */
+    .task-progress {
+      display: none;
+      margin-top: 14px;
+    }
+    
+    .task-progress.visible {
+      display: block;
+    }
+    
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .progress-label .step-text {
+      font-size: 12px;
+      color: #475569;
+      font-weight: 500;
+    }
+    
+    .progress-label .percent-text {
+      font-size: 12px;
+      color: #7CB342;
+      font-weight: 600;
+    }
+    
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: #e8f5e9;
+      border-radius: 100px;
+      overflow: visible;
+      position: relative;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #AED581, #7CB342, #558B2F);
+      border-radius: 100px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      width: 0%;
+      position: relative;
+    }
+    
+    /* Green circle with white tick at the end */
+    .progress-tick {
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      background: #43A047;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(67, 160, 71, 0.4);
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    
+    .progress-tick.show {
+      opacity: 1;
+      transform: translateY(-50%) scale(1);
+      animation: tickBounce 0.4s ease;
+    }
+    
+    .progress-tick svg {
+      width: 14px;
+      height: 14px;
+      stroke: white;
+      stroke-width: 3;
+      fill: none;
+    }
+    
+    @keyframes tickBounce {
+      0% { transform: translateY(-50%) scale(0.5); }
+      60% { transform: translateY(-50%) scale(1.15); }
+      100% { transform: translateY(-50%) scale(1); }
+    }
+    
+    /* Capture result message */
+    .capture-result {
+      font-size: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+      display: none;
+      text-align: center;
+      font-weight: 500;
+    }
+    
+    .capture-result.visible {
+      display: block;
+    }
+    
+    .capture-result.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    
+    .capture-result.error {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+    
+    .capture-result.info {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    
+    /* Queue Status */
+    .queue-status {
+      background: #fff8e1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: #f57f17;
+      display: none;
+    }
+    
+    .queue-status.visible {
+      display: block;
+    }
+    
+    /* Settings */
+    .settings {
+      background: white;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    
+    .settings h3 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #475569;
+    }
+    
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+    
+    .setting-item label {
+      font-size: 13px;
+      color: #475569;
+    }
+    
+    /* Toggle Switch */
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+    
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #cbd5e1;
+      border-radius: 24px;
+      transition: 0.3s;
+    }
+    
+    .toggle .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    
+    .toggle input:checked + .slider {
+      background: #7CB342;
+    }
+    
+    .toggle input:checked + .slider:before {
+      transform: translateX(18px);
+    }
+    
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 10px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    
+    .footer a {
+      color: #7CB342;
+      text-decoration: none;
+    }
+    
+    /* Loading spinner */
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Ventures HRD</h1>
+    <p>Naukri Auto Capture Extension</p>
+    <span class="version-badge">v3.8.5 AI</span>
+  </div>
+  
+  <div class="content">
+    <!-- Login Section -->
+    <div id="loginSection" class="login-form">
+      <div class="form-group">
+        <label>Ventures HRD Portal URL</label>
+        <input type="url" id="apiUrl" placeholder="https://ventureshrd.com" value="https://ventureshrd.com">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="Enter password">
+      </div>
+      <div id="loginError" class="error" style="display: none;"></div>
+      <button id="loginBtn" class="btn btn-primary">Login to Ventures HRD</button>
+    </div>
+    
+    <!-- Dashboard Section -->
+    <div id="dashboardSection" class="dashboard">
+      <div class="user-info">
+        <div class="user-details">
+          <div class="name" id="userName">-</div>
+          <div class="role" id="userRole">-</div>
+        </div>
+        <div class="api-url" id="apiUrlDisplay">-</div>
+      </div>
+      
+      <!-- Page Status -->
+      <div class="page-status">
+        <span class="status-dot gray" id="statusDot"></span>
+        <span class="text" id="pageStatusText">Checking current page...</span>
+      </div>
+      
+      <!-- Manual Capture Section -->
+      <div class="capture-section">
+        <h3>Capture Profile</h3>
+        <p>Click to capture the current Naukri profile with AI</p>
+        <button id="manualCaptureBtn" class="btn btn-capture" style="width: 100%;">
+          Capture This Profile
+        </button>
+        
+        <!-- Task Progress Bar -->
+        <div id="taskProgress" class="task-progress">
+          <div class="progress-label">
+            <span class="step-text" id="progressStepText">Starting capture...</span>
+            <span class="percent-text" id="progressPercent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill">
+              <div class="progress-tick" id="progressTick">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="captureStatus" class="capture-result"></div>
+      </div>
+      
+      <div id="queueStatus" class="queue-status">
+        <strong>Offline Queue:</strong> <span id="queueCount">0</span> profiles pending sync
+      </div>
+      
+      <div class="settings">
+        <h3>Settings</h3>
+        <div class="setting-item">
+          <label>Auto-capture profiles</label>
+          <label class="toggle">
+            <input type="checkbox" id="settingEnabled" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <label>Show notifications</label>
+          <label class="toggle">
+            <input type="checkbox" id="settingNotifications" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      
+      <button id="logoutBtn" class="btn btn-secondary" style="width: 100%;">Logout</button>
+    </div>
+  </div>
+  
+  <div class="footer">
+    Powered by <a href="#">Ventures HRD</a> v3.8.5
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
