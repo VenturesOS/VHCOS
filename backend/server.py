@@ -83,26 +83,55 @@ from services import (
     generate_r2_key
 )
 
-# Import route modules
-from routes import auth_router, public_router, files_router, admin_router, jobs_router, candidates_router, applications_router, settings_router, background_jobs_router, teams_router, referrals_router, commercials_router, analytics_router, revenue_router, employer_router, linkedin_router
-from routes.bulk_import import bulk_import_router
-from routes.bug_reports import bug_reports_router
-from routes.system_errors import system_errors_router, log_system_error
-from routes.extension import extension_router
-from routes.profile import profile_router
-from routes.cv_upload import cv_upload_router
-from routes.ai_search import ai_search_router
-from routes.contact import router as contact_router
-from routes.blog import router as blog_router
-from routes.seo import router as seo_router
-from routes.pillar_pages import router as pillar_pages_router
-from routes.blog_digest import router as blog_digest_router
-from routes.seo_dashboard import router as seo_dashboard_router
-from routes.tracker import router as tracker_router
-from routes.compliance_routes import compliance_router
-from routes.maintenance_routes import maintenance_router
-from routes.attendance import router as attendance_router
-from routes.attendance_analytics import router as attendance_analytics_router
+# Import route modules — wrapped in safe loader so server starts even if some routes fail
+_route_imports_failed = []
+
+def _safe_import(module_path, attr_name):
+    """Import a router safely; return None on failure so the server can still start."""
+    try:
+        parts = module_path.rsplit(".", 1)
+        mod = __import__(module_path, fromlist=[attr_name])
+        return getattr(mod, attr_name)
+    except Exception as e:
+        _route_imports_failed.append(f"{module_path}.{attr_name}: {e}")
+        logging.error(f"[IMPORT FAIL] {module_path}.{attr_name}: {e}")
+        return None
+
+# Core routes
+try:
+    from routes import auth_router, public_router, files_router, admin_router, jobs_router, candidates_router, applications_router, settings_router, background_jobs_router, teams_router, referrals_router, commercials_router, analytics_router, revenue_router, employer_router, linkedin_router
+except Exception as e:
+    logging.error(f"[IMPORT FAIL] Core routes: {e}")
+    auth_router = public_router = files_router = admin_router = jobs_router = None
+    candidates_router = applications_router = settings_router = background_jobs_router = None
+    teams_router = referrals_router = commercials_router = analytics_router = None
+    revenue_router = employer_router = linkedin_router = None
+
+bulk_import_router = _safe_import("routes.bulk_import", "bulk_import_router")
+bug_reports_router = _safe_import("routes.bug_reports", "bug_reports_router")
+
+try:
+    from routes.system_errors import system_errors_router, log_system_error
+except Exception as e:
+    logging.error(f"[IMPORT FAIL] system_errors: {e}")
+    system_errors_router = None
+    async def log_system_error(*a, **kw): pass
+
+extension_router = _safe_import("routes.extension", "extension_router")
+profile_router = _safe_import("routes.profile", "profile_router")
+cv_upload_router = _safe_import("routes.cv_upload", "cv_upload_router")
+ai_search_router = _safe_import("routes.ai_search", "ai_search_router")
+contact_router = _safe_import("routes.contact", "router")
+blog_router = _safe_import("routes.blog", "router")
+seo_router = _safe_import("routes.seo", "router")
+pillar_pages_router = _safe_import("routes.pillar_pages", "router")
+blog_digest_router = _safe_import("routes.blog_digest", "router")
+seo_dashboard_router = _safe_import("routes.seo_dashboard", "router")
+tracker_router = _safe_import("routes.tracker", "router")
+compliance_router = _safe_import("routes.compliance_routes", "compliance_router")
+maintenance_router = _safe_import("routes.maintenance_routes", "maintenance_router")
+attendance_router = _safe_import("routes.attendance", "router")
+attendance_analytics_router = _safe_import("routes.attendance_analytics", "router")
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
