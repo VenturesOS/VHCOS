@@ -39,8 +39,8 @@ async def get_attendance_analytics(
     Attendance analytics with extensible payload.
     Admin sees all, employer sees team only.
     """
-    end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = datetime.now(IST).strftime("%Y-%m-%d")
+    start_date = (datetime.now(IST) - timedelta(days=days)).strftime("%Y-%m-%d")
 
     # Build user filter
     user_filter = {"role": {"$in": ["employer", "recruiter"]}, "is_active": True}
