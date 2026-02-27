@@ -471,8 +471,9 @@ IMPORTANT: The page text may also contain the logged-in RECRUITER's email/phone.
         return AIExtractResponse(success=True, profile_data=profile_data)
         
     except Exception as e:
-        logger.error(f"[AI Extract] Error: {str(e)}")
-        return AIExtractResponse(success=False, error=str(e))
+        error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
+        logger.error(f"[AI Extract] Error: {error_msg}")
+        return AIExtractResponse(success=False, error=error_msg)
 
 
 # ============== ENDPOINTS ==============
