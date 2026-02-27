@@ -170,7 +170,8 @@ PARENT_UPLOAD_DIR.mkdir(exist_ok=True)
 # ============== SERVICES INITIALIZATION ==============
 
 def init_services():
-    """Initialize services that require DB connection."""
+    """Initialize services that require DB connection.
+    Called from deferred_startup_tasks in server.py AFTER initialize_db()."""
     try:
         from services.job_queue import job_queue
         job_queue.set_db(db)
@@ -178,5 +179,5 @@ def init_services():
     except Exception as e:
         logging.warning(f"Job queue service initialization failed: {e}")
 
-
-init_services()
+# NOTE: init_services() is NOT called at module level.
+# It is called from server.py's deferred startup task after the DB is initialized.
