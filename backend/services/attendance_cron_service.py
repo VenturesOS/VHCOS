@@ -23,7 +23,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 async def acquire_lock(job_name: str, lock_ttl_seconds: int = 600) -> bool:
     """Acquire an exclusive lock for a cron job. Returns True if acquired."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(IST)
     expiry = now + timedelta(seconds=lock_ttl_seconds)
 
     result = await db.cron_job_locks.find_one_and_update(
@@ -57,7 +57,7 @@ async def log_job_execution(job_name: str, status: str, details: dict):
         "job_name": job_name,
         "status": status,
         "details": details,
-        "executed_at": datetime.now(timezone.utc).isoformat(),
+        "executed_at": datetime.now(IST).isoformat(),
     })
 
 
@@ -75,7 +75,7 @@ async def create_notification_event(
     metadata: dict = None,
 ):
     """Create a notification event and queue delivery."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(IST).isoformat()
     event_id = str(uuid.uuid4())
 
     event = {
@@ -126,7 +126,7 @@ async def process_email_delivery(event_id: str):
     if not log:
         return
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(IST).isoformat()
     attempts = log.get("attempts", 0) + 1
 
     try:
@@ -273,7 +273,7 @@ async def run_attendance_reminders():
             logger.info(f"[CRON] {job_name}: Skipped — attendance is paused.")
             return
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(IST).strftime("%Y-%m-%d")
 
         # Get all active employers/recruiters
         users = await db.users.find(
@@ -375,7 +375,7 @@ async def run_auto_absent_marking():
             logger.info(f"[CRON] {job_name}: Skipped — attendance is paused.")
             return
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(IST).strftime("%Y-%m-%d")
 
         users = await db.users.find(
             {"role": {"$in": ["employer", "recruiter"]}, "is_active": True},
@@ -384,7 +384,7 @@ async def run_auto_absent_marking():
 
         marked = 0
         skipped = 0
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(IST).isoformat()
 
         for user in users:
             should, reason = await should_mark_absent(user["id"], today, settings)
@@ -439,8 +439,8 @@ async def calculate_health_score(user_id: str, days: int = 30) -> dict:
     Calculate attendance health score (0-100) for a user.
     Based on: punctuality, consistency, absenteeism, overtime patterns.
     """
-    end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = datetime.now(IST).strftime("%Y-%m-%d")
+    start_date = (datetime.now(IST) - timedelta(days=days)).strftime("%Y-%m-%d")
 
     records = await db.attendance_records.find(
         {"user_id": user_id, "date": {"$gte": start_date, "$lte": end_date}},
@@ -514,7 +514,7 @@ async def calculate_health_score(user_id: str, days: int = 30) -> dict:
             "label": label,
             "breakdown": result["breakdown"],
             "stats": result["stats"],
-            "calculated_at": datetime.now(timezone.utc).isoformat(),
+            "calculated_at": datetime.now(IST).isoformat(),
         }},
         upsert=True,
     )
