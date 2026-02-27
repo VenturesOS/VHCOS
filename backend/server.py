@@ -192,67 +192,56 @@ app.add_middleware(ZeroTrustMiddleware)
 # ============== SEED ADMIN ==============
 
 @app.on_event("startup")
-async def log_environment_report():
-    """Log environment details once at startup for deployment auditing."""
-    try:
-        from utils.environment import log_environment_banner
-        log_environment_banner()
-    except Exception as e:
-        logging.warning(f"[ENV] Environment report skipped: {e}")
-
-
-@app.on_event("startup")
-async def validate_mongodb_connection():
-    """
-    Validates MongoDB connectivity and logs full connection diagnostics.
-    """
-    def _mask(uri: str) -> str:
-        """Mask credentials in URI for safe logging."""
-        if not uri:
-            return "(empty)"
-        if "://" in uri and "@" in uri:
-            scheme_end = uri.index("://") + 3
-            at_pos = uri.index("@")
-            return uri[:scheme_end] + "***:***@" + uri[at_pos + 1:]
-        return uri[:30] + "..."
-
-    mongo_url_env = os.environ.get('MONGO_URL', '')
-    mongodb_uri_env = os.environ.get('MONGODB_URI', '')
-    db_name_env = os.environ.get('DB_NAME', '')
-
-    from config import mongodb_uri as _actual_uri
-    logging.warning("=" * 60)
-    logging.warning("  MONGO CONNECTION DIAGNOSTICS")
-    logging.warning(f"  ACTUAL URI    = {_mask(_actual_uri)}")
-    logging.warning(f"  ENV MONGO_URL = {_mask(mongo_url_env)}")
-    logging.warning(f"  DB_NAME (used)= {db_name}")
-    logging.warning(f"  DB_NAME (env) = {db_name_env or '(not set)'}")
-    logging.warning("=" * 60)
-
-    for attempt in range(3):
-        try:
-            await client.admin.command("ping")
-            user_count = await db.users.count_documents({})
-            logging.warning(f"  MongoDB OK | users={user_count} | db={db_name}")
-            if user_count < 19:
-                logging.warning(f"  WARNING: Expected 19 users but found {user_count}. Likely connected to WRONG database!")
-            return
-        except Exception as e:
-            logging.warning(f"  MongoDB attempt {attempt+1}/3 failed: {e}")
-            if attempt < 2:
-                await asyncio.sleep(5)
-    logging.warning("  MongoDB not available at startup. Motor will auto-reconnect on first request.")
-
-
-@app.on_event("startup")
 async def deferred_db_init():
     """
-    Run all heavy DB operations (indexes, bots, schedulers) in the BACKGROUND
-    so the server binds to port 8001 immediately and passes health checks.
-    Previously these were 12+ separate startup events that could take 60s+ total.
+    Run ALL heavy operations in the BACKGROUND so the server binds to port 8001
+    immediately and passes the platform's 60s health check.
     """
     async def _run_deferred():
-        await asyncio.sleep(2)  # Let the server fully bind first
+        await asyncio.sleep(1)  # Let the server fully bind first
+
+        # --- Environment report ---
+        try:
+            from utils.environment import log_environment_banner
+            log_environment_banner()
+        except Exception as e:
+            logging.warning(f"[ENV] Environment report skipped: {e}")
+
+        # --- MongoDB validation ---
+        def _mask(uri: str) -> str:
+            if not uri:
+                return "(empty)"
+            if "://" in uri and "@" in uri:
+                scheme_end = uri.index("://") + 3
+                at_pos = uri.index("@")
+                return uri[:scheme_end] + "***:***@" + uri[at_pos + 1:]
+            return uri[:30] + "..."
+
+        mongo_url_env = os.environ.get('MONGO_URL', '')
+        mongodb_uri_env = os.environ.get('MONGODB_URI', '')
+        db_name_env = os.environ.get('DB_NAME', '')
+
+        from config import mongodb_uri as _actual_uri
+        logging.warning("=" * 60)
+        logging.warning("  MONGO CONNECTION DIAGNOSTICS")
+        logging.warning(f"  ACTUAL URI    = {_mask(_actual_uri)}")
+        logging.warning(f"  ENV MONGO_URL = {_mask(mongo_url_env)}")
+        logging.warning(f"  DB_NAME (used)= {db_name}")
+        logging.warning(f"  DB_NAME (env) = {db_name_env or '(not set)'}")
+        logging.warning("=" * 60)
+
+        for attempt in range(3):
+            try:
+                await client.admin.command("ping")
+                user_count = await db.users.count_documents({})
+                logging.warning(f"  MongoDB OK | users={user_count} | db={db_name}")
+                if user_count < 19:
+                    logging.warning(f"  WARNING: Expected 19 users but found {user_count}. Likely connected to WRONG database!")
+                break
+            except Exception as e:
+                logging.warning(f"  MongoDB attempt {attempt+1}/3 failed: {e}")
+                if attempt < 2:
+                    await asyncio.sleep(3)
 
         # --- Compliance indexes ---
         try:
