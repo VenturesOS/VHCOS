@@ -64,12 +64,22 @@ def _detect_environment() -> str:
     return "unknown"
 
 
+# Resolve the actual mongo URL (including override file) for host display
+_resolved_mongo_url = _mongo_url
+if not _resolved_mongo_url or "cluster0.vuhdiod.mongodb.net" not in _resolved_mongo_url:
+    try:
+        from mongo_production_override import MONGO_URL as _ov
+        if _ov:
+            _resolved_mongo_url = _ov
+    except ImportError:
+        pass
+
 ENV_NAME: str = _detect_environment()
 IS_PRODUCTION: bool = ENV_NAME == "production"
 IS_PREVIEW: bool = ENV_NAME == "preview"
 IS_LOCAL: bool = ENV_NAME == "local"
 DB_NAME: str = _db_name
-MONGO_HOST: str = _mongo_url.split("@")[-1].split("/")[0].split("?")[0] if "@" in _mongo_url else "unknown"
+MONGO_HOST: str = _resolved_mongo_url.split("@")[-1].split("/")[0].split("?")[0] if "@" in _resolved_mongo_url else "unknown"
 
 
 def get_environment_info() -> dict:
