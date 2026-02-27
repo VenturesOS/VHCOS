@@ -20,6 +20,13 @@ from utils import require_role
 
 logger = logging.getLogger(__name__)
 
+# Indian Standard Time (UTC+5:30) — all attendance times must use IST
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def _now_ist():
+    """Current datetime in IST."""
+    return datetime.now(IST)
+
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
 
 # ── Pydantic Models ──
