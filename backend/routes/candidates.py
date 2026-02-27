@@ -39,7 +39,7 @@ from services.cache import cache
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/candidates", tags=["candidates"])
+router = APIRouter(prefix="/api/candidate-bank", tags=["candidate-bank"])
 candidates_router = router
 
 
