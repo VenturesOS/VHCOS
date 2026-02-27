@@ -262,7 +262,7 @@ async def get_my_attendance(
     user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Get my attendance records for a given month."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(IST)
     m = month or now.month
     y = year or now.year
 
@@ -291,7 +291,7 @@ async def get_my_attendance(
 @router.get("/today")
 async def get_today_status(user=Depends(require_role(["admin", "recruiter", "employer"]))):
     """Get today's attendance status for the current user."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(IST).strftime("%Y-%m-%d")
     record = await db.attendance_records.find_one(
         {"user_id": user["id"], "date": today}, {"_id": 0}
     )
@@ -314,7 +314,7 @@ async def admin_mark_attendance(req: AdminMarkRequest, user=Depends(require_role
         late_minutes = _calc_late_minutes(req.check_in, settings.get("work_start_time", "09:00"))
         overtime = _calc_overtime(req.check_out, settings.get("work_end_time", "18:00"))
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(IST).isoformat()
     record = {
         "user_id": req.user_id,
         "user_name": target.get("name", ""),
@@ -366,7 +366,7 @@ async def get_team_attendance(
     if date_str:
         query["date"] = date_str
     else:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(IST)
         m = month or now.month
         y = year or now.year
         start = f"{y}-{m:02d}-01"
@@ -395,7 +395,7 @@ async def get_all_attendance(
     user=Depends(require_role(["admin"])),
 ):
     """Admin: Get all attendance records."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(IST)
     m = month or now.month
     y = year or now.year
     start = f"{y}-{m:02d}-01"
@@ -427,7 +427,7 @@ async def monthly_report(
     user=Depends(require_role(["admin"])),
 ):
     """Admin: Monthly attendance summary for all users."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(IST)
     m = month or now.month
     y = year or now.year
     start = f"{y}-{m:02d}-01"
@@ -626,7 +626,7 @@ async def create_leave_request(req: LeaveRequestCreate, user=Depends(require_rol
                 detail=f"Insufficient {req.leave_type} leave balance. Available: {total - used}, Requested: {days}"
             )
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(IST).isoformat()
     leave_req = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -657,7 +657,7 @@ async def my_leave_requests(
     user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Get my leave requests."""
-    y = year or datetime.now(timezone.utc).year
+    y = year or datetime.now(IST).year
     start = f"{y}-01-01"
     end = f"{y + 1}-01-01"
 
@@ -685,7 +685,7 @@ async def all_leave_requests(
 ):
     """Admin: Get all leave requests."""
     query = {}
-    y = year or datetime.now(timezone.utc).year
+    y = year or datetime.now(IST).year
     query["start_date"] = {"$gte": f"{y}-01-01", "$lt": f"{y + 1}-01-01"}
     if status:
         query["status"] = status
@@ -703,7 +703,7 @@ async def approve_leave(request_id: str, req: LeaveActionRequest, user=Depends(r
     if leave["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Request is already {leave['status']}")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(IST).isoformat()
     await db.leave_requests.update_one(
         {"id": request_id},
         {"$set": {
@@ -781,9 +781,9 @@ async def reject_leave(request_id: str, req: LeaveActionRequest, user=Depends(re
         {"$set": {
             "status": "rejected",
             "approved_by": user.get("name", user.get("email", "")),
-            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "approved_at": datetime.now(IST).isoformat(),
             "admin_notes": req.notes,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(IST).isoformat(),
         }}
     )
     return {"message": "Leave rejected", "status": "rejected"}
@@ -797,7 +797,7 @@ async def get_my_leave_balance(
     user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """Get my leave balance."""
-    y = year or datetime.now(timezone.utc).year
+    y = year or datetime.now(IST).year
     balance = await db.leave_balances.find_one(
         {"user_id": user["id"], "year": y}, {"_id": 0}
     )
@@ -820,7 +820,7 @@ async def get_user_leave_balance(
     user=Depends(require_role(["admin"])),
 ):
     """Admin: Get a specific user's leave balance."""
-    y = year or datetime.now(timezone.utc).year
+    y = year or datetime.now(IST).year
     balance = await db.leave_balances.find_one(
         {"user_id": target_user_id, "year": y}, {"_id": 0}
     )
@@ -850,7 +850,7 @@ async def set_user_leave_balance(
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
-    y = year or datetime.now(timezone.utc).year
+    y = year or datetime.now(IST).year
     updates = {"year": y, "user_id": target_user_id, "user_name": target.get("name", ""), "user_email": target.get("email", "")}
     if req.casual_leave is not None:
         updates["casual_leave_total"] = req.casual_leave
@@ -884,7 +884,7 @@ async def get_all_leave_balances(
     user=Depends(require_role(["admin"])),
 ):
     """Admin: Get all users' leave balances."""
-    y = year or datetime.now(timezone.utc).year
+    y = year or datetime.now(IST).year
     balances = await db.leave_balances.find({"year": y}, {"_id": 0}).to_list(200)
 
     users = await db.users.find(
@@ -925,7 +925,7 @@ async def list_holidays(
     user=Depends(require_role(["admin", "recruiter", "employer"])),
 ):
     """List holidays for a year."""
-    y = year or datetime.now(timezone.utc).year
+    y = year or datetime.now(IST).year
     holidays = await db.holidays.find(
         {"date": {"$gte": f"{y}-01-01", "$lt": f"{y + 1}-01-01"}},
         {"_id": 0}
@@ -940,7 +940,7 @@ async def create_holiday(req: HolidayCreate, user=Depends(require_role(["admin"]
     if existing:
         raise HTTPException(status_code=409, detail="A holiday already exists on this date")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(IST).isoformat()
     holiday = {
         "id": str(uuid.uuid4()),
         "name": req.name,
@@ -1000,7 +1000,7 @@ async def pre_launch_reset(req: PreLaunchResetRequest, user=Depends(require_role
     if req.confirmation != "RESET DATA":
         raise HTTPException(status_code=400, detail="Invalid confirmation. Type 'RESET DATA' to proceed.")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(IST).isoformat()
     results = {}
 
     # Attendance & Leave
