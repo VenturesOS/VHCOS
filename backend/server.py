@@ -144,64 +144,30 @@ app = FastAPI(title="VHC Talent OS API")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "import_failures": len(_route_imports_failed)}
 
 
-# Include auth routes (extracted to routes/auth.py)
-app.include_router(auth_router)
+# Register all routers — skip any that failed to import
+_all_routers = [
+    auth_router, public_router, files_router, admin_router, jobs_router,
+    candidates_router, applications_router, settings_router, background_jobs_router,
+    bulk_import_router, teams_router, referrals_router, commercials_router,
+    bug_reports_router, system_errors_router, profile_router, cv_upload_router,
+    ai_search_router, extension_router, analytics_router, contact_router,
+    blog_router, seo_router, pillar_pages_router, blog_digest_router,
+    seo_dashboard_router, revenue_router, employer_router, linkedin_router,
+    tracker_router, compliance_router, maintenance_router, attendance_router,
+    attendance_analytics_router,
+]
 
-# Include public routes (extracted to routes/public.py)
-app.include_router(public_router)
+for _r in _all_routers:
+    if _r is not None:
+        app.include_router(_r)
 
-# Include file serving routes (extracted to routes/files.py)
-app.include_router(files_router)
-
-# Include admin routes (extracted to routes/admin.py)
-app.include_router(admin_router)
-
-# Include jobs routes (extracted to routes/jobs.py)
-app.include_router(jobs_router)
-
-# Include candidate bank routes (extracted to routes/candidates.py)
-app.include_router(candidates_router)
-
-# Include applications & AI matching routes (extracted to routes/applications.py)
-app.include_router(applications_router)
-
-# Include settings & alerts routes (extracted to routes/settings.py)
-app.include_router(settings_router)
-
-# Include background jobs & embeddings routes
-app.include_router(background_jobs_router)
-
-# Include bulk import routes (Admin only - for controlled data seeding)
-app.include_router(bulk_import_router)
-
-# Include extracted business-logic routes
-app.include_router(teams_router)
-app.include_router(referrals_router)
-app.include_router(commercials_router)
-app.include_router(bug_reports_router)
-app.include_router(system_errors_router)
-app.include_router(profile_router)
-app.include_router(cv_upload_router)
-app.include_router(ai_search_router)
-app.include_router(extension_router)
-app.include_router(analytics_router)
-app.include_router(contact_router)
-app.include_router(blog_router)
-app.include_router(seo_router)
-app.include_router(pillar_pages_router)
-app.include_router(blog_digest_router)
-app.include_router(seo_dashboard_router)
-app.include_router(revenue_router)
-app.include_router(employer_router)
-app.include_router(linkedin_router)
-app.include_router(tracker_router)
-app.include_router(compliance_router)
-app.include_router(maintenance_router)
-app.include_router(attendance_router)
-app.include_router(attendance_analytics_router)
+if _route_imports_failed:
+    logging.error(f"[STARTUP] {len(_route_imports_failed)} route(s) failed to import:")
+    for f in _route_imports_failed:
+        logging.error(f"  - {f}")
 
 # ============== RATE LIMITING MIDDLEWARE ==============
 from middleware.rate_limiter import RateLimitMiddleware
