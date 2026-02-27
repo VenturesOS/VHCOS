@@ -242,7 +242,8 @@ async function bulkEnqueue(profiles) {
   });
 }
 
- — pulls pending items from captureQueue, runs AI extraction,
+/**
+ * Main drain loop — pulls pending items from captureQueue, runs AI extraction,
  * then POSTs to databank. Runs up to DRAIN_CONCURRENCY profiles in parallel.
  */
 async function drainCaptureQueue() {
