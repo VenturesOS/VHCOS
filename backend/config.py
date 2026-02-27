@@ -24,28 +24,20 @@ load_dotenv(ROOT_DIR / ".env", override=False)
 # ============== MONGODB CONNECTION ==============
 # [EMERGENCY OVERRIDE] Force external Atlas cluster.
 # The Emergent platform overwrites .env AND injects env vars with its managed MongoDB.
-# This override reads from mongo_override.conf (which the platform does NOT touch)
-# to ensure we ALWAYS connect to the production Atlas cluster.
+# Python files are guaranteed to be deployed, so we import from a Python module.
 # TEMP OVERRIDE — remove once platform supports external MongoDB config.
 
 _override_active = False
-_override_uri = None
-_override_db = None
-_override_path = ROOT_DIR / "mongo_override.conf"
-if _override_path.exists():
-    with open(_override_path) as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line.startswith("MONGO_URL="):
-                _override_uri = _line.split("=", 1)[1].strip().strip('"').strip("'")
-            elif _line.startswith("DB_NAME="):
-                _override_db = _line.split("=", 1)[1].strip().strip('"').strip("'")
+try:
+    from mongo_production_override import MONGO_URL as _override_url, DB_NAME as _override_db
+    if _override_url and "cluster0.vuhdiod.mongodb.net" in _override_url:
+        mongodb_uri = _override_url
+        db_name = _override_db or "vhc_talent_os"
+        _override_active = True
+except ImportError:
+    pass
 
-if _override_uri and "cluster0.vuhdiod.mongodb.net" in _override_uri:
-    mongodb_uri = _override_uri
-    db_name = _override_db or "vhc_talent_os"
-    _override_active = True
-else:
+if not _override_active:
     _env_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
     if not _env_uri:
         raise RuntimeError(
