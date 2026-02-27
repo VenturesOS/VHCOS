@@ -743,7 +743,7 @@ async def approve_leave(request_id: str, req: LeaveActionRequest, user=Depends(r
             "status": "leave",
             "work_mode": "leave",
             "notes": f"{leave['leave_type'].title()} Leave — {leave.get('reason', '')}",
-            "marked_by": f"system:leave_approved",
+            "marked_by": "system:leave_approved",
             "updated_at": now_iso,
         }
         if existing:
