@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="10" failures="2" skipped="0" tests="12" time="9.708" timestamp="2026-02-27T07:48:37.558437+00:00" hostname="agent-env-02828c49-fb67-44a3-9a45-3e85e119568e"><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAuthentication" name="test_admin_login" time="3.030"><failure message="AssertionError: No token in response&#10;assert 'token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlYjk2MmQ2Zi1hZDZmLTQ1NGEtYmQ3Yi1lZGM2OGY4YjRmZjciLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NzIyNjQ5MjB9.0UfRp35FmhwjQxMhXQXb4cSpcQ5IPO6D2qg6cBa9c04', 'requires_password_reset': False, 'token_type': 'bearer', 'user': {'company_id': None, 'created_at': '2026-01-18T08:01:29.570417+00:00', 'email': 'admin@vhc.in', 'id': 'eb962d6f-ad6f-454a-bd7b-edc68f8b4ff7', ...}}">backend/tests/test_ist_timezone_and_candidate_bank.py:34: in test_admin_login
+    assert "token" in data, "No token in response"
+E   AssertionError: No token in response
+E   assert 'token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlYjk2MmQ2Zi1hZDZmLTQ1NGEtYmQ3Yi1lZGM2OGY4YjRmZjciLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NzIyNjQ5MjB9.0UfRp35FmhwjQxMhXQXb4cSpcQ5IPO6D2qg6cBa9c04', 'requires_password_reset': False, 'token_type': 'bearer', 'user': {'company_id': None, 'created_at': '2026-01-18T08:01:29.570417+00:00', 'email': 'admin@vhc.in', 'id': 'eb962d6f-ad6f-454a-bd7b-edc68f8b4ff7', ...}}</failure></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAuthentication" name="test_recruiter_login" time="1.430"><failure message="AssertionError: No token in response&#10;assert 'token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNDEyZDdhYS1jM2YxLTQzNmYtYWFlYS05MTYwMDkwNWY0ODYiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NzIyNjQ5MjJ9.0h2dPhPo-FfznyfDHvSsj93lGGQ-uHJb4_ghdYszck8', 'requires_password_reset': False, 'token_type': 'bearer', 'user': {'company_id': '', 'created_at': '2026-02-16T05:03:36.884013+00:00', 'email': 'siddharth@vhc.in', 'id': 'f412d7aa-c3f1-436f-aaea-91600905f486', ...}}">backend/tests/test_ist_timezone_and_candidate_bank.py:47: in test_recruiter_login
+    assert "token" in data, "No token in response"
+E   AssertionError: No token in response
+E   assert 'token' in {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNDEyZDdhYS1jM2YxLTQzNmYtYWFlYS05MTYwMDkwNWY0ODYiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NzIyNjQ5MjJ9.0h2dPhPo-FfznyfDHvSsj93lGGQ-uHJb4_ghdYszck8', 'requires_password_reset': False, 'token_type': 'bearer', 'user': {'company_id': '', 'created_at': '2026-02-16T05:03:36.884013+00:00', 'email': 'siddharth@vhc.in', 'id': 'f412d7aa-c3f1-436f-aaea-91600905f486', ...}}</failure></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAttendanceSettings" name="test_get_attendance_settings" time="1.434"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:63: in admin_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAttendanceISTTimezone" name="test_get_my_attendance_uses_ist_date" time="1.446"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:91: in admin_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAttendanceISTTimezone" name="test_today_attendance_date_is_ist" time="1.464"><error message="failed on setup with &quot;KeyError: 'token'&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:100: in recruiter_token
+    return response.json()["token"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'token'</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAttendanceISTTimezone" name="test_check_in_records_ist_time" time="0.105"><error message="failed on setup with &quot;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:90: in admin_token
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAttendanceISTTimezone" name="test_late_minutes_calculation_ist" time="0.104"><error message="failed on setup with &quot;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:90: in admin_token
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestAttendanceAnalytics" name="test_get_analytics" time="0.101"><error message="failed on setup with &quot;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:258: in admin_token
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestCandidateBankRoute" name="test_candidate_bank_list_with_pagination" time="0.108"><error message="failed on setup with &quot;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:295: in admin_token
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestCandidateBankRoute" name="test_candidate_bank_search" time="0.099"><error message="failed on setup with &quot;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:295: in admin_token
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestCandidateBankRoute" name="test_candidates_endpoint_still_works" time="0.101"><error message="failed on setup with &quot;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:295: in admin_token
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_ist_timezone_and_candidate_bank.TestCheckInCheckOutFlow" name="test_check_out_records_ist_time_and_calculates_hours" time="0.112"><error message="failed on setup with &quot;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_ist_timezone_and_candidate_bank.py:385: in admin_token
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase></testsuite></testsuites>
