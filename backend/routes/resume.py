@@ -84,11 +84,11 @@ def build_latex(profile: dict, template_id: str) -> str:
 
     # Build experience entries
     exp_entries = []
-    for exp in p.get("experience", []):
-        company = _escape_latex(exp.get("company", ""))
-        title = _escape_latex(exp.get("title", ""))
-        duration = _escape_latex(exp.get("duration", ""))
-        bullets_tex = "\n".join(["  \\item " + _escape_latex(b) for b in exp.get("bullets", [])])
+    for exp in p.get("experience") or []:
+        company = _escape_latex(exp.get("company") or "")
+        title = _escape_latex(exp.get("title") or "")
+        duration = _escape_latex(exp.get("duration") or "")
+        bullets_tex = "\n".join(["  \\item " + _escape_latex(b) for b in (exp.get("bullets") or []) if b])
         entry = (
             f"\\textbf{{{title}}} \\hfill {duration} \\\\\n"
             f"\\textit{{{company}}}\n"
@@ -102,11 +102,11 @@ def build_latex(profile: dict, template_id: str) -> str:
 
     # Build education entries
     edu_entries = []
-    for edu in p.get("education", []):
-        institution = _escape_latex(edu.get("institution", ""))
-        degree = _escape_latex(edu.get("degree", ""))
-        year = _escape_latex(edu.get("year", ""))
-        gpa = edu.get("gpa", "")
+    for edu in p.get("education") or []:
+        institution = _escape_latex(edu.get("institution") or "")
+        degree = _escape_latex(edu.get("degree") or "")
+        year = _escape_latex(edu.get("year") or "")
+        gpa = edu.get("gpa") or ""
         gpa_line = f" | GPA: {_escape_latex(gpa)}" if gpa else ""
         edu_entries.append(f"\\textbf{{{degree}}} \\hfill {year} \\\\\n\\textit{{{institution}}}{gpa_line}")
 
