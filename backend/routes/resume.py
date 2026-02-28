@@ -110,7 +110,7 @@ def build_latex(profile: dict, template_id: str) -> str:
         gpa_line = f" | GPA: {_escape_latex(gpa)}" if gpa else ""
         edu_entries.append(f"\\textbf{{{degree}}} \\hfill {year} \\\\\n\\textit{{{institution}}}{gpa_line}")
 
-    edu_section = "\n\\vspace{{4pt}}\n".join(edu_entries)
+    edu_section = "\n\\vspace{4pt}\n".join(edu_entries)
 
     # Skills
     skills_escaped = [_escape_latex(s) for s in skills]
