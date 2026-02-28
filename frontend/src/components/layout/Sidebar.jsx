@@ -51,6 +51,7 @@ const navItems = {
     { icon: IndianRupee, label: 'Revenue', path: '/admin/revenue' },
     { icon: UserCircle, label: 'Candidates', path: '/admin/candidates' },
     { icon: Database, label: 'Candidate Bank', path: '/admin/candidate-bank' },
+    { icon: FileText, label: 'Resume Builder', path: '/admin/resume-builder' },
     { icon: Upload, label: 'Bulk Import', path: '/admin/bulk-import' },
     { icon: History, label: 'Import History', path: '/admin/import-history' },
     { icon: Users, label: 'Users', path: '/admin/users' },
