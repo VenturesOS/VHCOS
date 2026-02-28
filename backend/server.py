@@ -131,6 +131,7 @@ compliance_router = _safe_import("routes.compliance_routes", "compliance_router"
 maintenance_router = _safe_import("routes.maintenance_routes", "maintenance_router")
 attendance_router = _safe_import("routes.attendance", "router")
 attendance_analytics_router = _safe_import("routes.attendance_analytics", "router")
+resume_router = _safe_import("routes.resume", "resume_router")
 
 # Import boto3 for type hints (r2_client operations)
 import boto3
