@@ -385,12 +385,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <button class="mobile-menu-toggle" aria-label="Toggle menu">&#9776;</button>
     <nav class="nav">
       <a href="/">Home</a>
-      <a href="/about">About</a>
-      <a href="/services">Services</a>
+      <a href="/about" data-role-hide="candidate">About</a>
+      <a href="/services" data-role-hide="candidate">Services</a>
       <a href="/industries">Industries</a>
       <a href="/careers" data-role-hide="employer">Career</a>
       <a href="/contact" data-role-hide="candidate">Contact</a>
-      <a href="/global-hiring">Global Hiring</a>
+      <a href="/global-hiring" data-role-hide="candidate">Global Hiring</a>
+      <a href="/login?redirect=/candidate/resume-builder" data-role-hide="employer">Resume Builder</a>
       <div class="login-dropdown">
         <button class="login-btn" onclick="toggleLoginDropdown()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
