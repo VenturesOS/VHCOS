@@ -330,6 +330,59 @@ async def reparse_candidate(
 
 
 # ---------------------------------------------------------------------------
+# Candidate History / Audit Log endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{candidate_id}/audit-log")
+async def get_candidate_audit_log(candidate_id: str, db=Depends(get_db), user=Depends(get_current_user)):
+    """Get audit log for a candidate (changes, updates, actions)."""
+    logs = await db.audit_logs.find(
+        {"entity_id": candidate_id, "entity_type": {"$in": ["candidate", "candidate_bank"]}},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    return logs
+
+
+@router.get("/{candidate_id}/history")
+async def get_candidate_history(candidate_id: str, db=Depends(get_db), user=Depends(get_current_user)):
+    """Get activity history for a candidate."""
+    # Combine audit logs and application activity
+    logs = await db.audit_logs.find(
+        {"entity_id": candidate_id},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    return logs
+
+
+@router.get("/{candidate_id}/resume-history")
+async def get_candidate_resume_history(candidate_id: str, db=Depends(get_db), user=Depends(get_current_user)):
+    """Get resume upload/parse history for a candidate."""
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    history = []
+    if candidate.get("created_at"):
+        history.append({
+            "action": "profile_created",
+            "source": candidate.get("source", "unknown"),
+            "timestamp": candidate.get("created_at"),
+        })
+    if candidate.get("reparsed_at"):
+        history.append({
+            "action": "resume_reparsed",
+            "timestamp": candidate.get("reparsed_at"),
+        })
+    if candidate.get("resume_latex"):
+        history.append({
+            "action": "latex_resume_generated",
+            "template": candidate.get("resume_template", "ats_clean"),
+            "timestamp": candidate.get("updated_at"),
+        })
+    return history
+
+
+# ---------------------------------------------------------------------------
 # ATS CV — Generate LaTeX resume using Resume Builder engine
 # ---------------------------------------------------------------------------
 
