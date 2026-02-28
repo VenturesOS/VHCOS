@@ -99,6 +99,7 @@ const navItems = {
     { icon: UserPlus, label: 'Post Job', path: '/employer/jobs/new' },
     { icon: CheckCircle, label: 'Approvals', path: '/employer/approvals' },
     { icon: Database, label: 'Candidate Bank', path: '/employer/candidate-bank' },
+    { icon: FileText, label: 'Resume Builder', path: '/employer/resume-builder' },
     { icon: Sparkles, label: 'Find Candidates', path: '/employer/find-candidates' },
     { icon: History, label: 'Match History', path: '/employer/match-history' },
     { icon: Clock, label: 'Attendance', path: '/employer/attendance' },
