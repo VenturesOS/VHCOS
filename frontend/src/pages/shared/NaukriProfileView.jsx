@@ -199,7 +199,7 @@ export default function NaukriProfileView() {
                   className="text-blue-600 border-blue-400 hover:bg-blue-50 h-7 text-xs"
                   data-testid="profile-ats-cv-btn"
                 >
-                  <FileText className="w-3 h-3 mr-1" /> ATS CV
+                  <FileText className="w-3 h-3 mr-1" /> Resume (.tex)
                 </Button>
               </div>
               <Badge className="bg-[#7CB342] text-white text-xs">
