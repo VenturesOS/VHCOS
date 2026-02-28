@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 # ── Single canonical parser — do NOT re-implement here ───────────────────
