@@ -74,13 +74,13 @@ def _escape_latex(text):
 def build_latex(profile: dict, template_id: str) -> str:
     """Generate LaTeX code from profile data and template."""
     p = profile
-    name = _escape_latex(p.get("name", ""))
-    email = p.get("email", "")
-    phone = _escape_latex(p.get("phone", ""))
-    location = _escape_latex(p.get("location", ""))
-    linkedin = p.get("linkedin", "")
-    summary = _escape_latex(p.get("summary", ""))
-    skills = p.get("skills", [])
+    name = _escape_latex(p.get("name") or "")
+    email = p.get("email") or ""
+    phone = _escape_latex(p.get("phone") or "")
+    location = _escape_latex(p.get("location") or "")
+    linkedin = p.get("linkedin") or ""
+    summary = _escape_latex(p.get("summary") or "")
+    skills = p.get("skills") or []
 
     # Build experience entries
     exp_entries = []
