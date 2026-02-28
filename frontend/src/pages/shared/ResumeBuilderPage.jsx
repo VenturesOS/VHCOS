@@ -8,8 +8,8 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { toast } from 'sonner';
 import {
-  FileText, Download, Copy, Sparkles, Plus, X, ChevronDown,
-  Briefcase, GraduationCap, Code, User, Loader2, Check, Search
+  FileText, Download, Copy, Sparkles, Plus, X, ChevronDown, ChevronUp,
+  Briefcase, GraduationCap, Code, User, Loader2, Check, Search, Eye, Edit2
 } from 'lucide-react';
 
 const TEMPLATES = [
@@ -38,8 +38,9 @@ export default function ResumeBuilderPage() {
   const [candidates, setCandidates] = useState([]);
   const [searchingCandidates, setSearchingCandidates] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
 
-  // Load profile on mount
+  // Load profile on mount and auto-generate
   useEffect(() => {
     if (isCandidate) {
       loadMyProfile();
@@ -51,11 +52,27 @@ export default function ResumeBuilderPage() {
   const loadMyProfile = async () => {
     try {
       const res = await resumeAPI.getMyProfile();
-      if (res.data) setProfile(prev => ({ ...prev, ...res.data }));
+      if (res.data) {
+        const loaded = { ...profile, ...res.data };
+        setProfile(loaded);
+        // Auto-generate if there's enough data
+        if (loaded.name) {
+          autoGenerate(loaded, selectedTemplate);
+        }
+      }
     } catch (e) {
       toast.error('Failed to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const autoGenerate = async (profileData, template) => {
+    try {
+      const res = await resumeAPI.generate(profileData, template);
+      setLatex(res.data.latex);
+    } catch (e) {
+      // Silent fail for auto-gen
     }
   };
 
@@ -78,8 +95,12 @@ export default function ResumeBuilderPage() {
     setSelectedCandidateId(candidateId);
     try {
       const res = await resumeAPI.getCandidateProfile(candidateId);
-      if (res.data) setProfile(prev => ({ ...prev, ...res.data }));
-      setLatex('');
+      if (res.data) {
+        const loaded = { ...profile, ...res.data };
+        setProfile(loaded);
+        // Auto-generate the preview
+        autoGenerate(loaded, selectedTemplate);
+      }
       toast.success('Candidate profile loaded');
     } catch (e) {
       toast.error('Failed to load candidate profile');
@@ -113,13 +134,12 @@ export default function ResumeBuilderPage() {
           return { ...exp, bullets: res.data.bullets || exp.bullets };
         })
       );
-      setProfile(prev => ({ ...prev, experience: updatedExp }));
+      const updated = { ...profile, experience: updatedExp };
+      setProfile(updated);
       toast.success('Bullets enhanced with AI!');
-      // Re-generate if latex exists
-      if (latex) {
-        const res = await resumeAPI.generate({ ...profile, experience: updatedExp }, selectedTemplate);
-        setLatex(res.data.latex);
-      }
+      // Re-generate
+      const res = await resumeAPI.generate(updated, selectedTemplate);
+      setLatex(res.data.latex);
     } catch (e) {
       toast.error('AI enhancement failed');
     } finally {
@@ -230,6 +250,8 @@ export default function ResumeBuilderPage() {
     );
   }
 
+  const hasProfileData = profile.name || profile.summary || profile.experience?.length > 0;
+
   return (
     <div className="space-y-6" data-testid="resume-builder-page">
       {/* Header */}
@@ -256,7 +278,7 @@ export default function ResumeBuilderPage() {
             data-testid="generate-resume-btn"
           >
             {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-            Generate Resume
+            {latex ? 'Regenerate' : 'Generate'} Resume
           </Button>
         </div>
       </div>
@@ -305,298 +327,247 @@ export default function ResumeBuilderPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Profile Editor */}
-        <div className="lg:col-span-1 space-y-4">
-          {/* Template Selection */}
-          <Card className="border-slate-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#7CB342]" /> Template
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {TEMPLATES.map(t => (
+      {/* Preview-First Layout: Preview on top, Edit below */}
+      <div className="space-y-6">
+        {/* Resume Preview / Output — Always visible */}
+        <Card className="border-slate-200" data-testid="resume-output-card">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
                 <button
-                  key={t.id}
-                  onClick={() => setSelectedTemplate(t.id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-all ${
-                    selectedTemplate === t.id
-                      ? 'border-[#7CB342] bg-green-50 text-green-800'
-                      : 'border-slate-200 hover:border-slate-300'
+                  onClick={() => setActiveTab('preview')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'preview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}
-                  data-testid={`template-${t.id}`}
+                  data-testid="tab-preview"
                 >
-                  <div className="font-medium">{t.label}</div>
-                  <div className="text-xs text-slate-500">{t.desc}</div>
+                  <Eye className="w-3.5 h-3.5 inline mr-1.5" />Preview
                 </button>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Personal Info */}
-          <Card className="border-slate-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <User className="w-4 h-4 text-[#7CB342]" /> Personal Info
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label className="text-xs text-slate-500">Full Name</Label>
-                <Input value={profile.name} onChange={(e) => updateField('name', e.target.value)} data-testid="profile-name" />
+                <button
+                  onClick={() => setActiveTab('latex')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'latex' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  data-testid="tab-latex"
+                >
+                  LaTeX Code
+                </button>
               </div>
-              <div>
-                <Label className="text-xs text-slate-500">Email</Label>
-                <Input value={profile.email} onChange={(e) => updateField('email', e.target.value)} data-testid="profile-email" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs text-slate-500">Phone</Label>
-                  <Input value={profile.phone} onChange={(e) => updateField('phone', e.target.value)} data-testid="profile-phone" />
+              {latex && (
+                <div className="flex gap-2">
+                  <Button onClick={handleCopy} size="sm" variant="outline" data-testid="copy-latex-btn">
+                    {copied ? <Check className="w-4 h-4 mr-1 text-green-600" /> : <Copy className="w-4 h-4 mr-1" />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                  <Button onClick={handleDownload} size="sm" variant="outline" data-testid="download-tex-btn">
+                    <Download className="w-4 h-4 mr-1" /> .tex
+                  </Button>
                 </div>
-                <div>
-                  <Label className="text-xs text-slate-500">Location</Label>
-                  <Input value={profile.location} onChange={(e) => updateField('location', e.target.value)} data-testid="profile-location" />
-                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {activeTab === 'preview' ? (
+              <ResumePreview profile={profile} template={selectedTemplate} />
+            ) : latex ? (
+              <div className="relative">
+                <pre className="bg-slate-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto max-h-[600px] overflow-y-auto font-mono">
+                  {latex}
+                </pre>
+                <p className="text-xs text-slate-400 mt-2">
+                  Compile with: pdflatex resume.tex or paste into <a href="https://www.overleaf.com" target="_blank" rel="noreferrer" className="text-[#7CB342] underline">Overleaf</a>
+                </p>
               </div>
-              <div>
-                <Label className="text-xs text-slate-500">LinkedIn URL</Label>
-                <Input value={profile.linkedin} onChange={(e) => updateField('linkedin', e.target.value)} placeholder="https://linkedin.com/in/..." data-testid="profile-linkedin" />
+            ) : (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                Click "Generate Resume" to create the LaTeX code
               </div>
-              <div>
-                <Label className="text-xs text-slate-500">Professional Summary</Label>
-                <Textarea value={profile.summary} onChange={(e) => updateField('summary', e.target.value)} rows={3} data-testid="profile-summary" />
-              </div>
-            </CardContent>
-          </Card>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Skills */}
-          <Card className="border-slate-200">
-            <CardHeader className="pb-3">
+        {/* Collapsible Edit Section */}
+        <Card className="border-slate-200">
+          <CardHeader
+            className="pb-3 cursor-pointer select-none hover:bg-slate-50 transition-colors rounded-t-lg"
+            onClick={() => setEditOpen(!editOpen)}
+          >
+            <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Code className="w-4 h-4 text-[#7CB342]" /> Skills
+                <Edit2 className="w-4 h-4 text-[#7CB342]" /> Edit Profile Details
               </CardTitle>
-            </CardHeader>
+              {editOpen ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+            </div>
+          </CardHeader>
+          {editOpen && (
             <CardContent>
-              <div className="flex gap-2 mb-3">
-                <Input
-                  value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
-                  placeholder="Add a skill"
-                  className="flex-1"
-                  data-testid="add-skill-input"
-                />
-                <Button onClick={addSkill} size="sm" variant="outline" data-testid="add-skill-btn">
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {profile.skills.map((skill, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-xs text-slate-700"
-                  >
-                    {skill}
-                    <button onClick={() => removeSkill(idx)} className="hover:text-red-500">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right: Experience + Education + Output */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Experience */}
-          <Card className="border-slate-200">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-[#7CB342]" /> Experience
-              </CardTitle>
-              <Button onClick={addExperience} size="sm" variant="outline" data-testid="add-experience-btn">
-                <Plus className="w-4 h-4 mr-1" /> Add
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {profile.experience.map((exp, expIdx) => (
-                <div key={expIdx} className="border rounded-lg p-3 space-y-2 relative bg-slate-50/50">
-                  <button
-                    onClick={() => removeExperience(expIdx)}
-                    className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
-                    data-testid={`remove-exp-${expIdx}`}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      value={exp.title}
-                      onChange={(e) => updateExperience(expIdx, 'title', e.target.value)}
-                      placeholder="Job Title"
-                      className="text-sm"
-                    />
-                    <Input
-                      value={exp.company}
-                      onChange={(e) => updateExperience(expIdx, 'company', e.target.value)}
-                      placeholder="Company"
-                      className="text-sm"
-                    />
-                  </div>
-                  <Input
-                    value={exp.duration}
-                    onChange={(e) => updateExperience(expIdx, 'duration', e.target.value)}
-                    placeholder="Duration (e.g., Jan 2022 - Present)"
-                    className="text-sm"
-                  />
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-500">Bullet Points</Label>
-                    {exp.bullets.map((bullet, bIdx) => (
-                      <div key={bIdx} className="flex gap-1.5">
-                        <Input
-                          value={bullet}
-                          onChange={(e) => updateBullet(expIdx, bIdx, e.target.value)}
-                          placeholder="Describe your achievement..."
-                          className="flex-1 text-sm"
-                        />
-                        <button onClick={() => removeBullet(expIdx, bIdx)} className="text-slate-400 hover:text-red-500 shrink-0">
-                          <X className="w-3.5 h-3.5" />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column: Personal + Template + Skills */}
+                <div className="space-y-4">
+                  {/* Template Selection */}
+                  <div>
+                    <Label className="text-xs text-slate-500 font-semibold flex items-center gap-1.5 mb-2">
+                      <FileText className="w-3.5 h-3.5 text-[#7CB342]" /> Template
+                    </Label>
+                    <div className="space-y-1.5">
+                      {TEMPLATES.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => setSelectedTemplate(t.id)}
+                          className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-all ${
+                            selectedTemplate === t.id
+                              ? 'border-[#7CB342] bg-green-50 text-green-800'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                          data-testid={`template-${t.id}`}
+                        >
+                          <div className="font-medium">{t.label}</div>
+                          <div className="text-xs text-slate-500">{t.desc}</div>
                         </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Personal Info */}
+                  <div>
+                    <Label className="text-xs text-slate-500 font-semibold flex items-center gap-1.5 mb-2">
+                      <User className="w-3.5 h-3.5 text-[#7CB342]" /> Personal Info
+                    </Label>
+                    <div className="space-y-2">
+                      <Input value={profile.name} onChange={(e) => updateField('name', e.target.value)} placeholder="Full Name" data-testid="profile-name" />
+                      <Input value={profile.email} onChange={(e) => updateField('email', e.target.value)} placeholder="Email" data-testid="profile-email" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input value={profile.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="Phone" data-testid="profile-phone" />
+                        <Input value={profile.location} onChange={(e) => updateField('location', e.target.value)} placeholder="Location" data-testid="profile-location" />
                       </div>
-                    ))}
-                    <button
-                      onClick={() => addBullet(expIdx)}
-                      className="text-xs text-[#7CB342] hover:text-[#689F38] flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> Add bullet
-                    </button>
+                      <Input value={profile.linkedin} onChange={(e) => updateField('linkedin', e.target.value)} placeholder="LinkedIn URL" data-testid="profile-linkedin" />
+                      <Textarea value={profile.summary} onChange={(e) => updateField('summary', e.target.value)} rows={3} placeholder="Professional Summary" data-testid="profile-summary" />
+                    </div>
                   </div>
-                </div>
-              ))}
-              {!profile.experience.length && (
-                <p className="text-sm text-slate-400 text-center py-4">No experience added yet</p>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Education */}
-          <Card className="border-slate-200">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <GraduationCap className="w-4 h-4 text-[#7CB342]" /> Education
-              </CardTitle>
-              <Button onClick={addEducation} size="sm" variant="outline" data-testid="add-education-btn">
-                <Plus className="w-4 h-4 mr-1" /> Add
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {profile.education.map((edu, idx) => (
-                <div key={idx} className="border rounded-lg p-3 space-y-2 relative bg-slate-50/50">
-                  <button
-                    onClick={() => removeEducation(idx)}
-                    className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
-                    data-testid={`remove-edu-${idx}`}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                  <Input
-                    value={edu.institution}
-                    onChange={(e) => updateEducation(idx, 'institution', e.target.value)}
-                    placeholder="University / Institution"
-                    className="text-sm"
-                  />
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      value={edu.degree}
-                      onChange={(e) => updateEducation(idx, 'degree', e.target.value)}
-                      placeholder="Degree"
-                      className="text-sm col-span-1"
-                    />
-                    <Input
-                      value={edu.year}
-                      onChange={(e) => updateEducation(idx, 'year', e.target.value)}
-                      placeholder="Year"
-                      className="text-sm"
-                    />
-                    <Input
-                      value={edu.gpa || ''}
-                      onChange={(e) => updateEducation(idx, 'gpa', e.target.value)}
-                      placeholder="GPA (optional)"
-                      className="text-sm"
-                    />
+                  {/* Skills */}
+                  <div>
+                    <Label className="text-xs text-slate-500 font-semibold flex items-center gap-1.5 mb-2">
+                      <Code className="w-3.5 h-3.5 text-[#7CB342]" /> Skills
+                    </Label>
+                    <div className="flex gap-2 mb-2">
+                      <Input
+                        value={newSkill}
+                        onChange={(e) => setNewSkill(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
+                        placeholder="Add a skill"
+                        className="flex-1"
+                        data-testid="add-skill-input"
+                      />
+                      <Button onClick={addSkill} size="sm" variant="outline" data-testid="add-skill-btn">
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {profile.skills.map((skill, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-xs text-slate-700">
+                          {skill}
+                          <button onClick={() => removeSkill(idx)} className="hover:text-red-500"><X className="w-3 h-3" /></button>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
-              {!profile.education.length && (
-                <p className="text-sm text-slate-400 text-center py-4">No education added yet</p>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Output: Preview / LaTeX */}
-          {latex && (
-            <Card className="border-slate-200" data-testid="resume-output-card">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
-                    <button
-                      onClick={() => setActiveTab('preview')}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                        activeTab === 'preview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                      data-testid="tab-preview"
-                    >
-                      Preview
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('latex')}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                        activeTab === 'latex' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                      data-testid="tab-latex"
-                    >
-                      LaTeX Code
-                    </button>
+                {/* Right Column: Experience + Education */}
+                <div className="lg:col-span-2 space-y-4">
+                  {/* Experience */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-[#7CB342]" /> Experience
+                      </Label>
+                      <Button onClick={addExperience} size="sm" variant="outline" data-testid="add-experience-btn">
+                        <Plus className="w-4 h-4 mr-1" /> Add
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {profile.experience.map((exp, expIdx) => (
+                        <div key={expIdx} className="border rounded-lg p-3 space-y-2 relative bg-slate-50/50">
+                          <button onClick={() => removeExperience(expIdx)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500" data-testid={`remove-exp-${expIdx}`}>
+                            <X className="w-4 h-4" />
+                          </button>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input value={exp.title} onChange={(e) => updateExperience(expIdx, 'title', e.target.value)} placeholder="Job Title" className="text-sm" />
+                            <Input value={exp.company} onChange={(e) => updateExperience(expIdx, 'company', e.target.value)} placeholder="Company" className="text-sm" />
+                          </div>
+                          <Input value={exp.duration} onChange={(e) => updateExperience(expIdx, 'duration', e.target.value)} placeholder="Duration (e.g., Jan 2022 - Present)" className="text-sm" />
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-500">Bullet Points</Label>
+                            {exp.bullets.map((bullet, bIdx) => (
+                              <div key={bIdx} className="flex gap-1.5">
+                                <Input value={bullet} onChange={(e) => updateBullet(expIdx, bIdx, e.target.value)} placeholder="Describe your achievement..." className="flex-1 text-sm" />
+                                <button onClick={() => removeBullet(expIdx, bIdx)} className="text-slate-400 hover:text-red-500 shrink-0"><X className="w-3.5 h-3.5" /></button>
+                              </div>
+                            ))}
+                            <button onClick={() => addBullet(expIdx)} className="text-xs text-[#7CB342] hover:text-[#689F38] flex items-center gap-1">
+                              <Plus className="w-3 h-3" /> Add bullet
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {!profile.experience.length && (
+                        <p className="text-sm text-slate-400 text-center py-4">No experience added yet</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={handleCopy} size="sm" variant="outline" data-testid="copy-latex-btn">
-                      {copied ? <Check className="w-4 h-4 mr-1 text-green-600" /> : <Copy className="w-4 h-4 mr-1" />}
-                      {copied ? 'Copied' : 'Copy'}
-                    </Button>
-                    <Button onClick={handleDownload} size="sm" variant="outline" data-testid="download-tex-btn">
-                      <Download className="w-4 h-4 mr-1" /> .tex
-                    </Button>
+
+                  {/* Education */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
+                        <GraduationCap className="w-3.5 h-3.5 text-[#7CB342]" /> Education
+                      </Label>
+                      <Button onClick={addEducation} size="sm" variant="outline" data-testid="add-education-btn">
+                        <Plus className="w-4 h-4 mr-1" /> Add
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {profile.education.map((edu, idx) => (
+                        <div key={idx} className="border rounded-lg p-3 space-y-2 relative bg-slate-50/50">
+                          <button onClick={() => removeEducation(idx)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500" data-testid={`remove-edu-${idx}`}>
+                            <X className="w-4 h-4" />
+                          </button>
+                          <Input value={edu.institution} onChange={(e) => updateEducation(idx, 'institution', e.target.value)} placeholder="University / Institution" className="text-sm" />
+                          <div className="grid grid-cols-3 gap-2">
+                            <Input value={edu.degree} onChange={(e) => updateEducation(idx, 'degree', e.target.value)} placeholder="Degree" className="text-sm" />
+                            <Input value={edu.year} onChange={(e) => updateEducation(idx, 'year', e.target.value)} placeholder="Year" className="text-sm" />
+                            <Input value={edu.gpa || ''} onChange={(e) => updateEducation(idx, 'gpa', e.target.value)} placeholder="GPA (optional)" className="text-sm" />
+                          </div>
+                        </div>
+                      ))}
+                      {!profile.education.length && (
+                        <p className="text-sm text-slate-400 text-center py-4">No education added yet</p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {activeTab === 'preview' ? (
-                  <ResumePreview profile={profile} template={selectedTemplate} />
-                ) : (
-                  <div className="relative">
-                    <pre className="bg-slate-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto max-h-[600px] overflow-y-auto font-mono">
-                      {latex}
-                    </pre>
-                    <p className="text-xs text-slate-400 mt-2">
-                      Compile with: pdflatex resume.tex or paste into <a href="https://www.overleaf.com" target="_blank" rel="noreferrer" className="text-[#7CB342] underline">Overleaf</a>
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );
 }
 
-// ── Visual Preview Component ───────────────────────────────
+// Visual Preview Component - Always shows profile data
 function ResumePreview({ profile: p, template: tpl }) {
   const isModern = tpl === 'modern';
-  const isGoogle = tpl === 'google_style';
+
+  if (!p.name && !p.summary && !p.experience?.length && !p.skills?.length) {
+    return (
+      <div className="text-center py-12 text-slate-400" data-testid="resume-preview-empty">
+        <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p className="text-sm">Search for a candidate above to preview their resume</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -691,10 +662,6 @@ function ResumePreview({ profile: p, template: tpl }) {
             )}
           </p>
         </>
-      )}
-
-      {!p.name && !p.summary && !p.experience?.length && (
-        <p className="text-center text-slate-400 py-8">Fill in your profile details and click "Generate Resume"</p>
       )}
     </div>
   );
