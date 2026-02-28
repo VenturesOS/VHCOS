@@ -385,15 +385,17 @@ export default function ResumeBuilderPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
-                <button
-                  onClick={() => setActiveTab('pdf')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'pdf' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                  data-testid="tab-pdf"
-                >
-                  <FileDown className="w-3.5 h-3.5 inline mr-1.5" />PDF
-                </button>
+                {pdfAvailable && (
+                  <button
+                    onClick={() => setActiveTab('pdf')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      activeTab === 'pdf' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                    data-testid="tab-pdf"
+                  >
+                    <FileDown className="w-3.5 h-3.5 inline mr-1.5" />PDF
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveTab('preview')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
