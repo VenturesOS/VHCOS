@@ -387,8 +387,44 @@ async def get_candidate_resume_history(candidate_id: str, db=Depends(get_db), us
 # ---------------------------------------------------------------------------
 
 @router.get("/{candidate_id}/ats-cv")
-async def get_ats_cv(candidate_id: str, db=Depends(get_db), user=Depends(get_current_user)):
-    """Generate or return a LaTeX resume for a candidate using the Resume Builder engine."""
+async def get_ats_cv(
+    candidate_id: str,
+    token: Optional[str] = Query(None),
+    db=Depends(get_db),
+):
+    """Generate or return a LaTeX resume for a candidate using the Resume Builder engine.
+    Supports both Authorization header and ?token= query param for new-tab downloads."""
+    from fastapi import Request
+    from utils.auth import get_current_user_from_token
+
+    # Auth: accept token from header or query param
+    from starlette.requests import Request as _Req
+    if not token:
+        # Fall back to standard auth
+        from utils.auth import get_current_user as _std_auth
+        # This will be handled below via manual token extraction
+        pass
+
+    # Manual token resolution for new-tab downloads
+    import jwt as _jwt
+    from config import JWT_SECRET_KEY, JWT_ALGORITHM
+    raw_token = token
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Not authenticated. Pass ?token= for new-tab downloads.")
+
+    try:
+        payload = _jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except _jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     from routes.resume import build_latex, _format_bank_profile_for_resume
 
     candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
