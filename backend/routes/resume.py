@@ -112,96 +112,100 @@ def build_latex(profile: dict, template_id: str) -> str:
     # Skills
     skills_escaped = [_escape_latex(s) for s in skills]
 
+    # Pre-compute contact line parts (avoids backslash in f-string expressions)
+    contact_parts = [phone]
+    if email:
+        contact_parts.append(email)
+    if location:
+        contact_parts.append(location)
+    if linkedin:
+        contact_parts.append(f"\\href{{{linkedin}}}{{LinkedIn}}")
+    contact_line = " | ".join(p for p in contact_parts if p)
+
     if template_id == "google_style":
         skills_line = " $\\bullet$ ".join(skills_escaped)
-        return f"""\\documentclass[11pt,a4paper]{{article}}
-\\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{{geometry}}
-\\usepackage{{enumitem}}
-\\usepackage{{titlesec}}
-\\usepackage[hidelinks]{{hyperref}}
-\\usepackage{{xcolor}}
-\\pagenumbering{{gobble}}
-\\titleformat{{\\section}}{{\\large\\bfseries}}{{}}{{0em}}{{}}[\\titlerule]
-\\titlespacing*{{\\section}}{{0pt}}{{8pt}}{{4pt}}
-\\begin{{document}}
-{{\\LARGE\\bfseries {name}}}\\\\[4pt]
-{phone}{f" | {email}" if email else ""}{f" | {location}" if location else ""}{f" | \\href{{{linkedin}}}{{LinkedIn}}" if linkedin else ""}
-
-\\section*{{Summary}}
-{summary}
-
-\\section*{{Experience}}
-{exp_section}
-
-\\section*{{Education}}
-{edu_section}
-
-\\section*{{Skills}}
-{skills_line}
-\\end{{document}}"""
+        return (
+            "\\documentclass[11pt,a4paper]{article}\n"
+            "\\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{geometry}\n"
+            "\\usepackage{enumitem}\n"
+            "\\usepackage{titlesec}\n"
+            "\\usepackage[hidelinks]{hyperref}\n"
+            "\\usepackage{xcolor}\n"
+            "\\pagenumbering{gobble}\n"
+            "\\titleformat{\\section}{\\large\\bfseries}{}{0em}{}[\\titlerule]\n"
+            "\\titlespacing*{\\section}{0pt}{8pt}{4pt}\n"
+            "\\begin{document}\n"
+            f"{{\\LARGE\\bfseries {name}}}\\\\[4pt]\n"
+            f"{contact_line}\n\n"
+            "\\section*{Summary}\n"
+            f"{summary}\n\n"
+            "\\section*{Experience}\n"
+            f"{exp_section}\n\n"
+            "\\section*{Education}\n"
+            f"{edu_section}\n\n"
+            "\\section*{Skills}\n"
+            f"{skills_line}\n"
+            "\\end{document}"
+        )
 
     elif template_id == "modern":
-        skills_items = "\n".join([f"  \\item {s}" for s in skills_escaped])
-        return f"""\\documentclass[11pt,a4paper]{{article}}
-\\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{{geometry}}
-\\usepackage{{enumitem}}
-\\usepackage{{titlesec}}
-\\usepackage[hidelinks]{{hyperref}}
-\\usepackage{{multicol}}
-\\pagenumbering{{gobble}}
-\\titleformat{{\\section}}{{\\large\\bfseries\\scshape}}{{}}{{0em}}{{}}[\\titlerule]
-\\titlespacing*{{\\section}}{{0pt}}{{8pt}}{{4pt}}
-\\begin{{document}}
-\\begin{{center}}
-{{\\LARGE\\bfseries {name}}}\\\\[4pt]
-{phone}{f" | {email}" if email else ""}{f" | {location}" if location else ""}{f" | \\href{{{linkedin}}}{{LinkedIn}}" if linkedin else ""}
-\\end{{center}}
-
-\\section*{{Professional Summary}}
-{summary}
-
-\\section*{{Experience}}
-{exp_section}
-
-\\section*{{Education}}
-{edu_section}
-
-\\section*{{Technical Skills}}
-\\begin{{multicols}}{{2}}
-\\begin{{itemize}}[leftmargin=*, itemsep=1pt]
-{skills_items}
-\\end{{itemize}}
-\\end{{multicols}}
-\\end{{document}}"""
+        skills_items = "\n".join(["  \\item " + s for s in skills_escaped])
+        return (
+            "\\documentclass[11pt,a4paper]{article}\n"
+            "\\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{geometry}\n"
+            "\\usepackage{enumitem}\n"
+            "\\usepackage{titlesec}\n"
+            "\\usepackage[hidelinks]{hyperref}\n"
+            "\\usepackage{multicol}\n"
+            "\\pagenumbering{gobble}\n"
+            "\\titleformat{\\section}{\\large\\bfseries\\scshape}{}{0em}{}[\\titlerule]\n"
+            "\\titlespacing*{\\section}{0pt}{8pt}{4pt}\n"
+            "\\begin{document}\n"
+            "\\begin{center}\n"
+            f"{{\\LARGE\\bfseries {name}}}\\\\[4pt]\n"
+            f"{contact_line}\n"
+            "\\end{center}\n\n"
+            "\\section*{Professional Summary}\n"
+            f"{summary}\n\n"
+            "\\section*{Experience}\n"
+            f"{exp_section}\n\n"
+            "\\section*{Education}\n"
+            f"{edu_section}\n\n"
+            "\\section*{Technical Skills}\n"
+            "\\begin{multicols}{2}\n"
+            "\\begin{itemize}[leftmargin=*, itemsep=1pt]\n"
+            f"{skills_items}\n"
+            "\\end{itemize}\n"
+            "\\end{multicols}\n"
+            "\\end{document}"
+        )
 
     else:  # ats_clean (default)
         skills_line = " $\\bullet$ ".join(skills_escaped)
-        return f"""\\documentclass[11pt,a4paper]{{article}}
-\\usepackage[top=0.4in,bottom=0.4in,left=0.5in,right=0.5in]{{geometry}}
-\\usepackage{{enumitem}}
-\\usepackage{{titlesec}}
-\\usepackage[hidelinks]{{hyperref}}
-\\pagenumbering{{gobble}}
-\\titleformat{{\\section}}{{\\normalsize\\bfseries\\uppercase}}{{}}{{0em}}{{}}[\\rule{{\\linewidth}}{{0.4pt}}]
-\\titlespacing*{{\\section}}{{0pt}}{{6pt}}{{4pt}}
-\\begin{{document}}
-\\begin{{center}}
-{{\\Large\\bfseries\\uppercase{{{name}}}}}\\\\[3pt]
-{phone}{f" | {email}" if email else ""}{f" | {location}" if location else ""}{f" | \\href{{{linkedin}}}{{LinkedIn}}" if linkedin else ""}
-\\end{{center}}
-
-\\section*{{Summary}}
-{summary}
-
-\\section*{{Experience}}
-{exp_section}
-
-\\section*{{Education}}
-{edu_section}
-
-\\section*{{Skills}}
-{skills_line}
-\\end{{document}}"""
+        return (
+            "\\documentclass[11pt,a4paper]{article}\n"
+            "\\usepackage[top=0.4in,bottom=0.4in,left=0.5in,right=0.5in]{geometry}\n"
+            "\\usepackage{enumitem}\n"
+            "\\usepackage{titlesec}\n"
+            "\\usepackage[hidelinks]{hyperref}\n"
+            "\\pagenumbering{gobble}\n"
+            "\\titleformat{\\section}{\\normalsize\\bfseries\\uppercase}{}{0em}{}[\\rule{\\linewidth}{0.4pt}]\n"
+            "\\titlespacing*{\\section}{0pt}{6pt}{4pt}\n"
+            "\\begin{document}\n"
+            "\\begin{center}\n"
+            f"{{\\Large\\bfseries\\uppercase{{{name}}}}}\\\\[3pt]\n"
+            f"{contact_line}\n"
+            "\\end{center}\n\n"
+            "\\section*{Summary}\n"
+            f"{summary}\n\n"
+            "\\section*{Experience}\n"
+            f"{exp_section}\n\n"
+            "\\section*{Education}\n"
+            f"{edu_section}\n\n"
+            "\\section*{Skills}\n"
+            f"{skills_line}\n"
+            "\\end{document}"
+        )
 
 
 # ── Routes ──────────────────────────────────────────────────
