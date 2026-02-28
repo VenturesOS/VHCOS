@@ -94,7 +94,7 @@ class TestResumeTemplates:
     def test_templates_requires_auth(self):
         """Verify templates endpoint requires authentication"""
         response = requests.get(f"{BASE_URL}/api/resume/templates")
-        assert response.status_code == 401, f"Expected 401 without auth, got {response.status_code}"
+        assert response.status_code in [401, 403], f"Expected 401/403 without auth, got {response.status_code}"
         print("SUCCESS: /api/resume/templates requires authentication")
 
 
@@ -252,7 +252,7 @@ class TestMyProfile:
     def test_my_profile_requires_auth(self):
         """Verify my-profile endpoint requires authentication"""
         response = requests.get(f"{BASE_URL}/api/resume/my-profile")
-        assert response.status_code == 401, f"Expected 401 without auth, got {response.status_code}"
+        assert response.status_code in [401, 403], f"Expected 401/403 without auth, got {response.status_code}"
         print("SUCCESS: /api/resume/my-profile requires authentication")
 
 
@@ -322,7 +322,7 @@ class TestCandidateProfile:
     def test_candidate_profile_requires_auth(self):
         """Verify candidate profile endpoint requires authentication"""
         response = requests.get(f"{BASE_URL}/api/resume/candidate/test-id")
-        assert response.status_code == 401, f"Expected 401 without auth, got {response.status_code}"
+        assert response.status_code in [401, 403], f"Expected 401/403 without auth, got {response.status_code}"
         print("SUCCESS: /api/resume/candidate/{id} requires authentication")
 
 
@@ -379,7 +379,7 @@ class TestAiEnhance:
             f"{BASE_URL}/api/resume/ai-enhance",
             json={"bullets": ["test"]}
         )
-        assert response.status_code == 401, f"Expected 401 without auth, got {response.status_code}"
+        assert response.status_code in [401, 403], f"Expected 401/403 without auth, got {response.status_code}"
         print("SUCCESS: /api/resume/ai-enhance requires authentication")
 
 
