@@ -207,6 +207,7 @@ function App() {
           <Route path="/candidate" element={<DashboardLayout allowedRoles={["candidate"]} />}>
             <Route index element={<CandidateDashboard />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="resume-builder" element={<ResumeBuilderPage />} />
             <Route path="jobs" element={<BrowseJobsPage />} />
             <Route path="matching-jobs" element={<MatchingJobsPage />} />
             <Route path="applications" element={<ApplicationsPage />} />
