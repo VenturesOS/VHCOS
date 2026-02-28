@@ -162,6 +162,7 @@ function App() {
             <Route path="attendance-insights" element={<AttendanceInsightsPage />} />
             <Route path="attendance-settings" element={<AttendanceSettingsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
+            <Route path="resume-builder" element={<ResumeBuilderPage />} />
           </Route>
 
           {/* Recruiter Routes */}
