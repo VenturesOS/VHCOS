@@ -422,6 +422,56 @@ async def get_candidate_resume_history(candidate_id: str, db=Depends(get_db), us
     return history
 
 
+
+# ---------------------------------------------------------------------------
+# Download Resume (original uploaded CV)
+# ---------------------------------------------------------------------------
+
+@router.get("/{candidate_id}/download-resume")
+async def download_resume(
+    candidate_id: str,
+    token: Optional[str] = Query(None),
+    db=Depends(get_db),
+):
+    """Download the original uploaded resume for a candidate.
+    Supports ?token= query param for new-tab downloads."""
+    import jwt as _jwt
+    from config import JWT_SECRET_KEY, JWT_ALGORITHM
+    from fastapi.responses import FileResponse, Response
+
+    raw_token = token
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Not authenticated. Pass ?token= for new-tab downloads.")
+
+    try:
+        payload = _jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (_jwt.ExpiredSignatureError, _jwt.InvalidTokenError):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    resume_path = candidate.get("resume_path") or candidate.get("resume_url")
+    if not resume_path:
+        raise HTTPException(status_code=404, detail="No resume file available for this candidate")
+
+    # If it's a local file path
+    if os.path.exists(resume_path):
+        return FileResponse(resume_path, filename=os.path.basename(resume_path))
+
+    # If it's a URL (R2 or external), redirect
+    if resume_path.startswith("http"):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=resume_path)
+
+    raise HTTPException(status_code=404, detail="Resume file not found on disk")
+
+
+
 # ---------------------------------------------------------------------------
 # ATS CV — Generate LaTeX resume using Resume Builder engine
 # ---------------------------------------------------------------------------
