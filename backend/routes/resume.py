@@ -237,6 +237,18 @@ class CompilePdfRequest(BaseModel):
     latex: str
 
 
+def _is_pdflatex_available():
+    """Check if pdflatex is installed on the system."""
+    import shutil
+    return shutil.which("pdflatex") is not None
+
+
+@resume_router.get("/capabilities")
+async def get_resume_capabilities(user=Depends(get_current_user)):
+    """Return what the resume builder can do on this server."""
+    return {"pdf_compilation": _is_pdflatex_available()}
+
+
 @resume_router.post("/compile-pdf")
 async def compile_pdf(req: CompilePdfRequest, user=Depends(get_current_user)):
     """Compile LaTeX code into a PDF and return it as a downloadable file."""
@@ -244,6 +256,12 @@ async def compile_pdf(req: CompilePdfRequest, user=Depends(get_current_user)):
     import subprocess
     import os
     from fastapi.responses import Response
+
+    if not _is_pdflatex_available():
+        raise HTTPException(
+            status_code=503,
+            detail="PDF compilation is not available on this server. pdflatex is not installed. Use the HTML preview or download the .tex file and compile locally."
+        )
 
     if not req.latex or len(req.latex.strip()) < 20:
         raise HTTPException(status_code=400, detail="LaTeX content is too short or empty")
@@ -263,6 +281,11 @@ async def compile_pdf(req: CompilePdfRequest, user=Depends(get_current_user)):
             )
         except subprocess.TimeoutExpired:
             raise HTTPException(status_code=500, detail="PDF compilation timed out")
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=503,
+                detail="PDF compilation is not available. pdflatex binary not found."
+            )
 
         pdf_path = os.path.join(tmpdir, "resume.pdf")
         if not os.path.exists(pdf_path):
@@ -271,7 +294,6 @@ async def compile_pdf(req: CompilePdfRequest, user=Depends(get_current_user)):
             if os.path.exists(log_path):
                 with open(log_path) as lf:
                     lines = lf.readlines()
-                    # Extract error lines
                     log_tail = "".join(lines[-30:])
             raise HTTPException(
                 status_code=422,
