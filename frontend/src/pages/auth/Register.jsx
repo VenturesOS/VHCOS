@@ -132,6 +132,54 @@ export default function Register() {
                   </button>
                 </div>
               </div>
+              {/* Notice Period, CTC fields */}
+              <div className="space-y-2">
+                <Label htmlFor="notice_period">Notice Period</Label>
+                <select
+                  id="notice_period"
+                  value={formData.notice_period}
+                  onChange={(e) => handleChange('notice_period', e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#7CB342]"
+                  data-testid="register-notice-period"
+                >
+                  <option value="">Select notice period</option>
+                  <option value="Immediate">Immediate</option>
+                  <option value="15 days">15 days</option>
+                  <option value="30 days">30 days</option>
+                  <option value="60 days">60 days</option>
+                  <option value="90 days">90 days</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="current_ctc">Current CTC (LPA)</Label>
+                  <Input
+                    id="current_ctc"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    placeholder="e.g. 8.5"
+                    value={formData.current_ctc}
+                    onChange={(e) => handleChange('current_ctc', e.target.value)}
+                    data-testid="register-current-ctc"
+                    className="focus-visible:ring-[#7CB342]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expected_ctc">Expected CTC (LPA)</Label>
+                  <Input
+                    id="expected_ctc"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    placeholder="e.g. 12.0"
+                    value={formData.expected_ctc}
+                    onChange={(e) => handleChange('expected_ctc', e.target.value)}
+                    data-testid="register-expected-ctc"
+                    className="focus-visible:ring-[#7CB342]"
+                  />
+                </div>
+              </div>
               {isTurnstileEnabled && (
                 <TurnstileWidget
                   onVerify={setTurnstileToken}
