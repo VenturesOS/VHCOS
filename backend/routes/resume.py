@@ -275,22 +275,28 @@ async def get_candidate_resume_profile(candidate_id: str, user=Depends(get_curre
 @resume_router.post("/ai-enhance")
 async def ai_enhance_bullets(req: AiEnhanceRequest, user=Depends(get_current_user)):
     """AI-enhance resume bullet points using OpenAI."""
-    from services.llm_service import call_llm
+    from services.llm_service import chat_completion
 
-    prompt = f"""You are an expert resume writer. Rewrite these bullet points to be stronger, more impact-driven, and ATS-optimized.
-
-Rules:
-- Start each bullet with a strong action verb
-- Include metrics and quantifiable results where possible
-- Keep each bullet concise (1-2 lines)
-- Make them ATS-friendly with industry keywords
-- Return ONLY a JSON array of strings, nothing else
-
-Bullet points to enhance:
-{chr(10).join(f'- {b}' for b in req.bullets)}"""
+    prompt = (
+        "You are an expert resume writer. Rewrite these bullet points to be stronger, more impact-driven, and ATS-optimized.\n\n"
+        "Rules:\n"
+        "- Start each bullet with a strong action verb\n"
+        "- Include metrics and quantifiable results where possible\n"
+        "- Keep each bullet concise (1-2 lines)\n"
+        "- Make them ATS-friendly with industry keywords\n"
+        "- Return ONLY a JSON array of strings, nothing else\n\n"
+        "Bullet points to enhance:\n"
+    )
+    prompt += "\n".join("- " + b for b in req.bullets)
 
     try:
-        response = await call_llm(prompt, model="gpt-4o-mini")
+        response = await chat_completion(
+            system_prompt="You are an expert resume writer. Return only valid JSON arrays.",
+            user_prompt=prompt,
+            model="gpt-4o-mini",
+            temperature=0.7,
+            json_mode=True,
+        )
         import json
         # Try to parse JSON from the response
         text = response.strip()
