@@ -327,3 +327,77 @@ async def reparse_candidate(
         "candidate_id": candidate_id,
         "skills_count": len(get_skills(new_data)),
     }
+
+
+# ---------------------------------------------------------------------------
+# ATS CV — Generate LaTeX resume using Resume Builder engine
+# ---------------------------------------------------------------------------
+
+@router.get("/{candidate_id}/ats-cv")
+async def get_ats_cv(candidate_id: str, db=Depends(get_db), user=Depends(get_current_user)):
+    """Generate or return a LaTeX resume for a candidate using the Resume Builder engine."""
+    from routes.resume import build_latex, _format_bank_profile_for_resume
+
+    candidate = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # If we have a stored LaTeX, return it
+    stored_latex = candidate.get("resume_latex")
+    if stored_latex:
+        return _latex_download_response(stored_latex, candidate.get("name", "Candidate"))
+
+    # Generate fresh LaTeX
+    profile = _format_bank_profile_for_resume(candidate)
+    latex = build_latex(profile, "ats_clean")
+
+    # Store it for next time
+    await db.candidate_bank.update_one(
+        {"id": candidate_id},
+        {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
+    )
+
+    return _latex_download_response(latex, candidate.get("name", "Candidate"))
+
+
+@router.post("/batch-generate-resumes")
+async def batch_generate_resumes(db=Depends(get_db), user=Depends(get_current_user)):
+    """Regenerate LaTeX resumes for ALL candidates in the bank. Admin only."""
+    if user.get("role") not in ("admin",):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    from routes.resume import build_latex, _format_bank_profile_for_resume
+
+    cursor = db.candidate_bank.find({}, {"_id": 0})
+    updated = 0
+    errors = 0
+
+    async for candidate in cursor:
+        try:
+            profile = _format_bank_profile_for_resume(candidate)
+            latex = build_latex(profile, "ats_clean")
+            await db.candidate_bank.update_one(
+                {"id": candidate["id"]},
+                {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
+            )
+            updated += 1
+        except Exception as e:
+            logger.warning(f"Batch resume gen failed for {candidate.get('id')}: {e}")
+            errors += 1
+
+    return {"updated": updated, "errors": errors, "total": updated + errors}
+
+
+def _latex_download_response(latex: str, name: str):
+    """Return LaTeX as a downloadable .tex file."""
+    import re
+    from fastapi.responses import Response
+
+    clean_name = re.sub(r'[^a-zA-Z0-9]', '_', name.strip()) if name else "Candidate"
+    filename = f"{clean_name}_Resume_VHC.tex"
+
+    return Response(
+        content=latex,
+        media_type="application/x-tex",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
