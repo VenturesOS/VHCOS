@@ -9,7 +9,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { toast } from 'sonner';
 import {
   FileText, Download, Copy, Sparkles, Plus, X, ChevronDown, ChevronUp,
-  Briefcase, GraduationCap, Code, User, Loader2, Check, Search, Eye, Edit2
+  Briefcase, GraduationCap, Code, User, Loader2, Check, Search, Eye, Edit2, FileDown
 } from 'lucide-react';
 
 const TEMPLATES = [
@@ -28,7 +28,9 @@ export default function ResumeBuilderPage() {
   });
   const [selectedTemplate, setSelectedTemplate] = useState('ats_clean');
   const [latex, setLatex] = useState('');
-  const [activeTab, setActiveTab] = useState('preview');
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [compilingPdf, setCompilingPdf] = useState(false);
+  const [activeTab, setActiveTab] = useState('pdf');
   const [aiEnhancing, setAiEnhancing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export default function ResumeBuilderPage() {
   const [selectedCandidateId, setSelectedCandidateId] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
 
-  // Load profile on mount and auto-generate
+  // Load profile on mount
   useEffect(() => {
     if (isCandidate) {
       loadMyProfile();
@@ -49,15 +51,19 @@ export default function ResumeBuilderPage() {
     }
   }, [isCandidate]);
 
+  // Cleanup PDF blob URL on unmount
+  useEffect(() => {
+    return () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); };
+  }, [pdfUrl]);
+
   const loadMyProfile = async () => {
     try {
       const res = await resumeAPI.getMyProfile();
       if (res.data) {
         const loaded = { ...profile, ...res.data };
         setProfile(loaded);
-        // Auto-generate if there's enough data
         if (loaded.name) {
-          autoGenerate(loaded, selectedTemplate);
+          generateAndCompile(loaded, selectedTemplate);
         }
       }
     } catch (e) {
@@ -67,12 +73,44 @@ export default function ResumeBuilderPage() {
     }
   };
 
-  const autoGenerate = async (profileData, template) => {
+  const compilePdf = async (latexCode) => {
+    setCompilingPdf(true);
+    try {
+      const res = await resumeAPI.compilePdf(latexCode);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setActiveTab('pdf');
+    } catch (e) {
+      const detail = e.response?.data;
+      if (detail instanceof Blob) {
+        const text = await detail.text();
+        try {
+          const json = JSON.parse(text);
+          toast.error(json.detail?.substring(0, 120) || 'PDF compilation failed');
+        } catch {
+          toast.error('PDF compilation failed');
+        }
+      } else {
+        toast.error('PDF compilation failed');
+      }
+    } finally {
+      setCompilingPdf(false);
+    }
+  };
+
+  const generateAndCompile = async (profileData, template) => {
+    setGenerating(true);
     try {
       const res = await resumeAPI.generate(profileData, template);
-      setLatex(res.data.latex);
+      const newLatex = res.data.latex;
+      setLatex(newLatex);
+      compilePdf(newLatex);
     } catch (e) {
-      // Silent fail for auto-gen
+      toast.error('Generation failed');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -98,8 +136,7 @@ export default function ResumeBuilderPage() {
       if (res.data) {
         const loaded = { ...profile, ...res.data };
         setProfile(loaded);
-        // Auto-generate the preview
-        autoGenerate(loaded, selectedTemplate);
+        generateAndCompile(loaded, selectedTemplate);
       }
       toast.success('Candidate profile loaded');
     } catch (e) {
@@ -109,18 +146,8 @@ export default function ResumeBuilderPage() {
     }
   };
 
-  const generateLatex = async () => {
-    setGenerating(true);
-    try {
-      const res = await resumeAPI.generate(profile, selectedTemplate);
-      setLatex(res.data.latex);
-      setActiveTab('preview');
-      toast.success('Resume generated!');
-    } catch (e) {
-      toast.error('Generation failed');
-    } finally {
-      setGenerating(false);
-    }
+  const handleGenerate = async () => {
+    generateAndCompile(profile, selectedTemplate);
   };
 
   const handleAiEnhance = async () => {
@@ -137,9 +164,7 @@ export default function ResumeBuilderPage() {
       const updated = { ...profile, experience: updatedExp };
       setProfile(updated);
       toast.success('Bullets enhanced with AI!');
-      // Re-generate
-      const res = await resumeAPI.generate(updated, selectedTemplate);
-      setLatex(res.data.latex);
+      generateAndCompile(updated, selectedTemplate);
     } catch (e) {
       toast.error('AI enhancement failed');
     } finally {
@@ -154,7 +179,7 @@ export default function ResumeBuilderPage() {
     toast.success('LaTeX copied to clipboard');
   }, [latex]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownloadTex = useCallback(() => {
     const blob = new Blob([latex], { type: 'application/x-tex' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -163,6 +188,14 @@ export default function ResumeBuilderPage() {
     a.click();
     URL.revokeObjectURL(url);
   }, [latex, profile.name]);
+
+  const handleDownloadPdf = useCallback(() => {
+    if (!pdfUrl) return;
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.download = `${profile.name?.replace(/\s+/g, '_') || 'resume'}.pdf`;
+    a.click();
+  }, [pdfUrl, profile.name]);
 
   // Profile field updaters
   const updateField = (field, value) => setProfile(prev => ({ ...prev, [field]: value }));
@@ -250,7 +283,7 @@ export default function ResumeBuilderPage() {
     );
   }
 
-  const hasProfileData = profile.name || profile.summary || profile.experience?.length > 0;
+  const isProcessing = generating || compilingPdf;
 
   return (
     <div className="space-y-6" data-testid="resume-builder-page">
@@ -258,12 +291,12 @@ export default function ResumeBuilderPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-xl sm:text-2xl font-bold text-slate-900">Resume Builder</h1>
-          <p className="text-slate-500 text-sm mt-1">Generate a professional LaTeX resume</p>
+          <p className="text-slate-500 text-sm mt-1">Generate a professional resume with live PDF preview</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
             onClick={handleAiEnhance}
-            disabled={aiEnhancing || !profile.experience.length}
+            disabled={aiEnhancing || !profile.experience.length || isProcessing}
             variant="outline"
             className="border-purple-300 text-purple-700 hover:bg-purple-50"
             data-testid="ai-enhance-btn"
@@ -272,13 +305,13 @@ export default function ResumeBuilderPage() {
             AI Enhance
           </Button>
           <Button
-            onClick={generateLatex}
-            disabled={generating || !profile.name}
+            onClick={handleGenerate}
+            disabled={isProcessing || !profile.name}
             className="bg-[#7CB342] hover:bg-[#689F38]"
             data-testid="generate-resume-btn"
           >
-            {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-            {latex ? 'Regenerate' : 'Generate'} Resume
+            {isProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+            {isProcessing ? 'Compiling...' : (latex ? 'Regenerate' : 'Generate')} Resume
           </Button>
         </div>
       </div>
@@ -327,13 +360,22 @@ export default function ResumeBuilderPage() {
         </Card>
       )}
 
-      {/* Preview-First Layout: Preview on top, Edit below */}
+      {/* Preview-First Layout */}
       <div className="space-y-6">
-        {/* Resume Preview / Output — Always visible */}
+        {/* Resume Output — Always visible */}
         <Card className="border-slate-200" data-testid="resume-output-card">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setActiveTab('pdf')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'pdf' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  data-testid="tab-pdf"
+                >
+                  <FileDown className="w-3.5 h-3.5 inline mr-1.5" />PDF
+                </button>
                 <button
                   onClick={() => setActiveTab('preview')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -350,24 +392,53 @@ export default function ResumeBuilderPage() {
                   }`}
                   data-testid="tab-latex"
                 >
-                  LaTeX Code
+                  LaTeX
                 </button>
               </div>
-              {latex && (
-                <div className="flex gap-2">
-                  <Button onClick={handleCopy} size="sm" variant="outline" data-testid="copy-latex-btn">
-                    {copied ? <Check className="w-4 h-4 mr-1 text-green-600" /> : <Copy className="w-4 h-4 mr-1" />}
-                    {copied ? 'Copied' : 'Copy'}
+              <div className="flex gap-2">
+                {pdfUrl && (
+                  <Button onClick={handleDownloadPdf} size="sm" className="bg-[#7CB342] hover:bg-[#689F38]" data-testid="download-pdf-btn">
+                    <Download className="w-4 h-4 mr-1" /> PDF
                   </Button>
-                  <Button onClick={handleDownload} size="sm" variant="outline" data-testid="download-tex-btn">
-                    <Download className="w-4 h-4 mr-1" /> .tex
-                  </Button>
-                </div>
-              )}
+                )}
+                {latex && (
+                  <>
+                    <Button onClick={handleCopy} size="sm" variant="outline" data-testid="copy-latex-btn">
+                      {copied ? <Check className="w-4 h-4 mr-1 text-green-600" /> : <Copy className="w-4 h-4 mr-1" />}
+                      {copied ? 'Copied' : 'Copy'}
+                    </Button>
+                    <Button onClick={handleDownloadTex} size="sm" variant="outline" data-testid="download-tex-btn">
+                      <Download className="w-4 h-4 mr-1" /> .tex
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            {activeTab === 'preview' ? (
+            {activeTab === 'pdf' ? (
+              pdfUrl ? (
+                <div className="rounded-lg overflow-hidden border bg-slate-100" data-testid="pdf-viewer">
+                  <iframe
+                    src={pdfUrl}
+                    title="Resume PDF Preview"
+                    className="w-full border-0"
+                    style={{ height: '680px' }}
+                  />
+                </div>
+              ) : compilingPdf ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400" data-testid="pdf-compiling">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#7CB342] mb-3" />
+                  <p className="text-sm font-medium">Compiling PDF...</p>
+                  <p className="text-xs mt-1">Converting LaTeX to PDF</p>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-slate-400" data-testid="pdf-empty">
+                  <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">{profile.name ? 'Click "Generate Resume" to see your PDF' : 'Search for a candidate or fill in your details to generate a PDF'}</p>
+                </div>
+              )
+            ) : activeTab === 'preview' ? (
               <ResumePreview profile={profile} template={selectedTemplate} />
             ) : latex ? (
               <div className="relative">
@@ -402,7 +473,7 @@ export default function ResumeBuilderPage() {
           {editOpen && (
             <CardContent>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column: Personal + Template + Skills */}
+                {/* Left Column */}
                 <div className="space-y-4">
                   {/* Template Selection */}
                   <div>
@@ -556,7 +627,7 @@ export default function ResumeBuilderPage() {
   );
 }
 
-// Visual Preview Component - Always shows profile data
+// Visual Preview Component
 function ResumePreview({ profile: p, template: tpl }) {
   const isModern = tpl === 'modern';
 
@@ -575,7 +646,6 @@ function ResumePreview({ profile: p, template: tpl }) {
       style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '13px', lineHeight: '1.5', color: '#1a1a1a' }}
       data-testid="resume-preview"
     >
-      {/* Header */}
       <div className={isModern ? 'text-center' : ''}>
         <h1 style={{
           fontSize: tpl === 'ats_clean' ? '18px' : '22px',
@@ -590,10 +660,7 @@ function ResumePreview({ profile: p, template: tpl }) {
           {[p.phone, p.email, p.location, p.linkedin].filter(Boolean).join(' | ')}
         </p>
       </div>
-
       <hr style={{ margin: '10px 0', borderColor: '#ccc' }} />
-
-      {/* Summary */}
       {p.summary && (
         <>
           <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', color: '#333' }}>
@@ -602,13 +669,9 @@ function ResumePreview({ profile: p, template: tpl }) {
           <p style={{ fontSize: '12px', color: '#444', marginBottom: '12px' }}>{p.summary}</p>
         </>
       )}
-
-      {/* Experience */}
       {p.experience?.length > 0 && (
         <>
-          <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', color: '#333', borderBottom: '1px solid #ddd', paddingBottom: '2px' }}>
-            Experience
-          </h2>
+          <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', color: '#333', borderBottom: '1px solid #ddd', paddingBottom: '2px' }}>Experience</h2>
           {p.experience.map((exp, i) => (
             <div key={i} style={{ marginBottom: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -625,13 +688,9 @@ function ResumePreview({ profile: p, template: tpl }) {
           ))}
         </>
       )}
-
-      {/* Education */}
       {p.education?.length > 0 && (
         <>
-          <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', color: '#333', borderBottom: '1px solid #ddd', paddingBottom: '2px' }}>
-            Education
-          </h2>
+          <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px', color: '#333', borderBottom: '1px solid #ddd', paddingBottom: '2px' }}>Education</h2>
           {p.education.map((edu, i) => (
             <div key={i} style={{ marginBottom: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -645,8 +704,6 @@ function ResumePreview({ profile: p, template: tpl }) {
           ))}
         </>
       )}
-
-      {/* Skills */}
       {p.skills?.length > 0 && (
         <>
           <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', color: '#333', borderBottom: '1px solid #ddd', paddingBottom: '2px' }}>
