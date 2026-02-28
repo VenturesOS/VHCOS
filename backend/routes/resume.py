@@ -18,24 +18,24 @@ resume_router = APIRouter(prefix="/api/resume", tags=["Resume Generator"])
 # ── Models ──────────────────────────────────────────────────
 
 class ExperienceItem(BaseModel):
-    company: str = ""
-    title: str = ""
-    duration: str = ""
+    company: Optional[str] = ""
+    title: Optional[str] = ""
+    duration: Optional[str] = ""
     bullets: List[str] = []
 
 class EducationItem(BaseModel):
-    institution: str = ""
-    degree: str = ""
-    year: str = ""
+    institution: Optional[str] = ""
+    degree: Optional[str] = ""
+    year: Optional[str] = None
     gpa: Optional[str] = None
 
 class ResumeProfile(BaseModel):
-    name: str = ""
-    email: str = ""
-    phone: str = ""
-    location: str = ""
-    linkedin: str = ""
-    summary: str = ""
+    name: Optional[str] = ""
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    location: Optional[str] = ""
+    linkedin: Optional[str] = ""
+    summary: Optional[str] = ""
     skills: List[str] = []
     experience: List[ExperienceItem] = []
     education: List[EducationItem] = []
