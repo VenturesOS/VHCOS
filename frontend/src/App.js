@@ -96,6 +96,7 @@ import ApplicationsPage from "./pages/candidate/ApplicationsPage";
 import MessagesPage from "./pages/candidate/MessagesPage";
 import MatchingJobsPage from "./pages/candidate/MatchingJobsPage";
 import NotificationSettingsPage from "./pages/candidate/NotificationSettingsPage";
+import ResumeBuilderPage from "./pages/shared/ResumeBuilderPage";
 
 function App() {
   return (
