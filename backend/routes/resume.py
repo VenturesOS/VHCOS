@@ -88,14 +88,17 @@ def build_latex(profile: dict, template_id: str) -> str:
         company = _escape_latex(exp.get("company", ""))
         title = _escape_latex(exp.get("title", ""))
         duration = _escape_latex(exp.get("duration", ""))
-        bullets_tex = "\n".join([f"  \\item {_escape_latex(b)}" for b in exp.get("bullets", [])])
-        exp_entries.append(f"""\\textbf{{{title}}} \\hfill {duration} \\\\
-\\textit{{{company}}}
-\\begin{{itemize}}[leftmargin=*, itemsep=2pt, parsep=0pt]
-{bullets_tex}
-\\end{{itemize}}""")
+        bullets_tex = "\n".join(["  \\item " + _escape_latex(b) for b in exp.get("bullets", [])])
+        entry = (
+            f"\\textbf{{{title}}} \\hfill {duration} \\\\\n"
+            f"\\textit{{{company}}}\n"
+            "\\begin{itemize}[leftmargin=*, itemsep=2pt, parsep=0pt]\n"
+            f"{bullets_tex}\n"
+            "\\end{itemize}"
+        )
+        exp_entries.append(entry)
 
-    exp_section = "\n\\vspace{{4pt}}\n".join(exp_entries)
+    exp_section = "\n\\vspace{4pt}\n".join(exp_entries)
 
     # Build education entries
     edu_entries = []
