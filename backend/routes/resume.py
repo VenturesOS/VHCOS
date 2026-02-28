@@ -88,14 +88,21 @@ def build_latex(profile: dict, template_id: str) -> str:
         company = _escape_latex(exp.get("company") or "")
         title = _escape_latex(exp.get("title") or "")
         duration = _escape_latex(exp.get("duration") or "")
-        bullets_tex = "\n".join(["  \\item " + _escape_latex(b) for b in (exp.get("bullets") or []) if b])
-        entry = (
-            f"\\textbf{{{title}}} \\hfill {duration} \\\\\n"
-            f"\\textit{{{company}}}\n"
-            "\\begin{itemize}[leftmargin=*, itemsep=2pt, parsep=0pt]\n"
-            f"{bullets_tex}\n"
-            "\\end{itemize}"
-        )
+        valid_bullets = [b for b in (exp.get("bullets") or []) if b and b.strip()]
+        bullets_tex = "\n".join(["  \\item " + _escape_latex(b) for b in valid_bullets])
+        if bullets_tex:
+            entry = (
+                f"\\textbf{{{title}}} \\hfill {duration} \\\\\n"
+                f"\\textit{{{company}}}\n"
+                "\\begin{itemize}[leftmargin=*, itemsep=2pt, parsep=0pt]\n"
+                f"{bullets_tex}\n"
+                "\\end{itemize}"
+            )
+        else:
+            entry = (
+                f"\\textbf{{{title}}} \\hfill {duration} \\\\\n"
+                f"\\textit{{{company}}}"
+            )
         exp_entries.append(entry)
 
     exp_section = "\n\\vspace{4pt}\n".join(exp_entries)
