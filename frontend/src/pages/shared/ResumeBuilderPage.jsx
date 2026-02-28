@@ -82,6 +82,7 @@ export default function ResumeBuilderPage() {
   };
 
   const compilePdf = async (latexCode) => {
+    if (!pdfAvailable) return;
     setCompilingPdf(true);
     try {
       const res = await resumeAPI.compilePdf(latexCode);
@@ -91,6 +92,11 @@ export default function ResumeBuilderPage() {
       setPdfUrl(url);
       setActiveTab('pdf');
     } catch (e) {
+      if (e.response?.status === 503) {
+        setPdfAvailable(false);
+        setActiveTab('preview');
+        return;
+      }
       const detail = e.response?.data;
       if (detail instanceof Blob) {
         const text = await detail.text();
