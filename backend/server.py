@@ -342,11 +342,12 @@ async def deferred_db_init():
         # --- R2 validation ---
         if R2_ENABLED:
             try:
-                r2_client.list_buckets()
-                logging.info("Cloudflare R2 successfully connected")
+                # Use head_bucket (not list_buckets) — R2 tokens are often scoped to a single bucket
+                r2_client.head_bucket(Bucket=R2_BUCKET_NAME)
+                logging.info(f"Cloudflare R2 connected. Bucket: {R2_BUCKET_NAME}")
             except Exception as e:
                 logging.warning(f"Cloudflare R2 connectivity check failed: {e}")
-                logging.warning("R2 may still work - some operations may succeed despite list_buckets failure")
+                logging.warning("R2 may still work for object operations")
         else:
             logging.info("Cloudflare R2 not configured - using local storage")
 
