@@ -9,6 +9,7 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - **Database**: MongoDB Atlas (cluster0.vuhdiod.mongodb.net) - external
 - **AI**: OpenAI GPT-4o-mini via centralized LLM service
 - **Storage**: Cloudflare R2 (credentials validated)
+- **LaTeX**: Server-side pdflatex (texlive) for PDF resume compilation
 
 ## Core Features (Implemented)
 
@@ -21,23 +22,23 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Candidate Bank (`/api/candidate-bank`) - 1800+ candidates with pagination/search
 - Candidate Profiles (`/api/candidates`) - registered candidate profiles
 - Naukri profile viewer, batch import, browser extension v4.2.0
-- **Candidate Edit** - Profile editing with mandatory fields (salary, notice, location, experience)
-- **PUT /salary-notice** endpoint for mandatory field updates
-- **PATCH update** for general field updates
+- Candidate Edit - Profile editing with mandatory fields (salary, notice, location, experience)
+- PUT /salary-notice endpoint for mandatory field updates
+- PATCH update for general field updates
 
 ### Resume Builder (Feb 2026)
 - Available to all roles: admin, recruiter, employer, candidate
 - 3 LaTeX templates: ATS Clean, Google Style, Modern Pro
 - **Preview-First UX** - visual resume preview shown immediately, edit section collapsible
-- Inline profile editor (name, email, phone, skills, experience, education)
+- **Live PDF Preview** - Server-side LaTeX-to-PDF compilation with inline iframe viewer
+- PDF download, .tex download, LaTeX code copy
 - AI bullet enhancement via OpenAI GPT-4o-mini
-- LaTeX code preview, copy, and .tex download
 - Candidate search from bank (admin/recruiter/employer only)
-- Backend: `/api/resume/templates`, `/generate`, `/my-profile`, `/candidate/{id}`, `/ai-enhance`
+- Backend: `/api/resume/templates`, `/generate`, `/compile-pdf`, `/my-profile`, `/candidate/{id}`, `/ai-enhance`
 
 ### ATS CV System
 - Auto-generates LaTeX resumes for all candidate bank profiles
-- **Token-based auth** for new-tab downloads (`?token=` query param)
+- Token-based auth for new-tab downloads (`?token=` query param)
 - Batch generation for all 1,977 existing candidates completed
 - Download endpoints: `/api/candidate-bank/{id}/ats-cv`, `/api/candidate-bank/{id}/download-resume`
 
@@ -60,6 +61,7 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Frontend: port 3000, Backend: port 8001
 - Lazy MongoDB proxy pattern for deployment-safe startup
 - `mongo_production_override.py` for Atlas connection override
+- Server-side LaTeX (texlive + cm-super fonts) for PDF compilation
 
 ## What's Been Implemented (Timeline)
 
@@ -81,11 +83,21 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Public website navigation updated
 
 ### Feb 28, 2026 - P0 Bug Fixes (Session 2)
-- **Fix 1**: ATS CV download auth - token-based query param auth for new-tab downloads
-- **Fix 2**: Resume Builder UX refactored to preview-first with collapsible editor
-- **Fix 3**: Created missing PUT /salary-notice endpoint for candidate mandatory fields
-- **Fix 4**: Created GET /download-resume endpoint with token auth
+- Fix 1: ATS CV download auth - token-based query param auth for new-tab downloads
+- Fix 2: Resume Builder UX refactored to preview-first with collapsible editor
+- Fix 3: Created missing PUT /salary-notice endpoint for candidate mandatory fields
+- Fix 4: Created GET /download-resume endpoint with token auth
 - All fixes verified with 100% pass rate (iteration_97)
+
+### Feb 28, 2026 - PDF Preview Feature (Session 2)
+- Installed texlive + cm-super fonts on server for LaTeX compilation
+- Created POST /api/resume/compile-pdf endpoint (LaTeX -> PDF)
+- Pydantic models accept Optional/null fields (email, phone, linkedin)
+- Fixed empty itemize blocks in LaTeX (skips when no valid bullets)
+- Frontend: 3-tab output (PDF, Preview, LaTeX) with inline iframe PDF viewer
+- PDF and .tex download buttons, copy LaTeX
+- Auto-generates and compiles PDF on candidate profile load
+- All features verified 100% pass rate (iteration_98)
 
 ## Backlog
 
