@@ -272,7 +272,7 @@ async def compile_pdf(req: CompilePdfRequest, user=Depends(get_current_user)):
             f.write(req.latex)
 
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
                 cwd=tmpdir,
                 capture_output=True,
