@@ -226,6 +226,61 @@ async def generate_resume(req: GenerateRequest, user=Depends(get_current_user)):
     return {"latex": latex, "template_id": req.template_id}
 
 
+class CompilePdfRequest(BaseModel):
+    latex: str
+
+
+@resume_router.post("/compile-pdf")
+async def compile_pdf(req: CompilePdfRequest, user=Depends(get_current_user)):
+    """Compile LaTeX code into a PDF and return it as a downloadable file."""
+    import tempfile
+    import subprocess
+    import os
+    from fastapi.responses import Response
+
+    if not req.latex or len(req.latex.strip()) < 20:
+        raise HTTPException(status_code=400, detail="LaTeX content is too short or empty")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tex_path = os.path.join(tmpdir, "resume.tex")
+        with open(tex_path, "w") as f:
+            f.write(req.latex)
+
+        try:
+            result = subprocess.run(
+                ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=500, detail="PDF compilation timed out")
+
+        pdf_path = os.path.join(tmpdir, "resume.pdf")
+        if not os.path.exists(pdf_path):
+            log_path = os.path.join(tmpdir, "resume.log")
+            log_tail = ""
+            if os.path.exists(log_path):
+                with open(log_path) as lf:
+                    lines = lf.readlines()
+                    # Extract error lines
+                    log_tail = "".join(lines[-30:])
+            raise HTTPException(
+                status_code=422,
+                detail=f"LaTeX compilation failed. Log tail:\n{log_tail[-500:]}"
+            )
+
+        with open(pdf_path, "rb") as pf:
+            pdf_bytes = pf.read()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="resume.pdf"'},
+    )
+
+
 @resume_router.get("/my-profile")
 async def get_my_resume_profile(user=Depends(get_current_user)):
     """Get current user's profile data formatted for resume builder."""
