@@ -623,7 +623,22 @@ async def capture_profile(
         
         # Invalidate search cache so new data appears immediately
         cache.invalidate_search_cache()
-        
+
+        # Auto-regenerate LaTeX resume on update
+        try:
+            from routes.resume import build_latex, _format_bank_profile_for_resume
+            updated_doc = await db.candidate_bank.find_one({"id": existing["id"]}, {"_id": 0})
+            if updated_doc:
+                profile_data = _format_bank_profile_for_resume(updated_doc)
+                latex = build_latex(profile_data, "ats_clean")
+                await db.candidate_bank.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
+                )
+                logger.info(f"[Extension] Re-generated LaTeX resume for {profile.name}")
+        except Exception as latex_err:
+            logger.warning(f"[Extension] LaTeX re-gen failed for {profile.name}: {latex_err}")
+
         # Safety log: count total profiles
         total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
         logger.warning(f"[Extension] UPDATE: '{profile.name}' -> existing record {existing['id'][:12]}. Total naukri profiles: {total}")
