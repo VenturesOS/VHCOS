@@ -179,6 +179,7 @@ function App() {
             <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="attendance" element={<AttendancePage />} />
             <Route path="leaves" element={<LeaveManagementPage />} />
+            <Route path="resume-builder" element={<ResumeBuilderPage />} />
           </Route>
 
           {/* Employer Routes */}
@@ -201,6 +202,7 @@ function App() {
             <Route path="attendance" element={<AttendancePage />} />
             <Route path="leaves" element={<LeaveManagementPage />} />
             <Route path="attendance-insights" element={<AttendanceInsightsPage />} />
+            <Route path="resume-builder" element={<ResumeBuilderPage />} />
           </Route>
 
           {/* Candidate Routes */}
