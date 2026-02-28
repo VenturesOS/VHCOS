@@ -14,6 +14,9 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
     turnstile_token: Optional[str] = None
+    notice_period: Optional[str] = None
+    current_ctc: Optional[float] = None
+    expected_ctc: Optional[float] = None
 
 
 class UserLogin(BaseModel):
