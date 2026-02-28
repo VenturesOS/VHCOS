@@ -41,9 +41,17 @@ export default function ResumeBuilderPage() {
   const [searchingCandidates, setSearchingCandidates] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [pdfAvailable, setPdfAvailable] = useState(true);
 
-  // Load profile on mount
+  // Check server capabilities and load profile on mount
   useEffect(() => {
+    resumeAPI.getCapabilities().then(res => {
+      setPdfAvailable(res.data?.pdf_compilation === true);
+      if (!res.data?.pdf_compilation) setActiveTab('preview');
+    }).catch(() => {
+      setPdfAvailable(false);
+      setActiveTab('preview');
+    });
     if (isCandidate) {
       loadMyProfile();
     } else {
