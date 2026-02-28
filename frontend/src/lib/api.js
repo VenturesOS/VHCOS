@@ -579,4 +579,13 @@ export const attendanceAPI = {
   preLaunchReset: (data) => api.post('/attendance/admin/pre-launch-reset', data),
 };
 
+// ─── Resume Generator ──────────────────────────────────────
+export const resumeAPI = {
+  getTemplates: () => api.get('/resume/templates'),
+  generate: (profile, templateId) => api.post('/resume/generate', { profile, template_id: templateId }),
+  getMyProfile: () => api.get('/resume/my-profile'),
+  getCandidateProfile: (candidateId) => api.get(`/resume/candidate/${candidateId}`),
+  aiEnhance: (bullets) => api.post('/resume/ai-enhance', { bullets }),
+};
+
 export default api;
