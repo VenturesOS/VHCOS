@@ -259,6 +259,46 @@ async def update_candidate(
     return {"success": True, "candidate_id": candidate_id}
 
 
+
+# ---------------------------------------------------------------------------
+# Update mandatory fields (salary, notice period, location, experience)
+# ---------------------------------------------------------------------------
+
+@router.put("/{candidate_id}/salary-notice")
+async def update_salary_notice(
+    candidate_id: str,
+    current_salary: Optional[int] = Query(None),
+    notice_period: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+    experience_years: Optional[int] = Query(None),
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Update mandatory candidate fields: salary, notice period, location, experience."""
+    existing = await db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if current_salary is not None:
+        updates["current_salary"] = current_salary
+    if notice_period is not None:
+        updates["notice_period"] = notice_period
+    if location is not None:
+        updates["location"] = location
+    if experience_years is not None:
+        updates["experience_years"] = experience_years
+
+    await db.candidate_bank.update_one(
+        {"id": candidate_id},
+        {"$set": updates},
+    )
+
+    cache.invalidate_search_cache()
+    return {"success": True, "candidate_id": candidate_id}
+
+
+
 # ---------------------------------------------------------------------------
 # Delete candidate
 # ---------------------------------------------------------------------------
