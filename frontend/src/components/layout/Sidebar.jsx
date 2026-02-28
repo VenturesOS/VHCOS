@@ -107,6 +107,7 @@ const navItems = {
   candidate: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/candidate' },
     { icon: UserCircle, label: 'My Profile', path: '/candidate/profile' },
+    { icon: FileText, label: 'Resume Builder', path: '/candidate/resume-builder' },
     { icon: Search, label: 'Browse Jobs', path: '/candidate/jobs' },
     { icon: Sparkles, label: 'Jobs For You', path: '/candidate/matching-jobs' },
     { icon: FileText, label: 'Applications', path: '/candidate/applications' },
