@@ -49,7 +49,14 @@ export default function Register() {
     setJustRegistered(true);
 
     try {
-      const userData = await register({ ...formData, turnstile_token: turnstileToken });
+      const payload = {
+        ...formData,
+        turnstile_token: turnstileToken,
+        current_ctc: formData.current_ctc ? parseFloat(formData.current_ctc) : null,
+        expected_ctc: formData.expected_ctc ? parseFloat(formData.expected_ctc) : null,
+        notice_period: formData.notice_period || null,
+      };
+      const userData = await register(payload);
       toast.success(`Welcome to Ventures HRD, ${userData.name}!`);
       window.location.href = `/${userData.role}`;
     } catch (error) {
