@@ -99,10 +99,30 @@ async def register(user_data: UserCreate, request: Request):
             "experience": [],
             "education": [],
             "resume_url": None,
+            "notice_period": user_data.notice_period,
+            "current_ctc": user_data.current_ctc,
+            "expected_ctc": user_data.expected_ctc,
             "created_at": now,
             "updated_at": now
         }
         await db.candidate_profiles.insert_one(profile_doc)
+
+        # Also add to candidate_bank for data collection
+        bank_doc = {
+            "id": str(uuid.uuid4()),
+            "name": user_data.name,
+            "email": email,
+            "notice_period": user_data.notice_period,
+            "current_salary": user_data.current_ctc,
+            "expected_salary": user_data.expected_ctc,
+            "source": "self_registered",
+            "skills": [],
+            "experience": [],
+            "education": [],
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.candidate_bank.insert_one(bank_doc)
     
     access_token = create_access_token({"sub": user_id, "role": user_data.role})
     
