@@ -361,31 +361,37 @@ async def get_ats_cv(candidate_id: str, db=Depends(get_db), user=Depends(get_cur
 
 
 @router.post("/batch-generate-resumes")
-async def batch_generate_resumes(db=Depends(get_db), user=Depends(get_current_user)):
-    """Regenerate LaTeX resumes for ALL candidates in the bank. Admin only."""
+async def batch_generate_resumes(
+    background_tasks: BackgroundTasks,
+    db=Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Regenerate LaTeX resumes for ALL candidates in the bank (background). Admin only."""
     if user.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
 
-    from routes.resume import build_latex, _format_bank_profile_for_resume
+    async def _run_batch():
+        from routes.resume import build_latex, _format_bank_profile_for_resume
+        from config import db as _db
+        cursor = _db.candidate_bank.find({}, {"_id": 0})
+        updated = errors = 0
+        async for candidate in cursor:
+            try:
+                profile = _format_bank_profile_for_resume(candidate)
+                latex = build_latex(profile, "ats_clean")
+                await _db.candidate_bank.update_one(
+                    {"id": candidate["id"]},
+                    {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
+                )
+                updated += 1
+            except Exception as e:
+                logger.warning(f"Batch resume gen failed for {candidate.get('id')}: {e}")
+                errors += 1
+        logger.info(f"[Batch Resume Gen] Done: {updated} updated, {errors} errors")
 
-    cursor = db.candidate_bank.find({}, {"_id": 0})
-    updated = 0
-    errors = 0
-
-    async for candidate in cursor:
-        try:
-            profile = _format_bank_profile_for_resume(candidate)
-            latex = build_latex(profile, "ats_clean")
-            await db.candidate_bank.update_one(
-                {"id": candidate["id"]},
-                {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
-            )
-            updated += 1
-        except Exception as e:
-            logger.warning(f"Batch resume gen failed for {candidate.get('id')}: {e}")
-            errors += 1
-
-    return {"updated": updated, "errors": errors, "total": updated + errors}
+    import asyncio
+    asyncio.create_task(_run_batch())
+    return {"status": "started", "message": "Batch resume generation started in background for all candidates"}
 
 
 def _latex_download_response(latex: str, name: str):
