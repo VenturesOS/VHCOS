@@ -656,7 +656,20 @@ async def capture_profile(
         
         # Invalidate search cache so new profile appears immediately
         cache.invalidate_search_cache()
-        
+
+        # Auto-generate LaTeX resume using Resume Builder engine
+        try:
+            from routes.resume import build_latex, _format_bank_profile_for_resume
+            profile_data = _format_bank_profile_for_resume(candidate_data)
+            latex = build_latex(profile_data, "ats_clean")
+            await db.candidate_bank.update_one(
+                {"id": candidate_id},
+                {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
+            )
+            logger.info(f"[Extension] Auto-generated LaTeX resume for {profile.name}")
+        except Exception as latex_err:
+            logger.warning(f"[Extension] LaTeX auto-gen failed for {profile.name}: {latex_err}")
+
         # Safety log: count total profiles
         total = await db.candidate_bank.count_documents({"source": "naukri_extension"})
         logger.warning(f"[Extension] INSERT: New profile '{profile.name}' ({candidate_id[:12]}). Total naukri profiles: {total}")
