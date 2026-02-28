@@ -158,7 +158,7 @@ _all_routers = [
     blog_router, seo_router, pillar_pages_router, blog_digest_router,
     seo_dashboard_router, revenue_router, employer_router, linkedin_router,
     tracker_router, compliance_router, maintenance_router, attendance_router,
-    attendance_analytics_router,
+    attendance_analytics_router, resume_router,
 ]
 
 for _r in _all_routers:
