@@ -120,7 +120,11 @@ export default function ResumeBuilderPage() {
       const res = await resumeAPI.generate(profileData, template);
       const newLatex = res.data.latex;
       setLatex(newLatex);
-      compilePdf(newLatex);
+      if (pdfAvailable) {
+        compilePdf(newLatex);
+      } else {
+        setActiveTab('preview');
+      }
     } catch (e) {
       toast.error('Generation failed');
     } finally {
