@@ -541,10 +541,23 @@ export default function RecruiterCandidateBankPage() {
       {/* Candidates List */}
       <Card className="border-slate-200">
         <CardHeader className="border-b border-slate-100 bg-slate-50/50">
-          <CardTitle className="font-heading text-lg flex items-center gap-2">
-            <Database className="w-5 h-5 text-[#7CB342]" />
-            Candidates ({candidates.length})
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-heading text-lg flex items-center gap-2">
+              <Database className="w-5 h-5 text-[#7CB342]" />
+              Candidates ({totalCount})
+            </CardTitle>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2 text-sm" data-testid="pagination">
+                <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => loadCandidates(currentPage - 1)} data-testid="prev-page">
+                  Prev
+                </Button>
+                <span className="text-slate-500">Page {currentPage} of {totalPages}</span>
+                <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => loadCandidates(currentPage + 1)} data-testid="next-page">
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
