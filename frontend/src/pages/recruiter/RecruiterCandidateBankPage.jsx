@@ -13,6 +13,17 @@ import { toast } from 'sonner';
 import { Search, Upload, Database, Mail, Phone, MapPin, FileText, Clock, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download, Info, Filter, X, ChevronDown, ChevronUp, EyeOff, Building2, Code, Calendar } from 'lucide-react';
 import { CVUploadDialog } from '../../components/dialogs/CVUploadDialog';
 
+const NOTICE_PERIODS = ['Immediate', '15 days', '30 days', '45 days', '60 days', '90 days', '90+ days'];
+
+function FilterChip({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#4A7C2C] text-xs font-medium" data-testid={`chip-${label.split(':')[0].trim().toLowerCase()}`}>
+      {label}
+      <button onClick={onRemove} className="hover:text-red-600 ml-0.5"><X className="w-3 h-3" /></button>
+    </span>
+  );
+}
+
 const NOTICE_PERIODS = [
   "Immediate",
   "15 days",
