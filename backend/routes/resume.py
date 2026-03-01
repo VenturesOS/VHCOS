@@ -312,7 +312,7 @@ async def generate_pdf(req: GeneratePdfRequest, user=Depends(get_current_user)):
     pdf_bytes = build_pdf_from_profile(profile_dict)
 
     return Response(
-        content=pdf_bytes,
+        content=bytes(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="resume.pdf"'},
     )
