@@ -440,30 +440,54 @@ def _format_profile_for_resume(profile: dict) -> dict:
 
 def _format_bank_profile_for_resume(candidate: dict) -> dict:
     """Format candidate_bank document for resume builder."""
+    # Format experience - handle various field names from different sources
+    formatted_exp = []
+    for exp in candidate.get("experience", []):
+        title = exp.get("title") or exp.get("designation", "")
+        company = exp.get("company") or exp.get("organization", "")
+        # Try multiple duration formats
+        duration = exp.get("duration") or exp.get("period", "")
+        if not duration:
+            # Construct from from_date and to_date
+            from_date = exp.get("from_date", "")
+            to_date = exp.get("to_date") or ("Present" if exp.get("is_current") else "")
+            if from_date or to_date:
+                duration = f"{from_date} - {to_date}".strip(" -")
+        # Get bullets from description if not available
+        bullets = exp.get("bullets", [])
+        if not bullets and exp.get("description"):
+            # Split description into bullet-like lines
+            desc = exp.get("description", "")
+            bullets = [line.strip() for line in desc.split(",") if line.strip()][:3]
+        formatted_exp.append({
+            "company": company,
+            "title": title,
+            "duration": duration,
+            "bullets": bullets,
+        })
+
+    # Format education - handle various field names
+    formatted_edu = []
+    for edu in candidate.get("education", []):
+        institution = edu.get("institution") or edu.get("university") or edu.get("school", "")
+        degree = edu.get("degree") or edu.get("qualification", "")
+        year = edu.get("year") or edu.get("passing_year") or edu.get("year_of_passing", "")
+        gpa = edu.get("gpa", "")
+        formatted_edu.append({
+            "institution": institution,
+            "degree": degree,
+            "year": str(year) if year else "",
+            "gpa": gpa,
+        })
+
     return {
         "name": candidate.get("name", ""),
         "email": candidate.get("email", ""),
-        "phone": candidate.get("phone", candidate.get("mobile", "")),
-        "location": candidate.get("location", candidate.get("current_location", "")),
+        "phone": candidate.get("phone") or candidate.get("mobile", ""),
+        "location": candidate.get("location") or candidate.get("current_location", ""),
         "linkedin": candidate.get("linkedin_url", ""),
-        "summary": candidate.get("summary", candidate.get("profile_summary", "")),
+        "summary": candidate.get("summary") or candidate.get("profile_summary", ""),
         "skills": candidate.get("skills", []),
-        "experience": [
-            {
-                "company": exp.get("company", exp.get("organization", "")),
-                "title": exp.get("title", exp.get("designation", "")),
-                "duration": exp.get("duration", exp.get("period", "")),
-                "bullets": exp.get("bullets", []),
-            }
-            for exp in candidate.get("experience", [])
-        ],
-        "education": [
-            {
-                "institution": edu.get("institution", edu.get("university", edu.get("school", ""))),
-                "degree": edu.get("degree", edu.get("qualification", "")),
-                "year": edu.get("year", edu.get("passing_year", "")),
-                "gpa": edu.get("gpa", ""),
-            }
-            for edu in candidate.get("education", [])
-        ],
+        "experience": formatted_exp,
+        "education": formatted_edu,
     }
