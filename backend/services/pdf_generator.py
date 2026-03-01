@@ -36,10 +36,30 @@ class _ResumePDF(FPDF):
 
 
 def _clean(val) -> str:
-    """Safely convert to string, stripping None."""
+    """Safely convert to string, stripping None. Also normalize Unicode chars."""
     if val is None:
         return ""
-    return str(val).strip()
+    text = str(val).strip()
+    # Replace common Unicode characters with ASCII equivalents
+    # (fpdf2's built-in Helvetica font doesn't support these)
+    unicode_replacements = {
+        '\u2013': '-',    # en-dash
+        '\u2014': '--',   # em-dash
+        '\u2018': "'",    # left single quote
+        '\u2019': "'",    # right single quote
+        '\u201c': '"',    # left double quote
+        '\u201d': '"',    # right double quote
+        '\u2022': '-',    # bullet
+        '\u2026': '...',  # ellipsis
+        '\u00a0': ' ',    # non-breaking space
+        '\u00b7': '-',    # middle dot
+        '\u2011': '-',    # non-breaking hyphen
+        '\u2010': '-',    # hyphen
+        '\u00ad': '-',    # soft hyphen
+    }
+    for char, replacement in unicode_replacements.items():
+        text = text.replace(char, replacement)
+    return text
 
 
 def build_pdf_from_profile(profile: dict) -> bytes:
