@@ -568,15 +568,31 @@ async def batch_generate_resumes(
     return {"status": "started", "message": "Batch resume generation started in background for all candidates"}
 
 
-def _latex_download_response(latex: str, name: str):
-    """Compile LaTeX to PDF and return as download. Falls back to .tex if pdflatex unavailable."""
+def _latex_download_response(latex: str, name: str, profile: dict = None):
+    """Generate a PDF resume and return as download.
+    Uses pure-Python fpdf2 (no system deps), with pdflatex as optional bonus.
+    Falls back to .tex if all else fails."""
     import re
-    import shutil
     from fastapi.responses import Response
 
     clean_name = re.sub(r'[^a-zA-Z0-9]', '_', name.strip()) if name else "Candidate"
 
-    # Try PDF compilation
+    # Method 1: Pure Python PDF generation (works everywhere)
+    if profile:
+        try:
+            from services.pdf_generator import build_pdf_from_profile
+            pdf_bytes = build_pdf_from_profile(profile)
+            if pdf_bytes and len(pdf_bytes) > 100:
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{clean_name}_Resume_VHC.pdf"'},
+                )
+        except Exception:
+            pass
+
+    # Method 2: pdflatex compilation (if available on server)
+    import shutil
     if shutil.which("pdflatex"):
         import tempfile
         import subprocess
