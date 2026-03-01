@@ -521,16 +521,11 @@ async def get_ats_cv(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    # If we have a stored LaTeX, return it
-    stored_latex = candidate.get("resume_latex")
-    if stored_latex:
-        return _latex_download_response(stored_latex, candidate.get("name", "Candidate"))
-
-    # Generate fresh LaTeX
+    # Always regenerate fresh LaTeX to ensure it compiles cleanly
     profile = _format_bank_profile_for_resume(candidate)
     latex = build_latex(profile, "ats_clean")
 
-    # Store it for next time
+    # Update stored copy
     await db.candidate_bank.update_one(
         {"id": candidate_id},
         {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
