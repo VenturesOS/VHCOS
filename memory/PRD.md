@@ -9,7 +9,7 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - **Database**: MongoDB Atlas (cluster0.vuhdiod.mongodb.net) - external
 - **AI**: OpenAI GPT-4o-mini via centralized LLM service
 - **Storage**: Cloudflare R2 (credentials validated)
-- **LaTeX**: Server-side pdflatex (texlive) for PDF resume compilation
+- **PDF Generation**: fpdf2 (pure Python, zero system deps) + pdflatex (optional, server-side)
 
 ## Core Features (Implemented)
 
@@ -26,20 +26,21 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - PUT /salary-notice endpoint for mandatory field updates
 - PATCH update for general field updates
 
-### Resume Builder (Feb 2026)
+### Resume Builder
 - Available to all roles: admin, recruiter, employer, candidate
 - 3 LaTeX templates: ATS Clean, Google Style, Modern Pro
 - **Preview-First UX** - visual resume preview shown immediately, edit section collapsible
-- **Live PDF Preview** - Server-side LaTeX-to-PDF compilation with inline iframe viewer
+- **PDF Preview** - inline iframe PDF viewer using fpdf2 (works in all environments)
 - PDF download, .tex download, LaTeX code copy
 - AI bullet enhancement via OpenAI GPT-4o-mini
 - Candidate search from bank (admin/recruiter/employer only)
-- Backend: `/api/resume/templates`, `/generate`, `/compile-pdf`, `/my-profile`, `/candidate/{id}`, `/ai-enhance`
+- Backend: `/api/resume/templates`, `/generate`, `/generate-pdf`, `/compile-pdf`, `/my-profile`, `/candidate/{id}`, `/ai-enhance`, `/capabilities`
 
 ### ATS CV System
-- Auto-generates LaTeX resumes for all candidate bank profiles
+- Auto-generates **PDF resumes** for all candidate bank profiles (was .tex, now PDF)
 - Token-based auth for new-tab downloads (`?token=` query param)
-- Batch generation for all 1,977 existing candidates completed
+- Pure Python PDF generation via fpdf2 (no system dependency on pdflatex)
+- Graceful fallback: fpdf2 → pdflatex → .tex
 - Download endpoints: `/api/candidate-bank/{id}/ats-cv`, `/api/candidate-bank/{id}/download-resume`
 
 ### Attendance System
@@ -61,7 +62,8 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Frontend: port 3000, Backend: port 8001
 - Lazy MongoDB proxy pattern for deployment-safe startup
 - `mongo_production_override.py` for Atlas connection override
-- Server-side LaTeX (texlive + cm-super fonts) for PDF compilation
+- fpdf2 for PDF generation (pure Python, no system deps)
+- Optional: texlive for higher-quality pdflatex compilation
 
 ## What's Been Implemented (Timeline)
 
@@ -87,17 +89,18 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Fix 2: Resume Builder UX refactored to preview-first with collapsible editor
 - Fix 3: Created missing PUT /salary-notice endpoint for candidate mandatory fields
 - Fix 4: Created GET /download-resume endpoint with token auth
-- All fixes verified with 100% pass rate (iteration_97)
+- All fixes verified 100% pass rate (iteration_97)
 
-### Feb 28, 2026 - PDF Preview Feature (Session 2)
-- Installed texlive + cm-super fonts on server for LaTeX compilation
-- Created POST /api/resume/compile-pdf endpoint (LaTeX -> PDF)
-- Pydantic models accept Optional/null fields (email, phone, linkedin)
-- Fixed empty itemize blocks in LaTeX (skips when no valid bullets)
-- Frontend: 3-tab output (PDF, Preview, LaTeX) with inline iframe PDF viewer
-- PDF and .tex download buttons, copy LaTeX
-- Auto-generates and compiles PDF on candidate profile load
-- All features verified 100% pass rate (iteration_98)
+### Feb 28, 2026 - PDF Preview & Download Fix (Session 3)
+- Created pure-Python PDF generator using fpdf2 (services/pdf_generator.py)
+- ATS CV download now returns **PDF** instead of .tex file
+- New POST /api/resume/generate-pdf endpoint (works without pdflatex)
+- Frontend Resume Builder uses generate-pdf for inline preview
+- Graceful degradation: fpdf2 → pdflatex → .tex fallback chain
+- Deployment fix: pdflatex FileNotFoundError no longer crashes production
+- Unicode char normalization (en-dash, smart quotes → ASCII)
+- Long text handling with multi_cell wrapping
+- All verified 100% (iteration_99: 10/10 backend, frontend verified)
 
 ## Backlog
 
@@ -108,10 +111,10 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Updated Browser Extension (pending user sharing new version)
 - Interview Scheduling
 - Candidate Activity Log
-- Hiring Funnel KPIs dashboard
-- In-App Notification Center
 
 ### P2
+- Hiring Funnel KPIs dashboard
+- In-App Notification Center
 - Client CRM & Invoicing
 - Candidate Duplicate Detection
 - Email Template Management
