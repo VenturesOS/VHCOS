@@ -112,7 +112,7 @@ def build_pdf_from_profile(profile: dict) -> bytes:
                 pdf.set_font("Helvetica", "", 9)
                 pdf.set_text_color(60, 60, 60)
                 pdf.cell(5)  # indent
-                pdf.cell(4, 4.5, chr(8226))  # bullet char
+                pdf.cell(4, 4.5, "-")
                 pdf.multi_cell(0, 4.5, _clean(bullet))
 
             pdf.ln(3)
