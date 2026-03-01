@@ -48,6 +48,31 @@ export default function EmployerCandidateBankPage() {
   const [activityHistory, setActivityHistory] = useState(null);
   const fileInputRef = useRef(null);
   const [uploadForm, setUploadForm] = useState({ email: '', name: '' });
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Advanced filters
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    phone: '', email: '', location: '', company: '', noticePeriod: '',
+    minExperience: '', maxExperience: '', minSalary: '', maxSalary: '',
+    source: '', hasResume: '', contactHidden: '', capturedAfter: '', capturedBefore: '',
+  });
+  const activeFilterCount = Object.values(filters).filter(v => v !== '').length + (skills ? 1 : 0);
+  const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
+  const clearFilters = () => {
+    setFilters({ phone: '', email: '', location: '', company: '', noticePeriod: '', minExperience: '', maxExperience: '', minSalary: '', maxSalary: '', source: '', hasResume: '', contactHidden: '', capturedAfter: '', capturedBefore: '' });
+    setSkills(''); setSearch('');
+  };
+  const setDatePreset = (preset) => {
+    const now = new Date();
+    let after = '';
+    if (preset === 'today') after = now.toISOString().split('T')[0];
+    else if (preset === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); after = d.toISOString().split('T')[0]; }
+    else if (preset === 'month') { const d = new Date(now); d.setMonth(d.getMonth() - 1); after = d.toISOString().split('T')[0]; }
+    setFilters(prev => ({ ...prev, capturedAfter: after, capturedBefore: '' }));
+  };
   
   // Add as Applicant state
   const [showAddApplicant, setShowAddApplicant] = useState(false);
