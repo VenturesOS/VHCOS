@@ -10,8 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download, Info } from 'lucide-react';
+import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download, Info, Filter, X, ChevronDown, ChevronUp, EyeOff, Building2, Code, Calendar } from 'lucide-react';
 import { CVUploadDialog } from '../../components/dialogs/CVUploadDialog';
+
+function FilterChip({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#4A7C2C] text-xs font-medium">
+      {label}
+      <button onClick={onRemove} className="hover:text-red-600 ml-0.5"><X className="w-3 h-3" /></button>
+    </span>
+  );
+}
 
 // Notice period options
 const NOTICE_PERIODS = [
