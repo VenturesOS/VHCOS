@@ -80,12 +80,19 @@ from utils import (
 )
 
 # Import R2 storage services
-from services import (
-    upload_to_r2,
-    get_r2_signed_url,
-    get_file_from_r2,
-    generate_r2_key
-)
+try:
+    from services import (
+        upload_to_r2,
+        get_r2_signed_url,
+        get_file_from_r2,
+        generate_r2_key
+    )
+except Exception as e:
+    logging.warning(f"[IMPORT] Services import failed: {e}")
+    async def upload_to_r2(*a, **kw): return None
+    async def get_r2_signed_url(*a, **kw): return None
+    async def get_file_from_r2(*a, **kw): return None
+    def generate_r2_key(*a, **kw): return ""
 
 # Import route modules — wrapped in safe loader so server starts even if some routes fail
 _route_imports_failed = []
