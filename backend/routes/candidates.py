@@ -155,6 +155,28 @@ async def upload_candidate_cv(
 # List candidates
 # ---------------------------------------------------------------------------
 
+
+@router.get("/filter-options")
+async def get_filter_options(
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Return distinct values for filter dropdowns."""
+    locations = await db.candidate_bank.distinct("location")
+    companies = await db.candidate_bank.distinct("current_company")
+    sources = await db.candidate_bank.distinct("source")
+
+    # Clean nulls/blanks and sort
+    clean = lambda lst: sorted(set(str(v).strip() for v in lst if v and str(v).strip()))
+
+    return {
+        "locations": clean(locations)[:50],
+        "companies": clean(companies)[:50],
+        "sources": clean(sources),
+        "notice_periods": ["Immediate", "15 days", "30 days", "45 days", "60 days", "90 days", "90+ days"],
+    }
+
+
 @router.get("/")
 @router.get("")
 async def list_candidates(
