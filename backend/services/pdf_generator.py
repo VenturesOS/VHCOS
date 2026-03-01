@@ -94,7 +94,6 @@ def build_pdf_from_profile(profile: dict) -> bytes:
             # Title and duration on same line
             pdf.set_font("Helvetica", "B", 10)
             pdf.set_text_color(30, 30, 30)
-            title_w = pdf.get_string_width(title) + 2
             dur_w = pdf.get_string_width(duration) + 2
             avail = pdf.w - pdf.l_margin - pdf.r_margin
 
