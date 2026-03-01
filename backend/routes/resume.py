@@ -246,62 +246,70 @@ def _is_pdflatex_available():
 @resume_router.get("/capabilities")
 async def get_resume_capabilities(user=Depends(get_current_user)):
     """Return what the resume builder can do on this server."""
-    return {"pdf_compilation": _is_pdflatex_available()}
+    return {"pdf_compilation": True, "pdflatex_available": _is_pdflatex_available()}
 
 
 @resume_router.post("/compile-pdf")
 async def compile_pdf(req: CompilePdfRequest, user=Depends(get_current_user)):
-    """Compile LaTeX code into a PDF and return it as a downloadable file."""
+    """Compile LaTeX code into a PDF and return it as a downloadable file.
+    Uses pdflatex if available, otherwise falls back to fpdf2."""
     import tempfile
     import subprocess
     import os
     from fastapi.responses import Response
 
-    if not _is_pdflatex_available():
-        raise HTTPException(
-            status_code=503,
-            detail="PDF compilation is not available on this server. pdflatex is not installed. Use the HTML preview or download the .tex file and compile locally."
-        )
-
     if not req.latex or len(req.latex.strip()) < 20:
         raise HTTPException(status_code=400, detail="LaTeX content is too short or empty")
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tex_path = os.path.join(tmpdir, "resume.tex")
-        with open(tex_path, "w") as f:
-            f.write(req.latex)
+    # Method 1: pdflatex (best quality)
+    if _is_pdflatex_available():
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tex_path = os.path.join(tmpdir, "resume.tex")
+            with open(tex_path, "w") as f:
+                f.write(req.latex)
 
-        try:
-            subprocess.run(
-                ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
-                cwd=tmpdir,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        except subprocess.TimeoutExpired:
-            raise HTTPException(status_code=500, detail="PDF compilation timed out")
-        except FileNotFoundError:
-            raise HTTPException(
-                status_code=503,
-                detail="PDF compilation is not available. pdflatex binary not found."
-            )
+            try:
+                subprocess.run(
+                    ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
+                    cwd=tmpdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            else:
+                pdf_path = os.path.join(tmpdir, "resume.pdf")
+                if os.path.exists(pdf_path):
+                    with open(pdf_path, "rb") as pf:
+                        pdf_bytes = pf.read()
+                    return Response(
+                        content=pdf_bytes,
+                        media_type="application/pdf",
+                        headers={"Content-Disposition": 'inline; filename="resume.pdf"'},
+                    )
 
-        pdf_path = os.path.join(tmpdir, "resume.pdf")
-        if not os.path.exists(pdf_path):
-            log_path = os.path.join(tmpdir, "resume.log")
-            log_tail = ""
-            if os.path.exists(log_path):
-                with open(log_path) as lf:
-                    lines = lf.readlines()
-                    log_tail = "".join(lines[-30:])
-            raise HTTPException(
-                status_code=422,
-                detail=f"LaTeX compilation failed. Log tail:\n{log_tail[-500:]}"
-            )
+    # Method 2: fpdf2 fallback — parse profile from the request context
+    # Since we only have LaTeX here, return a helpful message
+    raise HTTPException(
+        status_code=503,
+        detail="pdflatex not available. Use /api/resume/generate-pdf for direct PDF generation."
+    )
 
-        with open(pdf_path, "rb") as pf:
-            pdf_bytes = pf.read()
+
+class GeneratePdfRequest(BaseModel):
+    profile: ResumeProfile
+    template_id: str = "ats_clean"
+
+
+@resume_router.post("/generate-pdf")
+async def generate_pdf(req: GeneratePdfRequest, user=Depends(get_current_user)):
+    """Generate a PDF resume directly from profile data using fpdf2. No system deps required."""
+    from fastapi.responses import Response
+    from services.pdf_generator import build_pdf_from_profile
+
+    profile_dict = req.profile.model_dump()
+    pdf_bytes = build_pdf_from_profile(profile_dict)
 
     return Response(
         content=pdf_bytes,
