@@ -8,24 +8,31 @@ Tests for fpdf2-based PDF generation (Iteration 99)
 import pytest
 import requests
 import os
+import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+
+# Session-scoped fixture to avoid rate limiting
+@pytest.fixture(scope="module")
+def auth_token():
+    """Get auth token once for all tests"""
+    response = requests.post(f"{BASE_URL}/api/auth/login", json={
+        "email": "admin@vhc.in",
+        "password": "VhcAdmin@2024"
+    })
+    assert response.status_code == 200, f"Login failed: {response.text}"
+    data = response.json()
+    token = data.get("access_token")
+    assert token, "No access_token in login response"
+    return token
 
 class TestFpdf2PdfGeneration:
     """Tests for fpdf2-based PDF generation - fixes .tex file download issue"""
     
     @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get auth token for authenticated requests"""
-        # Login as admin
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@vhc.in",
-            "password": "VhcAdmin@2024"
-        })
-        assert response.status_code == 200, f"Login failed: {response.text}"
-        data = response.json()
-        self.token = data.get("access_token")
-        assert self.token, "No access_token in login response"
+    def setup(self, auth_token):
+        """Use shared auth token"""
+        self.token = auth_token
         self.headers = {"Authorization": f"Bearer {self.token}"}
         
     def test_resume_capabilities_returns_pdf_compilation_true(self):
