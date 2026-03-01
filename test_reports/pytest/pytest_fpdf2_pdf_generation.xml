@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="5" failures="1" skipped="0" tests="10" time="13.405" timestamp="2026-03-01T14:18:39.919643+00:00" hostname="agent-env-3f3167ba-1c1b-4e02-90af-439524dc3fbf"><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_resume_capabilities_returns_pdf_compilation_true" time="3.441" /><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_generate_pdf_endpoint_returns_valid_pdf" time="2.227"><failure message="AssertionError: Generate PDF failed: 500 - {&quot;detail&quot;:&quot;Internal server error&quot;}&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">backend/tests/test_fpdf2_pdf_generation.py:74: in test_generate_pdf_endpoint_returns_valid_pdf
+    assert response.status_code == 200, f"Generate PDF failed: {response.status_code} - {response.text}"
+E   AssertionError: Generate PDF failed: 500 - {"detail":"Internal server error"}
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_generate_pdf_with_null_fields" time="1.794" /><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_generate_pdf_empty_profile" time="1.783" /><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_ats_cv_endpoint_returns_pdf_not_tex" time="3.445" /><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_multiple_candidates_ats_cv_all_return_pdf" time="0.121"><error message="failed on setup with &quot;AssertionError: Login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_fpdf2_pdf_generation.py:25: in setup
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_generate_resume_latex_still_works" time="0.118"><error message="failed on setup with &quot;AssertionError: Login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_fpdf2_pdf_generation.py:25: in setup
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_compile_pdf_fallback_message" time="0.102"><error message="failed on setup with &quot;AssertionError: Login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_fpdf2_pdf_generation.py:25: in setup
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_auth_required_for_generate_pdf" time="0.115"><error message="failed on setup with &quot;AssertionError: Login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_fpdf2_pdf_generation.py:25: in setup
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_fpdf2_pdf_generation.TestFpdf2PdfGeneration" name="test_auth_required_for_ats_cv" time="0.139"><error message="failed on setup with &quot;AssertionError: Login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_fpdf2_pdf_generation.py:25: in setup
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase></testsuite></testsuites>
