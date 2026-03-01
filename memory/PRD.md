@@ -9,7 +9,7 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - **Database**: MongoDB Atlas (cluster0.vuhdiod.mongodb.net) - external
 - **AI**: OpenAI GPT-4o-mini via centralized LLM service
 - **Storage**: Cloudflare R2 (credentials validated)
-- **PDF Generation**: fpdf2 (pure Python, zero system deps) + pdflatex (optional, server-side)
+- **PDF Generation**: fpdf2 (pure Python) + pdflatex (optional)
 
 ## Core Features (Implemented)
 
@@ -19,112 +19,78 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Zero Trust middleware for team-based access
 
 ### Candidate Management
-- Candidate Bank (`/api/candidate-bank`) - 1800+ candidates with pagination/search
-- Candidate Profiles (`/api/candidates`) - registered candidate profiles
-- Naukri profile viewer, batch import, browser extension v4.2.0
-- Candidate Edit - Profile editing with mandatory fields (salary, notice, location, experience)
+- Candidate Bank (`/api/candidate-bank`) - 2032 candidates with pagination/search
+- **12 Advanced Filters**: phone, email, location, company, skills, notice period, experience range, salary range, source, has resume, contact hidden (Naukri hidden profiles), capture date range
+- Filter options endpoint (`/api/candidate-bank/filter-options`)
+- Filter panel with chips, clear all, date presets (Today/Week/Month)
+- Available on all 3 role pages: admin, recruiter, employer
 - PUT /salary-notice endpoint for mandatory field updates
 - PATCH update for general field updates
 
 ### Resume Builder
-- Available to all roles: admin, recruiter, employer, candidate
+- Available to all roles
 - 3 LaTeX templates: ATS Clean, Google Style, Modern Pro
-- **Preview-First UX** - visual resume preview shown immediately, edit section collapsible
-- **PDF Preview** - inline iframe PDF viewer using fpdf2 (works in all environments)
+- Preview-First UX with collapsible editor
+- PDF Preview via fpdf2 (works in all environments)
 - PDF download, .tex download, LaTeX code copy
 - AI bullet enhancement via OpenAI GPT-4o-mini
-- Candidate search from bank (admin/recruiter/employer only)
-- Backend: `/api/resume/templates`, `/generate`, `/generate-pdf`, `/compile-pdf`, `/my-profile`, `/candidate/{id}`, `/ai-enhance`, `/capabilities`
 
 ### ATS CV System
-- Auto-generates **PDF resumes** for all candidate bank profiles (was .tex, now PDF)
-- Token-based auth for new-tab downloads (`?token=` query param)
-- Pure Python PDF generation via fpdf2 (no system dependency on pdflatex)
+- Auto-generates PDF resumes for all candidate bank profiles
+- Token-based auth for new-tab downloads
+- Pure Python PDF generation via fpdf2
 - Graceful fallback: fpdf2 → pdflatex → .tex
-- Download endpoints: `/api/candidate-bank/{id}/ats-cv`, `/api/candidate-bank/{id}/download-resume`
+
+### Browser Extension v4.5.0
+- Scoped phone extraction (fixes recruiter phone leakage)
+- CV deep section parsing
+- Smarter "View Contact" click
+- Capture history with email/phone
 
 ### Attendance System
-- Check-in/check-out with IST timezone (UTC+5:30)
-- Late/overtime calculation, leave management
-- Analytics dashboard, health scores, cron service
+- IST timezone, late/overtime calculation, leave management
 
 ### Jobs & Pipeline
 - Job posting, approval workflow, applicant tracking
-- AI-powered candidate matching, submission tracker
-- Revenue dashboard
+- AI-powered matching, submission tracker, revenue dashboard
 
-### Content & Marketing
-- Blog engine, SEO monitoring, digest emails
-- LinkedIn integration, contact form submissions
-
-## Deployment Architecture
-- Kubernetes container with supervisor-managed services
-- Frontend: port 3000, Backend: port 8001
-- Lazy MongoDB proxy pattern for deployment-safe startup
-- `mongo_production_override.py` for Atlas connection override
-- fpdf2 for PDF generation (pure Python, no system deps)
-- Optional: texlive for higher-quality pdflatex compilation
-
-## What's Been Implemented (Timeline)
+## Implementation Timeline
 
 ### Feb 27, 2026 - Deployment Stabilization
-- P0 Fix: Lazy proxy pattern for MongoDB client (deployment-safe startup)
-- Environment detection fix (checks override file for production mode)
-- Attendance IST timezone fix (37 instances across 3 files)
-- Candidate bank route prefix fix (/api/candidate-bank)
+- Lazy proxy pattern, environment detection, IST fix, route prefix fix
 
-### Feb 28, 2026 - Resume Builder Feature
-- Full resume generation API (5 endpoints)
-- 3 LaTeX templates with proper escaping
-- AI bullet enhancement with fallback
-- Frontend page for all roles with inline editing
-- Registration enhanced with notice_period + CTC fields
-- Sidebar navigation updated for all roles
-- ATS CV process overhauled with LaTeX engine
-- Batch resume generation for all 1,977 candidates
-- Public website navigation updated
+### Feb 28, 2026 - Resume Builder + Bug Fixes
+- Resume generation API, LaTeX templates, AI enhancement
+- ATS CV overhaul, batch generation for 1,977 candidates
+- P0 fixes: auth, UX, salary-notice, download-resume endpoints
 
-### Feb 28, 2026 - P0 Bug Fixes (Session 2)
-- Fix 1: ATS CV download auth - token-based query param auth for new-tab downloads
-- Fix 2: Resume Builder UX refactored to preview-first with collapsible editor
-- Fix 3: Created missing PUT /salary-notice endpoint for candidate mandatory fields
-- Fix 4: Created GET /download-resume endpoint with token auth
-- All fixes verified 100% pass rate (iteration_97)
+### Feb 28, 2026 - PDF Preview
+- fpdf2 pure-Python PDF generator
+- generate-pdf endpoint, inline iframe preview
+- Deployment fix: pdflatex graceful degradation
 
-### Feb 28, 2026 - PDF Preview & Download Fix (Session 3)
-- Created pure-Python PDF generator using fpdf2 (services/pdf_generator.py)
-- ATS CV download now returns **PDF** instead of .tex file
-- New POST /api/resume/generate-pdf endpoint (works without pdflatex)
-- Frontend Resume Builder uses generate-pdf for inline preview
-- Graceful degradation: fpdf2 → pdflatex → .tex fallback chain
-- Deployment fix: pdflatex FileNotFoundError no longer crashes production
-- Unicode char normalization (en-dash, smart quotes → ASCII)
-- Long text handling with multi_cell wrapping
-- All verified 100% (iteration_99: 10/10 backend, frontend verified)
+### Mar 1, 2026 - Browser Extension v4.5.0 + Advanced Filters
+- Updated extension with scoped phone extraction, CV deep parsing
+- 12 advanced filters on candidate bank (phone, email, location, company, skills, notice period, experience range, salary range, source, has resume, contact hidden, capture date)
+- Filter panel with chips, clear all, date presets
+- All 3 role pages updated (admin, recruiter, employer)
+- All verified 100% (iteration_100: 27/27 backend, 15/15 frontend)
 
 ## Backlog
 
-### P0 (Immediate)
-- None currently
-
 ### P1 (Next)
-- Updated Browser Extension (pending user sharing new version)
 - Interview Scheduling
 - Candidate Activity Log
-
-### P2
 - Hiring Funnel KPIs dashboard
 - In-App Notification Center
+
+### P2
 - Client CRM & Invoicing
 - Candidate Duplicate Detection
 - Email Template Management
 
-### P3 (Future)
-- Boolean Search
-- Onboarding Module
-- Vendor Management System
-- Mobile PWA
-- Custom Report Builder
+### P3
+- Boolean Search, Onboarding Module, Vendor Management, Mobile PWA, Custom Report Builder
 
 ### Blocked
 - LinkedIn API Auto-Posting (needs w_organization_social scope approval)
