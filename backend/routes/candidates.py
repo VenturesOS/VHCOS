@@ -295,9 +295,9 @@ async def list_candidates(
     # ── Has Resume ──
     if has_resume == "yes":
         conditions.append({"$or": [
-            {"resume_url":   {"$exists": True, "$ne": None, "$ne": ""}},
-            {"resume_path":  {"$exists": True, "$ne": None, "$ne": ""}},
-            {"resume_latex": {"$exists": True, "$ne": None, "$ne": ""}},
+            {"resume_url":   {"$exists": True, "$nin": [None, ""]}},
+            {"resume_path":  {"$exists": True, "$nin": [None, ""]}},
+            {"resume_latex": {"$exists": True, "$nin": [None, ""]}},
         ]})
     elif has_resume == "no":
         conditions.append({
