@@ -531,7 +531,7 @@ async def get_ats_cv(
         {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
     )
 
-    return _latex_download_response(latex, candidate.get("name", "Candidate"))
+    return _latex_download_response(latex, candidate.get("name", "Candidate"), profile=profile)
 
 
 @router.post("/batch-generate-resumes")
