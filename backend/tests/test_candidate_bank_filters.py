@@ -22,14 +22,14 @@ ADMIN_PASSWORD = "VhcAdmin@2024"
 class TestCandidateBankFilters:
     """Tests for candidate-bank advanced filter endpoints"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Setup session with auth token"""
-        self.session = requests.Session()
-        self.session.headers.update({"Content-Type": "application/json"})
+    @classmethod
+    def setup_class(cls):
+        """Setup session with auth token for all tests in class"""
+        cls.session = requests.Session()
+        cls.session.headers.update({"Content-Type": "application/json"})
         
         # Login as admin
-        login_response = self.session.post(
+        login_response = cls.session.post(
             f"{BASE_URL}/api/auth/login",
             json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
         )
@@ -37,8 +37,8 @@ class TestCandidateBankFilters:
             data = login_response.json()
             token = data.get("access_token") or data.get("token")
             if token:
-                self.session.headers.update({"Authorization": f"Bearer {token}"})
-                self.token = token
+                cls.session.headers.update({"Authorization": f"Bearer {token}"})
+                cls.token = token
             else:
                 pytest.skip("No token returned from login")
         else:
