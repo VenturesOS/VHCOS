@@ -13,7 +13,11 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 import aiofiles
-import fitz  # PyMuPDF for PDF text extraction
+try:
+    import fitz  # PyMuPDF for PDF text extraction
+except ImportError:
+    fitz = None
+    logging.warning("[IMPORT] PyMuPDF (fitz) not available — PDF text extraction disabled")
 
 # Import configuration from config.py
 from config import (
