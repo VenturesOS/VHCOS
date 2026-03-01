@@ -593,7 +593,22 @@ export default function RecruiterCandidateBankPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium text-slate-900 truncate">{candidate.name}</p>
-                        <p className="text-sm text-slate-500 truncate">{candidate.headline || candidate.email}</p>
+                        <p className="text-sm text-slate-500 truncate">{candidate.headline || candidate.current_designation || candidate.email}</p>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          {candidate.email ? (
+                            <span className="text-xs text-slate-400 flex items-center gap-1 truncate"><Mail className="w-3 h-3" />{candidate.email}</span>
+                          ) : (
+                            <span className="text-xs text-orange-400 flex items-center gap-1"><EyeOff className="w-3 h-3" />Email hidden</span>
+                          )}
+                          {candidate.phone ? (
+                            <span className="text-xs text-slate-400 flex items-center gap-1"><Phone className="w-3 h-3" />{candidate.phone}</span>
+                          ) : (
+                            <span className="text-xs text-orange-400 flex items-center gap-1"><EyeOff className="w-3 h-3" />Phone hidden</span>
+                          )}
+                          {candidate.location && (
+                            <span className="text-xs text-slate-400 flex items-center gap-1 hidden md:flex"><MapPin className="w-3 h-3" />{candidate.location}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap ml-13 sm:ml-0">
