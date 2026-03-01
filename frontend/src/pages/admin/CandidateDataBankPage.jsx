@@ -288,22 +288,31 @@ export default function CandidateDataBankPage() {
   const loadCandidates = async (page = 1) => {
     setLoading(true);
     try {
-      const params = {
-        page,
-        limit: pageSize
-      };
+      const params = { page, limit: pageSize };
       if (debouncedSearch) params.search = debouncedSearch;
       if (debouncedSkills) params.skills = debouncedSkills;
+      if (filters.phone) params.phone = filters.phone;
+      if (filters.email) params.email = filters.email;
+      if (filters.location) params.location = filters.location;
+      if (filters.company) params.company = filters.company;
+      if (filters.noticePeriod) params.notice_period = filters.noticePeriod;
+      if (filters.minExperience !== '') params.min_experience = parseInt(filters.minExperience);
+      if (filters.maxExperience !== '') params.max_experience = parseInt(filters.maxExperience);
+      if (filters.minSalary !== '') params.min_salary = parseInt(filters.minSalary);
+      if (filters.maxSalary !== '') params.max_salary = parseInt(filters.maxSalary);
+      if (filters.source) params.source = filters.source;
+      if (filters.hasResume) params.has_resume = filters.hasResume;
+      if (filters.contactHidden) params.contact_hidden = filters.contactHidden;
+      if (filters.capturedAfter) params.captured_after = filters.capturedAfter;
+      if (filters.capturedBefore) params.captured_before = filters.capturedBefore;
+
       const res = await candidateBankAPI.getAll(params);
-      
-      // Handle new paginated response format
       if (res.data.candidates) {
         setCandidates(res.data.candidates);
         setTotalCandidates(res.data.total);
-        setTotalPages(res.data.total_pages);
+        setTotalPages(res.data.pages || res.data.total_pages || 1);
         setCurrentPage(res.data.page);
       } else {
-        // Fallback for old response format (array)
         setCandidates(res.data);
         setTotalCandidates(res.data.length);
         setTotalPages(1);
