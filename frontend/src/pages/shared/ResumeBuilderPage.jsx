@@ -43,15 +43,8 @@ export default function ResumeBuilderPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [pdfAvailable, setPdfAvailable] = useState(true);
 
-  // Check server capabilities and load profile on mount
+  // Load profile on mount — PDF is always available via fpdf2
   useEffect(() => {
-    resumeAPI.getCapabilities().then(res => {
-      setPdfAvailable(res.data?.pdf_compilation === true);
-      if (!res.data?.pdf_compilation) setActiveTab('preview');
-    }).catch(() => {
-      setPdfAvailable(false);
-      setActiveTab('preview');
-    });
     if (isCandidate) {
       loadMyProfile();
     } else {
