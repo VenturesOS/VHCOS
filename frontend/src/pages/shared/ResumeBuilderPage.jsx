@@ -103,11 +103,8 @@ export default function ResumeBuilderPage() {
       const res = await resumeAPI.generate(profileData, template);
       const newLatex = res.data.latex;
       setLatex(newLatex);
-      if (pdfAvailable) {
-        compilePdf(newLatex);
-      } else {
-        setActiveTab('preview');
-      }
+      // Generate PDF from profile data directly (fpdf2 — works everywhere)
+      compilePdf(profileData);
     } catch (e) {
       toast.error('Generation failed');
     } finally {
