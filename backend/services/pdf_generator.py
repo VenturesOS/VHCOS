@@ -120,9 +120,14 @@ def build_pdf_from_profile(profile: dict) -> bytes:
             for bullet in bullets:
                 pdf.set_font("Helvetica", "", 9)
                 pdf.set_text_color(60, 60, 60)
+                # Use multi_cell with proper width calculation (leave indent space)
+                x_start = pdf.l_margin + 9  # 5 indent + 4 for dash
+                bullet_width = pdf.w - x_start - pdf.r_margin
+                pdf.set_x(pdf.l_margin)
                 pdf.cell(5)  # indent
                 pdf.cell(4, 4.5, "-")
-                pdf.multi_cell(0, 4.5, _clean(bullet))
+                # Use inline_multi_cell approach to handle long bullets
+                pdf.multi_cell(bullet_width, 4.5, _clean(bullet))
 
             pdf.ln(3)
 
