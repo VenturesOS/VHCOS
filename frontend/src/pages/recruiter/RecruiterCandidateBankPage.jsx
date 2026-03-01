@@ -37,6 +37,30 @@ export default function RecruiterCandidateBankPage() {
   const [activityHistory, setActivityHistory] = useState(null);
   const fileInputRef = useRef(null);
   const [uploadForm, setUploadForm] = useState({ email: '', name: '' });
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Filters state
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    phone: '',
+    email: '',
+    location: '',
+    company: '',
+    noticePeriod: '',
+    minExperience: '',
+    maxExperience: '',
+    minSalary: '',
+    maxSalary: '',
+    source: '',
+    hasResume: '',
+    contactHidden: '',
+    capturedAfter: '',
+    capturedBefore: '',
+  });
+
+  const activeFilterCount = Object.values(filters).filter(v => v !== '').length + (skills ? 1 : 0);
   
   // Add as Applicant state
   const [showAddApplicant, setShowAddApplicant] = useState(false);
