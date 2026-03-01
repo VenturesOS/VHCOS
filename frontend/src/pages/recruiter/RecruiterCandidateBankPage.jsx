@@ -24,16 +24,6 @@ function FilterChip({ label, onRemove }) {
   );
 }
 
-const NOTICE_PERIODS = [
-  "Immediate",
-  "15 days",
-  "30 days",
-  "45 days",
-  "60 days",
-  "90 days",
-  "90+ days"
-];
-
 export default function RecruiterCandidateBankPage() {
   const navigate = useNavigate();
   const [candidates, setCandidates] = useState([]);
