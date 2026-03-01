@@ -74,11 +74,12 @@ export default function ResumeBuilderPage() {
     }
   };
 
-  const compilePdf = async (latexCode) => {
+  const compilePdf = async (profileData) => {
     if (!pdfAvailable) return;
     setCompilingPdf(true);
     try {
-      const res = await resumeAPI.compilePdf(latexCode);
+      // Use generatePdf (pure Python, works in all environments)
+      const res = await resumeAPI.generatePdf(profileData, selectedTemplate);
       const blob = new Blob([res.data], { type: 'application/pdf' });
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
       const url = URL.createObjectURL(blob);
@@ -90,18 +91,7 @@ export default function ResumeBuilderPage() {
         setActiveTab('preview');
         return;
       }
-      const detail = e.response?.data;
-      if (detail instanceof Blob) {
-        const text = await detail.text();
-        try {
-          const json = JSON.parse(text);
-          toast.error(json.detail?.substring(0, 120) || 'PDF compilation failed');
-        } catch {
-          toast.error('PDF compilation failed');
-        }
-      } else {
-        toast.error('PDF compilation failed');
-      }
+      toast.error('PDF generation failed');
     } finally {
       setCompilingPdf(false);
     }
