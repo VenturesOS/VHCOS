@@ -166,12 +166,12 @@ async def get_filter_options(
     companies = await db.candidate_bank.distinct("current_company")
     sources = await db.candidate_bank.distinct("source")
 
-    # Clean nulls/blanks and sort
-    clean = lambda lst: sorted(set(str(v).strip() for v in lst if v and str(v).strip()))
+    def clean_list(lst):
+        return sorted(set(str(v).strip() for v in lst if v and str(v).strip()))
 
     return {
-        "locations": clean(locations)[:50],
-        "companies": clean(companies)[:50],
+        "locations": clean_list(locations)[:50],
+        "companies": clean_list(companies)[:50],
         "sources": clean(sources),
         "notice_periods": ["Immediate", "15 days", "30 days", "45 days", "60 days", "90 days", "90+ days"],
     }
