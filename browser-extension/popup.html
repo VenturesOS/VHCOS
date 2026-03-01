@@ -250,6 +250,27 @@
     .hc-exists .hist-status   { background: #f1f5f9; color: #64748b; }
     .hc-failed .hist-status   { background: #ffe4e6; color: #dc2626; }
 
+    /* ── E / M indicator circles ── */
+    .hist-indicators {
+      display: flex; gap: 4px; align-items: center; flex-shrink: 0;
+    }
+    .em-circle {
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 800; letter-spacing: 0;
+      flex-shrink: 0; position: relative;
+      border: 1.5px solid transparent;
+      transition: transform 0.15s;
+      cursor: default;
+    }
+    .em-circle:hover { transform: scale(1.25); z-index: 10; }
+    /* Green — captured & unique (created) */
+    .em-green  { background: #dcfce7; color: #15803d; border-color: #86efac; }
+    /* Yellow — missing / hidden on Naukri */
+    .em-yellow { background: #fef9c3; color: #a16207; border-color: #fde047; }
+    /* Red — duplicate / suspicious */
+    .em-red    { background: #ffe4e6; color: #be123c; border-color: #fca5a5; }
+
     /* Summary chips */
     .hist-chip {
       font-size: 10px; font-weight: 600; padding: 3px 8px;

@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '4.2.0';
+const VERSION = '4.5.0';
 
 const CONFIG = {
   MAX_CAPTURE_QUEUE_SIZE: 500,
@@ -423,6 +423,8 @@ async function processSingleCapture(item, auth) {
       naukri_profile_url: item.naukri_profile_url,
       action:            captureResult.action,
       candidate_id:      captureResult.candidate_id,
+      email:             item.email || null,
+      phone:             item.phone || null,
       _bulk:             item._bulk || false,
     });
 
@@ -456,6 +458,8 @@ async function processSingleCapture(item, auth) {
           naukri_profile_url: item.naukri_profile_url,
           action:            'failed',
           error:             err.message,
+          email:             item.email || null,
+          phone:             item.phone || null,
           _bulk:             item._bulk || false,
         });
       }
@@ -686,6 +690,8 @@ async function addToHistory(entry) {
         action:       entry.action,           // created | updated | exists | failed
         error:        entry.error || null,
         candidate_id: entry.candidate_id || null,
+        email:        entry.email || null,    // captured email (null = hidden/missing)
+        phone:        entry.phone || null,    // captured phone (null = hidden/missing)
         timestamp:    new Date().toISOString(),
         bulk:         entry._bulk || false,
       });

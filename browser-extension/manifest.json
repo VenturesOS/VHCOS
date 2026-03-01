@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "VHC Talent OS - Naukri Auto Capture",
-  "version": "4.2.0",
-  "description": "Automatically capture candidate profiles from Naukri.com to VHC Talent OS — with Bulk Queue & Capture History",
+  "version": "4.5.0",
+  "description": "Automatically capture candidate profiles from Naukri.com to VHC Talent OS — Targeted phone extraction, no recruiter leakage",
   "permissions": [
     "alarms",
     "notifications",

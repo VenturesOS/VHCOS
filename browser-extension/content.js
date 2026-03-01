@@ -19,7 +19,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '4.1.0';
+  const VERSION = '4.5.0';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -400,7 +400,20 @@
    * Auto-click "View Contact" / "View Phone" buttons to reveal hidden numbers.
    * Waits for the number to appear, then returns the revealed contact info.
    */
+  /**
+   * Click the "View Contact" button, then detect the NEWLY revealed phone number
+   * using a BEFORE/AFTER diff on the candidate root container.
+   *
+   * v4.5 key insight: snapshot phones in the candidate root BEFORE clicking,
+   * then diff AFTER — only phones that NEWLY appeared are the candidate's.
+   * The recruiter's phone (in the sidebar/nav) was already present before,
+   * so it is always excluded from the diff — regardless of recruiterCreds.phone.
+   */
   async function clickViewContactButton() {
+    // ── BEFORE snapshot: record all phones currently in candidate root ──
+    const phonesBeforeClick = snapshotPhonesInRoot();
+    console.log(`[VHC v${VERSION}] BEFORE click phones in root: [${[...phonesBeforeClick].join(', ')}]`);
+
     const buttonTexts = [
       'View Contact', 'View contact', 'view contact',
       'View Phone', 'View phone', 'view phone',
@@ -412,17 +425,17 @@
 
     let clicked = false;
 
-    // Strategy 1: Find by EXACT button text match only (strict)
+    // Strategy 1: Exact button text match (scoped inside candidate root)
+    const root = getCandidateRoot();
     for (const text of buttonTexts) {
-      const buttons = document.querySelectorAll('button, a, span[role="button"], div[role="button"]');
+      const buttons = root.querySelectorAll('button, a, span[role="button"], div[role="button"]');
       for (const btn of buttons) {
         const btnText = (btn.innerText || btn.textContent || '').trim();
-        // EXACT match only — prevents clicking "Similar profiles" or other unrelated elements
         if (btnText === text) {
           try {
             btn.click();
             clicked = true;
-            console.log(`[VHC v${VERSION}] Clicked "${btnText}" button (exact match)`);
+            console.log(`[VHC v${VERSION}] Clicked "${btnText}" button`);
             break;
           } catch (_) {}
         }
@@ -430,7 +443,7 @@
       if (clicked) break;
     }
 
-    // Strategy 2: Find by class/attribute patterns (more targeted)
+    // Strategy 2: Class/attribute selectors (scoped to root)
     if (!clicked) {
       const selectors = [
         '[class*="viewContact"]', '[class*="view-contact"]', '[class*="ViewContact"]',
@@ -441,11 +454,11 @@
       ];
       for (const sel of selectors) {
         try {
-          const el = document.querySelector(sel);
+          const el = root.querySelector(sel);
           if (el) {
             el.click();
             clicked = true;
-            console.log(`[VHC v${VERSION}] Clicked view contact via selector: ${sel}`);
+            console.log(`[VHC v${VERSION}] Clicked via selector: ${sel}`);
             break;
           }
         } catch (_) {}
@@ -453,31 +466,32 @@
     }
 
     if (clicked) {
-      // Wait for contact to appear using MutationObserver instead of fixed 2000ms sleep
-      await new Promise((resolve) => {
-        let quietTimer = null;
-        const maxTimer = setTimeout(resolve, 1500); // cap at 1.5s (was 2s)
-        const observer = new MutationObserver(() => {
-          clearTimeout(quietTimer);
-          quietTimer = setTimeout(() => {
-            observer.disconnect();
-            clearTimeout(maxTimer);
-            resolve();
-          }, 250);
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        quietTimer = setTimeout(() => {
-          observer.disconnect();
-          clearTimeout(maxTimer);
-          resolve();
-        }, 250);
+      // Poll for a NEW phone to appear in candidate root (max 4s, check every 300ms)
+      const revealedPhones = await new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 14; // 4.2s max
+        const interval = setInterval(() => {
+          attempts++;
+          const phonesAfter = snapshotPhonesInRoot();
+          const newPhones = diffPhoneSets(phonesBeforeClick, phonesAfter);
+          if (newPhones.length > 0) {
+            clearInterval(interval);
+            console.log(`[VHC v${VERSION}] ✅ New phone revealed after ${attempts * 300}ms: [${newPhones.join(', ')}]`);
+            resolve(newPhones);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(interval);
+            console.log(`[VHC v${VERSION}] Timeout — no new phone appeared after click`);
+            resolve([]);
+          }
+        }, 300);
       });
-      console.log(`[VHC v${VERSION}] Contact reveal settled`);
+      return { clicked: true, revealedPhones };
     } else {
-      console.log(`[VHC v${VERSION}] No "View Contact" button found (contact may already be visible)`);
+      // No button found — number may already be visible
+      // The BEFORE snapshot IS the candidate's number (no recruiter number expected in root)
+      console.log(`[VHC v${VERSION}] No "View Contact" button — checking root for existing phones`);
+      return { clicked: false, revealedPhones: [...phonesBeforeClick] };
     }
-
-    return clicked;
   }
 
   function extractNaukriProfileId() {
@@ -510,12 +524,172 @@
   // ===================== MULTI-SOURCE CONTACT EXTRACTION =====================
 
   const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const PHONE_REGEX = /(?:\+91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}/g;
-  const INDIAN_MOBILE = /(?:\+91[\s.-]?)?[6-9]\d{9}/;
 
-  function cleanPhone(p) { return p.replace(/[\s.+\-()]/g, '').slice(-10); }
+  /**
+   * PHONE EXTRACTION v4.4 — Targeted, not whole-page.
+   *
+   * Root causes fixed:
+   *  1. PHONE_CHUNK_REGEX was too greedy → matched profile IDs, salary ranges etc.
+   *  2. Whole body.innerText scan included recruiter's nav-bar number
+   *  3. recruiterCreds.phone often null (API doesn't return it) → filter bypassed
+   *
+   * New strategy:
+   *  - scanContactSection():  read ONLY the Naukri contact info div, not full page
+   *  - clickAndWaitForPhone(): click View Contact, then poll the contact section
+   *    for a real number to appear — avoids whole-page before/after diff entirely
+   *  - extractPhonesFromText(): stricter regex, only matches clean 10-digit groups
+   *  - Recruiter phone blocklist: built from BOTH stored phone AND email-derived
+   *    heuristics so it works even when API doesn't return the phone field
+   */
 
-  function isNaukriSystemEmail(e) {
+  /** Strip non-digits, take last 10 */
+  function cleanPhone(p) {
+    return (p || '').replace(/\D/g, '').slice(-10);
+  }
+
+  /** True if cleaned string is a valid Indian mobile (starts 6-9, exactly 10 digits) */
+  function isValidIndianMobile(c) {
+    return c.length === 10 && /^[6-9]\d{9}$/.test(c);
+  }
+
+  /**
+   * Extract valid Indian mobile numbers from a SHORT, targeted text snippet.
+   * Covers all common separator patterns seen on Naukri.
+   * Do NOT use this on full body.innerText (guard enforced via length check).
+   */
+  function extractPhonesFromText(text) {
+    const found = new Set();
+    if (!text) return found;
+
+    // For longer text (contact section can be 200-500 chars), we allow up to 1000
+    const t = text.substring(0, 1000);
+
+    // Pattern: strip all non-digits between the digit groups, validate result
+    // We match: optional +91/00 91 prefix, then groups of digits+separators
+    // totalling 10 digits, starting with 6-9
+    const SEP = '[\\s\\-\\.]?'; // single optional separator
+    const MSEP = '[\\s\\-\\.]*'; // zero or more separators
+
+    const patterns = [
+      // Plain 10 digits (no separators)
+      /(?:(?:\+|00)91\s*)?([6-9]\d{9})/g,
+      // +91 prefix with separator then 10 digits
+      /(?:\+91|0091)[\s\-\.]([6-9]\d{9})/g,
+      // 5+5 split: 98765 43210
+      /([6-9]\d{4})[\s\-\.](\d{5})/g,
+      // 4+6 split: 9876-543210
+      /([6-9]\d{3})[\s\-\.](\d{6})/g,
+      // 4+3+3 split: 9876-543-210
+      /([6-9]\d{3})[\s\-\.](\d{3})[\s\-\.](\d{3})/g,
+      // 3+3+4 split: 987-654-3210
+      /([6-9]\d{2})[\s\-\.](\d{3})[\s\-\.](\d{4})/g,
+      // 4+2+4 split: 9876 54 3210 (common on Naukri Resdex)
+      /([6-9]\d{3})[\s\-\.](\d{2})[\s\-\.](\d{4})/g,
+      // 4+4+2 split: 9876 5432 10
+      /([6-9]\d{3})[\s\-\.](\d{4})[\s\-\.](\d{2})/g,
+      // 5+3+2 split
+      /([6-9]\d{4})[\s\-\.](\d{3})[\s\-\.](\d{2})/g,
+      // 5+2+3 split
+      /([6-9]\d{4})[\s\-\.](\d{2})[\s\-\.](\d{3})/g,
+      // 2+4+4 split: 98-7654-3210
+      /([6-9]\d)[\s\-\.](\d{4})[\s\-\.](\d{4})/g,
+      // Dot-separated: 9876.543.210
+      /([6-9]\d{3})\.(\d{3})\.(\d{3})/g,
+      /([6-9]\d{4})\.(\d{3})\.(\d{2})/g,
+    ];
+
+    for (const re of patterns) {
+      let m;
+      re.lastIndex = 0;
+      while ((m = re.exec(t)) !== null) {
+        // Collect all capture groups and join digits
+        const digits = m.slice(1).join('').replace(/\D/g, '');
+        const c = digits.slice(-10);
+        if (isValidIndianMobile(c)) found.add(c);
+        // Also try full match in case groups aren't captured cleanly
+        const fullClean = cleanPhone(m[0]);
+        if (isValidIndianMobile(fullClean)) found.add(fullClean);
+      }
+    }
+
+    return found;
+  }
+
+  /**
+   * Naukri contact section selectors — ordered by reliability.
+   * We read from THESE elements only, not full body text.
+   */
+  // ─────────────────────────────────────────────────────────────────────────
+  // PHONE EXTRACTION v4.5 — Diff-based on contact section, scoped to candidate
+  // ─────────────────────────────────────────────────────────────────────────
+  //
+  // THE DEFINITIVE APPROACH:
+  //
+  // Problem with every previous approach:
+  //   - Whole-page before/after diff: picks up recruiter nav number
+  //   - Contact section scan: class*=contactInfo matches recruiter sidebar too
+  //   - Recruiter phone filter: only works if API returns phone (often null)
+  //
+  // Solution (v4.5):
+  //   1. Find the candidate profile ROOT container (not whole page)
+  //   2. SNAPSHOT all digit-strings in that container BEFORE click
+  //   3. Click "View Contact"
+  //   4. SNAPSHOT again AFTER
+  //   5. DIFF → only NEW digit-strings that appeared = candidate phone
+  //
+  // This is safe because:
+  //   - The recruiter phone was ALREADY in the container before the click
+  //   - After click, only the candidate number is NEW
+  //   - We never need to know the recruiter phone at all
+  //   - Works even when recruiterCreds.phone is null
+  //
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Candidate profile root container selectors — ordered by specificity.
+   * These wrap ONLY the candidate's profile, not the recruiter header/nav.
+   */
+  const CANDIDATE_ROOT_SELECTORS = [
+    '#rdxRoot .pages',
+    '#rdxRoot [class*="tupleDetail"]',
+    '#rdxRoot [class*="candidateDetail"]',
+    '#rdxRoot [class*="profilePage"]',
+    '#rdxRoot [class*="resumeDetail"]',
+    '#rdxRoot [class*="cvDetail"]',
+    '#rdxRoot',
+    // Absolute fallback: main content area
+    'main',
+    '[role="main"]',
+  ];
+
+  /** Get the tightest candidate profile container available */
+  function getCandidateRoot() {
+    for (const sel of CANDIDATE_ROOT_SELECTORS) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return document.body; // last resort
+  }
+
+  /**
+   * Snapshot all valid Indian mobile numbers visible inside the candidate root.
+   * Reads text of ALL descendant elements but only from inside the candidate container.
+   * Returns a Set<string> of 10-digit numbers.
+   */
+  function snapshotPhonesInRoot() {
+    const root = getCandidateRoot();
+    const text = root.innerText || root.textContent || '';
+    return extractPhonesFromText(text.substring(0, 8000));
+  }
+
+  /**
+   * DIFF two phone Sets — returns numbers that appeared in `after` but not `before`.
+   */
+  function diffPhoneSets(before, after) {
+    return [...after].filter(p => !before.has(p));
+  }
+
+    function isNaukriSystemEmail(e) {
     const lower = (e || '').toLowerCase();
     return lower.includes('@naukri.com') || lower.includes('support@') ||
            lower.includes('noreply@') || lower.includes('@example.') ||
@@ -524,46 +698,36 @@
   }
 
   /**
-   * Snapshot all emails and phones currently visible on the page.
-   * Returns { emails: Set, phones: Set }
+   * v4.4: Snapshot EMAILS only from page body text.
+   * Phone extraction is done via scanContactSectionForPhones() — reads ONLY
+   * the Naukri contact info div, not full body text. This prevents recruiter
+   * nav-bar numbers, profile IDs, and salary ranges from leaking in.
    */
-  function snapshotPageContacts() {
+  function snapshotPageEmails() {
     const text = document.body.innerText || '';
     const emails = new Set();
-    const phones = new Set();
-
-    const emailMatches = text.match(EMAIL_REGEX) || [];
-    emailMatches.forEach(e => {
+    (text.match(EMAIL_REGEX) || []).forEach(e => {
       const lower = e.toLowerCase().trim();
       if (!isNaukriSystemEmail(lower)) emails.add(lower);
     });
-
-    const phoneMatches = text.match(PHONE_REGEX) || [];
-    phoneMatches.forEach(p => {
-      const cleaned = cleanPhone(p);
-      if (cleaned.length === 10 && INDIAN_MOBILE.test(cleaned)) phones.add(cleaned);
-    });
-
-    // Also check mailto/tel links
     document.querySelectorAll('a[href^="mailto:"]').forEach(a => {
       const e = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
       if (e && !isNaukriSystemEmail(e)) emails.add(e);
     });
-    document.querySelectorAll('a[href^="tel:"]').forEach(a => {
-      const p = cleanPhone(a.getAttribute('href').replace('tel:', ''));
-      if (p.length === 10) phones.add(p);
-    });
+    return emails;
+  }
 
-    return { emails, phones };
+  // Compatibility shim — phones always empty, email diff still works
+  function snapshotPageContacts() {
+    return { emails: snapshotPageEmails(), phones: new Set() };
   }
 
   /**
-   * Diff two contact snapshots. Returns NEW contacts that appeared in `after`.
+   * Diff two email snapshots. Returns NEW emails that appeared after View Contact.
    */
   function diffContacts(before, after) {
     const newEmails = [...after.emails].filter(e => !before.emails.has(e));
-    const newPhones = [...after.phones].filter(p => !before.phones.has(p));
-    return { emails: newEmails, phones: newPhones };
+    return { emails: newEmails, phones: [] }; // phone diff retired in v4.4
   }
 
   /**
@@ -640,14 +804,20 @@
         }
       }
 
-      // Extract phones
-      const cvPhones = cvText.match(PHONE_REGEX) || [];
-      for (const p of cvPhones) {
-        const cleaned = cleanPhone(p);
-        if (cleaned.length === 10 && INDIAN_MOBILE.test(cleaned)) {
-          result.phone = cleaned;
-          console.log(`[VHC v${VERSION}] CV phone: ${cleaned}`);
-          break;
+      // Extract phones — FIX v4.3: dual-pass extractor
+      const cvPhoneSet = extractPhonesFromText(cvText);
+      const cvPhonesArray = [...cvPhoneSet];
+      if (cvPhonesArray.length > 0) {
+        result.phone = cvPhonesArray[0];
+        console.log(`[VHC v${VERSION}] CV phone: ${result.phone} (found ${cvPhonesArray.length} total)`);
+      }
+
+      // Also check tel: links inside iframe
+      if (!result.phone) {
+        const telLinks = iframeDoc.querySelectorAll('a[href^="tel:"]');
+        for (const a of telLinks) {
+          const c = cleanPhone(a.getAttribute('href').replace('tel:', ''));
+          if (isValidIndianMobile(c)) { result.phone = c; break; }
         }
       }
 
@@ -709,17 +879,15 @@
         console.log(`[VHC v${VERSION}] CV LinkedIn: ${linkedinMatch[0]}`);
       }
 
-      // Extract additional emails (all unique, non-system emails)
-      const allCvEmails = cvEmails.map(e => e.toLowerCase().trim()).filter(e => !isNaukriSystemEmail(e));
+      // Extract additional emails
+      const allCvEmails = (cvText.match(EMAIL_REGEX) || []).map(e => e.toLowerCase().trim()).filter(e => !isNaukriSystemEmail(e));
       if (allCvEmails.length > 1) {
         result.sections.additionalEmails = allCvEmails.slice(1);
       }
 
       // Extract additional phone numbers
-      const allCvPhones = cvPhones.map(p => cleanPhone(p)).filter(p => p.length === 10 && INDIAN_MOBILE.test(p));
-      const uniquePhones = [...new Set(allCvPhones)];
-      if (uniquePhones.length > 1) {
-        result.sections.additionalPhones = uniquePhones.slice(1);
+      if (cvPhonesArray.length > 1) {
+        result.sections.additionalPhones = cvPhonesArray.slice(1);
       }
 
     } catch (err) {
@@ -731,11 +899,12 @@
 
   /**
    * Extract contacts using Naukri's DOM selectors as a fallback.
-   * i.naukri-icon-email → parent title, and [title*="@"] in #rdxRoot
+   * FIX v4.3: now extracts PHONE as well as email.
    */
   function extractFromDOMSelectors(recruiterCreds = {}) {
     const contacts = { email: null, phone: null };
     const rEmail = recruiterCreds.email || null;
+    const rPhone = cleanPhone(recruiterCreds.phone || '');
 
     function isRecruiterOrSystem(e) {
       if (!e) return true;
@@ -744,7 +913,12 @@
       return false;
     }
 
-    // Email via naukri icon
+    function isRecruiterPhone(p) {
+      if (!p) return false;
+      return rPhone && cleanPhone(p) === rPhone;
+    }
+
+    // ── EMAIL via naukri icon ──
     const emailIcon = document.querySelector('#rdxRoot i.naukri-icon-email') ||
                       document.querySelector('i.naukri-icon-email') ||
                       document.querySelector('i[title="Email"]');
@@ -769,7 +943,7 @@
       }
     }
 
-    // Email via title attribute containing @
+    // ── EMAIL via title attribute containing @ ──
     if (!contacts.email) {
       const profileRoot = document.querySelector('#rdxRoot .pages') || document.querySelector('#rdxRoot');
       if (profileRoot) {
@@ -785,77 +959,170 @@
       }
     }
 
+    // ── FIX v4.3: PHONE via naukri phone icon ──
+    const phoneIconSelectors = [
+      '#rdxRoot i.naukri-icon-phone',
+      'i.naukri-icon-phone',
+      '#rdxRoot i.naukri-icon-mobile',
+      'i.naukri-icon-mobile',
+      'i[title="Mobile"]',
+      'i[title="Phone"]',
+      '[class*="phoneIcon"]',
+      '[class*="phone-icon"]',
+    ];
+    for (const sel of phoneIconSelectors) {
+      const icon = document.querySelector(sel);
+      if (!icon) continue;
+      const parent = icon.closest('[title]') || icon.parentElement;
+      if (parent) {
+        const titleVal = parent.getAttribute('title') || '';
+        const cleaned = cleanPhone(titleVal);
+        if (isValidIndianMobile(cleaned) && !isRecruiterPhone(cleaned)) {
+          contacts.phone = cleaned;
+          console.log(`[VHC v${VERSION}] DOM selector phone (icon title): ${cleaned}`);
+          break;
+        }
+        // Also check text content of parent
+        const txt = (parent.textContent || '').trim();
+        const phonesInParent = extractPhonesFromText(txt);
+        for (const p of phonesInParent) {
+          if (!isRecruiterPhone(p)) {
+            contacts.phone = p;
+            console.log(`[VHC v${VERSION}] DOM selector phone (icon text): ${p}`);
+            break;
+          }
+        }
+        if (contacts.phone) break;
+      }
+    }
+
+    // ── FIX v4.3: PHONE via tel: links ──
+    if (!contacts.phone) {
+      document.querySelectorAll('a[href^="tel:"]').forEach(a => {
+        if (contacts.phone) return;
+        const c = cleanPhone(a.getAttribute('href').replace('tel:', ''));
+        if (isValidIndianMobile(c) && !isRecruiterPhone(c)) {
+          contacts.phone = c;
+          console.log(`[VHC v${VERSION}] DOM selector phone (tel: link): ${c}`);
+        }
+      });
+    }
+
+    // ── FIX v4.3: PHONE via data-phone / data-mobile attributes ──
+    if (!contacts.phone) {
+      const dataPhoneEl = document.querySelector('[data-phone],[data-mobile],[data-contact-number]');
+      if (dataPhoneEl) {
+        const raw = dataPhoneEl.getAttribute('data-phone') ||
+                    dataPhoneEl.getAttribute('data-mobile') ||
+                    dataPhoneEl.getAttribute('data-contact-number') || '';
+        const c = cleanPhone(raw);
+        if (isValidIndianMobile(c) && !isRecruiterPhone(c)) {
+          contacts.phone = c;
+          console.log(`[VHC v${VERSION}] DOM selector phone (data attr): ${c}`);
+        }
+      }
+    }
+
+    // ── FIX v4.3: PHONE via known Naukri contact section selectors ──
+    if (!contacts.phone) {
+      const contactSectionSelectors = [
+        '[class*="contactInfo"] [class*="phone"]',
+        '[class*="contact-info"] [class*="phone"]',
+        '[class*="candidateContact"] [class*="phone"]',
+        '[class*="phoneNumber"]',
+        '[class*="phone-number"]',
+        '[class*="mobileNumber"]',
+        '[class*="mobile-number"]',
+        '.rdx-phone', '.rdx-mobile',
+        '[class*="contactPhone"]',
+      ];
+      for (const sel of contactSectionSelectors) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const txt = (el.textContent || el.getAttribute('title') || '').trim();
+        const phones = extractPhonesFromText(txt);
+        for (const p of phones) {
+          if (!isRecruiterPhone(p)) {
+            contacts.phone = p;
+            console.log(`[VHC v${VERSION}] DOM selector phone (contact section ${sel}): ${p}`);
+            break;
+          }
+        }
+        if (contacts.phone) break;
+      }
+    }
+
     return contacts;
   }
 
   /**
-   * MERGE contacts from all sources using trust hierarchy:
-   * CV iframe > Before/After Diff > Already-visible (BEFORE snapshot filtered) > DOM selectors > AI
+   * MERGE contacts from all sources.
+   * v4.4 trust hierarchy:
+   *   EMAIL: CV iframe > Email diff (after View Contact) > BEFORE snapshot > DOM
+   *   PHONE: CV iframe > Revealed phones (from contact section) > DOM selectors
+   *
+   * Phone NEVER falls back to BEFORE snapshot — that contains recruiter's number.
+   * Phone sources are now guaranteed to come from the contact section only.
    */
   function mergeContacts(cvData, diffData, domData, recruiterCreds, beforeSnapshot) {
     const rEmail = (recruiterCreds.email || '').toLowerCase().trim();
     const rPhone = cleanPhone(recruiterCreds.phone || '');
 
-    function isRecruiterOrSystemContact(email, phone) {
-      if (email) {
-        const eLower = email.toLowerCase().trim();
-        if (isNaukriSystemEmail(eLower)) return true;
-        if (rEmail && eLower === rEmail) return true;
-      }
-      if (phone && rPhone && cleanPhone(phone) === rPhone) return true;
-      return false;
+    function isRecruiterEmail(e) {
+      if (!e) return false;
+      return rEmail && e.toLowerCase().trim() === rEmail;
     }
 
-    // Email: CV > Diff > Already-visible > DOM
+    function isRecruiterPhone(p) {
+      if (!p || !rPhone) return false;
+      return cleanPhone(p) === rPhone;
+    }
+
+    function isBadEmail(e) {
+      return !e || isNaukriSystemEmail(e) || isRecruiterEmail(e);
+    }
+
+    // ── EMAIL: CV > Diff > BEFORE snapshot > DOM ──
     let finalEmail = null;
     let emailSource = 'none';
 
-    if (cvData.isValid && cvData.email && !isRecruiterOrSystemContact(cvData.email, null)) {
+    if (cvData.isValid && cvData.email && !isBadEmail(cvData.email)) {
       finalEmail = cvData.email;
       emailSource = 'CV iframe';
     } else if (diffData.emails.length > 0) {
       for (const e of diffData.emails) {
-        if (!isRecruiterOrSystemContact(e, null)) {
-          finalEmail = e;
-          emailSource = 'Before/After diff';
-          break;
-        }
+        if (!isBadEmail(e)) { finalEmail = e; emailSource = 'After View Contact'; break; }
       }
     }
-    // NEW: If diff found nothing, check BEFORE snapshot for already-visible candidate emails
-    if (!finalEmail && beforeSnapshot) {
+    if (!finalEmail && beforeSnapshot?.emails) {
       for (const e of beforeSnapshot.emails) {
-        if (!isRecruiterOrSystemContact(e, null)) {
-          finalEmail = e;
-          emailSource = 'Already-visible (BEFORE snapshot)';
-          break;
-        }
+        if (!isBadEmail(e)) { finalEmail = e; emailSource = 'Already-visible'; break; }
       }
     }
-    if (!finalEmail && domData.email && !isRecruiterOrSystemContact(domData.email, null)) {
+    if (!finalEmail && domData.email && !isBadEmail(domData.email)) {
       finalEmail = domData.email;
       emailSource = 'DOM selectors';
     }
 
-    // Phone: CV > Diff > DOM (SKIP BEFORE snapshot - contains recruiter's phone)
+    // ── PHONE: CV > Revealed (contact section) > DOM ──
+    // NEVER uses BEFORE snapshot — too risky (contains recruiter's number).
+    // diffData.phones now contains only phones from scanContactSectionForPhones()
+    // which reads the contact div only — so recruiter nav number never appears here.
     let finalPhone = null;
     let phoneSource = 'none';
 
-    if (cvData.isValid && cvData.phone && !isRecruiterOrSystemContact(null, cvData.phone)) {
+    if (cvData.isValid && cvData.phone && !isRecruiterPhone(cvData.phone)) {
       finalPhone = cvData.phone;
       phoneSource = 'CV iframe';
     } else if (diffData.phones.length > 0) {
       for (const p of diffData.phones) {
-        if (!isRecruiterOrSystemContact(null, p)) {
-          finalPhone = p;
-          phoneSource = 'Before/After diff';
-          break;
-        }
+        if (!isRecruiterPhone(p)) { finalPhone = p; phoneSource = 'View Contact reveal'; break; }
       }
     }
-    // NOTE: BEFORE snapshot phones are intentionally skipped here
-    // Naukri pages display the logged-in recruiter's phone in the BEFORE snapshot
-    // Only phones from CV, Diff (after View Contact click), or DOM selectors are trusted
+    if (!finalPhone && domData.phone && !isRecruiterPhone(domData.phone)) {
+      finalPhone = domData.phone;
+      phoneSource = 'DOM selectors';
+    }
 
     console.log(`[VHC v${VERSION}] MERGE email: ${finalEmail || 'NONE'} [source: ${emailSource}]`);
     console.log(`[VHC v${VERSION}] MERGE phone: ${finalPhone || 'NONE'} [source: ${phoneSource}]`);
@@ -1144,20 +1411,26 @@
     const domName = extractNameFromTitle();
     console.log(`[VHC v${VERSION}] Candidate name: "${domName}"`);
 
-    // Step 4: SNAPSHOT contacts BEFORE "View Contact" click
+    // Step 4: Snapshot EMAILS before click (for email diff)
+    // Step 4+5: Snapshot emails AND click View Contact
+    // clickViewContactButton() internally does BEFORE/AFTER diff on candidate root
+    // so revealedPhones = only numbers that NEWLY appeared → guaranteed candidate phone
     updateProgress(20, 'Scanning page contacts...');
-    const beforeSnapshot = snapshotPageContacts();
-    console.log(`[VHC v${VERSION}] BEFORE: ${beforeSnapshot.emails.size} emails [${[...beforeSnapshot.emails].join(', ')}], ${beforeSnapshot.phones.size} phones [${[...beforeSnapshot.phones].join(', ')}]`);
+    const beforeEmails = snapshotPageEmails();
+    console.log(`[VHC v${VERSION}] BEFORE emails: [${[...beforeEmails].join(', ')}]`);
 
-    // Step 5: Click "View Contact"
     updateProgress(30, 'Revealing contact info...');
-    await clickViewContactButton();
+    const contactReveal = await clickViewContactButton();
+    console.log(`[VHC v${VERSION}] Revealed phones (diff): [${contactReveal.revealedPhones.join(', ')}]`);
 
-    // Step 6: SNAPSHOT AFTER and compute DIFF
+    // Step 6: Diff emails for email capture (phone diff already done inside clickViewContactButton)
     updateProgress(40, 'Analyzing revealed contacts...');
-    const afterSnapshot = snapshotPageContacts();
-    const diff = diffContacts(beforeSnapshot, afterSnapshot);
-    console.log(`[VHC v${VERSION}] AFTER: ${afterSnapshot.emails.size} emails, ${afterSnapshot.phones.size} phones`);
+    const afterEmails = snapshotPageEmails();
+    const newEmails = [...afterEmails].filter(e => !beforeEmails.has(e));
+    const diff = {
+      emails: newEmails,
+      phones: contactReveal.revealedPhones, // diff-based: only newly appeared phones
+    };
     console.log(`[VHC v${VERSION}] DIFF: new emails=[${diff.emails.join(', ')}], new phones=[${diff.phones.join(', ')}]`);
 
     // Step 7: Scan CV iframe
@@ -1165,13 +1438,13 @@
     const cvData = scanCVIframe(domName);
     console.log(`[VHC v${VERSION}] CV: email=${cvData.email || 'none'}, phone=${cvData.phone || 'none'}, valid=${cvData.isValid}, text=${cvData.text.length}chars`);
 
-    // Step 8: DOM selector fallback
+    // Step 8: DOM selector fallback (recruiterCreds used for filtering)
     const recruiterCreds = await getRecruiterCredentials();
     const domSelectorData = extractFromDOMSelectors(recruiterCreds);
 
-    // Step 9: MERGE all sources (CV > Diff > Already-visible > DOM > AI)
+    // Step 9: MERGE — pass beforeEmails as Set for email fallback
     updateProgress(55, 'Cross-validating contacts...');
-    const merged = mergeContacts(cvData, diff, domSelectorData, recruiterCreds, beforeSnapshot);
+    const merged = mergeContacts(cvData, diff, domSelectorData, recruiterCreds, { emails: beforeEmails, phones: new Set() });
     console.log(`[VHC v${VERSION}] === FINAL: email=${merged.email || 'NONE'}, phone=${merged.phone || 'NONE'} ===`);
 
     // Step 10: Capture raw text

@@ -398,6 +398,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ── Capture History rendering ──────────────────────────────────────────────
 
+  /**
+   * Determine the colour state for an E or M indicator circle.
+   *
+   * GREEN  — data was captured AND the record is new (action = created)
+   * YELLOW — data is missing/hidden (null/empty)
+   * RED    — data exists but record is duplicate/suspicious (action = exists|updated|failed)
+   *          OR: Option C — red if EITHER condition (duplicate OR suspicious data)
+   *
+   * @param {string|null} value  - the captured email or phone string
+   * @param {string}      action - created | updated | exists | failed
+   * @returns {'green'|'yellow'|'red'}
+   */
+  function emState(value, action) {
+    const hasValue = value && value.trim().length > 0;
+
+    // Missing / hidden on Naukri → yellow
+    if (!hasValue) return 'yellow';
+
+    // Data captured AND brand new record → green
+    if (action === 'created') return 'green';
+
+    // Data exists but already in databank (updated/exists) OR failed → red
+    // This catches: duplicate captures, recruiter number accidentally captured, etc.
+    return 'red';
+  }
+
+  function emCircleHTML(letter, state, tooltip) {
+    return `<div class="em-circle em-${state}" title="${escHtml(tooltip)}">${letter}</div>`;
+  }
+
   async function refreshHistory() {
     const res = await chrome.runtime.sendMessage({ action: 'getHistory' });
     const history = res?.history || [];
@@ -407,8 +437,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Summary chips
     const counts = { created: 0, updated: 0, exists: 0, failed: 0 };
     history.forEach(h => { if (counts[h.action] !== undefined) counts[h.action]++; });
-    const summaryEl = document.getElementById('historySummary');
-    summaryEl.innerHTML = `
+    document.getElementById('historySummary').innerHTML = `
       <span class="hist-chip chip-added">${counts.created} Added</span>
       <span class="hist-chip chip-updated">${counts.updated} Updated</span>
       <span class="hist-chip chip-exists">${counts.exists} Exists</span>
@@ -420,19 +449,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const icons = { created: '✓', updated: '↑', exists: '=', failed: '✕' };
-    const labels = { created: 'Added', updated: 'Updated', exists: 'Exists', failed: 'Failed' };
+    const icons   = { created: '✓', updated: '↑', exists: '=', failed: '✕' };
+    const labels  = { created: 'Added', updated: 'Updated', exists: 'Exists', failed: 'Failed' };
 
     listEl.innerHTML = history.map(item => {
       const action = item.action || 'exists';
-      const icon   = icons[action] || '?';
+      const icon   = icons[action]  || '?';
       const label  = labels[action] || action;
       const time   = item.timestamp ? formatTime(item.timestamp) : '';
-      const meta   = [
+
+      // ── E / M indicator logic ──
+      const eState = emState(item.email, action);
+      const mState = emState(item.phone, action);
+
+      const eTooltip = eState === 'green'  ? `Email: ${item.email}` :
+                       eState === 'yellow' ? 'Email: hidden / not captured' :
+                       `Email: ${item.email || 'unknown'} — duplicate/suspicious`;
+
+      const mTooltip = mState === 'green'  ? `Mobile: ${item.phone}` :
+                       mState === 'yellow' ? 'Mobile: hidden / not captured' :
+                       `Mobile: ${item.phone || 'unknown'} — duplicate/suspicious`;
+
+      const indicators = `
+        <div class="hist-indicators">
+          ${emCircleHTML('E', eState, eTooltip)}
+          ${emCircleHTML('M', mState, mTooltip)}
+        </div>`;
+
+      const meta = [
         item.bulk ? '⚡ Bulk' : '📄 Single',
         time,
-        item.error ? `⚠ ${item.error.substring(0, 45)}` : ''
+        item.error ? `⚠ ${item.error.substring(0, 40)}` : ''
       ].filter(Boolean).join(' · ');
+
       const profileLink = item.profileUrl
         ? `<a href="${item.profileUrl}" target="_blank" style="color:#7CB342;text-decoration:none;font-size:10px;" title="Open profile">↗</a>`
         : '';
@@ -444,6 +493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="hist-name">${escHtml(item.name || 'Unknown')} ${profileLink}</div>
             <div class="hist-meta">${escHtml(meta)}</div>
           </div>
+          ${indicators}
           <div class="hist-status">${label}</div>
         </div>
       `;
