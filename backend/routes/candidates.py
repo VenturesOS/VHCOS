@@ -588,8 +588,8 @@ def _latex_download_response(latex: str, name: str, profile: dict = None):
                     media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{clean_name}_Resume_VHC.pdf"'},
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"fpdf2 PDF generation failed for {name}: {e}")
 
     # Method 2: pdflatex compilation (if available on server)
     import shutil
