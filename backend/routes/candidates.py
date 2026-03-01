@@ -584,7 +584,7 @@ def _latex_download_response(latex: str, name: str, profile: dict = None):
             pdf_bytes = build_pdf_from_profile(profile)
             if pdf_bytes and len(pdf_bytes) > 100:
                 return Response(
-                    content=pdf_bytes,
+                    content=bytes(pdf_bytes),
                     media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{clean_name}_Resume_VHC.pdf"'},
                 )
