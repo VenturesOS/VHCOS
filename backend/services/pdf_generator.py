@@ -151,7 +151,7 @@ def build_pdf_from_profile(profile: dict) -> bytes:
         pdf._section_heading("Skills")
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(60, 60, 60)
-        skills_text = "  \u2022  ".join(str(s) for s in skills if s)
+        skills_text = "  |  ".join(str(s) for s in skills if s)
         pdf.multi_cell(0, 5, skills_text)
 
     # ── Output ──────────────────────────────────────────────────────────
