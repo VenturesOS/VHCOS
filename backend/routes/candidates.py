@@ -172,7 +172,7 @@ async def get_filter_options(
     return {
         "locations": clean_list(locations)[:50],
         "companies": clean_list(companies)[:50],
-        "sources": clean(sources),
+        "sources": clean_list(sources),
         "notice_periods": ["Immediate", "15 days", "30 days", "45 days", "60 days", "90 days", "90+ days"],
     }
 
