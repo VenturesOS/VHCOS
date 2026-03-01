@@ -107,6 +107,29 @@ export default function CandidateDataBankPage() {
     industry: ''
   });
 
+  // Advanced filters
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    phone: '', email: '', location: '', company: '', noticePeriod: '',
+    minExperience: '', maxExperience: '', minSalary: '', maxSalary: '',
+    source: '', hasResume: '', contactHidden: '', capturedAfter: '', capturedBefore: '',
+  });
+  const activeFilterCount = Object.values(filters).filter(v => v !== '').length + (skills ? 1 : 0);
+
+  const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
+  const clearFilters = () => {
+    setFilters({ phone: '', email: '', location: '', company: '', noticePeriod: '', minExperience: '', maxExperience: '', minSalary: '', maxSalary: '', source: '', hasResume: '', contactHidden: '', capturedAfter: '', capturedBefore: '' });
+    setSkills(''); setSearch('');
+  };
+  const setDatePreset = (preset) => {
+    const now = new Date();
+    let after = '';
+    if (preset === 'today') after = now.toISOString().split('T')[0];
+    else if (preset === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); after = d.toISOString().split('T')[0]; }
+    else if (preset === 'month') { const d = new Date(now); d.setMonth(d.getMonth() - 1); after = d.toISOString().split('T')[0]; }
+    setFilters(prev => ({ ...prev, capturedAfter: after, capturedBefore: '' }));
+  };
+
   // Load candidates when debounced search/skills or page changes
   useEffect(() => {
     loadCandidates(currentPage);
