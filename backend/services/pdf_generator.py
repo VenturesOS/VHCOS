@@ -91,16 +91,25 @@ def build_pdf_from_profile(profile: dict) -> bytes:
             company = _clean(exp.get("company"))
             duration = _clean(exp.get("duration"))
 
-            # Title and duration on same line
+            # Title and duration on same line (handle long text gracefully)
             pdf.set_font("Helvetica", "B", 10)
             pdf.set_text_color(30, 30, 30)
-            dur_w = pdf.get_string_width(duration) + 2
+            dur_w = pdf.get_string_width(duration) + 2 if duration else 0
             avail = pdf.w - pdf.l_margin - pdf.r_margin
+            title_w = avail - dur_w
 
-            pdf.cell(avail - dur_w, 5, title)
-            pdf.set_font("Helvetica", "", 9)
-            pdf.set_text_color(130, 130, 130)
-            pdf.cell(dur_w, 5, duration, align="R", new_x="LMARGIN", new_y="NEXT")
+            # If title is too long for same line, put duration on next line
+            if title_w < 30 or pdf.get_string_width(title) > title_w:
+                pdf.multi_cell(0, 5, title)
+                if duration:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(130, 130, 130)
+                    pdf.cell(0, 5, duration, new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(title_w, 5, title)
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(130, 130, 130)
+                pdf.cell(dur_w, 5, duration, align="R", new_x="LMARGIN", new_y="NEXT")
 
             if company:
                 pdf.set_font("Helvetica", "I", 9)
