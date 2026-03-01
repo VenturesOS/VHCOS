@@ -138,8 +138,13 @@ attendance_analytics_router = _safe_import("routes.attendance_analytics", "route
 resume_router = _safe_import("routes.resume", "resume_router")
 
 # Import boto3 for type hints (r2_client operations)
-import boto3
-from botocore.config import Config
+try:
+    import boto3
+    from botocore.config import Config
+except ImportError:
+    boto3 = None
+    Config = None
+    logging.warning("[IMPORT] boto3 not available — R2 storage disabled")
 
 
 # Create the main app
