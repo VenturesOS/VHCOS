@@ -139,12 +139,22 @@ def build_pdf_from_profile(profile: dict) -> bytes:
             pdf.set_text_color(30, 30, 30)
             yr_w = pdf.get_string_width(year) + 2 if year else 0
             avail = pdf.w - pdf.l_margin - pdf.r_margin
-            pdf.cell(avail - yr_w, 5, degree)
-            if year:
-                pdf.set_font("Helvetica", "", 9)
-                pdf.set_text_color(130, 130, 130)
-                pdf.cell(yr_w, 5, year, align="R")
-            pdf.ln()
+            degree_w = avail - yr_w
+
+            # If degree is too long for same line, put year on next line
+            if degree_w < 30 or pdf.get_string_width(degree) > degree_w:
+                pdf.multi_cell(0, 5, degree)
+                if year:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(130, 130, 130)
+                    pdf.cell(0, 5, year, new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(degree_w, 5, degree)
+                if year:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(130, 130, 130)
+                    pdf.cell(yr_w, 5, year, align="R")
+                pdf.ln()
 
             sub_line = institution
             if gpa:
