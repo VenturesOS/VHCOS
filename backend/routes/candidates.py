@@ -574,15 +574,43 @@ async def batch_generate_resumes(
 
 
 def _latex_download_response(latex: str, name: str):
-    """Return LaTeX as a downloadable .tex file."""
+    """Compile LaTeX to PDF and return as download. Falls back to .tex if pdflatex unavailable."""
     import re
+    import shutil
     from fastapi.responses import Response
 
     clean_name = re.sub(r'[^a-zA-Z0-9]', '_', name.strip()) if name else "Candidate"
-    filename = f"{clean_name}_Resume_VHC.tex"
 
+    # Try PDF compilation
+    if shutil.which("pdflatex"):
+        import tempfile
+        import subprocess
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tex_path = os.path.join(tmpdir, "resume.tex")
+            with open(tex_path, "w") as f:
+                f.write(latex)
+            try:
+                subprocess.run(
+                    ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
+                    cwd=tmpdir, capture_output=True, text=True, timeout=30,
+                )
+                pdf_path = os.path.join(tmpdir, "resume.pdf")
+                if os.path.exists(pdf_path):
+                    with open(pdf_path, "rb") as pf:
+                        pdf_bytes = pf.read()
+                    return Response(
+                        content=pdf_bytes,
+                        media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{clean_name}_Resume_VHC.pdf"'},
+                    )
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+
+    # Fallback: return .tex
     return Response(
         content=latex,
         media_type="application/x-tex",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": f'attachment; filename="{clean_name}_Resume_VHC.tex"'},
     )
