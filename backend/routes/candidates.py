@@ -161,25 +161,154 @@ async def list_candidates(
     page:      int   = Query(1, ge=1),
     limit:     int   = Query(20, ge=1, le=100),
     search:    Optional[str] = Query(None),
+    phone:     Optional[str] = Query(None),
+    email:     Optional[str] = Query(None),
+    location:  Optional[str] = Query(None),
+    company:   Optional[str] = Query(None),
+    skills:    Optional[str] = Query(None),
+    notice_period: Optional[str] = Query(None),
+    min_experience: Optional[int] = Query(None),
+    max_experience: Optional[int] = Query(None),
+    min_salary: Optional[int] = Query(None),
+    max_salary: Optional[int] = Query(None),
+    source:    Optional[str] = Query(None),
+    has_resume: Optional[str] = Query(None),
+    contact_hidden: Optional[str] = Query(None),
+    captured_after:  Optional[str] = Query(None),
+    captured_before: Optional[str] = Query(None),
     db=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """List candidates with optional text search."""
+    """List candidates with advanced filters."""
     skip  = (page - 1) * limit
-    query = {}
+    conditions = []
 
+    # ── Text search (name, email, designation, headline) ──
     if search:
         import re
         pattern = re.escape(search)
-        query["$or"] = [
+        conditions.append({"$or": [
             {"name":             {"$regex": pattern, "$options": "i"}},
             {"email":            {"$regex": pattern, "$options": "i"}},
+            {"phone":            {"$regex": pattern, "$options": "i"}},
             {"key_skills":       {"$regex": pattern, "$options": "i"}},
             {"skills":           {"$regex": pattern, "$options": "i"}},
             {"current_designation": {"$regex": pattern, "$options": "i"}},
             {"designation":      {"$regex": pattern, "$options": "i"}},
             {"headline":         {"$regex": pattern, "$options": "i"}},
-        ]
+        ]})
+
+    # ── Phone search ──
+    if phone:
+        import re
+        clean = re.sub(r'[^0-9]', '', phone)
+        if clean:
+            conditions.append({"phone": {"$regex": clean, "$options": "i"}})
+
+    # ── Email search ──
+    if email:
+        import re
+        conditions.append({"email": {"$regex": re.escape(email), "$options": "i"}})
+
+    # ── Location ──
+    if location:
+        import re
+        conditions.append({"$or": [
+            {"location":      {"$regex": re.escape(location), "$options": "i"}},
+            {"current_location": {"$regex": re.escape(location), "$options": "i"}},
+        ]})
+
+    # ── Company ──
+    if company:
+        import re
+        conditions.append({"$or": [
+            {"current_company": {"$regex": re.escape(company), "$options": "i"}},
+            {"company":         {"$regex": re.escape(company), "$options": "i"}},
+        ]})
+
+    # ── Skills (comma-separated) ──
+    if skills:
+        import re
+        skill_list = [s.strip() for s in skills.split(",") if s.strip()]
+        skill_conditions = []
+        for s in skill_list:
+            pat = re.escape(s)
+            skill_conditions.append({"$or": [
+                {"skills":     {"$elemMatch": {"$regex": pat, "$options": "i"}}},
+                {"key_skills": {"$regex": pat, "$options": "i"}},
+            ]})
+        if skill_conditions:
+            conditions.append({"$and": skill_conditions})
+
+    # ── Notice Period ──
+    if notice_period:
+        conditions.append({"notice_period": notice_period})
+
+    # ── Experience Range ──
+    if min_experience is not None or max_experience is not None:
+        exp_filter = {}
+        if min_experience is not None:
+            exp_filter["$gte"] = min_experience
+        if max_experience is not None:
+            exp_filter["$lte"] = max_experience
+        conditions.append({"experience_years": exp_filter})
+
+    # ── Salary Range ──
+    if min_salary is not None or max_salary is not None:
+        sal_filter = {}
+        if min_salary is not None:
+            sal_filter["$gte"] = min_salary
+        if max_salary is not None:
+            sal_filter["$lte"] = max_salary
+        conditions.append({"current_salary": sal_filter})
+
+    # ── Source ──
+    if source:
+        import re
+        conditions.append({"$or": [
+            {"source":            {"$regex": re.escape(source), "$options": "i"}},
+            {"extension_version": {"$exists": source.lower() == "extension"}},
+        ]})
+
+    # ── Has Resume ──
+    if has_resume == "yes":
+        conditions.append({"$or": [
+            {"resume_url":   {"$exists": True, "$ne": None, "$ne": ""}},
+            {"resume_path":  {"$exists": True, "$ne": None, "$ne": ""}},
+            {"resume_latex": {"$exists": True, "$ne": None, "$ne": ""}},
+        ]})
+    elif has_resume == "no":
+        conditions.append({
+            "resume_url":   {"$in": [None, ""]},
+            "resume_path":  {"$in": [None, ""]},
+            "resume_latex": {"$in": [None, ""]},
+        })
+
+    # ── Contact Hidden (from Naukri — phone/email is null or placeholder) ──
+    if contact_hidden == "yes":
+        conditions.append({"$or": [
+            {"email": {"$in": [None, ""]}},
+            {"phone": {"$in": [None, ""]}},
+        ]})
+    elif contact_hidden == "no":
+        conditions.append({
+            "email": {"$exists": True, "$nin": [None, ""]},
+            "phone": {"$exists": True, "$nin": [None, ""]},
+        })
+
+    # ── Capture Date Range ──
+    if captured_after:
+        conditions.append({"$or": [
+            {"created_at": {"$gte": captured_after}},
+            {"scraped_at": {"$gte": captured_after}},
+        ]})
+    if captured_before:
+        conditions.append({"$or": [
+            {"created_at": {"$lte": captured_before}},
+            {"scraped_at": {"$lte": captured_before}},
+        ]})
+
+    query = {"$and": conditions} if conditions else {}
 
     total = await db.candidate_bank.count_documents(query)
     docs  = (
