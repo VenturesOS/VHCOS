@@ -14,6 +14,15 @@ import { toast } from 'sonner';
 import { Search, Upload, Database, User, Mail, Phone, MapPin, FileText, Clock, History, Plus, Files, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download, Paperclip, ShieldAlert, Building2, Sparkles, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, Filter, X, ChevronDown, ChevronUp, EyeOff, Code, Calendar } from 'lucide-react';
 import { CVUploadDialog } from '../../components/dialogs/CVUploadDialog';
 
+function FilterChip({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#4A7C2C] text-xs font-medium">
+      {label}
+      <button onClick={onRemove} className="hover:text-red-600 ml-0.5"><X className="w-3 h-3" /></button>
+    </span>
+  );
+}
+
 // Custom hook for debouncing
 function useDebounce(value, delay) {
   const [debouncedValue, setDebouncedValue] = useState(value);
