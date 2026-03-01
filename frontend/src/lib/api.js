@@ -587,6 +587,7 @@ export const resumeAPI = {
   getCandidateProfile: (candidateId) => api.get(`/resume/candidate/${candidateId}`),
   aiEnhance: (bullets) => api.post('/resume/ai-enhance', { bullets }),
   compilePdf: (latex) => api.post('/resume/compile-pdf', { latex }, { responseType: 'blob' }),
+  generatePdf: (profile, templateId) => api.post('/resume/generate-pdf', { profile, template_id: templateId }, { responseType: 'blob' }),
   getCapabilities: () => api.get('/resume/capabilities'),
 };
 
