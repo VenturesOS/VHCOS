@@ -189,21 +189,40 @@ export default function EmployerCandidateBankPage() {
     document.body.removeChild(link);
   };
 
-  const loadCandidates = async () => {
+  const loadCandidates = async (page = 1) => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { page, limit: 20 };
       if (search) params.search = search;
       if (skills) params.skills = skills;
+      if (filters.phone) params.phone = filters.phone;
+      if (filters.email) params.email = filters.email;
+      if (filters.location) params.location = filters.location;
+      if (filters.company) params.company = filters.company;
+      if (filters.noticePeriod) params.notice_period = filters.noticePeriod;
+      if (filters.minExperience !== '') params.min_experience = parseInt(filters.minExperience);
+      if (filters.maxExperience !== '') params.max_experience = parseInt(filters.maxExperience);
+      if (filters.minSalary !== '') params.min_salary = parseInt(filters.minSalary);
+      if (filters.maxSalary !== '') params.max_salary = parseInt(filters.maxSalary);
+      if (filters.source) params.source = filters.source;
+      if (filters.hasResume) params.has_resume = filters.hasResume;
+      if (filters.contactHidden) params.contact_hidden = filters.contactHidden;
+      if (filters.capturedAfter) params.captured_after = filters.capturedAfter;
+      if (filters.capturedBefore) params.captured_before = filters.capturedBefore;
+
       const res = await candidateBankAPI.getAll(params);
-      // Handle paginated response - API returns { candidates: [], total, page, limit, total_pages }
       const data = res.data;
       if (data && Array.isArray(data.candidates)) {
         setCandidates(data.candidates);
+        setTotalCount(data.total || data.candidates.length);
+        setTotalPages(data.pages || 1);
+        setCurrentPage(data.page || 1);
       } else if (Array.isArray(data)) {
         setCandidates(data);
+        setTotalCount(data.length);
       } else {
         setCandidates([]);
+        setTotalCount(0);
       }
     } catch (error) {
       toast.error('Failed to load candidates');
@@ -213,7 +232,7 @@ export default function EmployerCandidateBankPage() {
   };
 
   const handleSearch = () => {
-    loadCandidates();
+    loadCandidates(1);
   };
 
   const handleUpload = async (e) => {
