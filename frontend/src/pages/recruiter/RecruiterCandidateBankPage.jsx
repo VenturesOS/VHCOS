@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { candidateBankAPI, jobAPI } from '../../lib/api';
 import { formatSalaryINR } from '../../lib/currency';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Upload, Database, Mail, Phone, MapPin, FileText, Clock, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download, Info } from 'lucide-react';
+import { Search, Upload, Database, Mail, Phone, MapPin, FileText, Clock, Briefcase, DollarSign, AlertCircle, CalendarDays, Activity, TrendingUp, Download, Info, Filter, X, ChevronDown, ChevronUp, EyeOff, Building2, Code, Calendar } from 'lucide-react';
 import { CVUploadDialog } from '../../components/dialogs/CVUploadDialog';
 
 const NOTICE_PERIODS = [
