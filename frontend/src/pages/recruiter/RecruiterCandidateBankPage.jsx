@@ -193,22 +193,40 @@ export default function RecruiterCandidateBankPage() {
     document.body.removeChild(link);
   };
 
-  const loadCandidates = async () => {
+  const loadCandidates = async (page = 1) => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { page, limit: 20 };
       if (search) params.search = search;
       if (skills) params.skills = skills;
+      if (filters.phone) params.phone = filters.phone;
+      if (filters.email) params.email = filters.email;
+      if (filters.location) params.location = filters.location;
+      if (filters.company) params.company = filters.company;
+      if (filters.noticePeriod) params.notice_period = filters.noticePeriod;
+      if (filters.minExperience !== '') params.min_experience = parseInt(filters.minExperience);
+      if (filters.maxExperience !== '') params.max_experience = parseInt(filters.maxExperience);
+      if (filters.minSalary !== '') params.min_salary = parseInt(filters.minSalary);
+      if (filters.maxSalary !== '') params.max_salary = parseInt(filters.maxSalary);
+      if (filters.source) params.source = filters.source;
+      if (filters.hasResume) params.has_resume = filters.hasResume;
+      if (filters.contactHidden) params.contact_hidden = filters.contactHidden;
+      if (filters.capturedAfter) params.captured_after = filters.capturedAfter;
+      if (filters.capturedBefore) params.captured_before = filters.capturedBefore;
+
       const res = await candidateBankAPI.getAll(params);
-      // Handle paginated response - API returns { candidates: [], total, page, limit, total_pages }
       const data = res.data;
       if (data && Array.isArray(data.candidates)) {
         setCandidates(data.candidates);
+        setTotalCount(data.total || data.candidates.length);
+        setTotalPages(data.pages || 1);
+        setCurrentPage(data.page || 1);
       } else if (Array.isArray(data)) {
-        // Fallback for non-paginated response
         setCandidates(data);
+        setTotalCount(data.length);
       } else {
         setCandidates([]);
+        setTotalCount(0);
       }
     } catch (error) {
       toast.error('Failed to load candidates');
@@ -218,7 +236,37 @@ export default function RecruiterCandidateBankPage() {
   };
 
   const handleSearch = () => {
-    loadCandidates();
+    loadCandidates(1);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      phone: '', email: '', location: '', company: '', noticePeriod: '',
+      minExperience: '', maxExperience: '', minSalary: '', maxSalary: '',
+      source: '', hasResume: '', contactHidden: '', capturedAfter: '', capturedBefore: '',
+    });
+    setSkills('');
+    setSearch('');
+  };
+
+  const updateFilter = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Quick date helper
+  const setDatePreset = (preset) => {
+    const now = new Date();
+    let after = '';
+    if (preset === 'today') {
+      after = now.toISOString().split('T')[0];
+    } else if (preset === 'week') {
+      const d = new Date(now); d.setDate(d.getDate() - 7);
+      after = d.toISOString().split('T')[0];
+    } else if (preset === 'month') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 1);
+      after = d.toISOString().split('T')[0];
+    }
+    setFilters(prev => ({ ...prev, capturedAfter: after, capturedBefore: '' }));
   };
 
   const handleUpload = async (e) => {
