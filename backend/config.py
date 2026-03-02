@@ -49,12 +49,17 @@ except Exception as e:
 if not _override_active:
     _env_uri = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
     if not _env_uri:
-        raise RuntimeError(
-            "MONGO_URL environment variable is not set and mongo_production_override.py "
-            "is missing or invalid. Cannot start without a MongoDB connection."
+        logging.critical(
+            "[CONFIG] FATAL: No MongoDB URI found. "
+            "mongo_production_override.py is missing/invalid AND MONGO_URL env var is not set."
         )
-    mongodb_uri = _env_uri
-    db_name = os.environ.get("DB_NAME", _REQUIRED_DB)
+        # Use a placeholder so server can start and respond to health checks
+        # DB operations will fail gracefully via the lazy proxy pattern
+        mongodb_uri = "mongodb://localhost:27017/fallback"
+        db_name = _REQUIRED_DB
+    else:
+        mongodb_uri = _env_uri
+        db_name = os.environ.get("DB_NAME", _REQUIRED_DB)
 
 # Safety check: refuse to start if URI doesn't point to the correct Atlas cluster
 if _REQUIRED_CLUSTER not in mongodb_uri:
