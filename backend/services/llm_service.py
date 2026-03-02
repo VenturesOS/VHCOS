@@ -15,13 +15,7 @@ OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 def get_api_key() -> str:
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
-        try:
-            from mongo_production_override import OPENAI_API_KEY
-            key = OPENAI_API_KEY
-        except (ImportError, AttributeError):
-            pass
-    if not key:
-        raise ValueError("OPENAI_API_KEY not configured")
+        raise ValueError("OPENAI_API_KEY not configured — set it in .env or environment")
     return key
 
 

@@ -33,16 +33,7 @@ def _detect_environment() -> str:
     # This MUST run before the preview-pod check: a preview pod connected to production
     # data should report "production" so the warning banner does not appear.
     try:
-        mongo_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL") or ""
-        # Also check the Python override file (survives platform .env overwrites).
-        # config.py uses this same file to connect, so env detection must match.
-        if "cluster0.vuhdiod.mongodb.net" not in mongo_uri:
-            try:
-                from mongo_production_override import MONGO_URL as _ov_url
-                if _ov_url and "cluster0.vuhdiod.mongodb.net" in _ov_url:
-                    mongo_uri = _ov_url
-            except ImportError:
-                pass
+        mongo_uri = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or ""
         if "cluster0.vuhdiod.mongodb.net" in mongo_uri:
             return "production"
     except Exception:
@@ -64,15 +55,8 @@ def _detect_environment() -> str:
     return "unknown"
 
 
-# Resolve the actual mongo URL (including override file) for host display
+# Resolve the actual mongo URL for host display
 _resolved_mongo_url = _mongo_url
-if not _resolved_mongo_url or "cluster0.vuhdiod.mongodb.net" not in _resolved_mongo_url:
-    try:
-        from mongo_production_override import MONGO_URL as _ov
-        if _ov:
-            _resolved_mongo_url = _ov
-    except ImportError:
-        pass
 
 ENV_NAME: str = _detect_environment()
 IS_PRODUCTION: bool = ENV_NAME == "production"

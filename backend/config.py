@@ -21,25 +21,42 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env", override=False)
 
 # ============== MONGODB URI RESOLUTION (no network calls) ==============
+# Priority: mongo_production_override.py > MONGO_URL env var
+# The override file survives Emergent's .env overwrite during deployment.
+_REQUIRED_CLUSTER = "cluster0.vuhdiod.mongodb.net"
+_REQUIRED_DB = "vhc_talent_os"
 _override_active = False
+
 try:
     from mongo_production_override import MONGO_URL as _override_url, DB_NAME as _override_db
-    if _override_url and "cluster0.vuhdiod.mongodb.net" in _override_url:
+    if _override_url and _REQUIRED_CLUSTER in _override_url:
         mongodb_uri = _override_url
-        db_name = _override_db or "vhc_talent_os"
+        db_name = _override_db or _REQUIRED_DB
         _override_active = True
+        logging.info(f"[CONFIG] Using mongo_production_override.py (cluster: {_REQUIRED_CLUSTER})")
 except ImportError:
-    pass
+    logging.info("[CONFIG] mongo_production_override.py not found, falling back to env vars")
 
 if not _override_active:
-    _env_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or os.environ.get("MONGO_URL")
+    _env_uri = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
     if not _env_uri:
         raise RuntimeError(
-            "MONGODB_URI (or MONGO_URL) environment variable is not set. "
-            "Add it to your .env file or deployment environment."
+            "MONGO_URL environment variable is not set and mongo_production_override.py "
+            "is missing or invalid. Cannot start without a MongoDB connection."
         )
     mongodb_uri = _env_uri
-    db_name = os.environ.get("DB_NAME", "vhc_talent_os")
+    db_name = os.environ.get("DB_NAME", _REQUIRED_DB)
+
+# Safety check: refuse to start if URI doesn't point to the correct Atlas cluster
+if _REQUIRED_CLUSTER not in mongodb_uri:
+    logging.warning(
+        f"[CONFIG] WARNING: MongoDB URI does not contain '{_REQUIRED_CLUSTER}'. "
+        f"URI points to: {mongodb_uri[:40]}... — this may be the wrong database!"
+    )
+if db_name != _REQUIRED_DB:
+    logging.warning(
+        f"[CONFIG] WARNING: DB_NAME is '{db_name}', expected '{_REQUIRED_DB}'"
+    )
 
 # Client options — computed once, used later by initialize_db()
 _client_opts = dict(
