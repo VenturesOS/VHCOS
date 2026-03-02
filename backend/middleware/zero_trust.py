@@ -22,8 +22,8 @@ _raw_domain = os.environ.get("CF_ACCESS_TEAM_DOMAIN", "")
 # Handle both formats: "vhc-admin" or "vhc-admin.cloudflareaccess.com"
 CF_TEAM_DOMAIN = _raw_domain.replace(".cloudflareaccess.com", "").strip()
 CF_AUD = os.environ.get("CF_ACCESS_AUD", "").strip()
-CF_ENFORCE = os.environ.get("CF_ACCESS_ENFORCE", "true").lower() == "true"
-ZERO_TRUST_ENABLED = bool(CF_TEAM_DOMAIN and CF_AUD)
+CF_ENFORCE = False  # Disabled — caused login errors. Re-enable after proper CF Access setup.
+ZERO_TRUST_ENABLED = False  # Disabled until Cloudflare Zero Trust is properly configured
 
 # Protected path prefixes
 PROTECTED_PATHS = ["/api/admin/", "/api/admin"]
