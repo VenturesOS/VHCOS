@@ -17,8 +17,8 @@ from config import db
 logger = logging.getLogger(__name__)
 
 # ─── Allowed file types ───
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx"}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 PARSE_TIMEOUT = 15  # seconds
 
 # ─── ClamAV Configuration ───
