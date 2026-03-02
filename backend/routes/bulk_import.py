@@ -1211,6 +1211,12 @@ async def attach_cv_to_candidate(
     
     # Upload to R2
     content = await cv_file.read()
+
+    # Security: validate file content (magic bytes + threat scan)
+    from services.security_service import validate_upload as _sec_validate
+    sec_check = await _sec_validate(content, cv_file.filename, current_user.get("email", "internal"))
+    if not sec_check["valid"]:
+        raise HTTPException(status_code=400, detail=sec_check["reason"])
     file_id = str(uuid.uuid4())
     r2_key = generate_r2_key("bulk-import-cv", cv_file.filename)
     
