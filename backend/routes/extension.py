@@ -616,7 +616,8 @@ async def capture_profile(
         if visibility_update:
             update_data.update(visibility_update)
         
-        await db.candidate_bank.update_one(
+        from utils.db_retry import retry_write
+        await retry_write(db.candidate_bank.update_one,
             {"id": existing["id"]},
             {"$set": update_data}
         )
