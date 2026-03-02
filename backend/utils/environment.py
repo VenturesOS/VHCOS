@@ -32,6 +32,13 @@ def _detect_environment() -> str:
     # Check if connected to production Atlas cluster — authoritative for data identity.
     # This MUST run before the preview-pod check: a preview pod connected to production
     # data should report "production" so the warning banner does not appear.
+    # Use config.mongodb_uri (already resolved, including override file) as primary source.
+    try:
+        from config import mongodb_uri as _cfg_uri
+        if "cluster0.vuhdiod.mongodb.net" in _cfg_uri:
+            return "production"
+    except ImportError:
+        pass
     try:
         mongo_uri = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL") or ""
         if "cluster0.vuhdiod.mongodb.net" in mongo_uri:
@@ -55,8 +62,12 @@ def _detect_environment() -> str:
     return "unknown"
 
 
-# Resolve the actual mongo URL for host display
-_resolved_mongo_url = _mongo_url
+# Resolve the actual mongo URL for host display — use config's resolved URI
+try:
+    from config import mongodb_uri as _cfg_resolved
+    _resolved_mongo_url = _cfg_resolved
+except ImportError:
+    _resolved_mongo_url = _mongo_url
 
 ENV_NAME: str = _detect_environment()
 IS_PRODUCTION: bool = ENV_NAME == "production"
