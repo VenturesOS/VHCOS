@@ -179,7 +179,7 @@ async def health_diagnostics():
         "env_openai_key": f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "(empty/short)",
         "override_openai_key": f"{override_key[:8]}...{override_key[-4:]}" if len(override_key) > 12 else "(empty/short)",
         "keys_match": key == override_key if key and override_key else None,
-        "mongo_override_active": _override_active,
+        "mongo_override_active": getattr(__import__('config'), '_override_active', 'unknown'),
         "db_name": db_name,
         "import_failures": len(_route_imports_failed),
     }
