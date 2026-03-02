@@ -74,16 +74,16 @@ if db_name != _REQUIRED_DB:
 
 # Client options — computed once, used later by initialize_db()
 _client_opts = dict(
-    maxPoolSize=10,
-    minPoolSize=1,
-    maxIdleTimeMS=30000,
-    waitQueueTimeoutMS=15000,
-    serverSelectionTimeoutMS=15000,
-    connectTimeoutMS=10000,
-    socketTimeoutMS=30000,
+    maxPoolSize=50,
+    minPoolSize=5,
+    maxIdleTimeMS=45000,
+    waitQueueTimeoutMS=20000,
+    serverSelectionTimeoutMS=20000,
+    connectTimeoutMS=15000,
+    socketTimeoutMS=45000,
     retryWrites=True,
     retryReads=True,
-    maxConnecting=2,
+    maxConnecting=4,
 )
 
 if "mongodb+srv" in mongodb_uri or "mongodb.net" in mongodb_uri:

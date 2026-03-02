@@ -22,6 +22,13 @@ ROUTE_LIMITS = {
     "/api/public/upload-resume": (3, 60),
 }
 
+# High-priority routes exempt from default limits (user-facing, latency-sensitive)
+HIGH_PRIORITY_ROUTES = {
+    "/api/extension/ai-extract": (30, 60),
+    "/api/extension/capture": (30, 60),
+    "/api/extension/check-existing": (60, 60),
+}
+
 # Prefix-based limits
 PREFIX_LIMITS = {
     "/api/admin/": (30, 60),
@@ -55,6 +62,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         limit, window = DEFAULT_LIMIT
         if path in ROUTE_LIMITS:
             limit, window = ROUTE_LIMITS[path]
+        elif path in HIGH_PRIORITY_ROUTES:
+            limit, window = HIGH_PRIORITY_ROUTES[path]
         else:
             for prefix, lw in PREFIX_LIMITS.items():
                 if path.startswith(prefix):
