@@ -64,7 +64,8 @@ async def _log_capture(profile, user, status, action, candidate_id, failure_reas
         "captured_by_name": user.get("name", "") if user else "",
     }
     try:
-        await db.naukri_capture_logs.insert_one(doc)
+        from utils.db_retry import retry_write
+        await retry_write(db.naukri_capture_logs.insert_one, doc)
     except Exception as e:
         logger.error(f"[CaptureLog] Failed to log: {e}")
 
