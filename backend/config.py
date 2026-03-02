@@ -34,12 +34,12 @@ try:
         db_name = _override_db or _REQUIRED_DB
         _override_active = True
         logging.info(f"[CONFIG] Using mongo_production_override.py (cluster: {_REQUIRED_CLUSTER})")
-    # Also inject OPENAI_API_KEY into env if not already set (survives .env overwrite)
+    # Always inject OPENAI_API_KEY from override file (Emergent overwrites .env with its own keys)
     try:
         from mongo_production_override import OPENAI_API_KEY as _override_oai_key
-        if _override_oai_key and not os.environ.get("OPENAI_API_KEY"):
+        if _override_oai_key:
             os.environ["OPENAI_API_KEY"] = _override_oai_key
-            logging.info("[CONFIG] Injected OPENAI_API_KEY from override file")
+            logging.info("[CONFIG] Injected OPENAI_API_KEY from override file (authoritative)")
     except (ImportError, AttributeError):
         pass
 except ImportError:
