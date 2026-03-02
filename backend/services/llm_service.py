@@ -14,6 +14,17 @@ OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 def get_api_key() -> str:
     key = os.environ.get("OPENAI_API_KEY")
+    # Belt-and-suspenders: if env var is missing/empty, read directly from override file
+    # (config.py should have injected it, but Emergent's deployment may overwrite env after config loads)
+    if not key:
+        try:
+            from mongo_production_override import OPENAI_API_KEY
+            key = OPENAI_API_KEY
+            if key:
+                os.environ["OPENAI_API_KEY"] = key
+                logger.info("[LLM] Loaded OPENAI_API_KEY from override file (fallback)")
+        except (ImportError, AttributeError):
+            pass
     if not key:
         raise ValueError("OPENAI_API_KEY not configured — set it in .env or environment")
     return key
