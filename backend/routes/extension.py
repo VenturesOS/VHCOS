@@ -663,7 +663,8 @@ async def capture_profile(
             candidate_data.update(visibility_update)
         
         try:
-            await db.candidate_bank.insert_one(candidate_data)
+            from utils.db_retry import retry_write
+            await retry_write(db.candidate_bank.insert_one, candidate_data)
         except Exception as insert_err:
             logger.error(f"[Extension] Insert FAILED for {profile.name}: {insert_err}")
             await _log_capture(profile, current_user, "failed", "insert_failed", candidate_id, str(insert_err)[:300], "save_to_bank", capture_start)
