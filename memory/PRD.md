@@ -61,7 +61,16 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 - Fixed `.gitignore`: Removed 78 duplicate `*.env` blocking entries (lines 98-178) so `.env` files deploy correctly
 - Fixed `llm_service.py`: Removed `mongo_production_override` fallback for OPENAI_API_KEY — env-only now
 - Fixed `environment.py`: Removed `mongo_production_override` imports for env detection — uses `MONGO_URL` env var only
+- Updated OpenAI API key (old one was revoked)
+- Added `/api/health/diagnostics` endpoint for production key verification
 - Verified: health OK, 0 import failures, admin login works, 2032 candidates, correct Atlas cluster
+
+### Mar 2, 2026 - Server Hardening (4 fixes)
+1. Extension exempt from throttling: `/api/extension/ai-extract` and `/api/extension/capture` get 30 req/min (vs default 60) in HIGH_PRIORITY_ROUTES
+2. Malware upload protection: Added security validation (magic bytes + threat scan) to cv_upload, profile, candidates, bulk_import routes. Files inside ZIPs are also scanned.
+3. MongoDB connection pool: Upgraded from maxPoolSize=10→50, minPoolSize=1→5, maxConnecting=2→4
+4. DB write retry: Added `utils/db_retry.py` with exponential backoff for transient errors (AutoReconnect, WriteError). Applied to extension capture/update operations.
+5. Disabled Cloudflare Zero Trust middleware (caused login errors)
 
 ### Feb 27, 2026 - Deployment Stabilization
 - Lazy proxy pattern, environment detection, IST fix, route prefix fix
