@@ -18,7 +18,7 @@ import zipfile
 import io
 import time
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://builder-auth.preview.emergentagent.com")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://talent-platform-29.preview.emergentagent.com")
 
 # Test credentials from review request
 ADMIN_CREDS = {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}

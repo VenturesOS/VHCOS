@@ -402,7 +402,7 @@ RESEND_API_KEY=re_placeholder_key
 
 ### Frontend (.env)
 ```env
-REACT_APP_BACKEND_URL=https://builder-auth.preview.emergentagent.com
+REACT_APP_BACKEND_URL=https://talent-platform-29.preview.emergentagent.com
 WDS_SOCKET_PORT=443
 ```
 

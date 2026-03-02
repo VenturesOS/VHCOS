@@ -1,82 +1,59 @@
 <analysis>**original_problem_statement:**
-The user initially reported a critical production outage where the backend was unreachable due to a startup crash (). After fixing the outage, the user requested a series of bug fixes and a major new feature:
+The user initially requested fixes for a production outage and the implementation of a large Resume Builder feature. Throughout the session, the scope expanded significantly.
 
 **PRODUCT REQUIREMENTS:**
 
-1.  **Resume Builder Feature:**
-    *   Create a new Resume Builder page accessible to all user roles (Candidate, Employer, Recruiter, Admin).
-    *   The user interface should be based on a provided  component.
-    *   The builder should allow users to edit personal info, experience, education, and skills.
-    *   It should offer multiple resume templates (e.g., ATS Clean, Google Style).
-    *   Include an AI Enhance feature using the existing OpenAI integration to improve resume content.
-    *   The output should be a downloadable  (LaTeX) file.
-    *   The user registration process should be updated to collect , , and .
-    *   **UX Flow:** The page must immediately show a visual preview of the generated resume based on existing profile data. Editing options should be secondary to the preview.
-
-2.  **Public Navigation Update:**
-    *   On the public-facing website (not the logged-in dashboard), modify the main navigation menu.
-    *   **For Candidates:** Remove About, Services, and Global Hiring links and add a Resume Builder link.
-    *   **For Employers:** The navigation should remain unchanged.
-
-3.  **ATS CV Process Overhaul:**
-    *   Replace the existing basic ATS CV generation for profiles extracted from the Naukri browser extension.
-    *   The new process must automatically use the Resume Builder engine to generate a high-quality LaTeX resume (ATS Clean template by default) for every new profile saved from the extension.
-    *   Run a one-time batch process to regenerate and standardize resumes for all existing candidates in the database.
-
-4.  **Bug Fixes:**
-    *   **Attendance Timezone:** Ensure all check-in/check-out times are recorded in Indian Standard Time (IST, GMT+5:30), not UTC.
-    *   **Candidate Bank Loading:** Fix the Candidate Bank page, which was failing to load data due to a backend route conflict.
-    *   **Cloudflare R2 Connectivity:** Resolve the  error during the R2 connection check on startup.
-    *   **Not Authenticated on CV Download:** Fix the authentication error that occurs when trying to download a generated CV.
-    *   **Cannot Edit Candidate Info:** Fix a bug preventing users from editing and saving changes to candidate profiles captured via the extension.
+1.  **Critical Production Deployment Fix (P0):** The application backend is crashing on startup in the production environment, making the entire application unusable. This must be resolved immediately.
+2.  **Resume Builder Feature & PDF Generation:**
+    *   Create a Resume Builder page with a preview-first user experience.
+    *   The builder must support AI enhancement, multiple templates, and editing of user profile data.
+    *   The final output must be a downloadable PDF. This was a change from the initial  requirement.
+    *   This feature should work in all environments, including production where system dependencies like  are not available.
+3.  **ATS CV Download as PDF:** The ATS CV download functionality for candidates sourced from the browser extension must generate a PDF document, not a  script.
+4.  **Browser Extension Update:** Integrate the user-provided new version of the Naukri browser extension ().
+5.  **Advanced Candidate Bank Filters:** Enhance the Candidate Bank page for all user roles (Candidate, Admin, Employer) with a comprehensive set of filters to improve searchability, including:
+    *   Keyword search
+    *   Location, Experience, CTC (Current & Expected), Notice Period
+    *   Job Title, Skills, Source
+    *   Filters for profiles with/without resumes and with hidden contact info.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack talent management platform (VHC Talent OS) with a React frontend, FastAPI backend, and MongoDB database.
+The application is a full-stack talent management platform. The agent has completed all feature requests, including fixing the initial P0 bugs, building the Resume Builder with a pure-Python PDF generation service (), updating the ATS CV download to produce PDFs, integrating the new browser extension, and implementing an advanced filter panel on the three candidate bank pages.
 
-The agent has successfully resolved the critical production outage by refactoring the database connection to initialize in a non-blocking background task. The UNKNOWN MODE banner issue was also fixed by making the environment detection logic aware of the production database override.
-
-The Resume Builder feature has been implemented, including the backend API for LaTeX generation (), the frontend page (), and integration into all user roles' sidebars. The public website's navigation has been updated. The old ATS CV process has been fully replaced with the new LaTeX-based system, and a batch job has standardized all 1,977 existing candidate profiles. The attendance system's timezone has been corrected to IST, and the R2 connectivity issue is resolved.
-
-However, the final implementation of the Resume Builder has three outstanding bugs reported by the user.
+However, the application is currently facing a critical P0 issue: the backend crashes on startup during production deployment, rendering the application completely inaccessible in that environment. The agent has implemented a potential fix by making server startup code more resilient to import errors but has not been able to verify it.
 
 **Last working item**:
-- Last item agent was working: Analyzing and devising a plan to fix three user-reported issues related to the newly implemented Resume Builder and candidate profile management.
+- Last item agent was working: Diagnosing and fixing a critical production deployment failure where the backend crashes on startup (). The agent suspected an import-time failure due to dependencies missing in the production container and wrapped critical imports in  within  blocks as a potential fix.
 - Status: IN PROGRESS
 - Agent Testing Done: N
-- Which testing method agent to use? both
+- Which testing method agent to use? The fix can only be verified by the user initiating a new production deployment. The agent must ask the user to do this.
 - User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   Issue 1:  **(P0) Resume Builder & Candidate Edit Functionality is Broken**
+-   Issue 1:  **(P0) Critical Production Deployment Failure**
 
 Issues Detail:
--   **Issue 1: (P0) Resume Builder & Candidate Edit Functionality is Broken**
-    -   Attempted fixes: The agent has analyzed the root causes and proposed a clear plan but has not yet implemented the fixes.
+-   **Issue 1: (P0) Critical Production Deployment Failure**
+    -   Attempted fixes: The agent theorized that a recently added dependency ( or ) or another module is causing an import-time crash in the clean production environment. As a fix, the agent wrapped the imports for , , and the  within  blocks in  to prevent a startup failure.
     -   Next debug checklist:
-        1.  **Fix Not Authenticated Error**: The CV download link opens in a new tab, losing the auth header. Modify the backend endpoint ( in ) to accept the JWT as a query parameter (). The frontend call that generates the URL () must be updated to include this token.
-        2.  **Fix Edit-First UX**: The current flow requires users to edit details *before* seeing a resume. This must be reversed. Refactor  to immediately generate and display a visual preview of the resume on page load. The editing form should be secondary, perhaps in an expandable section.
-        3.  **Fix Cannot Edit Candidate Bug**: The user-provided video shows that saving edits to an extension-captured candidate profile does not work. The agent must trace the  or  request sent from the frontend profile page to the backend. Check the browser's network tab to see if the request is being sent correctly and what response the server returns. The issue is likely in the frontend submission logic or the backend update endpoint in .
-    -   Why fix this issue and what will be achieved with the fix?: This will complete the Resume Builder feature as per the user's explicit requirements, making it functional and user-friendly, and will restore core functionality for editing candidate data.
+        1.  **Confirm the fix with the user:** Ask the user to trigger a new deployment to verify if the wrapped imports have resolved the startup crash.
+        2.  **Request Production Logs:** If the deployment fails again, it is CRITICAL to obtain the backend error logs () from the production container. These logs will contain the exact traceback and identify the root cause, eliminating guesswork.
+        3.  **Isolate the faulty module:** If logs are unavailable, systematically comment out recently added features (starting with the  and its routes in  and ) and attempt redeployment to pinpoint the breaking change.
+    -   Why fix this issue and what will be achieved with the fix?: The application is completely down in production. Fixing this will restore service and make all the newly developed features available to users.
     -   Status: IN PROGRESS
-    -   Is recurring issue?: N
-    -   Should Test frontend/backend/both after fix?: both
-    -   Blocked on other issue: None. This is the highest priority.
+    -   Is recurring issue?: Y
+    -   Should Test frontend/backend/both after fix?: Backend (via deployment).
+    -   Blocked on other issue: None. This is the only priority.
 
 **In progress Task List**:
--   **Task 1: (P0) Finalize Resume Builder Implementation**
-    -   Where to resume: Implement the three-step fix detailed in Issue 1 above.
-    -   What will be achieved with this?: A fully functional, user-friendly Resume Builder that meets all of the user's requirements.
-    -   Status: IN PROGRESS
-    -   Should Test frontend/backend/both after fix?: both
-    -   Blocked on something: None.
+- None. All efforts must be focused on resolving the P0 deployment issue.
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks:**
-  - **(P1) Updated Browser Extension:** The user mentioned they will be sharing an updated version of the Naukri browser extension once the current tasks are complete. The agent will need to integrate this new version.
-  - **(P2) Implement Interview Scheduling.**
-  - **(P2) Implement Candidate Activity Log.**
+  - **(P1) Implement Interview Scheduling.**
+  - **(P1) Implement Candidate Activity Log.**
 - **Future Tasks:**
   - Implement Hiring Funnel KPIs dashboard.
   - Implement In-App Notification Center.
@@ -85,105 +62,110 @@ Issues Detail:
   - Implement Email Template Management.
 
 **Completed work in this session**
-- **Critical Production Outage Resolved:** Fixed application startup crash by deferring the MongoDB connection to a non-blocking background task.
-- **UNKNOWN MODE Banner Fixed:** Corrected the environment detection logic in  to be aware of the production database override file.
-- **Candidate Bank Loading Fixed:** Resolved a route conflict by renaming the candidate bank route prefix to  in .
-- **Attendance System Timezone Fixed:** Replaced all  calls in the attendance module with a helper that uses .
-- **Resume Builder Feature (V1) Implemented:**
-    - Created backend API () for LaTeX resume generation and AI enhancement.
-    - Built the frontend page .
-    - Updated user registration to collect CTC and notice period.
-- **ATS CV Process Overhauled:**
-    - Replaced the old CV generation with the new LaTeX engine.
-    - Created a background task to successfully regenerate and standardize resumes for all 1,977 existing candidates.
-- **Public Website Navigation Updated:** Modified all static HTML files to update the main navigation bar based on the user role (candidate vs. employer).
-- **Cloudflare R2 Connectivity Fixed:** Changed the R2 health check from  to  to work with bucket-scoped API tokens.
-- **Missing API Stubs Added:** Created placeholder endpoints for , , and  to prevent frontend 404 errors.
+- **Initial P0 Bugs Resolved:**
+  - Fixed Not Authenticated on CV download by adding token-based authentication.
+  - Refactored Resume Builder for a preview-first UX.
+  - Added the missing  endpoint to fix candidate profile editing.
+- **Pure-Python PDF Generation Implemented:**
+  - Replaced a  (system dependency) solution with a portable  (Python library) service in , ensuring PDF generation works in all environments.
+- **ATS CV Download Upgraded to PDF:**
+  - The  endpoint now generates and serves a PDF resume.
+- **Browser Extension Updated:**
+  - Analyzed and replaced the old browser extension with the new  provided by the user.
+- **Advanced Candidate Bank Filters Added:**
+  - Implemented a comprehensive 12-filter panel on the candidate bank pages for Admin, Employer, and Candidate roles.
+  - Enhanced the  endpoint to support all new filter queries.
+  - Created a  endpoint to dynamically populate filter options.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: LinkedIn API Auto-Posting Blocked**
-    -   This feature is blocked pending user action. The user needs to get the  scope approved by LinkedIn for their developer app before the agent can proceed with the integration.
+    -   This feature is blocked pending user action. The user needs to get the  scope approved by LinkedIn for their developer app.
     -   Status: BLOCKED
 
 **Known issue recurrence from previous fork**
-- **Issue recurrence in previous fork**: The core recurring issue was the conflict between platform-injected environment variables (specifically ) and the application's requirement to connect to an external MongoDB Atlas database. This caused both the initial production outage and the subsequent UNKNOWN MODE banner.
-- **Recurrence count**: 2
-- **Status**: RESOLVED (The agent implemented a robust override system using  and made the environment detection logic aware of it).
+- **Issue recurrence in previous fork**: Production outages caused by discrepancies between the local/preview environment and the clean production container.
+- **Recurrence count**: 3
+- **Status**: IN PROGRESS (The current deployment crash is the latest instance of this issue).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Non-Blocking/Deferred Initialization:** The critical fix for the production outage involved moving the  instantiation from the global scope into a background task in , ensuring the web server binds to its port before attempting network I/O.
--   **Environment-Aware Configuration:** The application uses a Python module () to enforce the use of an external database, and utility files () read from this source to correctly identify the runtime environment.
--   **Backend LaTeX Generation:** The resume builder generates  files on the backend using f-strings and serves them as downloadable files, separating the complex logic from the frontend.
--   **Background Tasks:** Used  to run the long-running batch job for regenerating all candidate resumes without timing out the HTTP request.
+-   **Deployment Dependency Resolution:** Migrated from a system-dependent tool () to a pure-Python library () to ensure feature portability and fix production deployment failures.
+-   **Resilient Server Startup:** Wrapped critical application imports in  within  blocks to prevent the entire server from crashing due to an error in a single module during initialization.
+-   **Advanced Backend Filtering:** Implemented complex, multi-parameter filtering for MongoDB by dynamically constructing queries with the  operator, using  for text search and other operators (, , , , ) for structured data.
+-   **Pure-Python PDF Generation:** Created a service () that uses the  library to construct PDF documents from structured JSON data, avoiding external dependencies.
 
 **key DB schema**
--   **users**: Added  (String),  (String),  (String).
--   **candidate_bank**: Added  (String) to store the auto-generated LaTeX code for each candidate.
+- No new schema changes were introduced in this session. The work utilized existing fields in the  and  collections.
 
 **All files of reference**
--   : Contains the logic for the candidate bank, the ATS CV download endpoint, and the broken candidate edit functionality. **This is a key file for the next set of fixes.**
--   : The main UI for the resume builder. **Needs to be refactored for the preview-first UX.**
--   : The core engine for building the LaTeX resumes.
--    & : The core of the production stability fixes.
--   The static HTML files in  (e.g., , ).
+-   : **CRITICAL FILE.** Contains the startup logic and the potential fix for the current P0 deployment issue.
+-   : The core of the candidate filtering and PDF download logic.
+-   : The new, portable PDF generation service.
+-   : The primary UI for the candidate bank, containing the new filter panel. (The employer and candidate versions are similar).
+-   : The frontend for the resume builder feature.
+-   : Directory containing the newly integrated browser extension.
+
+**Areas that need refactoring**
+-   The candidate filter panel UI and logic were duplicated across three files: , , and . This violates the DRY principle and should be refactored into a single reusable  component and a shared custom hook (e.g., ) to handle state and data fetching.
+
+**key api endpoints**
+-   : Heavily modified to accept ~12 new query parameters for advanced filtering.
+-   : (NEW) Returns metadata (locations, titles) for populating filter dropdowns.
+-   : Upgraded to return a dynamically generated PDF file.
+-   : (NEW) Generates a PDF from profile JSON data using .
+-   : Updated to always report PDF capability as .
+-   : (NEW) Endpoint created to fix a bug in editing candidate profiles.
 
 **Critical Info for New Agent**
--   You must immediately address the three user-reported issues detailed in the ****. This is the top priority.
--   **Auth Fix is Critical:** The CV download is completely broken without fixing the Not authenticated error. The proposed fix (adding the token as a query parameter) is the correct approach.
--   **UX is a Hard Requirement:** The user explicitly wants a preview-first experience in the Resume Builder. Do not skip the refactoring of .
--   **Candidate Edit Bug:** Carefully debug the candidate profile update flow. Use browser developer tools to inspect the network request being sent when the save button is clicked. The problem could be in the frontend call or the backend handler.
+-   **Your only priority is to fix the P0 production deployment crash.** The application is completely down in production.
+-   The previous agent's last action was to wrap critical imports in  in  blocks. **Your first step is to ask the user to redeploy and check if this solved the issue.**
+-   If the deployment fails again, **you must insist on getting the production  logs** (). Debugging without these logs is inefficient and prone to error.
+-   Do not start any new features or other bug fixes until the application is successfully deployed and running in the production environment.
 
 **documents and test reports created in this job**
--    (Attendance System tests - All Passed)
--    (Resume Builder V1 tests - 95% Pass Rate)
--    (Updated)
+-   
+-   
+-   
+-   
+-    (Updated multiple times)
 
 **Last 10 User Messages and any pending HUMAN messages**
--   User confirmed  for the Candidate Bank loading fix.
--   User reported the attendance system timezone is wrong and must be IST.
--   Agent confirmed all attendance-related files were fixed and tested.
--   User initiated the Resume Builder feature with a reference component.
--   User provided detailed requirements: add it to the candidate-facing public nav, collect CTC/notice period on signup, and make it available for all logged-in roles.
--   Agent implemented and tested the feature.
--   User reported the public navigation was not updated correctly.
--   Agent fixed the public navigation in the static HTML files.
--   User proposed replacing the old ATS CV process with the new Resume Builder engine and standardizing all existing data.
--   Agent implemented this, including a background batch job for all 1,977 candidates.
--   User asked for the fix for the Cloudflare R2 credentials.
--   Agent fixed the R2 validation logic.
--   User provided deployment error logs.
--   Agent identified missing API endpoints as the cause and created stubs.
--   **PENDING**: User reported three critical issues: (1) Not authenticated error on CV download, (2) Resume Builder UX is edit-first instead of preview-first, and (3) an inability to edit candidate info (with video). Agent has analyzed and proposed a plan, awaiting execution.
+1.  User requested to add advanced search filters to the candidate data bank.
+2.  Agent proposed a list of 12 filters.
+3.  User approved the proposed filters (proceed with all).
+4.  Agent implemented the backend and frontend for the filters.
+5.  Agent finished the filter implementation task.
+6.  User reported a critical deployment error log showing the backend is unreachable ().
+7.  Agent began diagnosing the production crash.
+8.  Agent theorized the crash is due to an import-time error and implemented a fix by wrapping imports in .
+9.  User messaged proceed with pending task, encouraging the agent to continue fixing the deployment issue.
+10. **PENDING**: The agent has implemented a potential fix for the deployment crash but needs the user to trigger a new deployment to verify it.
 
 **Project Health Check:**
--   **Broken**:
-    -   CV download functionality () fails with an auth error.
-    -   Editing candidate profiles captured from the extension does not save.
+-   **Broken**: The entire application backend is non-functional in the production deployment environment due to a startup crash.
 -   **Mocked**: N/A
 
 **3rd Party Integrations**
--   **MongoDB Atlas**: Primary database. Connection is forced via .
--   **OpenAI**: Used for the AI Enhance feature in the Resume Builder.
--   **Cloudflare R2**: Used for object storage. Connectivity is now fixed and verified.
--   **Upstash Redis**: Present in the environment.
+-   **MongoDB Atlas**: Primary database.
+-   **OpenAI**: Used for the AI Enhance feature.
+-   **Cloudflare R2**: Used for object storage.
+-   **Upstash Redis**: Caching service.
+-   **fpdf2**: (New) A pure-Python library added for PDF document generation.
 
 **Testing status**
 -   Testing agent used after significant changes: YES
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created:
-    - 
-    - 
+    - Four new test reports were generated from  to .
 -   Known regressions:
-    -   Candidate profile editing is non-functional.
-    -   CV download is non-functional.
+    -   The entire application is down in production.
 
 **Credentials to test flow:**
 -    / 
 -    / 
 
 **What agent forgot to execute**
-- The agent did not initially anticipate that opening a URL in a new tab () would result in an unauthenticated request, causing the Not authenticated error for CV downloads.
-- The initial implementation of the Resume Builder did not match the user's desired preview-first UX flow, requiring a significant refactor.</analysis>
+-   The agent failed to insist on receiving the actual production error logs (), which would have provided the exact traceback for the startup crash. This led to a less efficient debugging process based on hypotheses rather than direct evidence.
+-   The agent created three separate, nearly identical implementations of the candidate filter UI instead of creating a single, reusable component, leading to significant code duplication.</analysis>

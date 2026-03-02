@@ -16,7 +16,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://builder-auth.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://talent-platform-29.preview.emergentagent.com')
 
 # Test credentials
 ADMIN_EMAIL = "admin@vhc.in"
