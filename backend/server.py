@@ -164,6 +164,27 @@ async def health_check():
     return {"status": "ok", "import_failures": len(_route_imports_failed)}
 
 
+@app.get("/api/health/diagnostics")
+async def health_diagnostics():
+    """Production diagnostics — shows masked credentials and config sources."""
+    import os as _os
+    key = _os.environ.get("OPENAI_API_KEY", "")
+    override_key = ""
+    try:
+        from mongo_production_override import OPENAI_API_KEY as _ok
+        override_key = _ok or ""
+    except Exception:
+        pass
+    return {
+        "env_openai_key": f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "(empty/short)",
+        "override_openai_key": f"{override_key[:8]}...{override_key[-4:]}" if len(override_key) > 12 else "(empty/short)",
+        "keys_match": key == override_key if key and override_key else None,
+        "mongo_override_active": _override_active,
+        "db_name": db_name,
+        "import_failures": len(_route_imports_failed),
+    }
+
+
 # Register all routers — skip any that failed to import
 _all_routers = [
     auth_router, public_router, files_router, admin_router, jobs_router,
