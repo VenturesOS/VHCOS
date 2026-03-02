@@ -89,11 +89,18 @@ def scan_for_threats(content: bytes, filename: str) -> list:
         except Exception:
             pass
 
-    # Check for embedded executables
-    exe_sigs = [b"MZ", b"\x7fELF"]  # PE and ELF
-    for sig in exe_sigs:
-        if sig in content[:100000]:
-            threats.append("embedded_executable")
+    # Check for embedded executables — scan full content for hidden payloads
+    exe_sigs = [
+        (b"MZ", "PE_executable"),
+        (b"\x7fELF", "ELF_executable"),
+        (b"\xca\xfe\xba\xbe", "Mach-O_universal"),
+        (b"\xfe\xed\xfa", "Mach-O_32bit"),
+        (b"\xcf\xfa\xed\xfe", "Mach-O_64bit"),
+    ]
+    scan_range = content[:500000]  # Scan first 500KB for embedded payloads
+    for sig, name in exe_sigs:
+        if sig in scan_range:
+            threats.append(f"embedded_{name}")
             break
 
     return threats
