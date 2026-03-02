@@ -738,6 +738,12 @@ async def parse_cv_zip(
                         content = f.read()
                     
                     if ext in ['.pdf', '.doc', '.docx']:
+                        # Security: validate each file inside ZIP
+                        from services.security_service import scan_for_threats
+                        _threats = scan_for_threats(content, filename)
+                        if _threats:
+                            logger.warning(f"[CV ZIP] Skipping malicious file: {filename} — {_threats}")
+                            continue
                         resume_files.append((filename, content))
                     elif ext in ['.xlsx', '.xls', '.csv']:
                         excel_files.append((filename, content))
