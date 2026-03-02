@@ -42,8 +42,9 @@ try:
             logging.info("[CONFIG] Injected OPENAI_API_KEY from override file (authoritative)")
     except (ImportError, AttributeError):
         pass
-except ImportError:
-    logging.info("[CONFIG] mongo_production_override.py not found, falling back to env vars")
+except Exception as e:
+    logging.warning(f"[CONFIG] mongo_production_override.py failed: {e}")
+    logging.info("[CONFIG] Falling back to env vars")
 
 if not _override_active:
     _env_uri = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI") or os.environ.get("MONGODB_URL")
