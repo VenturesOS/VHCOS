@@ -32,6 +32,12 @@ async def parse_cv(
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    # Security: validate file content (magic bytes + threat scan)
+    from services.security_service import validate_upload as _sec_validate
+    sec_check = await _sec_validate(content, file.filename, current_user.get("email", "internal"))
+    if not sec_check["valid"]:
+        raise HTTPException(status_code=400, detail=sec_check["reason"])
     
     # Extract text from file
     raw_text = ""

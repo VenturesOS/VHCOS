@@ -81,6 +81,12 @@ async def upload_candidate_cv(
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
 
+    # Security: validate file content (magic bytes + threat scan)
+    from services.security_service import validate_upload as _sec_validate
+    sec_check = await _sec_validate(content, file.filename or "resume", current_user.get("email", "internal"))
+    if not sec_check["valid"]:
+        raise HTTPException(status_code=400, detail=sec_check["reason"])
+
     resume_text = extract_text_from_file(content, file.filename or "resume")
     if not resume_text or len(resume_text) < 50:
         raise HTTPException(

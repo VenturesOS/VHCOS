@@ -51,6 +51,13 @@ async def upload_resume(file: UploadFile = File(...), current_user: dict = Depen
         raise HTTPException(status_code=400, detail="No file provided")
 
     content = await file.read()
+
+    # Security: validate file content (magic bytes + threat scan)
+    from services.security_service import validate_upload as _sec_validate
+    sec_check = await _sec_validate(content, file.filename, current_user.get("email", "internal"))
+    if not sec_check["valid"]:
+        raise HTTPException(status_code=400, detail=sec_check["reason"])
+
     resume_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
