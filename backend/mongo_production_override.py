@@ -9,4 +9,4 @@ TEMP OVERRIDE — remove once platform supports external config.
 
 MONGO_URL = "mongodb+srv://vhc_admin:DL4cbb4890@cluster0.vuhdiod.mongodb.net/?retryWrites=true&w=majority"
 DB_NAME = "vhc_talent_os"
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "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"
