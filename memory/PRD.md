@@ -56,6 +56,13 @@ VHC Talent OS is a comprehensive recruitment management platform for Ventures HR
 
 ## Implementation Timeline
 
+### Mar 2, 2026 - P0 Production Deployment Fix
+- Fixed `config.py`: MongoDB URI resolution now prioritizes `mongo_production_override.py` over env var with cluster validation
+- Fixed `.gitignore`: Removed 78 duplicate `*.env` blocking entries (lines 98-178) so `.env` files deploy correctly
+- Fixed `llm_service.py`: Removed `mongo_production_override` fallback for OPENAI_API_KEY — env-only now
+- Fixed `environment.py`: Removed `mongo_production_override` imports for env detection — uses `MONGO_URL` env var only
+- Verified: health OK, 0 import failures, admin login works, 2032 candidates, correct Atlas cluster
+
 ### Feb 27, 2026 - Deployment Stabilization
 - Lazy proxy pattern, environment detection, IST fix, route prefix fix
 
