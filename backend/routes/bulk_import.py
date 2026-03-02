@@ -1556,6 +1556,11 @@ async def parse_cv_zip_from_chunked(
                         content = f.read()
                     
                     if ext in ['.pdf', '.doc', '.docx']:
+                        from services.security_service import scan_for_threats
+                        _threats = scan_for_threats(content, filename)
+                        if _threats:
+                            logger.warning(f"[CV ZIP CHUNKED] Skipping malicious file: {filename} — {_threats}")
+                            continue
                         resume_files.append((filename, content))
                     elif ext in ['.xlsx', '.xls', '.csv']:
                         excel_files.append((filename, content))
