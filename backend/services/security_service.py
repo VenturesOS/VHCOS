@@ -56,11 +56,11 @@ def validate_file_size(content: bytes) -> bool:
 
 def validate_magic_bytes(content: bytes, expected_ext: str) -> bool:
     """Verify file content matches its claimed extension via magic bytes."""
-    if not content or len(content) < 8:
+    if not content or len(content) < 4:
         return False
     signatures = MAGIC_BYTES.get(expected_ext, [])
     if not signatures:
-        return False
+        return True  # No signatures defined for this type (e.g. .txt) — allow
     for sig in signatures:
         if content[:len(sig)] == sig:
             return True
@@ -231,7 +231,7 @@ async def validate_upload(content: bytes, filename: str, client_ip: str) -> dict
         size_mb = round(len(content) / 1048576, 1)
         await log_security_event("file_too_large", client_ip, "MEDIUM",
                                  f"File too large: {size_mb}MB", {"filename": filename, "size_mb": size_mb})
-        return {"valid": False, "reason": f"File too large ({size_mb}MB). Maximum is 5MB.", "threats": []}
+        return {"valid": False, "reason": f"File too large ({size_mb}MB). Maximum is {MAX_FILE_SIZE // (1024*1024)}MB.", "threats": []}
 
     # 3. Magic byte validation
     if not validate_magic_bytes(content, ext):

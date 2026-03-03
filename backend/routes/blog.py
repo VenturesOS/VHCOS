@@ -289,9 +289,25 @@ def _build_rss_item(blog: dict, base_url: str) -> str:
 </item>"""
 
 
+_rss_cache = {"content": None, "expires": 0, "type_content": {}}
+
 @router.get("/api/blog/rss")
 async def rss_feed(blog_type: Optional[str] = None):
-    """Public: RSS 2.0 feed of published blog posts."""
+    """Public: RSS 2.0 feed of published blog posts. Cached for 5 minutes."""
+    import time
+    cache_key = blog_type or "_default"
+    now = time.time()
+
+    # Return cached response if fresh (5 min TTL)
+    if cache_key in _rss_cache["type_content"]:
+        cached = _rss_cache["type_content"][cache_key]
+        if now < cached["expires"]:
+            return Response(
+                content=cached["content"],
+                media_type="application/rss+xml",
+                headers={"Cache-Control": "public, max-age=300", "X-Cache": "HIT"},
+            )
+
     query = {"status": "published"}
     if blog_type in ("employer", "candidate"):
         query["blog_type"] = blog_type
@@ -326,10 +342,13 @@ async def rss_feed(blog_type: Optional[str] = None):
 </channel>
 </rss>"""
 
+    # Cache for 5 minutes
+    _rss_cache["type_content"][cache_key] = {"content": rss_xml, "expires": now + 300}
+
     return Response(
         content=rss_xml,
         media_type="application/rss+xml",
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={"Cache-Control": "public, max-age=300", "X-Cache": "MISS"},
     )
 
 
