@@ -26,20 +26,27 @@ async def acquire_lock(job_name: str, lock_ttl_seconds: int = 600) -> bool:
     now = datetime.now(IST)
     expiry = now + timedelta(seconds=lock_ttl_seconds)
 
-    result = await db.cron_job_locks.find_one_and_update(
-        {"job_name": job_name, "$or": [
-            {"locked": False},
-            {"expires_at": {"$lt": now.isoformat()}},
-        ]},
-        {"$set": {
-            "locked": True,
-            "locked_at": now.isoformat(),
-            "expires_at": expiry.isoformat(),
-        }},
-        upsert=True,
-        return_document=True,
-    )
-    return result is not None
+    try:
+        result = await db.cron_job_locks.find_one_and_update(
+            {"job_name": job_name, "$or": [
+                {"locked": False},
+                {"expires_at": {"$lt": now.isoformat()}},
+            ]},
+            {"$set": {
+                "locked": True,
+                "locked_at": now.isoformat(),
+                "expires_at": expiry.isoformat(),
+            }},
+            upsert=True,
+            return_document=True,
+        )
+        return result is not None
+    except Exception as e:
+        # DuplicateKeyError (11000) means another instance holds the lock — expected
+        if "11000" in str(e) or "DuplicateKey" in str(e):
+            return False
+        logger.error(f"[CRON LOCK] Unexpected error acquiring lock '{job_name}': {e}")
+        return False
 
 
 async def release_lock(job_name: str):
