@@ -1629,3 +1629,66 @@ async def get_matching_jobs_for_candidate(
     results.sort(key=lambda x: x.score, reverse=True)
     
     return results[:20]  # Return top 20 matches
+
+
+
+# ── Link Candidate to Job ──────────────────────────────────────────────
+
+class LinkCandidateRequest(BaseModel):
+    candidate_id: str
+    job_id: str
+    expected_salary: Optional[float] = None
+
+@applications_router.post("/applications/link-candidate")
+async def link_candidate_to_job(
+    data: LinkCandidateRequest,
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+):
+    """Link an existing candidate from the bank to a job as an application."""
+    # Verify candidate exists
+    candidate = await db.candidate_bank.find_one({"id": data.candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Verify job exists
+    job = await db.jobs.find_one({"id": data.job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Check if already linked
+    existing = await db.applications.find_one(
+        {"candidate_id": data.candidate_id, "job_id": data.job_id},
+        {"_id": 0}
+    )
+    if existing:
+        return {"message": "Candidate already linked to this job", "application_id": existing["id"]}
+
+    now = datetime.now(timezone.utc).isoformat()
+    application_id = str(uuid.uuid4())
+
+    application = {
+        "id": application_id,
+        "job_id": data.job_id,
+        "candidate_id": data.candidate_id,
+        "candidate_name": candidate.get("name", ""),
+        "candidate_email": candidate.get("email", ""),
+        "candidate_phone": candidate.get("phone", ""),
+        "stage": "sourced",
+        "status": "active",
+        "source": "candidate_bank",
+        "expected_salary": data.expected_salary,
+        "created_by": current_user["id"],
+        "created_at": now,
+        "updated_at": now,
+        "stage_history": [{
+            "stage": "sourced",
+            "moved_by": current_user["id"],
+            "moved_by_name": current_user.get("name", ""),
+            "timestamp": now,
+        }],
+    }
+
+    await db.applications.insert_one(application)
+    application.pop("_id", None)
+
+    return {"message": "Candidate linked to job", "application_id": application_id, "application": application}

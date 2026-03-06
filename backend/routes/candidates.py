@@ -128,12 +128,16 @@ async def upload_candidate_cv(
         else:
             upsert_filter = {"id": candidate_id}
 
+    # Separate fields for $set vs $setOnInsert to avoid MongoDB path conflicts
+    set_data = {k: v for k, v in candidate_data.items() if k not in ("created_at", "id", "resume_fingerprints")}
+    set_data["updated_at"] = now
+
     await db.candidate_bank.update_one(
         upsert_filter,
         {
-            "$set":        candidate_data,
-            "$setOnInsert": {"created_at": now},
-            "$addToSet":   {"resume_fingerprints": fingerprint},
+            "$set":         set_data,
+            "$setOnInsert": {"created_at": now, "id": candidate_id},
+            "$addToSet":    {"resume_fingerprints": fingerprint},
         },
         upsert=True,
     )

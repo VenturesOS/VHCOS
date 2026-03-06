@@ -37,7 +37,7 @@ MAGIC_BYTES = {
 SUSPICIOUS_PATTERNS = [
     b"<script", b"javascript:", b"eval(", b"document.cookie",
     b"onerror=", b"onload=", b"<iframe", b"<object",
-    b"/Launch", b"/JavaScript", b"/JS ", b"/OpenAction",  # PDF-specific
+    b"/Launch", b"/JavaScript", b"/JS ",  # PDF-specific (not /OpenAction — too many false positives)
 ]
 
 
