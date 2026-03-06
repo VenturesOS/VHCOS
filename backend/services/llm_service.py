@@ -68,11 +68,19 @@ async def chat_completion(
         body["response_format"] = {"type": "json_object"}
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            OPENAI_API_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=body,
-        )
+        for attempt in range(2):
+            try:
+                resp = await client.post(
+                    OPENAI_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=body,
+                )
+                break
+            except httpx.ReadTimeout:
+                if attempt == 0:
+                    logger.warning(f"[LLM] ReadTimeout on attempt 1, retrying...")
+                    continue
+                raise RuntimeError("LLM API timeout after 2 attempts")
 
     if resp.status_code != 200:
         logger.error(f"[LLM] Error {resp.status_code}: {resp.text[:300]}")
