@@ -1,0 +1,132 @@
+{
+  "summary": "Iteration 162: Tested Naukri Regex Parser Format C Work Experience improvements. All 30 new tests passed (100%). Verified: Format C date-anchored parsing for dense text and blank-line separated entries, companies without keywords (Reliance Jio, Zomato, Flipkart, Google, etc.), multi-line descriptions, gap line skipping, and critical is_current fix. Regression tests for Format A (pipe), Format B (at), CTC, notice period, skills, education all pass. Previous iterations (158, 160, 161) all pass (75/75 tests).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration162.py",
+    "/app/test_reports/pytest/pytest_naukri_regex_parser_iteration162.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ Format C: Dense text (no blank lines) with 3+ work entries correctly parsed using date-anchored state machine",
+    "✅ Format C: Blank-line separated entries correctly parsed with company, title, date, description",
+    "✅ Format C: Companies WITHOUT keywords (Reliance Jio, Zomato, Flipkart, Google, Amazon, Uber, Swiggy, Paytm, Ola) correctly identified",
+    "✅ Format C: Multi-line descriptions correctly captured for each entry",
+    "✅ Format C: 'N months gap' lines between entries correctly skipped",
+    "✅ is_current=True ONLY when to_date is 'Present'/'Current'/'till date', NOT for 'till Dec 24' - CRITICAL FIX VERIFIED",
+    "✅ Format A (pipe 'Title | Company') regression - still works",
+    "✅ Format B ('Title at Company') regression - still works",
+    "✅ Admin AI extract endpoint returns regex source (routing check passed)",
+    "✅ Recruiter AI extract endpoint still works (Claude routing check passed)",
+    "✅ Full profile extraction with work experience from Naukri Resdex text",
+    "✅ CTC, notice period, skills, education extraction regressions all pass",
+    "✅ Empty/minimal text edge cases handled correctly"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration162.py",
+    "/app/backend/tests/test_naukri_regex_parser_iteration161.py (BASE_URL fix)",
+    "/app/backend/tests/test_naukri_regex_parser_iteration160.py (BASE_URL fix)",
+    "/app/backend/tests/test_admin_regex_routing_iteration158.py (BASE_URL fix)"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 tests in iteration 162, 75/75 in previous iterations 158+160+161)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used test fixtures with sample CV and Naukri profile text",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Naukri Regex Parser (naukri_regex_parser.py) fully tested with all 3 work experience formats. Key improvements verified in iteration 162: 1) Format C date-anchored state machine for dense text and blank-line separated entries, 2) Companies without keywords (Reliance Jio, Zomato, Flipkart, Google, etc.) correctly identified, 3) Multi-line descriptions preserved, 4) Gap lines skipped, 5) CRITICAL: is_current fix - 'Sep 21 till Dec 24' now correctly sets is_current=False (only Present/Current/till date sets True). All 105 tests across iterations 158-162 pass.",
+  "test_results": {
+    "TestFormatCDenseText": {
+      "test_dense_text_three_entries_with_dates": "PASSED - Reliance Jio, Zomato, Flipkart extracted with correct is_current",
+      "test_dense_text_companies_without_keywords": "PASSED - Google, Amazon, Uber extracted without Ltd/Inc/Pvt keywords"
+    },
+    "TestFormatCBlankLineSeparated": {
+      "test_blank_line_separated_entries": "PASSED - Swiggy, Paytm, Ola entries correctly parsed",
+      "test_multi_line_descriptions_preserved": "PASSED - 5+ line descriptions captured"
+    },
+    "TestFormatCGapLines": {
+      "test_gap_lines_skipped": "PASSED - '3 months gap' and '6 months gap' lines not treated as companies"
+    },
+    "TestIsCurrentDetection": {
+      "test_is_current_true_for_present": "PASSED",
+      "test_is_current_true_for_current": "PASSED",
+      "test_is_current_true_for_till_date": "PASSED",
+      "test_is_current_false_for_specific_date": "PASSED - Dec 24, Dec '24, Jan 2025 all return False",
+      "test_is_current_false_for_empty": "PASSED",
+      "test_work_experience_is_current_with_till_keyword": "PASSED - 'Sep 21 till Dec 24' correctly sets is_current=False"
+    },
+    "TestFormatAPipeRegression": {
+      "test_pipe_format_single_entry": "PASSED - 'Senior Engineer | Google' extracted",
+      "test_pipe_format_multiple_entries": "PASSED - Multiple pipe entries work"
+    },
+    "TestFormatBAtRegression": {
+      "test_at_format_single_entry": "PASSED - 'Senior Consultant at TCS' extracted",
+      "test_at_format_multiple_entries": "PASSED - Multiple at entries work"
+    },
+    "TestAdminRegexRouting": {
+      "test_admin_ai_extract_returns_regex_source": "PASSED - Admin uses regex parser"
+    },
+    "TestRecruiterClaudeRouting": {
+      "test_recruiter_ai_extract_works": "PASSED - Recruiter uses Claude"
+    },
+    "TestFullProfileExtraction": {
+      "test_full_naukri_resdex_profile": "PASSED - All fields extracted correctly"
+    },
+    "TestExtractionRegressions": {
+      "test_ctc_extraction_lacs": "PASSED - 45 Lacs = 4500000",
+      "test_ctc_extraction_crore": "PASSED - 1.5 Crore = 15000000",
+      "test_notice_period_extraction": "PASSED - 2 Months = 60 days",
+      "test_immediate_joiner": "PASSED - Immediate = 0 days",
+      "test_skills_extraction": "PASSED - 5+ skills extracted",
+      "test_education_extraction": "PASSED - Education entries extracted"
+    },
+    "TestEdgeCases": {
+      "test_empty_text": "PASSED - Low confidence returned",
+      "test_minimal_text": "PASSED - Basic extraction works",
+      "test_no_work_experience_section": "PASSED - No crash",
+      "test_special_characters_in_company_names": "PASSED - AT&T handled"
+    },
+    "TestDirectFunctionCalls": {
+      "test_is_current_role_function": "PASSED - All cases verified",
+      "test_date_pattern_matching": "PASSED - DATE_PAT regex works"
+    }
+  },
+  "verified_features": {
+    "format_c_date_anchored": {
+      "dense_text": "Multiple entries without blank lines parsed using date-anchored 2-pass algorithm",
+      "blank_line_separated": "Entries separated by blank lines correctly parsed",
+      "companies_without_keywords": "Reliance Jio, Zomato, Flipkart, Google, Amazon, Uber, Swiggy, Paytm, Ola",
+      "multi_line_descriptions": "5+ line descriptions preserved",
+      "gap_lines_skipped": "'N months gap' lines correctly ignored"
+    },
+    "is_current_fix": {
+      "true_cases": ["Present", "Current", "till date", "date"],
+      "false_cases": ["Dec 24", "Dec '24", "Jan 2025", "Aug 2021", "", null],
+      "critical_fix": "'Sep 21 till Dec 24' now correctly sets is_current=False"
+    },
+    "format_a_pipe": {
+      "pattern": "Title | Company",
+      "status": "Regression verified - still works"
+    },
+    "format_b_at": {
+      "pattern": "Title at Company",
+      "status": "Regression verified - still works"
+    },
+    "routing": {
+      "admin": "Uses regex parser (zero LLM cost)",
+      "recruiter": "Uses Claude (Anthropic)"
+    }
+  }
+}

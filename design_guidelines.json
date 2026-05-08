@@ -1,0 +1,113 @@
+{
+  "brand_identity": {
+    "name": "VHC Talent OS - Blog Engine",
+    "tone": "Professional, Automated, Efficient, Growth-Oriented",
+    "primary_color": "#7CB342",
+    "secondary_color": "#9ACD32",
+    "accent_color": "#DCFCE7",
+    "dark_header_bg": "#0F172A",
+    "typography": {
+      "headings": "Manrope",
+      "body": "Inter",
+      "code": "JetBrains Mono"
+    }
+  },
+  "design_rules": {
+    "theme": "Light Mode (Content) / Dark Mode (Header/Sidebar)",
+    "layout_strategy": "High Density Bento Grid (Mode B)",
+    "spacing": "Generous (p-6, p-8) for containers, Tight (gap-2, gap-4) for data grids",
+    "radius": "rounded-lg (8px) for cards, rounded-full for buttons",
+    "shadows": "shadow-sm for cards, shadow-md for floating actions"
+  },
+  "ui_components": {
+    "cards": {
+      "style": "Flat with 1px border (#E2E8F0), no shadow by default, lift on hover",
+      "header": "Clean, Manrope font-bold text-lg",
+      "content": "p-6"
+    },
+    "buttons": {
+      "primary": "bg-[#7CB342] hover:bg-[#689F38] text-white rounded-md font-semibold px-4 py-2 shadow-sm transition-all",
+      "secondary": "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-md px-4 py-2",
+      "ghost": "hover:bg-gray-100 text-gray-600"
+    },
+    "tables": {
+      "style": "Clean, distinct rows, light gray header bg",
+      "row_hover": "bg-gray-50/50"
+    },
+    "badges": {
+      "style": "Pill shaped, subtle background, dark text",
+      "variants": {
+        "success": "bg-green-100 text-green-700 border-green-200",
+        "warning": "bg-yellow-100 text-yellow-700 border-yellow-200",
+        "error": "bg-red-100 text-red-700 border-red-200",
+        "neutral": "bg-gray-100 text-gray-700 border-gray-200"
+      }
+    }
+  },
+  "visual_assets": {
+    "images": [
+      {
+        "id": "avatar_admin",
+        "url": "https://images.unsplash.com/photo-1576558656222-ba66febe3dec?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "description": "Admin User Avatar"
+      },
+      {
+        "id": "avatar_user_2",
+        "url": "https://images.pexels.com/photos/30004324/pexels-photo-30004324.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Team Member Avatar"
+      },
+      {
+        "id": "blog_thumb_tech",
+        "url": "https://images.unsplash.com/photo-1670834416041-e2d96529ed52?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "description": "Abstract Tech Thumbnail"
+      },
+      {
+        "id": "blog_thumb_abstract",
+        "url": "https://images.unsplash.com/photo-1761767380566-7a86c3e653a3?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "description": "Abstract Gold Thumbnail"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "preferred": ["Activity", "FileText", "Settings", "Zap", "CheckCircle", "AlertCircle", "Clock", "BarChart3"]
+    }
+  },
+  "implementation_instructions": {
+    "file_extension": ".jsx",
+    "react_mode": "javascript",
+    "styling": "Tailwind CSS + inline styles for dynamic values",
+    "animation": "Framer Motion (if available) or CSS Transitions",
+    "critical_files": [
+      "/app/frontend/src/pages/BlogAdmin.jsx",
+      "/app/frontend/src/components/PipelineStats.jsx",
+      "/app/frontend/src/components/BlogList.jsx",
+      "/app/frontend/src/components/ActivityLog.jsx"
+    ]
+  },
+  "specific_sections": {
+    "pipeline_status": {
+      "concept": "Flow visualization using connected cards or a stepper",
+      "metrics": ["Topics Found", "Drafting", "Review", "Published"]
+    },
+    "draft_queue": {
+      "concept": "Visual meter/gauge showing capacity vs current load",
+      "style": "Clean progress bars with distinct segments"
+    },
+    "activity_log": {
+      "concept": "Terminal-like feed for automation logs",
+      "font": "JetBrains Mono",
+      "bg": "bg-slate-900 text-green-400 (if dark) or bg-gray-50 text-gray-700 (if light)"
+    }
+  },
+  "universal_guidelines": {
+    "anti_patterns": [
+      "No gradients on text",
+      "No generic 'Inter' for headings",
+      "No center-aligned dashboard grids"
+    ],
+    "accessibility": {
+      "contrast": "Ensure text is legible on colored badges",
+      "focus": "Visible focus rings on all interactive elements"
+    }
+  }
+}

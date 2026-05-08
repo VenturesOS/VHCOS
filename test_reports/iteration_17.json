@@ -1,0 +1,156 @@
+{
+  "summary": "VHC Talent OS - Shareable Job Links, Structured Job ID & JD Parsing Features Testing Complete. All 16 backend tests pass. All frontend components verified working correctly.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ FEATURE 1 - SHAREABLE JOB LINK + PUBLIC JOB LANDING PAGE:",
+    "  - GET /api/public/jobs returns only jobs with career_page_status=live AND shareable_link_enabled=true",
+    "  - GET /api/public/jobs/{job_id} returns job details with job_public_id, title, description, company alias",
+    "  - Hidden jobs (not live or shareable disabled) correctly return 404 on public endpoint",
+    "  - PUT /api/jobs/{job_id}/shareable-link requires authentication",
+    "  - Shareable link can only be enabled for jobs with career_page_status=live",
+    "  - POST /api/public/apply requires consent_given=true",
+    "  - Application stores consent metadata (timestamp, IP, policy version)",
+    "  - Honeypot field (website) provides bot protection",
+    "  - Rate limiting on public apply endpoint (5 per minute per IP)",
+    
+    "✅ FEATURE 2 - STRUCTURED JOB ID FORMAT:",
+    "  - Job creation generates job_public_id in VHC/YYYY/NNNN format",
+    "  - Sequence increments correctly for each new job",
+    "  - Existing test job has correct ID: VHC/2026/0001",
+    
+    "✅ FEATURE 3 - JD PARSING DURING JOB CREATION:",
+    "  - POST /api/jobs/parse-jd requires authentication (admin/employer/recruiter only)",
+    "  - JD parsing requires either jd_text or jd_file input",
+    "  - JD parsing returns structured fields (title, skills, experience, location, etc.)",
+    
+    "✅ FRONTEND - PublicJobPage.jsx:",
+    "  - Page loads at /jobs/{jobId} without authentication",
+    "  - Job Public ID badge (VHC/2026/0001) displayed",
+    "  - Company alias shown instead of real company name",
+    "  - Apply Now button shows application form",
+    "  - Application form has: resume upload, name, email, phone, current_salary, notice_period",
+    "  - Consent checkbox present and required",
+    "  - Submit Application button present",
+    
+    "✅ FRONTEND - ApplicationSuccessPage.jsx:",
+    "  - Page loads at /application-success",
+    "  - THANK YOU heading is uppercase and bold",
+    "  - Subheading is italic",
+    "  - View More Jobs button present",
+    
+    "✅ FRONTEND - Admin JobsPage.jsx:",
+    "  - Job Public ID badge displayed for each job",
+    "  - Live status badge shown for live jobs",
+    "  - Shareable link toggle present for live jobs",
+    "  - Copy link and external link buttons available when shareable enabled",
+    "  - Career page control buttons (post/remove) present",
+    
+    "✅ FRONTEND - CreateJobPage.jsx:",
+    "  - AI Job Description Parser section present",
+    "  - Use AI Parser button expands parser section",
+    "  - JD Parser input textarea available",
+    "  - Parse JD button available",
+    "  - All form fields present (title, location, job_type, description, etc.)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_shareable_jobs.py",
+    "/app/test_reports/pytest/pytest_shareable_jobs.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_shareable_jobs.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (all pages and components working correctly)"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "seed_data_creation": "Test job fb3514ce-2c16-40ab-ae4d-f0ae38016d3a with job_public_id VHC/2026/0001 already exists and is live with shareable link enabled",
+
+  "verified_features": {
+    "shareable_job_link": {
+      "public_endpoint": "GET /api/public/jobs/{job_id}",
+      "visibility_rules": "career_page_status=live AND shareable_link_enabled=true",
+      "company_privacy": "Returns public_company_alias instead of real company name",
+      "status": "WORKING"
+    },
+    "public_apply": {
+      "endpoint": "POST /api/public/apply",
+      "consent_required": true,
+      "consent_metadata": ["timestamp", "IP address", "policy version"],
+      "rate_limiting": "5 per minute per IP",
+      "honeypot_protection": true,
+      "status": "WORKING"
+    },
+    "structured_job_id": {
+      "format": "VHC/YYYY/NNNN",
+      "auto_generated": true,
+      "sequence_increments": true,
+      "status": "WORKING"
+    },
+    "jd_parsing": {
+      "endpoint": "POST /api/jobs/parse-jd",
+      "access_control": "admin/employer/recruiter only",
+      "ai_integration": "GPT-5.2 via Emergent LLM Key",
+      "advisory_only": true,
+      "status": "WORKING"
+    },
+    "public_job_page": {
+      "route": "/jobs/{jobId}",
+      "no_auth_required": true,
+      "displays": ["job_public_id", "title", "description", "company_alias", "skills", "requirements"],
+      "application_form": ["resume", "name", "email", "phone", "current_salary", "notice_period", "consent"],
+      "status": "WORKING"
+    },
+    "application_success_page": {
+      "route": "/application-success",
+      "heading_style": "uppercase, bold",
+      "subheading_style": "italic",
+      "status": "WORKING"
+    },
+    "admin_jobs_page": {
+      "job_public_id_badge": true,
+      "shareable_link_toggle": true,
+      "career_page_controls": true,
+      "status": "WORKING"
+    },
+    "create_job_page": {
+      "jd_parser_section": true,
+      "parse_jd_button": true,
+      "apply_suggestions": true,
+      "status": "WORKING"
+    }
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["JD parsing uses GPT-5.2 via Emergent LLM Key", "Resume parsing uses GPT-5.2 via Emergent LLM Key"]
+  },
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Three new features fully implemented and tested: 1) Shareable Job Links with public landing page at /jobs/{jobId}, visibility rules (live + shareable_link_enabled), consent-based apply flow with rate limiting and honeypot protection. 2) Structured Job ID (VHC/YYYY/NNNN) auto-generated on job creation. 3) JD Parsing via POST /api/jobs/parse-jd for internal users. Test job fb3514ce-2c16-40ab-ae4d-f0ae38016d3a exists with VHC/2026/0001 and is publicly accessible."
+}

@@ -1,0 +1,134 @@
+{
+  "summary": "Iteration 161: Tested and fixed Naukri Regex Parser improvements for CV format work experience and summary extraction. All 24 new tests passed (100%). Fixed 2 bugs: 1) CV summary extraction was incorrectly matching 'Experienced' as section header due to case-insensitive prefix match, 2) Naukri DOM format work experience was splitting on every capitalized line instead of blank lines. Both iteration 160 (34 tests) and iteration 161 (24 tests) pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration161.py",
+    "/app/test_reports/pytest/pytest_naukri_regex_parser_iteration161.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ CV format work experience: 'Title | Company' pattern extracts correctly with dates and descriptions",
+    "✅ Naukri DOM format work experience: 'Company\\nTitle\\nDate' pattern works correctly after fix",
+    "✅ CV summary extraction: paragraph text between contact info and EXPERIENCE section header now works",
+    "✅ Labeled summary extraction ('Profile Summary:') still works",
+    "✅ Industry extraction from Naukri page text section ('Industry: IT Services & Consulting')",
+    "✅ Department extraction from Naukri page text section",
+    "✅ Combined text (CV + page_text) enrichment for admin captures works with '=== NAUKRI PAGE TEXT ===' separator",
+    "✅ Admin routes to regex parser (regression verified)",
+    "✅ Non-admin routes to Claude (regression verified)",
+    "✅ Multiple work experience entries with full descriptions preserved",
+    "✅ Education extraction from CV format ('EDUCATION' uppercase header)"
+  ],
+  "bugs_fixed": [
+    {
+      "file": "/app/backend/services/naukri_regex_parser.py",
+      "issue": "CV summary extraction incorrectly matched 'Experienced' as section header",
+      "root_cause": "Section header regex used case-insensitive match on 'EXPERIENCE' which matched prefix 'Experience' in 'Experienced software architect...'",
+      "fix": "Changed regex to require standalone section headers (added \\s*$ for single-word headers like EXPERIENCE, SKILLS, EDUCATION)"
+    },
+    {
+      "file": "/app/backend/services/naukri_regex_parser.py",
+      "issue": "Naukri DOM format work experience was creating multiple entries for single job",
+      "root_cause": "Split pattern r'\\n(?=[A-Z][^\\n]{2,60}\\n)' was splitting on every capitalized line",
+      "fix": "Changed to split on blank lines (r'\\n\\s*\\n') which correctly separates different job entries"
+    }
+  ],
+  "updated_files": [
+    "/app/backend/services/naukri_regex_parser.py",
+    "/app/backend/tests/test_naukri_regex_parser_iteration161.py"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 tests passed in iteration 161, 34/34 in iteration 160)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used test fixtures with sample CV and Naukri profile text",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Naukri Regex Parser (naukri_regex_parser.py) fully tested with both CV format and Naukri DOM format. Key improvements verified: 1) CV format 'Title | Company' pattern with multi-line descriptions, 2) Naukri DOM format 'Company\\nTitle\\nDate' pattern, 3) CV summary extraction from paragraph between contact info and section headers, 4) Combined text (CV + page_text) with '=== NAUKRI PAGE TEXT ===' separator for Industry/Department extraction. Two bugs were found and fixed during testing.",
+  "test_results": {
+    "TestCVFormatWorkExperience": {
+      "test_cv_format_single_entry": "PASSED - 'Senior Software Engineer | Google' extracted correctly",
+      "test_cv_format_multiple_entries": "PASSED - Multiple CV entries extracted",
+      "test_cv_format_with_full_descriptions": "PASSED - Multi-line descriptions preserved"
+    },
+    "TestNaukriDOMFormatWorkExperience": {
+      "test_naukri_dom_format_single_entry": "PASSED - Company, designation, dates extracted correctly",
+      "test_naukri_dom_format_multiple_entries": "PASSED - Multiple DOM entries work"
+    },
+    "TestCVSummaryExtraction": {
+      "test_cv_summary_between_contact_and_experience": "PASSED - Full paragraph extracted",
+      "test_cv_summary_multiline_paragraph": "PASSED - Multi-line summary works"
+    },
+    "TestLabeledSummaryExtraction": {
+      "test_labeled_profile_summary": "PASSED - 'Profile Summary:' label works",
+      "test_labeled_summary_with_colon": "PASSED - 'Summary:' label works"
+    },
+    "TestIndustryDepartmentExtraction": {
+      "test_industry_extraction": "PASSED - 'Industry: IT Services & Consulting' extracted",
+      "test_department_extraction": "PASSED - 'Department: Technology / IT' extracted",
+      "test_industry_department_from_page_text": "PASSED - Extracted from combined text"
+    },
+    "TestCombinedTextEnrichment": {
+      "test_combined_cv_and_page_text": "PASSED - CV + page_text both extracted"
+    },
+    "TestEducationExtraction": {
+      "test_education_cv_format": "PASSED - EDUCATION section parsed",
+      "test_education_does_not_include_experience": "PASSED - No cross-contamination"
+    },
+    "TestAdminRegexRouting": {
+      "test_admin_ai_extract_uses_regex": "PASSED - Admin uses regex parser",
+      "test_recruiter_ai_extract_works": "PASSED - Recruiter uses Claude"
+    },
+    "TestEdgeCases": {
+      "test_empty_text": "PASSED - Low confidence returned",
+      "test_minimal_cv_text": "PASSED - Basic extraction works",
+      "test_pipe_separator_variations": "PASSED - Different pipe formats work",
+      "test_experience_section_boundary": "PASSED - EDUCATION not in work exp"
+    },
+    "TestDirectFunctionCalls": {
+      "test_cv_format_detection": "PASSED - Pipe separator detected",
+      "test_naukri_dom_format_detection": "PASSED - DOM format detected",
+      "test_summary_extraction_priority": "PASSED - Labeled summary prioritized"
+    }
+  },
+  "verified_features": {
+    "cv_format_work_experience": {
+      "pattern": "Title | Company",
+      "dates": "Jan 2020 - Present format",
+      "descriptions": "Multi-line descriptions preserved",
+      "multiple_entries": "Correctly separated"
+    },
+    "naukri_dom_format_work_experience": {
+      "pattern": "Company\\nTitle\\nDate",
+      "parsing": "Split on blank lines",
+      "fields": "company, designation, from_date, to_date, is_current, description"
+    },
+    "cv_summary_extraction": {
+      "location": "Paragraph between contact info and first section header",
+      "section_headers": "EXPERIENCE, SKILLS, EDUCATION, EMPLOYMENT (standalone only)",
+      "fix_applied": "No longer matches 'Experienced' as header"
+    },
+    "industry_department": {
+      "industry_pattern": "Industry: {value}",
+      "department_pattern": "Department: {value}",
+      "source": "Naukri page text section"
+    },
+    "combined_text": {
+      "separator": "=== NAUKRI PAGE TEXT ===",
+      "cv_section": "Before separator",
+      "page_text_section": "After separator"
+    }
+  }
+}

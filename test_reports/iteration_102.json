@@ -1,0 +1,105 @@
+{
+  "summary": "VHC Talent OS - Recruiter & Employer workflow testing complete. P0 API URL fix verified: frontend now correctly uses REACT_APP_BACKEND_URL for API calls. Backend: 9/9 tests passed (100%). Frontend: All critical flows working - login, recruiter job creation, employer pipeline.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_recruiter_employer_workflow.py",
+    "/app/test_reports/pytest/pytest_recruiter_employer_workflow.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "P0 Fix Verified: api.js line 5-7 now uses process.env.REACT_APP_BACKEND_URL dynamically instead of hardcoded '/api'",
+    "Recruiter job creation works: POST /api/jobs auto-approves and auto-assigns jobs created by recruiters",
+    "Employer approval workflow in place: shortlisted candidates show approve/reject buttons in pipeline",
+    "Rate limiting is active on auth endpoints - tests need to include delays to avoid 429 errors"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_recruiter_employer_workflow.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (all critical flows verified via Playwright)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024 - WORKING",
+    "recruiter": "jatin@vhc.in / 12345678 - WORKING",
+    "employer": "maneet@vhc.in / Test@1234 - WORKING (password reset via admin)"
+  },
+  "seed_data_creation": "Password reset for maneet@vhc.in employer account",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "P0 API URL fix verified working. Recruiter can create jobs, employer can view pipeline. Approve/reject buttons appear in 'Shortlisted' column when candidates are present. Rate limiting is active - include 2-3 second delays between API calls in tests.",
+  "features_verified": {
+    "p0_api_url_fix": {
+      "status": "VERIFIED",
+      "file": "frontend/src/lib/api.js",
+      "lines": "5-7",
+      "implementation": "const envUrl = process.env.REACT_APP_BACKEND_URL; const API_BASE = envUrl ? `${envUrl.replace(/\\/+$/, '')}/api` : '/api';",
+      "env_value": "https://talent-graph-fix.preview.emergentagent.com"
+    },
+    "admin_login": {
+      "endpoint": "POST /api/auth/login",
+      "credentials": "admin@vhc.in / VhcAdmin@2024",
+      "status": "WORKING",
+      "response": "Returns access_token and user object with role=admin"
+    },
+    "recruiter_login": {
+      "endpoint": "POST /api/auth/login",
+      "credentials": "jatin@vhc.in / 12345678",
+      "status": "WORKING",
+      "response": "Returns access_token and user object with role=recruiter"
+    },
+    "recruiter_jobs_page": {
+      "url": "/recruiter/jobs",
+      "status": "WORKING",
+      "features": ["Create Job button visible", "Jobs list displayed", "View/Delete actions available"]
+    },
+    "recruiter_job_creation": {
+      "endpoint": "POST /api/jobs",
+      "url": "/recruiter/jobs/new",
+      "status": "WORKING",
+      "features": ["AI JD Parser available", "Form fields: Client Company, Job Title, Location, Job Type, etc.", "Auto-approved (status=active)", "Auto-assigned to recruiter"]
+    },
+    "get_jobs_for_recruiter": {
+      "endpoint": "GET /api/jobs",
+      "status": "WORKING",
+      "response": "Returns jobs posted by recruiter OR assigned to recruiter"
+    },
+    "employer_login": {
+      "credentials": "maneet@vhc.in / Test@1234",
+      "status": "WORKING (after password reset)"
+    },
+    "employer_pipeline": {
+      "url": "/employer/pipeline",
+      "endpoint": "GET /api/employer/pipeline",
+      "status": "WORKING",
+      "features": ["Kanban board with all stages", "Filter by recruiter/job", "Stage counts displayed", "Drag-and-drop enabled"]
+    },
+    "pending_approval_api": {
+      "endpoint": "GET /api/applications/pending-approval",
+      "status": "WORKING",
+      "response": "Returns applications in 'shortlisted' stage for employer's team"
+    },
+    "employer_approval_api": {
+      "endpoint": "POST /api/applications/{id}/employer-approval",
+      "status": "WORKING",
+      "actions": ["approve (moves to employer_approved)", "reject (moves to employer_rejected)"]
+    }
+  },
+  "ui_screenshots_taken": [
+    "Login page",
+    "Admin dashboard",
+    "Recruiter dashboard",
+    "Recruiter jobs page",
+    "Job creation form",
+    "Employer dashboard",
+    "Employer pipeline"
+  ]
+}

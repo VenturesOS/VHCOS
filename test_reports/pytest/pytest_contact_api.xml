@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="2" failures="2" skipped="0" tests="10" time="121.285" timestamp="2026-02-15T10:24:43.627863+00:00" hostname="agent-env-8c9482e8-36bf-4703-b8c0-5e649a4dc03d"><testcase classname="tests.test_contact_api.TestContactAPI" name="test_contact_form_submission" time="47.505"><failure message="AssertionError: Contact submission failed: {&quot;detail&quot;:&quot;Internal server error&quot;}&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">tests/test_contact_api.py:97: in test_contact_form_submission
+    assert response.status_code == 200, f"Contact submission failed: {response.text}"
+E   AssertionError: Contact submission failed: {"detail":"Internal server error"}
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="tests.test_contact_api.TestContactAPI" name="test_contact_form_validation" time="0.003" /><testcase classname="tests.test_contact_api.TestContactAPI" name="test_admin_get_submissions" time="32.111"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Internal server error&quot;}&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code&quot;">tests/test_contact_api.py:35: in admin_token
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Internal server error"}
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</error></testcase><testcase classname="tests.test_contact_api.TestContactAPI" name="test_admin_filter_by_status" time="28.283"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Internal server error&quot;}&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code&quot;">tests/test_contact_api.py:35: in admin_token
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Internal server error"}
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</error></testcase><testcase classname="tests.test_contact_api.TestContactAPI" name="test_admin_update_status" time="4.009" /><testcase classname="tests.test_contact_api.TestContactAPI" name="test_admin_invalid_status" time="2.808" /><testcase classname="tests.test_contact_api.TestContactAPI" name="test_admin_delete_submission" time="3.044" /><testcase classname="tests.test_contact_api.TestContactAPI" name="test_non_admin_access_denied" time="1.590" /><testcase classname="tests.test_contact_api.TestContactAPI" name="test_unauthenticated_access_denied" time="0.003"><failure message="AssertionError: Expected 401 for unauthenticated, got: 403&#10;assert 403 == 401&#10; +  where 403 = &lt;Response [403]&gt;.status_code">tests/test_contact_api.py:251: in test_unauthenticated_access_denied
+    assert response.status_code == 401, f"Expected 401 for unauthenticated, got: {response.status_code}"
+E   AssertionError: Expected 401 for unauthenticated, got: 403
+E   assert 403 == 401
+E    +  where 403 = &lt;Response [403]&gt;.status_code</failure></testcase><testcase classname="tests.test_contact_api.TestContactAPI" name="test_delete_nonexistent" time="1.820" /></testsuite></testsuites>

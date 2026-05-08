@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VHC Talent OS - Developer Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #1a1a1a;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #fff;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            color: #1a1a1a;
+            border-bottom: 4px solid #7CB342;
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            font-size: 1.5em;
+            color: #333;
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        h3 {
+            font-size: 1.2em;
+            color: #444;
+            margin: 25px 0 15px 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+        
+        .highlight {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .warning {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        
+        .badge-green { background: #d4edda; color: #155724; }
+        .badge-yellow { background: #fff3cd; color: #856404; }
+        .badge-red { background: #f8d7da; color: #721c24; }
+        .badge-blue { background: #cce5ff; color: #004085; }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafafa;
+        }
+        
+        .card h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        ul {
+            margin: 10px 0 10px 20px;
+        }
+        
+        li {
+            margin: 5px 0;
+        }
+        
+        .toc {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .toc h3 {
+            margin-top: 0;
+        }
+        
+        .toc ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .toc li {
+            padding: 5px 0;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        @media print {
+            body {
+                font-size: 11pt;
+                padding: 0;
+            }
+            h1 { font-size: 24pt; }
+            h2 { font-size: 16pt; page-break-after: avoid; }
+            h3 { font-size: 13pt; }
+            pre { font-size: 9pt; }
+            table { font-size: 9pt; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<h1>🚀 VHC Talent OS</h1>
+<p class="subtitle">Developer Documentation &amp; Quick Start Guide<br>
+<strong>Version 2.0</strong> | Last Updated: February 8, 2026</p>
+
+<div class="toc">
+    <h3>📋 Table of Contents</h3>
+    <ul>
+        <li>1. Quick Start Guide</li>
+        <li>2. Tech Stack</li>
+        <li>3. Project Structure</li>
+        <li>4. External Services</li>
+        <li>5. API Reference</li>
+        <li>6. Database Schema</li>
+        <li>7. Authentication</li>
+        <li>8. AI Matching System</li>
+        <li>9. Test Credentials</li>
+        <li>10. Known Limitations</li>
+    </ul>
+</div>
+
+<h2>1. Quick Start Guide</h2>
+
+<h3>Setup Commands</h3>
+<pre><code># Backend Setup
+cd /app/backend
+pip install -r requirements.txt
+uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+
+# Frontend Setup
+cd /app/frontend
+yarn install
+yarn start</code></pre>
+
+<h3>Environment Variables</h3>
+
+<div class="grid-2">
+    <div class="card">
+        <h4>Backend (.env)</h4>
+        <pre><code>MONGO_URL=mongodb+srv://...
+DB_NAME=vhc_talent_os
+JWT_SECRET_KEY=...
+EMERGENT_LLM_KEY=...
+UPSTASH_REDIS_REST_URL=...
+R2_ACCOUNT_ID=...</code></pre>
+    </div>
+    <div class="card">
+        <h4>Frontend (.env)</h4>
+        <pre><code>REACT_APP_BACKEND_URL=https://your-domain.com</code></pre>
+    </div>
+</div>
+
+<h2>2. Tech Stack</h2>
+
+<table>
+    <tr>
+        <th>Layer</th>
+        <th>Technology</th>
+        <th>Purpose</th>
+    </tr>
+    <tr>
+        <td><strong>Frontend</strong></td>
+        <td>React 18, Tailwind CSS, Shadcn/UI</td>
+        <td>User Interface</td>
+    </tr>
+    <tr>
+        <td><strong>Backend</strong></td>
+        <td>FastAPI, Python 3.11, Pydantic v2</td>
+        <td>REST API</td>
+    </tr>
+    <tr>
+        <td><strong>Database</strong></td>
+        <td>MongoDB Atlas + Atlas Search</td>
+        <td>Data Storage</td>
+    </tr>
+    <tr>
+        <td><strong>Cache</strong></td>
+        <td>Upstash Redis</td>
+        <td>Distributed Cache</td>
+    </tr>
+    <tr>
+        <td><strong>Storage</strong></td>
+        <td>Cloudflare R2</td>
+        <td>File Storage</td>
+    </tr>
+    <tr>
+        <td><strong>AI</strong></td>
+        <td>OpenAI GPT-4o + Embeddings</td>
+        <td>Resume Parsing, Matching</td>
+    </tr>
+</table>
+
+<h2 class="page-break">3. Project Structure</h2>
+
+<pre><code>/app/
+├── backend/
+│   ├── server.py              # Main FastAPI application
+│   ├── config.py              # Database & service config
+│   ├── routes/                # API endpoint modules
+│   │   ├── auth.py            # Authentication
+│   │   ├── jobs.py            # Job management
+│   │   ├── applications.py    # Applications + AI matching
+│   │   ├── candidates.py      # Candidate bank
+│   │   ├── bulk_import.py     # Bulk import
+│   │   ├── teams.py           # Team management
+│   │   ├── referrals.py       # Referrals
+│   │   ├── commercials.py     # Revenue tracking
+│   │   ├── bug_reports.py     # Bug reporting
+│   │   └── system_errors.py   # Error tracking
+│   ├── services/              # Business logic
+│   │   ├── matching_engine.py # AI matching algorithms
+│   │   ├── embeddings.py      # Vector embeddings
+│   │   ├── r2_storage.py      # File storage
+│   │   └── rate_limiter.py    # Rate limiting
+│   ├── models/                # Pydantic schemas
+│   └── tests/                 # Test suite (50+ files)
+│
+└── frontend/
+    └── src/
+        ├── App.js             # Main React app
+        ├── lib/
+        │   ├── api.js         # All API calls
+        │   ├── auth.js        # Auth context
+        │   └── errorCapture.js# Error tracking
+        ├── pages/             # Role-based pages
+        │   ├── admin/         # Admin dashboard
+        │   ├── employer/      # Employer portal
+        │   ├── recruiter/     # Recruiter portal
+        │   └── candidate/     # Candidate portal
+        └── components/        # UI components</code></pre>
+
+<h2>4. External Services</h2>
+
+<table>
+    <tr>
+        <th>Service</th>
+        <th>Purpose</th>
+        <th>Status</th>
+    </tr>
+    <tr>
+        <td><strong>OpenAI GPT-4o</strong></td>
+        <td>Resume/JD parsing, AI matching</td>
+        <td><span class="badge badge-green">Active</span></td>
+    </tr>
+    <tr>
+        <td><strong>OpenAI Embeddings</strong></td>
+        <td>Semantic search vectors</td>
+        <td><span class="badge badge-green">Active</span></td>
+    </tr>
+    <tr>
+        <td><strong>MongoDB Atlas</strong></td>
+        <td>Primary database</td>
+        <td><span class="badge badge-green">Active</span></td>
+    </tr>
+    <tr>
+        <td><strong>Upstash Redis</strong></td>
+        <td>Caching, rate limiting</td>
+        <td><span class="badge badge-green">Active</span></td>
+    </tr>
+    <tr>
+        <td><strong>Cloudflare R2</strong></td>
+        <td>Resume/file storage</td>
+        <td><span class="badge badge-green">Active</span></td>
+    </tr>
+    <tr>
+        <td><strong>Resend (Email)</strong></td>
+        <td>Email notifications</td>
+        <td><span class="badge badge-yellow">Mocked</span></td>
+    </tr>
+    <tr>
+        <td><strong>Twilio (WhatsApp)</strong></td>
+        <td>WhatsApp notifications</td>
+        <td><span class="badge badge-yellow">Mocked</span></td>
+    </tr>
+</table>
+
+<h2 class="page-break">5. API Reference</h2>
+
+<h3>Authentication</h3>
+<table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Login, returns JWT token</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Register (candidate only)</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/me</code></td><td>Get current user</td></tr>
+</table>
+
+<h3>Jobs</h3>
+<table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td>GET</td><td><code>/api/jobs</code></td><td>List all jobs</td></tr>
+    <tr><td>POST</td><td><code>/api/jobs</code></td><td>Create job</td></tr>
+    <tr><td>GET</td><td><code>/api/jobs/{id}</code></td><td>Get job details</td></tr>
+    <tr><td>PUT</td><td><code>/api/jobs/{id}</code></td><td>Update job</td></tr>
+    <tr><td>DELETE</td><td><code>/api/jobs/{id}</code></td><td>Delete job</td></tr>
+</table>
+
+<h3>Applications & Pipeline</h3>
+<table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td>GET</td><td><code>/api/applications</code></td><td>List applications</td></tr>
+    <tr><td>POST</td><td><code>/api/applications</code></td><td>Apply for job</td></tr>
+    <tr><td>PUT</td><td><code>/api/applications/{id}</code></td><td>Update stage</td></tr>
+    <tr><td>GET</td><td><code>/api/jobs/{id}/applicants</code></td><td>Job pipeline</td></tr>
+</table>
+
+<h3>AI Matching</h3>
+<table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td>POST</td><td><code>/api/matching/find-candidates</code></td><td>Find matching candidates</td></tr>
+    <tr><td>GET</td><td><code>/api/matching/jobs/{id}/status</code></td><td>Poll background job</td></tr>
+    <tr><td>POST</td><td><code>/api/matching/shortlist</code></td><td>Shortlist candidate</td></tr>
+    <tr><td>GET</td><td><code>/api/matching/history</code></td><td>Match history</td></tr>
+</table>
+
+<h3>Candidate Bank</h3>
+<table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td>GET</td><td><code>/api/candidate-bank</code></td><td>List candidates</td></tr>
+    <tr><td>POST</td><td><code>/api/candidate-bank/add</code></td><td>Add with resume</td></tr>
+    <tr><td>GET</td><td><code>/api/candidate-bank/{id}</code></td><td>Get candidate</td></tr>
+    <tr><td>PUT</td><td><code>/api/candidate-bank/{id}</code></td><td>Update candidate</td></tr>
+</table>
+
+<h2 class="page-break">6. Database Schema</h2>
+
+<h3>Core Collections</h3>
+
+<div class="card" style="margin-bottom: 15px;">
+    <h4>users</h4>
+    <code>id, email, password_hash, name, role, phone, company_id, team_id, status, created_at</code>
+</div>
+
+<div class="card" style="margin-bottom: 15px;">
+    <h4>jobs</h4>
+    <code>id, title, description, requirements, location, job_type, salary_min, salary_max, company_id, posted_by, status, career_page_status, assigned_recruiters, applicant_count</code>
+</div>
+
+<div class="card" style="margin-bottom: 15px;">
+    <h4>applications</h4>
+    <code>id, job_id, candidate_id, candidate_name, stage, status, source, current_salary, expected_salary, notice_period, skills, resume_url, notes, edit_history</code>
+</div>
+
+<div class="card" style="margin-bottom: 15px;">
+    <h4>candidate_bank</h4>
+    <code>id, name, email, phone, skills, experience_years, education, experience, current_salary, notice_period, location, summary, resume_url, embedding, source, application_history</code>
+</div>
+
+<h3>All Collections</h3>
+<p><code>users</code> • <code>jobs</code> • <code>applications</code> • <code>candidate_bank</code> • <code>companies</code> • <code>teams</code> • <code>referrals</code> • <code>commercials</code> • <code>revenues</code> • <code>match_results</code> • <code>match_jobs</code> • <code>bug_reports</code> • <code>system_errors</code> • <code>notifications</code></p>
+
+<h2>7. Authentication</h2>
+
+<h3>JWT Token Flow</h3>
+<pre><code>// 1. Login
+POST /api/auth/login
+Body: { "email": "admin@vhc.in", "password": "VhcAdmin@2024" }
+Response: { "access_token": "eyJ...", "token_type": "bearer" }
+
+// 2. Use token in all requests
+Headers: { "Authorization": "Bearer eyJ..." }</code></pre>
+
+<h3>User Roles</h3>
+<table>
+    <tr><th>Role</th><th>Access Level</th></tr>
+    <tr><td><strong>admin</strong></td><td>Full system access</td></tr>
+    <tr><td><strong>employer</strong></td><td>Own jobs, candidates, teams</td></tr>
+    <tr><td><strong>recruiter</strong></td><td>Assigned jobs, candidate bank</td></tr>
+    <tr><td><strong>candidate</strong></td><td>Own profile, applications</td></tr>
+</table>
+
+<h2 class="page-break">8. AI Matching System</h2>
+
+<div class="grid-2">
+    <div class="card">
+        <h4>⚡ Quick Match (Default)</h4>
+        <ul>
+            <li><strong>Speed:</strong> 2-5 seconds</li>
+            <li><strong>Method:</strong> Keyword + semantic scoring</li>
+            <li><strong>LLM Calls:</strong> Zero</li>
+            <li><strong>Best for:</strong> Fast screening</li>
+        </ul>
+    </div>
+    <div class="card">
+        <h4>🧠 Full AI Match</h4>
+        <ul>
+            <li><strong>Speed:</strong> 1-3 minutes</li>
+            <li><strong>Method:</strong> LLM deep analysis</li>
+            <li><strong>Runs:</strong> Background job</li>
+            <li><strong>Best for:</strong> Detailed matching</li>
+        </ul>
+    </div>
+</div>
+
+<h3>Matching Flow</h3>
+<pre><code>// 1. Start matching
+POST /api/matching/find-candidates
+Body: { "job_id": "...", "match_mode": "quick" }
+
+// 2. For Full AI, poll status
+GET /api/matching/jobs/{job_id}/status
+Response: { "status": "completed", "progress": 100, "results": [...] }
+
+// 3. Shortlist candidate
+POST /api/matching/shortlist
+Body: { "candidate_id": "...", "job_id": "..." }</code></pre>
+
+<h2>9. Test Credentials</h2>
+
+<div class="success">
+    <table>
+        <tr><th>Role</th><th>Email</th><th>Password</th></tr>
+        <tr><td><strong>Admin</strong></td><td>admin@vhc.in</td><td>VhcAdmin@2024</td></tr>
+        <tr><td><strong>Employer</strong></td><td>employer@vhctalent.com</td><td>VhcTalent@2024</td></tr>
+        <tr><td><strong>Recruiter</strong></td><td>recruiter@vhctalent.com</td><td>VhcTalent@2024</td></tr>
+    </table>
+</div>
+
+<h2>10. Known Limitations</h2>
+
+<div class="warning">
+    <h4>⚠️ Mocked Services</h4>
+    <ul>
+        <li><strong>Resend (Email):</strong> Integration exists but returns mock success</li>
+        <li><strong>Twilio (WhatsApp):</strong> Integration exists but returns mock success</li>
+    </ul>
+</div>
+
+<div class="highlight">
+    <h4>📝 Notes</h4>
+    <ul>
+        <li><strong>MongoDB Atlas:</strong> Requires IP whitelisting for new deployments</li>
+        <li><strong>Full AI Match:</strong> Can take 1-3 minutes for large candidate pools</li>
+        <li><strong>Public Registration:</strong> Limited to Candidate role only</li>
+    </ul>
+</div>
+
+<hr style="margin: 40px 0;">
+
+<p style="text-align: center; color: #666;">
+    <strong>VHC Talent OS</strong> — Developer Documentation v2.0<br>
+    February 2026 | Full docs: <code>/app/PROJECT_DOCUMENTATION.md</code>
+</p>
+
+</body>
+</html>

@@ -1,0 +1,125 @@
+{
+  "summary": "Backend-only testing of 8 reliability fixes for Claude extraction. All 41 tests passed (100%). Verified: retry with backoff [0,5,15]s, regex fallback on Claude failure, enrichment_status tracking (pending/enriched/partial/failed), _repair_truncated_json function, max_tokens=4096, quality-gated caching (4+ fields), 3-layer enrichment status.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reliability_fixes_iteration172.py",
+    "/app/test_reports/pytest/pytest_reliability_fixes_iteration172.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix 1 VERIFIED: retry_delays = [0, 5, 15] with asyncio.sleep(delay) for backoff (lines 1097-1102)",
+    "Fix 2 VERIFIED: Regex fallback via extract_full_profile_regex when Claude fails (lines 1129-1135)",
+    "Fix 3 VERIFIED: enrichment_status='failed' + enrichment_error + enrichment_failed_at on total failure (lines 1144-1148)",
+    "Fix 4 VERIFIED: _repair_truncated_json handles missing braces, brackets, trailing commas (lines 472-517)",
+    "Fix 5 VERIFIED: max_tokens=4096 in extract_full_profile (line 628) + JSON repair before regex fallback (lines 639-647)",
+    "Fix 6 VERIFIED: Quality-gated caching requires 4+ fields (lines 1436-1442)",
+    "Fix 7 VERIFIED: enrichment_status tracking: pending (line 2153), enriched (line 1422), partial (line 1420), failed (line 1145)",
+    "Fix 8 VERIFIED: 3-layer gap-fill sets enrichment_status='enriched' (line 1224)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reliability_fixes_iteration172.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (backend only testing)"
+  },
+  "seed_data_creation": "None - pure unit tests using function imports and code structure verification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 8 reliability fixes verified via 41 unit tests. Key functions tested: _repair_truncated_json (JSON repair for truncated responses), _background_claude_enrich (retry logic + regex fallback), enrichment_status lifecycle. Test patterns: (1) Direct function imports from services.bedrock_service for _repair_truncated_json, (2) Code structure verification via file reading for async functions, (3) Edge case testing for JSON repair (nested objects, arrays, trailing commas).",
+  "tests_executed": [
+    {"test_name": "test_repair_function_exists", "status": "PASSED", "description": "Fix 4: _repair_truncated_json function exists"},
+    {"test_name": "test_repair_valid_json_unchanged", "status": "PASSED", "description": "Fix 4: Valid JSON returned unchanged"},
+    {"test_name": "test_repair_missing_closing_brace", "status": "PASSED", "description": "Fix 4: Missing closing brace repaired"},
+    {"test_name": "test_repair_missing_closing_bracket", "status": "PASSED", "description": "Fix 4: Missing closing bracket repaired"},
+    {"test_name": "test_repair_trailing_comma", "status": "PASSED", "description": "Fix 4: Trailing comma handled"},
+    {"test_name": "test_repair_incomplete_string_value", "status": "PASSED", "description": "Fix 4: Incomplete string value handled gracefully"},
+    {"test_name": "test_repair_nested_objects", "status": "PASSED", "description": "Fix 4: Nested objects repaired"},
+    {"test_name": "test_repair_returns_none_for_garbage", "status": "PASSED", "description": "Fix 4: Returns None for garbage input"},
+    {"test_name": "test_repair_handles_markdown_fenced_json", "status": "PASSED", "description": "Fix 4: Markdown fenced JSON handled"},
+    {"test_name": "test_retry_delays_defined_in_code", "status": "PASSED", "description": "Fix 1: retry_delays = [0, 5, 15] found"},
+    {"test_name": "test_retry_loop_structure", "status": "PASSED", "description": "Fix 1: Retry loop structure found"},
+    {"test_name": "test_asyncio_sleep_for_backoff", "status": "PASSED", "description": "Fix 1: asyncio.sleep(delay) for backoff"},
+    {"test_name": "test_break_on_success", "status": "PASSED", "description": "Fix 1: Break on success found"},
+    {"test_name": "test_regex_fallback_import", "status": "PASSED", "description": "Fix 2: extract_full_profile_regex import found"},
+    {"test_name": "test_regex_fallback_called_after_claude_failure", "status": "PASSED", "description": "Fix 2: regex_fallback_after_claude_failure source tag found"},
+    {"test_name": "test_regex_fallback_checks_for_data", "status": "PASSED", "description": "Fix 2: Regex fallback data validation found"},
+    {"test_name": "test_failed_status_written_on_total_failure", "status": "PASSED", "description": "Fix 3: enrichment_status='failed' found"},
+    {"test_name": "test_enrichment_error_stored", "status": "PASSED", "description": "Fix 3: enrichment_error stored on failure"},
+    {"test_name": "test_enrichment_failed_at_timestamp", "status": "PASSED", "description": "Fix 3: enrichment_failed_at timestamp found"},
+    {"test_name": "test_max_tokens_4096_in_extract_full_profile", "status": "PASSED", "description": "Fix 5: max_tokens=4096 found"},
+    {"test_name": "test_max_tokens_in_call_claude_call", "status": "PASSED", "description": "Fix 5: _call_claude called with max_tokens=4096"},
+    {"test_name": "test_json_repair_called_on_decode_error", "status": "PASSED", "description": "Fix 5: _repair_truncated_json called on JSON error"},
+    {"test_name": "test_repaired_json_used_if_successful", "status": "PASSED", "description": "Fix 5: Repaired JSON used when repair succeeds"},
+    {"test_name": "test_fallback_to_regex_if_repair_fails", "status": "PASSED", "description": "Fix 5: Falls back to regex_result if repair fails"},
+    {"test_name": "test_quality_gate_threshold_4_fields", "status": "PASSED", "description": "Fix 6: Quality gate threshold of 4+ fields found"},
+    {"test_name": "test_cacheable_fields_list", "status": "PASSED", "description": "Fix 6: Cacheable fields list found"},
+    {"test_name": "test_cache_skipped_for_low_quality", "status": "PASSED", "description": "Fix 6: Cache skip logic for low quality found"},
+    {"test_name": "test_pending_status_on_create", "status": "PASSED", "description": "Fix 7: enrichment_status='pending' set on create"},
+    {"test_name": "test_enriched_status_on_success", "status": "PASSED", "description": "Fix 7: enrichment_status='enriched' found"},
+    {"test_name": "test_partial_status_on_regex_fallback", "status": "PASSED", "description": "Fix 7: enrichment_status='partial' for regex fallback found"},
+    {"test_name": "test_all_four_statuses_present", "status": "PASSED", "description": "Fix 7: All four enrichment statuses found"},
+    {"test_name": "test_3layer_sets_enriched_status", "status": "PASSED", "description": "Fix 8: 3-layer gap-fill sets enrichment_status='enriched'"},
+    {"test_name": "test_3layer_source_tag", "status": "PASSED", "description": "Fix 8: 3-layer source tag 'dom_3layer_claude_gapfill' found"},
+    {"test_name": "test_repair_deeply_nested_truncation", "status": "PASSED", "description": "Fix 4 edge case: Deeply nested truncation repaired"},
+    {"test_name": "test_repair_array_of_objects_truncation", "status": "PASSED", "description": "Fix 4 edge case: Array truncation handled"},
+    {"test_name": "test_repair_mixed_brackets_truncation", "status": "PASSED", "description": "Fix 4 edge case: Mixed brackets truncation repaired"},
+    {"test_name": "test_repair_empty_object", "status": "PASSED", "description": "Fix 4 edge case: Empty object repaired to {}"},
+    {"test_name": "test_repair_with_leading_text", "status": "PASSED", "description": "Fix 4 edge case: Leading text handled, JSON extracted"},
+    {"test_name": "test_background_claude_enrich_function_exists", "status": "PASSED", "description": "Code structure: _background_claude_enrich function exists"},
+    {"test_name": "test_retry_logic_before_fallback", "status": "PASSED", "description": "Code structure: Retry logic comes before fallback logic"},
+    {"test_name": "test_failure_status_after_fallback_failure", "status": "PASSED", "description": "Code structure: Failure status set after both Claude and regex fail"}
+  ],
+  "reliability_fixes_summary": {
+    "fix_1": {
+      "description": "Retry with backoff: 3 attempts with delays [0, 5, 15] seconds",
+      "location": "routes/extension.py:1097-1124",
+      "status": "VERIFIED"
+    },
+    "fix_2": {
+      "description": "Regex fallback on Claude failure via extract_full_profile_regex",
+      "location": "routes/extension.py:1129-1156",
+      "status": "VERIFIED"
+    },
+    "fix_3": {
+      "description": "enrichment_status='failed' + enrichment_error + enrichment_failed_at on total failure",
+      "location": "routes/extension.py:1144-1148",
+      "status": "VERIFIED"
+    },
+    "fix_4": {
+      "description": "_repair_truncated_json fixes missing braces, brackets, trailing commas",
+      "location": "services/bedrock_service.py:472-517",
+      "status": "VERIFIED"
+    },
+    "fix_5": {
+      "description": "max_tokens=4096 (was 3000) + JSON repair before regex fallback",
+      "location": "services/bedrock_service.py:628, 639-647",
+      "status": "VERIFIED"
+    },
+    "fix_6": {
+      "description": "Quality-gated caching: only cache results with 4+ meaningful fields",
+      "location": "routes/extension.py:1436-1442",
+      "cacheable_fields": ["candidate_name", "current_employer", "current_designation", "location", "current_ctc", "key_skills", "work_experience", "education", "experience_years"],
+      "status": "VERIFIED"
+    },
+    "fix_7": {
+      "description": "enrichment_status tracking: pending → enriched/partial/failed",
+      "location": "routes/extension.py:2153 (pending), 1422 (enriched), 1420 (partial), 1145 (failed)",
+      "statuses": ["pending", "enriched", "partial", "failed"],
+      "status": "VERIFIED"
+    },
+    "fix_8": {
+      "description": "3-Layer gap-fill path sets enrichment_status='enriched'",
+      "location": "routes/extension.py:1224",
+      "status": "VERIFIED"
+    }
+  }
+}

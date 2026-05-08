@@ -1,0 +1,87 @@
+{
+  "summary": "VHC Talent OS v3.7.0 feature testing complete. All 15 backend API tests passed. Frontend UI tests verified: Admin and Recruiter candidate bank pages load correctly, inline detail view opens without errors for naukri-sourced candidates, Activity History tab works correctly (Promise.allSettled handling missing audit logs), Naukri candidates are visible to both admin and recruiter with proper visibility settings.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Candidate Profile Dialog", "issues": ["Warning: Missing Description or aria-describedby for DialogContent (accessibility warning, not blocking)"]}
+    ]
+  },
+
+  "passed_tests": [
+    "POST /api/extension/capture - creates candidate with correct data and team visibility (visibility.recruiter_ids set)",
+    "POST /api/extension/capture - invalidates search cache after capture (cache.invalidate_search_cache called)",
+    "POST /api/extension/ai-extract - correctly overrides AI name/email/phone with DOM hints",
+    "GET /api/candidate-bank?search=X - returns relevant results with Atlas Search",
+    "GET /api/candidate-bank?search=name - returns name-weighted search results",
+    "GET /api/candidate-bank (admin) - shows 1711 candidates including naukri-sourced",
+    "GET /api/candidate-bank (recruiter yamini@vhc.in) - shows 17 candidates with 11 Naukri badges",
+    "GET /api/extension/profile/{id} - returns full naukri candidate profile without errors",
+    "GET /api/extension/profile/{invalid_id} - returns 404 for non-existent candidate",
+    "GET /api/download/naukri-extension - returns valid ZIP file",
+    "GET /api/download/naukri-extension - ZIP contains manifest.json with version 3.7.0",
+    "GET /api/download/naukri-extension - content.js has extractContactFromDOM and clickViewContactButton functions",
+    "Admin candidate bank detail view loads without error for naukri-sourced candidates (Promise.allSettled)",
+    "Admin Activity History tab loads without crash (Promise.allSettled handles missing audit logs)",
+    "Recruiter candidate bank detail view loads without error for naukri-sourced candidates",
+    "Recruiter Activity History tab loads without crash (Promise.allSettled)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_v370_features.py",
+    "/app/test_reports/pytest/pytest_v370_features.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "extension.py build_team_visibility() correctly sets visibility.employer_ids and visibility.recruiter_ids",
+    "extension.py line 535, 559: cache.invalidate_search_cache() called after create/update",
+    "extension.py lines 409-414: DOM hints (dom_extracted_name/email/phone) override AI-extracted values",
+    "candidates.py lines 594-639: Atlas Search with name boost (5x exact, 3x fuzzy), minimumShouldMatch: 1",
+    "CandidateDataBankPage.jsx line 322: Promise.allSettled for loadCandidateDetails prevents crash on missing audit logs",
+    "RecruiterCandidateBankPage.jsx line 220: Promise.allSettled for candidate details API calls"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_v370_features.py - New comprehensive test file for v3.7.0 features"
+  ],
+
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% - Admin and Recruiter candidate bank pages work correctly"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "recruiter": {"email": "yamini@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "seed_data_creation": "Created test candidates with test_v370_ prefix for visibility and cache invalidation tests",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "v3.7.0 features fully tested. Key implementations: 1) Auto-click View Contact button via clickViewContactButton() in content.js, 2) Profile-area-aware extraction via extractContactFromDOM(candidateName) uses candidate name position to skip recruiter's info, 3) Tighter Atlas Search removed summary fuzzy, added 5x exact name boost + 3x fuzzy name boost with minimumShouldMatch:1, 4) Promise.allSettled in CandidateDataBankPage and RecruiterCandidateBankPage prevents crash for naukri candidates missing audit logs. Test prefix: test_v370_",
+
+  "features_verified": {
+    "POST /api/extension/capture visibility": "WORKING - sets employer_ids and recruiter_ids from team",
+    "POST /api/extension/capture cache invalidation": "WORKING - cache.invalidate_search_cache() called",
+    "POST /api/extension/ai-extract DOM override": "WORKING - dom_extracted_name/email/phone override AI output",
+    "GET /api/candidate-bank Atlas Search": "WORKING - name-weighted search with 5x/3x boost",
+    "GET /api/candidate-bank recruiter visibility": "WORKING - recruiter sees 17 candidates with Naukri badges",
+    "GET /api/extension/profile/{id}": "WORKING - returns full naukri profile",
+    "GET /api/download/naukri-extension": "WORKING - ZIP with v3.7.0 manifest, content.js has new functions",
+    "Admin inline detail view": "WORKING - Promise.allSettled prevents crash",
+    "Recruiter inline detail view": "WORKING - Promise.allSettled prevents crash"
+  },
+
+  "mocked_apis": "None - all APIs are real (OpenAI API for ai-extract is real)"
+}

@@ -1,0 +1,108 @@
+{
+  "summary": "AWS Migration Audit - All features tested and working. Backend: 13/13 tests passed (100%). Verified: health check with 0 import failures (emergentintegrations now optional), auth endpoints working, sitemap using SITE_URL env var correctly, Turnstile CAPTCHA is ENABLED (real secret set), public jobs API working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_aws_migration_audit.py",
+    "/app/test_reports/pytest/pytest_aws_migration_audit.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "emergentintegrations library is now optional - uses try/except with fallback to direct OpenAI API via llm_service.py",
+    "Turnstile CAPTCHA is configurable: TURNSTILE_ENABLED is True only when TURNSTILE_SECRET_KEY exists AND is not in ('disabled', 'false', 'none', 'skip')",
+    "SITE_URL env var is correctly used in seo.py (sitemap), blog.py (RSS, sitemap, digest emails), auth.py (password reset link)",
+    "CORS middleware in server.py auto-includes SITE_URL in allowed origins",
+    "Health check shows import_failures=0 confirming all routes imported successfully",
+    "All hardcoded ventureshrd.com URLs now use os.environ.get('SITE_URL', 'https://ventureshrd.com')"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_aws_migration_audit.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "N/A (backend-only testing)"
+  },
+  "test_credentials": {
+    "siddharth": "siddharth@vhc.in / 12345678 - WORKING (admin)",
+    "admin_vhc": "admin@vhc.in / VhcAdmin@2024 - WORKING"
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "AWS migration audit complete. Key changes verified: 1) emergentintegrations is optional with OpenAI fallback, 2) Turnstile CAPTCHA is configurable via TURNSTILE_SECRET_KEY env var, 3) SITE_URL env var centralizes ventureshrd.com URLs, 4) CORS auto-includes SITE_URL. Note: /api/public/apply will return 403 for CAPTCHA in preview because the domain doesn't match Cloudflare's widget - this is expected and proves the fix works (on AWS, set TURNSTILE_SECRET_KEY=DISABLED to bypass).",
+  "features_verified": {
+    "health_check": {
+      "endpoint": "/api/health",
+      "status": "WORKING",
+      "import_failures": 0,
+      "notes": "0 import failures confirms emergentintegrations fallback works"
+    },
+    "health_diagnostics": {
+      "endpoint": "/api/health/diagnostics",
+      "status": "WORKING",
+      "db_name": "vhc_talent_os",
+      "mongo_override_active": true
+    },
+    "auth_login": {
+      "endpoint": "/api/auth/login",
+      "status": "WORKING",
+      "credentials_tested": ["siddharth@vhc.in / 12345678", "admin@vhc.in / VhcAdmin@2024"]
+    },
+    "auth_me": {
+      "endpoint": "/api/auth/me",
+      "status": "WORKING",
+      "notes": "Returns user info with valid token"
+    },
+    "public_jobs": {
+      "endpoint": "/api/public/jobs",
+      "status": "WORKING",
+      "notes": "Returns JSON list (empty but valid)"
+    },
+    "sitemap": {
+      "endpoint": "/api/sitemap.xml",
+      "status": "WORKING",
+      "uses_site_url": true,
+      "base_url": "https://ventureshrd.com",
+      "pages_included": ["/", "/about", "/services", "/careers", "/contact", "blog posts"]
+    },
+    "turnstile_configuration": {
+      "env_var": "TURNSTILE_SECRET_KEY",
+      "current_value": "0x4AAAAAACgOPmdo8um1AIEY6ZVy10ZmFdg (real secret)",
+      "turnstile_enabled": true,
+      "bypass_values": ["DISABLED", "false", "none", "skip", "empty string"],
+      "notes": "Turnstile is ENABLED in preview env because a real secret is set. To disable, set TURNSTILE_SECRET_KEY=DISABLED"
+    }
+  },
+  "aws_migration_changes_verified": {
+    "emergentintegrations_optional": {
+      "file": "services/matching_engine.py",
+      "lines": "24-33",
+      "implementation": "try/except ImportError with fallback to services/llm_service.py",
+      "status": "VERIFIED"
+    },
+    "turnstile_configurable": {
+      "file": "services/security_service.py",
+      "lines": "286-294",
+      "implementation": "TURNSTILE_ENABLED = bool(TURNSTILE_SECRET) and TURNSTILE_SECRET.lower() not in ('disabled', 'false', 'none', 'skip')",
+      "status": "VERIFIED"
+    },
+    "site_url_env_var": {
+      "files": ["routes/seo.py:19", "routes/blog.py:322,482,553", "routes/auth.py:236"],
+      "implementation": "os.environ.get('SITE_URL', 'https://ventureshrd.com')",
+      "status": "VERIFIED"
+    },
+    "cors_site_url_auto_include": {
+      "file": "server.py",
+      "lines": "486-498",
+      "implementation": "_site_url added to _hardcoded_origins if not already present",
+      "status": "VERIFIED"
+    }
+  }
+}

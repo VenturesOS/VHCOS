@@ -1,0 +1,108 @@
+{
+  "summary": "Iteration 119 - Maintenance Report Bug Fixes - ALL 13 tests PASSED. Fixed 2 bugs during testing: (1) Added missing 'recruiter_phone' field to CompleteNaukriProfileInput model, (2) Fixed UnboundLocalError for normalize_phone function by renaming local helper to _normalize_phone_for_compare. Verified: name validation rejects nav text, phone filtering strips recruiter's phone, evaluate-fit and stats endpoints work correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_maintenance_report_fixes.py",
+    "/app/test_reports/pytest/pytest_maintenance_report_fixes.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED: CompleteNaukriProfileInput model was missing 'recruiter_phone' and 'recruiter_email' fields - added them",
+    "FIXED: Local normalize_phone function definitions inside if blocks were shadowing global function, causing UnboundLocalError - renamed to _normalize_phone_for_compare",
+    "Name validation correctly rejects nav text patterns: 'Search candidates', 'Resdex', 'Application Received', 'Showing X candidates', 'Filter by', 'Page X of Y', 'X profiles found'",
+    "Phone filtering correctly strips recruiter's own phone from candidate profile when they match",
+    "Stress mode hysteresis correctly implemented: ON < 40, OFF > 60, no change between 40-60",
+    "Data sync regex is tight and won't match 'email.send' - only matches sync_fail, data_drift, mismatch patterns",
+    ".doc file handling has 3 fallback methods for edge cases"
+  ],
+  "updated_files": [
+    "/app/backend/routes/extension.py",
+    "/app/backend/tests/test_maintenance_report_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "N/A - backend only testing per request"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "Test candidates created with TEST_MAINTENANCE_ prefix and cleaned up after each test class",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 119 tested and fixed maintenance report bugs. Key findings: (1) Name validation - 'Search candidates', 'Resdex', 'Application Received', 'Showing 25 candidates' all correctly rejected - PASS, (2) Valid name 'Priya Sharma' accepted - PASS, (3) Year suffix stripped from name 'Rajiv Mathur - 15 Year(s)' - PASS, (4) Recruiter phone filtering works - same phone stripped, different phone kept - PASS, (5) evaluate-fit endpoint returns verdict/criteria/summary - PASS, (6) stats endpoint works - PASS. Two bugs were found and fixed during testing: (a) Missing recruiter_phone field in CompleteNaukriProfileInput model, (b) UnboundLocalError for normalize_phone function due to local function shadowing global.",
+  "features_tested": {
+    "name_validation_nav_text_rejection": {
+      "status": "PASSED",
+      "tests": [
+        "name='Search candidates' → rejected",
+        "name='Showing 25 candidates' → rejected",
+        "name='Resdex' → rejected",
+        "name='Application Received' → rejected",
+        "name='Filter by location' → rejected",
+        "name='Page 1 of 10' → rejected",
+        "name='500 profiles found' → rejected"
+      ]
+    },
+    "name_validation_valid_names": {
+      "status": "PASSED",
+      "tests": [
+        "name='Priya Sharma' → accepted (created/updated)",
+        "name='Rajiv Mathur - 15 Year(s)' → year suffix stripped, accepted"
+      ]
+    },
+    "phone_filtering": {
+      "status": "PASSED",
+      "tests": [
+        "phone matching recruiter_phone → stripped",
+        "phone different from recruiter_phone → kept"
+      ]
+    },
+    "evaluate_fit_endpoint": {
+      "status": "PASSED",
+      "tests": ["POST /api/extension/evaluate-fit returns verdict, criteria, summary"]
+    },
+    "stats_endpoint": {
+      "status": "PASSED",
+      "tests": ["GET /api/extension/stats returns total_captured, user_captured"]
+    }
+  },
+  "bugs_found_and_fixed": {
+    "missing_recruiter_phone_field": {
+      "issue": "CompleteNaukriProfileInput model was missing 'recruiter_phone' field, causing AttributeError when capture endpoint tried to access profile.recruiter_phone",
+      "fix": "Added 'recruiter_phone: Optional[str] = None' and 'recruiter_email: Optional[str] = None' fields to CompleteNaukriProfileInput model",
+      "file": "/app/backend/routes/extension.py",
+      "line": "After line 1056"
+    },
+    "normalize_phone_unbound_error": {
+      "issue": "Local normalize_phone function was defined inside 'if recruiter_phone:' block, shadowing global function. When recruiter_phone was empty, the function was never defined, causing UnboundLocalError at line 1408",
+      "fix": "Renamed local function to '_normalize_phone_for_compare' and moved it outside the if block",
+      "file": "/app/backend/routes/extension.py",
+      "lines": "1332-1348"
+    }
+  },
+  "code_review_verification": {
+    "health_monitor_data_sync_regex": {
+      "status": "VERIFIED",
+      "regex": "sync.*fail|data.*inconsist|mismatch.*detect",
+      "note": "This regex will NOT match 'email.send' - it requires specific patterns like 'sync' followed by 'fail'"
+    },
+    "stress_mode_hysteresis": {
+      "status": "VERIFIED",
+      "thresholds": "ON < 40, OFF > 60, no change between 40-60",
+      "note": "Prevents oscillation when score hovers around 50"
+    },
+    "doc_file_handling": {
+      "status": "VERIFIED",
+      "methods": ["docx2txt", "UTF-8 decode with printable filter", "Latin-1 decode fallback"],
+      "note": "Returns empty string if all methods fail, preventing 422 errors"
+    }
+  }
+}

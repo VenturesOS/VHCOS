@@ -1,0 +1,97 @@
+{
+  "summary": "Iteration 156: Tested Chrome Extension AI Re-enrich endpoint and Skills Cleanup fix. All 21 backend tests passed. Verified Shailesh Kumar Pathak candidate data is correct after re-enrichment. Frontend 'AI Re-enrich' buttons verified in both CandidateProfileDialog and NaukriProfileView.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_re_enrich_skills_cleanup_iteration156.py",
+    "/app/test_reports/pytest/pytest_re_enrich_skills_cleanup_iteration156.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ POST /api/extension/re-enrich/{candidate_id} endpoint working correctly (line 1776 in extension.py)",
+    "✅ POST /api/extension/re-enrich/{candidate_id} with invalid ID returns 404",
+    "✅ _clean_skills() function (line 1725) removes date ranges, phone numbers, emails, section headers, company names",
+    "✅ Skills array for Shailesh Kumar Pathak is clean: 3D Modeling, GD&T, AutoCAD, etc.",
+    "✅ Shailesh Kumar Pathak candidate data verified: location=Gurugram, current_employer=Krishna Maruti Limited, designation=Sr. Engineer in R&D, experience_years=6",
+    "✅ Login endpoints work for admin@vhc.in and yamini@vhc.in",
+    "✅ Frontend 'AI Re-enrich' button with data-testid='re-enrich-btn' present in CandidateProfileDialog (line 270)",
+    "✅ Frontend 'AI Re-enrich' button with data-testid='profile-re-enrich-btn' present in NaukriProfileView (line 226)",
+    "✅ spaCy A/B test disabled - all users now route through Claude (line 886 in extension.py)",
+    "✅ Admin users use Direct Anthropic SDK, non-admin users use Emergent LLM"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_re_enrich_skills_cleanup_iteration156.py"
+  ],
+  "success_rate": {
+    "backend": "100% (21/21 tests passed)",
+    "frontend": "100% (all buttons and data-testid attributes verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used existing test candidate debf70a3-fbb6-4400-b493-44678ac9fdee (Shailesh Kumar Pathak)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Re-enrich endpoint and skills cleanup fix verified. Key functions: _clean_skills() (line 1725), re_enrich_candidate() (line 1776), _background_claude_enrich() (line 849). spaCy A/B test disabled at line 886. Frontend buttons: re-enrich-btn in CandidateProfileDialog (line 270), profile-re-enrich-btn in NaukriProfileView (line 226). Test candidate: debf70a3-fbb6-4400-b493-44678ac9fdee (Shailesh Kumar Pathak).",
+  "test_results": {
+    "backend_api": {
+      "auth_login": {
+        "admin_login": "PASSED - admin@vhc.in returns valid token",
+        "recruiter_login": "PASSED - yamini@vhc.in returns valid token"
+      },
+      "re_enrich_endpoint": {
+        "requires_auth": "PASSED - Returns 401/403 without token",
+        "invalid_candidate_404": "PASSED - Returns 404 for non-existent candidate",
+        "valid_candidate_admin": "PASSED - Re-enrichment works for admin user"
+      },
+      "shailesh_kumar_pathak_candidate": {
+        "candidate_exists": "PASSED - Candidate found in database",
+        "has_location": "PASSED - location=Gurugram",
+        "has_employer": "PASSED - current_employer=Krishna Maruti Limited",
+        "has_designation": "PASSED - designation=Sr. Engineer in R&D",
+        "has_experience_years": "PASSED - experience_years=6 (>= 4)"
+      },
+      "skills_cleanup": {
+        "no_date_ranges": "PASSED - No date ranges in skills array",
+        "no_phone_numbers": "PASSED - No phone numbers in skills array",
+        "no_email_addresses": "PASSED - No email addresses in skills array",
+        "no_section_headers": "PASSED - No section headers in skills array",
+        "no_company_names": "PASSED - No company names in skills array"
+      },
+      "ai_extract_endpoint": {
+        "requires_auth": "PASSED - Returns 401/403 without token",
+        "admin_structured_response": "PASSED - Direct Anthropic returns structured data",
+        "recruiter_structured_response": "PASSED - Emergent LLM returns structured data",
+        "insufficient_text": "PASSED - Returns 422 validation error"
+      },
+      "extension_profile_endpoint": {
+        "profile_exists": "PASSED - Returns candidate data",
+        "invalid_id_404": "PASSED - Returns 404 for non-existent candidate"
+      }
+    },
+    "frontend_verification": {
+      "naukri_profile_view": {
+        "profile_re_enrich_btn": "VERIFIED - data-testid='profile-re-enrich-btn' present (line 226)",
+        "profile_name": "VERIFIED - data-testid='profile-name' shows 'Shailesh Kumar Pathak'",
+        "profile_download_cv_btn": "VERIFIED - data-testid='profile-download-cv-btn' present",
+        "profile_ats_cv_btn": "VERIFIED - data-testid='profile-ats-cv-btn' present",
+        "back_button": "VERIFIED - data-testid='back-button' present",
+        "tabs": "VERIFIED - All 7 tabs present (overview, experience, education, skills, personal, preferences, timeline)"
+      },
+      "candidate_profile_dialog": {
+        "re_enrich_btn": "VERIFIED - data-testid='re-enrich-btn' present in code (line 270)",
+        "edit_profile_btn": "VERIFIED - data-testid='edit-profile-btn' present in code",
+        "download_resume_btn": "VERIFIED - data-testid='download-resume-btn' present in code",
+        "generate_ats_cv_btn": "VERIFIED - data-testid='generate-ats-cv-btn' present in code"
+      }
+    }
+  }
+}

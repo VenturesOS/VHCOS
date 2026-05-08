@@ -1,0 +1,73 @@
+{
+  "summary": "Iteration 148: Tested async CV parsing fixes (502 elimination), MongoDB allowDiskUse fix, health monitor 'processing' status fix, and refresh token rotation regression. All features working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_async_cv_parse_iteration148.py",
+    "/app/test_reports/pytest/pytest_async_cv_parse_iter148.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ VERIFIED: POST /api/cv-upload/parse returns 202 with task_id and status='processing' (non-blocking)",
+    "✅ VERIFIED: GET /api/cv-upload/parse/{task_id} returns task status (processing/completed/failed)",
+    "✅ VERIFIED: Invalid task_id returns 404 with 'Task not found' message",
+    "✅ VERIFIED: Background worker processes CV asynchronously (fire_and_forget pattern)",
+    "✅ VERIFIED: health_monitor.py line 55 checks 'processing' status (not 'active') for stuck job detection",
+    "✅ VERIFIED: applications.py uses allowDiskUse=True at lines 1252 and 1298 for aggregation pipelines",
+    "✅ VERIFIED: api.js has cvUploadAPI.getParseStatus (line 211) and parseAndPoll (lines 216-227)",
+    "✅ VERIFIED: async_tasks.py has create_task, complete_task, fail_task, get_task, fire_and_forget functions",
+    "✅ VERIFIED: CVUploadDialog uses cvUploadAPI.parseAndPoll for async polling (line 68)",
+    "✅ VERIFIED: BatchUploadPage uses cvUploadAPI.parseAndPoll for async polling (line 106)",
+    "✅ VERIFIED: Refresh token rotation still works (login returns refresh_token, refresh endpoint returns new pair)",
+    "✅ VERIFIED: parse_tasks collection indexes defined in create_indexes.py (task_id_idx, task_created_by_idx, task_status_created_idx)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_async_cv_parse_iteration148.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (CV Upload dialog and Batch Upload page both working)"
+  },
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Async CV parsing is fully implemented. POST /cv-upload/parse returns 202 immediately with task_id, background worker processes the CV, and GET /cv-upload/parse/{task_id} polls for status. The minimal test PDF fails with 'Could not extract enough text' which is CORRECT behavior - the important thing is the 202 response and async processing. The parse_tasks collection will be created on first use. MongoDB indexes are defined in create_indexes.py.",
+  "test_results": {
+    "async_cv_parse_tests": {
+      "cv_parse_returns_202_with_task_id": "PASSED - Returns 202 with task_id and status='processing'",
+      "get_parse_status_returns_task": "PASSED - Returns task with id, status, type, created_at, etc.",
+      "poll_until_complete_or_fail": "PASSED - Task fails as expected for minimal PDF (no extractable text)",
+      "invalid_task_id_returns_404": "PASSED - Returns 404 with 'Task not found'",
+      "cv_parse_rejects_invalid_file_type": "PASSED - Returns 400 for non-PDF/DOCX files",
+      "cv_parse_requires_auth": "PASSED - Returns 403 without authentication"
+    },
+    "refresh_token_tests": {
+      "login_returns_refresh_token": "PASSED",
+      "refresh_endpoint_returns_new_tokens": "PASSED",
+      "new_access_token_works": "PASSED"
+    },
+    "code_verification_tests": {
+      "health_monitor_checks_processing_status": "PASSED - Line 55 checks 'processing' not 'active'",
+      "applications_uses_allow_disk_use": "PASSED - allowDiskUse=True at lines 1252 and 1298",
+      "api_js_has_parse_and_poll_methods": "PASSED - getParseStatus and parseAndPoll exist",
+      "async_tasks_service_exists": "PASSED - All required functions present"
+    },
+    "frontend_ui_tests": {
+      "cv_upload_dialog_opens": "PASSED - Dialog opens with file input and Parse CV button",
+      "batch_upload_page_loads": "PASSED - Page loads at /admin/candidate-bank/batch-upload with file dropzone"
+    }
+  },
+  "fixes_verified": {
+    "502_bad_gateway_fix": "VERIFIED - POST /cv-upload/parse now returns 202 immediately, processes in background",
+    "mongodb_sort_memory_fix": "VERIFIED - allowDiskUse=True added to aggregation pipelines in applications.py",
+    "health_monitor_false_positives_fix": "VERIFIED - Changed from 'active' to 'processing' status check in health_monitor.py"
+  }
+}

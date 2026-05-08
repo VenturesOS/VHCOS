@@ -1,0 +1,15 @@
+<analysis>/app/browser-extension/content.jsbackground.jsmax_tokensis_runpod_reachable()backfill_and_retry_ai_tags.pycontent.jsbackground.js
+/app
+├── backend/
+│   ├── config.py / mongo_production_override.py # DB connection overrides
+│   ├── scripts/
+│   │   └── backfill_and_retry_ai_tags.py  # Leakage recovery script
+│   ├── services/
+│   │   └── llm_fallback_service.py        # Strict Qwen reachability gate
+├── frontend/
+│   ├── src/pages/admin/
+│   │   ├── AdminDashboard.jsx             # Cleaned up, added Hiring Funnel widget
+│   │   ├── AdminAnalyticsPage.jsx         # Now contains Activity Monitor tab
+│   │   ├── BatchUploadPage.jsx            # Now contains Naukri Import tab
+├── browser-extension/
+sentence-transformerscandidate_bankai_enrichment_sourceenrichment_statusphone_blocklistextraction_trackingpython-dotenvmongo_production_override.py/app/backend/scripts/backfill_and_retry_ai_tags.py/app/backend/services/llm_fallback_service.py/app/frontend/src/pages/admin/AdminAnalyticsPage.jsxBatchUploadPage.jsxAdminDashboard.jsxDataQualityPage.jsx/app/frontend/src/components/layout/Sidebar.jsxGET /api/admin/pipeline?job_id={id}POST /api/candidates/data-quality/phone-blocklistcd /home/ubuntu/vhc-platform && git pull && sudo systemctl restart gunicorn && cd frontend && yarn build && sudo cp -r build/* /var/www/html/MONGO_URL.envconfig.pymongo_production_override.pyis_runpod_reachable()/app/memory/PRD.mdemergent_haiku_4_5admin@vhc.inVhcAdmin@2024maneet@vhc.in12345678/app/browser-extension/content.js/app/browser-extension/background.jschrome.scripting.executeScriptextractAndRelay</analysis>

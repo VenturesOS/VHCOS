@@ -1,0 +1,78 @@
+{
+  "summary": "Iteration 152: Tested Batch Save Mandate Linking feature. All 8 backend tests passed. The POST /api/candidate-bank/batch-save endpoint correctly accepts optional 'mandate_id' field and links candidates to the specified job as applications with stage='sourced'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_batch_save_mandate_linking.py",
+    "/app/test_reports/pytest/pytest_batch_save_mandate_linking.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ POST /api/candidate-bank/batch-save accepts optional 'mandate_id' field",
+    "✅ When mandate_id is null/missing, candidates are saved but linked=0 (backward compatible)",
+    "✅ When mandate_id is valid, all saved candidates are linked to the job as applications",
+    "✅ Applications are created with stage='sourced' and source='batch_upload'",
+    "✅ Duplicate candidates already linked to the mandate are NOT double-linked (linked=0 for duplicates)",
+    "✅ Response includes 'linked' count and 'mandate_id' field",
+    "✅ Invalid mandate_id gracefully handled - candidates saved but not linked",
+    "✅ Partial linking works - only new candidates get linked, existing linked candidates are skipped",
+    "✅ Backward compatibility maintained - old payload format without mandate_id still works"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_batch_save_mandate_linking.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "Not tested (backend only per request)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "Test candidates created with TESTUNIQ prefix for unique identification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Batch Save Mandate Linking feature fully tested. The endpoint POST /api/candidate-bank/batch-save now accepts optional 'mandate_id' parameter. When provided, all saved/updated candidates are linked to the specified job as applications with stage='sourced'. The linking logic correctly handles: (1) new candidates - creates application, (2) existing candidates not linked - creates application, (3) existing candidates already linked - skips (no double-linking). Frontend has a 'Link to Mandate (Optional)' dropdown with data-testid='batch-mandate-link' that appears in Step 2 after CVs are parsed.",
+  "test_results": {
+    "backend_api": {
+      "batch_save_without_mandate": {
+        "status": "PASSED",
+        "description": "Candidates saved, linked=0, mandate_id=null"
+      },
+      "batch_save_with_valid_mandate": {
+        "status": "PASSED",
+        "description": "2 candidates saved, linked=2, mandate_id returned"
+      },
+      "duplicate_not_double_linked": {
+        "status": "PASSED",
+        "description": "First save: linked=1, Second save (same candidate): linked=0"
+      },
+      "response_includes_required_fields": {
+        "status": "PASSED",
+        "description": "Response contains: success, saved, updated, linked, mandate_id, errors, total"
+      },
+      "application_created_with_sourced_stage": {
+        "status": "PASSED",
+        "description": "Application has stage='sourced' and source='batch_upload'"
+      },
+      "invalid_mandate_id": {
+        "status": "PASSED",
+        "description": "Candidates saved, linked=0 (job not found)"
+      },
+      "partial_linking": {
+        "status": "PASSED",
+        "description": "Only new candidates linked, existing linked candidates skipped"
+      },
+      "backward_compatibility": {
+        "status": "PASSED",
+        "description": "Old payload format without mandate_id still works"
+      }
+    }
+  }
+}

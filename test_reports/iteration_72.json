@@ -1,0 +1,54 @@
+{
+  "summary": "CV + Profile Enhancement Testing Complete. All 10 backend tests pass. Frontend verified: Candidate Bank page loads with 1728 candidates, Full Profile view (NaukriProfileView) displays correctly with ATS CV button visible. TEST_CVUpload_Candidate was created via API test with unified schema fields.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cv_profile_enhancement.py",
+    "/app/test_reports/pytest/pytest_cv_profile_enhancement.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ATS CV generator (ats_cv_generator.py): Clean implementation using reportlab for PDF generation in memory",
+    "CV upload save endpoint returns unified schema fields matching extension capture: skills_display, experience, education, visibility, has_resume",
+    "ATS CV endpoint correctly returns Content-Disposition with Firstname_Lastname_VHC.pdf naming",
+    "Download CV button in NaukriProfileView only shows when resume_url or active_resume_id exists",
+    "Extension capture validation returns 422/400 for empty payloads as expected"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cv_profile_enhancement.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (Candidate Bank + Full Profile view verified)"
+  },
+  "test_credentials": {
+    "admin_email": "admin@vhc.in",
+    "admin_password": "VhcAdmin@2024"
+  },
+  "seed_data_creation": "TEST_CVUpload_Candidate created via cv-upload/save API test",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "CV Profile Enhancement verified. Key endpoints: GET /api/candidate-bank (pagination, search working), GET /api/candidate-bank/{id}/ats-cv (returns PDF with Content-Disposition: Firstname_Lastname_VHC.pdf), POST /api/cv-upload/save (returns unified schema with skills_display, experience, education, visibility, has_resume etc). Revenue and Pipeline regression tests pass. Frontend shows ATS CV button in Full Profile view (NaukriProfileView). Download CV button only visible for candidates with uploaded resumes.",
+  "features_verified": {
+    "GET /api/candidate-bank?page=1&limit=5": "PASS - Returns candidate list with pagination",
+    "GET /api/candidate-bank/{id}/ats-cv": "PASS - Returns PDF with Content-Type: application/pdf, Content-Disposition contains _VHC.pdf",
+    "GET /api/candidate-bank/{id}/ats-cv (invalid ID)": "PASS - Returns 404",
+    "GET /api/candidate-bank/{id}/download-resume": "PASS - Returns 200 or 404 (no 500 errors)",
+    "POST /api/cv-upload/save": "PASS - Saves profile with unified schema (skills_display, experience, education, visibility, has_resume, source=cv_upload)",
+    "Extension capture validation": "PASS - Returns 422/400 for empty payload",
+    "GET /api/revenue/aggregate/by-company": "PASS - Regression test passes, returns Panasonic India revenue data",
+    "GET /api/admin/pipeline": "PASS - Returns pipeline with joined stage (1 joined candidate: Ravi Yadav)",
+    "Candidate Bank pagination": "PASS - Different candidates on different pages",
+    "Candidate Bank search": "PASS - Search functionality works",
+    "Frontend: Candidate Bank page": "PASS - Loads with 1728 candidates, shows TEST_CVUpload_Candidate",
+    "Frontend: Full Profile page (NaukriProfileView)": "PASS - Shows ATS CV button with data-testid='profile-ats-cv-btn'",
+    "Frontend: Pipeline page": "PASS - Shows joined column with Ravi Yadav (CTC 15.0L, Locked)"
+  }
+}

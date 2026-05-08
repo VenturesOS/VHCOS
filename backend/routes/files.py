@@ -1,0 +1,123 @@
+"""
+VHC Talent OS - File Serving Routes
+Handles file uploads, downloads, and serving with R2/local fallback.
+"""
+import io
+from pathlib import Path
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+
+# Import configuration
+from config import db, R2_ENABLED, UPLOAD_DIR, ROOT_DIR
+
+# Import services
+from services import get_r2_signed_url, get_file_from_r2
+
+
+# Create router for file endpoints
+files_router = APIRouter(prefix="/api", tags=["Files"])
+
+
+@files_router.get("/uploads/{filename}")
+async def get_upload(filename: str, redirect: bool = True):
+    """
+    Serve uploaded files. Checks R2 first, then local storage.
+    If redirect=True and file is in R2, returns a redirect to signed URL.
+    If redirect=False or file is local, streams the file content.
+    """
+    # First, check if we have R2 metadata for this file in MongoDB
+    # Look in applications, candidate_bank collections for r2_key
+    if R2_ENABLED:
+        # Try to find R2 key from stored metadata
+        # Check applications collection
+        app_doc = await db.applications.find_one(
+            {"$or": [
+                {"resume_url": {"$regex": filename}},
+                {"r2_metadata.filename": filename}
+            ]},
+            {"r2_metadata": 1, "_id": 0}
+        )
+        if app_doc and app_doc.get("r2_metadata", {}).get("r2_key"):
+            r2_key = app_doc["r2_metadata"]["r2_key"]
+            if redirect:
+                signed_url = get_r2_signed_url(r2_key)
+                if signed_url:
+                    return RedirectResponse(url=signed_url, status_code=307)
+            else:
+                content = await get_file_from_r2(r2_key)
+                if content:
+                    return StreamingResponse(io.BytesIO(content), media_type="application/octet-stream")
+        
+        # Check candidate_bank collection
+        candidate_doc = await db.candidate_bank.find_one(
+            {"$or": [
+                {"resume_url": {"$regex": filename}},
+                {"r2_metadata.filename": filename}
+            ]},
+            {"r2_metadata": 1, "_id": 0}
+        )
+        if candidate_doc and candidate_doc.get("r2_metadata", {}).get("r2_key"):
+            r2_key = candidate_doc["r2_metadata"]["r2_key"]
+            if redirect:
+                signed_url = get_r2_signed_url(r2_key)
+                if signed_url:
+                    return RedirectResponse(url=signed_url, status_code=307)
+            else:
+                content = await get_file_from_r2(r2_key)
+                if content:
+                    return StreamingResponse(io.BytesIO(content), media_type="application/octet-stream")
+    
+    # Fallback to local storage
+    # Check both possible upload locations
+    # Primary location: backend/uploads (used by public apply)
+    from config import ROOT_DIR
+    primary_dir = ROOT_DIR / "uploads"
+    primary_path = primary_dir / filename
+    
+    # Secondary location: /app/backend/uploads (used by internal uploads)
+    secondary_path = UPLOAD_DIR / filename
+    
+    if primary_path.exists():
+        return FileResponse(primary_path)
+    elif secondary_path.exists():
+        return FileResponse(secondary_path)
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
+
+
+@files_router.get("/download/naukri-extension")
+async def download_naukri_extension():
+    """
+    Download the VHC Naukri Auto-Capture browser extension.
+    Dynamically builds ZIP from source to always serve the latest version.
+    """
+    import zipfile, json as json_mod
+    
+    ext_source = ROOT_DIR.parent / "browser-extension"
+    if not ext_source.exists():
+        raise HTTPException(status_code=404, detail="Extension source not found")
+    
+    # Read version from manifest
+    manifest_path = ext_source / "manifest.json"
+    version = "unknown"
+    if manifest_path.exists():
+        with open(manifest_path) as f:
+            version = json_mod.load(f).get("version", "unknown")
+    
+    # Build ZIP from source
+    zip_path = UPLOAD_DIR / "vhc-naukri-extension.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path in ext_source.rglob("*"):
+            if file_path.is_file() and not file_path.name.startswith("."):
+                zf.write(file_path, file_path.relative_to(ext_source))
+    
+    response = FileResponse(
+        path=zip_path,
+        filename=f"vhc-naukri-extension-v{version}.zip",
+        media_type="application/zip",
+    )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["X-Extension-Version"] = version
+    return response

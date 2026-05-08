@@ -1,0 +1,78 @@
+{
+  "summary": "Iteration 131 - Public Jobs API Fix and User Role Change Feature. Backend: 11/11 tests PASSED. Frontend: All features verified working. Both fixes are confirmed working: (1) GET /api/public/jobs now returns jobs with career_page_status='live' without requiring shareable_link_enabled, (2) Admin can change user roles via Edit User dialog with proper validation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_public_jobs_role_change.py",
+    "/app/test_reports/pytest/pytest_public_jobs_role_change.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: GET /api/public/jobs returns jobs with career_page_status='live' (no shareable_link_enabled requirement)",
+    "VERIFIED: Public jobs API returns 21+ jobs with proper fields (title, location, company_name)",
+    "VERIFIED: PUT /api/users/{user_id} with role='employer' successfully changes user role",
+    "VERIFIED: PUT /api/users/{user_id} with role='superadmin' returns 400 with invalid role error",
+    "VERIFIED: PUT /api/users/{admin_id} with role change returns 400 'cannot change your own role'",
+    "VERIFIED: All valid roles (admin, employer, recruiter, candidate) are accepted",
+    "VERIFIED: Frontend Edit User dialog has Role dropdown with all 4 options",
+    "VERIFIED: Frontend shows amber warning 'Role will change from X to Y' when role is changed",
+    "VERIFIED: careers.html uses API_BASE = 'https://ventureshrd.com' (production URL)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_public_jobs_role_change.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "test_user": "Yamini gupta (id: 06b70e35-bb06-41b9-a5f1-d9111112ae78, role: recruiter)"
+  },
+  "seed_data_creation": "No new seed data created. Test user role was changed and reverted during testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 131 tested two bug fixes: (1) Public jobs API now returns jobs with career_page_status='live' without requiring shareable_link_enabled=true. The query in /app/backend/routes/public.py was fixed. (2) User role change feature added to admin panel. PUT /api/users/{user_id} now accepts 'role' field with validation. Frontend UsersPage.jsx has Role dropdown in Edit User dialog with warning message when role changes. Test user Yamini gupta (id: 06b70e35-bb06-41b9-a5f1-d9111112ae78) was used for testing and reverted to 'recruiter' role.",
+  "features_tested": {
+    "public_jobs_api": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/public/jobs returns 200 with jobs list",
+        "Jobs have career_page_status='live' (no shareable_link_enabled requirement)",
+        "Response contains required fields: title, location, company_name",
+        "21+ jobs returned (previously returned 0)"
+      ]
+    },
+    "user_role_change_backend": {
+      "status": "PASSED",
+      "tests": [
+        "PUT /api/users/{user_id} with role='employer' returns 200",
+        "PUT /api/users/{user_id} with role='superadmin' returns 400 (invalid role)",
+        "PUT /api/users/{admin_id} with role change returns 400 (cannot change own role)",
+        "All valid roles (admin, employer, recruiter, candidate) accepted"
+      ]
+    },
+    "user_role_change_frontend": {
+      "status": "PASSED",
+      "tests": [
+        "Edit User dialog opens with Role dropdown",
+        "Role dropdown shows all 4 options: Admin, Employer, Recruiter, Candidate",
+        "Warning message appears when role is changed",
+        "Save Changes button works correctly"
+      ]
+    },
+    "careers_html_api_base": {
+      "status": "VERIFIED",
+      "tests": [
+        "API_BASE = 'https://ventureshrd.com' (production URL, not preview URL)"
+      ]
+    }
+  }
+}

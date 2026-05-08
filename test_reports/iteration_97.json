@@ -1,0 +1,82 @@
+{
+  "summary": "P0 Bug Fixes Testing - All 3 P0 bugs verified as fixed: (1) ATS CV download with ?token= query param works, (2) Resume Builder has preview-first UX with collapsible Edit section, (3) PUT /salary-notice endpoint created and working with data persistence verified. Backend 100% pass rate, Frontend 100% pass rate.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_p0_bug_fixes_iteration97.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/candidates.py - ATS CV endpoint correctly uses manual JWT decoding from query param instead of Depends(get_current_user)",
+    "frontend/src/pages/shared/NaukriProfileView.jsx - downloadAtsCv() correctly includes ?token=${token} for new-tab downloads",
+    "frontend/src/components/shared/CandidateProfileDialog.jsx - downloadAtsCv() correctly includes ?token=${token}",
+    "frontend/src/pages/shared/ResumeBuilderPage.jsx - Preview section is immediately visible at top, Edit section is collapsible below"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_p0_bug_fixes_iteration97.py"
+  ],
+  "success_rate": {
+    "backend": "100% (All P0 endpoints verified)",
+    "frontend": "100% (All UI fixes verified)"
+  },
+  "test_credentials": {
+    "admin": "siddharth@vhc.in / 12345678 - WORKING"
+  },
+  "seed_data_creation": "None - used existing candidate 51dc2222-93b5-40bc-9170-c79167f2b431",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All P0 bug fixes verified. Backend tests in /app/backend/tests/test_p0_bug_fixes_iteration97.py cover ATS CV, download-resume, salary-notice, and PATCH update endpoints.",
+  "features_verified": {
+    "fix_1_ats_cv_token_param": {
+      "endpoint": "GET /api/candidate-bank/{id}/ats-cv?token=JWT",
+      "status": "VERIFIED",
+      "response": "Returns LaTeX content with 200",
+      "without_token": "Returns 401 as expected"
+    },
+    "fix_2_resume_builder_preview_first": {
+      "page": "/admin/resume-builder",
+      "status": "VERIFIED",
+      "preview_section": "Visible immediately at page top",
+      "edit_section": "Collapsible 'Edit Profile Details' section below preview",
+      "candidate_search": "Works for admin/recruiter - shows results and loads profile"
+    },
+    "fix_3_salary_notice_endpoint": {
+      "endpoint": "PUT /api/candidate-bank/{id}/salary-notice",
+      "status": "VERIFIED",
+      "params": "current_salary, notice_period, location, experience_years",
+      "persistence": "Data verified as persisted via GET and UI display"
+    },
+    "fix_3b_patch_update": {
+      "endpoint": "PATCH /api/candidate-bank/{id}",
+      "status": "VERIFIED",
+      "body": "JSON with name, headline, summary, current_employer, etc"
+    },
+    "fix_4_download_resume_token": {
+      "endpoint": "GET /api/candidate-bank/{id}/download-resume?token=JWT",
+      "status": "VERIFIED",
+      "response": "Returns 404 when no file (not 401), returns file when present"
+    },
+    "frontend_token_in_urls": {
+      "naukri_profile_view": "downloadAtsCv() includes ?token= param",
+      "candidate_profile_dialog": "downloadAtsCv() and downloadResume() include ?token= param"
+    }
+  },
+  "test_data_updated": {
+    "candidate_id": "51dc2222-93b5-40bc-9170-c79167f2b431",
+    "updated_values": {
+      "current_salary": 750000,
+      "notice_period": "45 days",
+      "location": "Bangalore",
+      "experience_years": 6,
+      "headline": "Test Headline Updated",
+      "industry": "IT Services"
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "summary": "CV Upload Non-Destructive Merge testing complete - ALL 15 tests passed. Verified merge logic for existing candidates: protected fields (CTC, notice period, naukri_profile_id) preserved, contact merge (alternate email/phone), skills/education/experience union merge, source tracking preserved.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cv_upload_merge.py",
+    "/app/test_reports/pytest/pytest_cv_upload_merge.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Protected fields logic correctly implemented - uses _has_value() to check if existing field is populated before preserving",
+    "Contact merge logic handles both scenarios: different contact -> alternate, missing contact -> fill primary",
+    "Skills merge uses case-insensitive dedup via _merge_string_lists()",
+    "Work experience merge matches by company+designation and prefers richer description",
+    "Source tracking preserves original source (e.g. naukri_extension) and appends to source_history array",
+    "Duplicate lookup searches by name (case-insensitive), email, and phone_normalized across ALL sources"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cv_upload_merge.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "N/A - backend only testing per request"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "TEST_ prefixed candidates created during tests, auto-cleaned via fixture teardown",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "CV Upload Non-Destructive Merge feature fully tested. All 15 test cases passed covering: (1) Protected fields not overwritten by nulls - current_salary, expected_salary, notice_period, notice_period_days, naukri_profile_id all preserved, (2) Contact merge - different email/phone saved as alternate, missing email/phone filled from CV, (3) Skills union-merged case-insensitively without duplicates, (4) Work experience merged by company+designation key with richer description winning, (5) Education merged by degree+institution key, (6) Source tracking - original source preserved, source_history tracks CV upload events, (7) New candidate via CV creates fresh document with source=cv_upload, (8) Duplicate lookup finds candidates across ALL sources by name/email/phone.",
+  "features_tested": {
+    "protected_fields_preservation": {
+      "status": "PASSED",
+      "details": [
+        "current_salary, expected_salary NOT overwritten by CV nulls",
+        "notice_period, notice_period_days preserved",
+        "naukri_profile_id from extension capture preserved"
+      ]
+    },
+    "contact_merge_logic": {
+      "status": "PASSED",
+      "details": [
+        "Different email from CV saved as alternate_email, original stays primary",
+        "Different phone from CV saved as alternate_phone, original stays primary",
+        "Missing email filled from CV into primary email field",
+        "Missing phone filled from CV into primary phone field"
+      ]
+    },
+    "array_merging": {
+      "status": "PASSED",
+      "details": [
+        "Skills union-merged with case-insensitive dedup (Python == python)",
+        "Work experience merged by company+designation, richer description wins",
+        "Education merged by degree+institution key",
+        "Certifications merged without duplicates"
+      ]
+    },
+    "source_tracking": {
+      "status": "PASSED",
+      "details": [
+        "Original source (naukri_extension) preserved after CV upload",
+        "source_history array tracks CV upload events with filename and timestamp",
+        "has_resume flag set to True after CV upload"
+      ]
+    },
+    "duplicate_detection": {
+      "status": "PASSED",
+      "details": [
+        "Lookup searches ALL sources (not restricted to cv_upload)",
+        "Matches by name (case-insensitive regex)",
+        "Matches by email",
+        "Matches by phone_normalized"
+      ]
+    },
+    "new_candidate_creation": {
+      "status": "PASSED",
+      "details": [
+        "New candidate via CV upload creates fresh document",
+        "Source set to cv_upload for new entries",
+        "Proper visibility fields set"
+      ]
+    },
+    "validation": {
+      "status": "PASSED",
+      "details": [
+        "CV upload requires name field (400 error without)",
+        "CV upload requires authentication (401/403 without token)"
+      ]
+    }
+  }
+}

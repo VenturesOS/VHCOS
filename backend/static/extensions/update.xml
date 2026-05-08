@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='nmlmoniipcgpomhhogijpbelmpcoafjk'>
+    <updatecheck codebase='https://talent-graph-fix.preview.emergentagent.com/api/extension/download.crx?v=5.3.0' version='5.3.0' hash_sha256='e2e8f886bceb1424b3e80aae019481ae4ed7da7bb21305159bee9fc021401508' />
+  </app>
+</gupdate>

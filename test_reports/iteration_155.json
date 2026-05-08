@@ -1,0 +1,69 @@
+{
+  "summary": "Iteration 155: Tested Chrome Extension Direct Anthropic AI extraction fix. All 11 backend tests passed. Verified that both admin (Direct Anthropic SDK) and non-admin (Emergent LLM) paths now return identical structured JSON with work_experience array, key_skills array, current_ctc as integer, and notice_period as string. CTC conversion working correctly (35 Lacs = 3500000). Null-safety fix verified - profile_data initialized to {} when Claude fails.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_extension_ai_extract_iteration155.py",
+    "/app/test_reports/pytest/pytest_extension_ai_extract_iteration155.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ bedrock_service.py _call_claude() (line 17) has use_direct_anthropic parameter that routes through Anthropic SDK directly",
+    "✅ bedrock_service.py extract_full_profile() (line 176) has use_direct_anthropic parameter",
+    "✅ extension.py ai_extract_profile() (line 336) uses _call_claude() with use_direct_anthropic=_is_admin",
+    "✅ extension.py _background_claude_enrich() (line 849) uses extract_full_profile() with use_direct_anthropic=_is_admin_bg",
+    "✅ Both admin and non-admin paths use identical detailed JSON-schema prompts from bedrock_service.py",
+    "✅ Null-safety fix: profile_data initialized to {} if Claude fails (lines 549-551 in extension.py)",
+    "✅ CTC conversion working: '35 Lacs' = 3500000, '50 Lacs' = 5000000",
+    "✅ Response structure consistent: work_experience (array), key_skills (array), current_ctc (integer), notice_period (string)",
+    "✅ DOM-extracted fields return immediately without LLM call (fast path)",
+    "✅ Authentication required for /api/extension/ai-extract endpoint"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_extension_ai_extract_iteration155.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used existing test accounts",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Chrome Extension AI extraction fix verified. Key functions: _call_claude() in bedrock_service.py (line 17) with use_direct_anthropic parameter, extract_full_profile() (line 176), ai_extract_profile() in extension.py (line 336), _background_claude_enrich() (line 849). Both admin (Direct Anthropic SDK) and non-admin (Emergent LLM) paths now use identical JSON-schema prompts. CTC conversion: Lacs * 100000 = INR. Null-safety: profile_data = {} when Claude fails.",
+  "test_results": {
+    "backend_api": {
+      "auth_login": {
+        "admin_login": "PASSED - admin@vhc.in returns valid token",
+        "recruiter_login": "PASSED - yamini@vhc.in returns valid token"
+      },
+      "ai_extract_endpoint": {
+        "dom_fields_instant_response": "PASSED - Returns immediately without LLM when DOM fields provided",
+        "admin_structured_response": "PASSED - Direct Anthropic returns work_experience array, key_skills array",
+        "recruiter_structured_response": "PASSED - Emergent LLM returns same structured format",
+        "ctc_conversion": "PASSED - 35 Lacs = 3500000 INR",
+        "null_safety_insufficient_text": "PASSED - Returns success=False gracefully",
+        "dom_fallback_on_llm_fail": "PASSED - Uses DOM data when LLM fails",
+        "requires_authentication": "PASSED - Returns 403 without token",
+        "response_structure_admin": "PASSED - Has name, naukri_profile_id, naukri_profile_url",
+        "response_structure_recruiter": "PASSED - Same structure as admin"
+      }
+    },
+    "direct_verification": {
+      "direct_anthropic_path": "VERIFIED - _call_claude(use_direct_anthropic=True) works",
+      "emergent_llm_path": "VERIFIED - _call_claude(use_direct_anthropic=False) works",
+      "extract_full_profile_admin": "VERIFIED - Returns structured JSON with arrays",
+      "extract_full_profile_recruiter": "VERIFIED - Returns identical structure"
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "summary": "Comprehensive testing of 3-Layer Capture Architecture for Chrome Extension profile capture endpoint. All 13 tests passed. The 3-Layer architecture is correctly gated for admin@vhc.in only and properly preserves DOM fields while extracting phone/email from regex (L2) and triggering Claude only when phone is missing (L3).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/extension/capture",
+        "issue": "STALE PHONE blocking can prevent phone extraction if test phone numbers already exist in DB - this is expected behavior for dedup but affects testing",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_3layer_capture_iteration169.py",
+    "/app/test_reports/pytest/pytest_3layer_capture_iteration169.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "3-Layer architecture implementation is correct and well-structured",
+    "DOM fields (company, designation, CTC, notice, location, skills) are properly preserved for admin@vhc.in with dom_scraped=true",
+    "Phone/Email extraction from regex (L2) works correctly when DOM values are empty/masked",
+    "Claude CV scan (L3) is correctly triggered ONLY when phone is still missing after L1+L2",
+    "Non-admin users correctly use standard pipeline even with dom_scraped=true",
+    "Admin users without dom_scraped=true correctly use standard pipeline",
+    "Dedup and mandate linking regression tests pass for 3-Layer captures"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_3layer_capture_iteration169.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (backend only testing)"
+  },
+  "seed_data_creation": "None - tests use unique identifiers and clean up after themselves",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "3-Layer Capture Architecture tests are comprehensive. Key test scenarios covered: (1) DOM fields preserved for admin, (2) L2 phone/email extraction, (3) L3 Claude triggering only when phone missing, (4) Non-admin uses standard pipeline, (5) Admin without dom_scraped uses standard pipeline, (6) Dedup and mandate linking regression. Use unique phone numbers (6xxxxxxxxx, 7xxxxxxxxx) to avoid STALE PHONE blocking. Use Naukri format with ₹ symbol for page_text CTC parsing.",
+  "tests_executed": [
+    {
+      "test_name": "test_health_check_returns_200",
+      "status": "PASSED",
+      "description": "Health endpoint returns 200"
+    },
+    {
+      "test_name": "test_3layer_dom_fields_not_overwritten_by_regex",
+      "status": "PASSED",
+      "description": "3-Layer capture with dom_scraped=true for admin@vhc.in: DOM fields preserved and NOT overwritten"
+    },
+    {
+      "test_name": "test_3layer_l2_phone_from_regex",
+      "status": "PASSED",
+      "description": "3-Layer L2: Phone extraction from regex when DOM phone is empty/masked"
+    },
+    {
+      "test_name": "test_3layer_l2_email_from_regex",
+      "status": "PASSED",
+      "description": "3-Layer L2: Email extraction from regex when DOM email is missing"
+    },
+    {
+      "test_name": "test_3layer_phone_found_no_claude",
+      "status": "PASSED",
+      "description": "3-Layer: When phone IS found by regex (L2), Claude is NOT triggered and enrichment_source is 'dom_3layer'"
+    },
+    {
+      "test_name": "test_non_admin_dom_scraped_uses_standard_pipeline",
+      "status": "PASSED",
+      "description": "Non-admin (yamini@vhc.in) with dom_scraped=true: 3-Layer logic NOT activated, page_text OVERRIDES CTC"
+    },
+    {
+      "test_name": "test_admin_dom_scraped_false_uses_standard_pipeline",
+      "status": "PASSED",
+      "description": "Admin with dom_scraped=false: uses standard pipeline, not 3-Layer"
+    },
+    {
+      "test_name": "test_non_admin_standard_capture_unchanged",
+      "status": "PASSED",
+      "description": "Non-admin standard capture (dom_scraped=false): existing hybrid pipeline unchanged"
+    },
+    {
+      "test_name": "test_3layer_dedup_by_naukri_id",
+      "status": "PASSED",
+      "description": "Regression: dedup by naukri_profile_id still works for 3-Layer captures"
+    },
+    {
+      "test_name": "test_3layer_mandate_linking",
+      "status": "PASSED",
+      "description": "Regression: mandate linking still works for 3-Layer captures"
+    },
+    {
+      "test_name": "test_3layer_enrichment_source_dom_3layer",
+      "status": "PASSED",
+      "description": "3-Layer capture with phone found has enrichment_source='dom_3layer'"
+    },
+    {
+      "test_name": "test_3layer_l3_claude_triggered_when_phone_missing",
+      "status": "PASSED",
+      "description": "3-Layer L3: Background Claude triggered when phone is still missing after L1+L2"
+    },
+    {
+      "test_name": "test_3layer_dom_skills_preserved",
+      "status": "PASSED",
+      "description": "3-Layer capture: DOM skills are preserved and not overwritten"
+    }
+  ]
+}

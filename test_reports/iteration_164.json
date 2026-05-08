@@ -1,0 +1,155 @@
+{
+  "summary": "Iteration 164: Comprehensive quality overhaul testing of naukri_regex_parser.py for Claude-level extraction quality. All 35 new tests passed (100%). Verified: Skills extraction anchored to LINE START (prevents matching 'key skills' inside sentences), CORE COMPETENCIES as primary skills source, _clean_skill() garbage filter (rejects conjunctions, Proficient/Adept/Demonstrated starters, >5 words, lowercase gerunds), Profile Summary capped at ~500 chars with sentence-boundary cut, Summary stops at CORE COMPETENCIES/Areas of Expertise boundary, |||| bar artifacts removed, CTC patterns (INR/Rs./Compensation/Package), Expected CTC patterns (Exp CTC/Looking for/Desired CTC), Notice period from header, Address filtering regression, Work experience boundary (Project Manager not truncating), Format A/B/C regressions. All 150 previous tests (iterations 158-163) also pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration164.py",
+    "/app/test_reports/pytest/pytest_naukri_regex_parser_iteration164.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ Skills patterns now require (?:^|\\n)\\s* prefix — prevents matching 'key skills' inside summary sentences (CRITICAL FIX)",
+    "✅ CORE COMPETENCIES section recognized as primary skills source (Strategy 1)",
+    "✅ _clean_skill() rejects: conjunctions (and/or/in/for/to/of/with/the/a/an/by/at/on/is/are/was/were/has/have/had/do/does/did/that/this/also/such/as/its/into/from)",
+    "✅ _clean_skill() rejects: Proficient/Adept/Demonstrated/Experienced/Well-versed/Skilled/Expert/Proven/Capable + >3 words",
+    "✅ _clean_skill() rejects: items with >5 words (sentence fragments)",
+    "✅ _clean_skill() rejects: lowercase-starting fragments with >2 words (gerund phrases)",
+    "✅ Profile Summary capped at ~500 chars with sentence-boundary cut (not 2000+ chars)",
+    "✅ Profile Summary stops at CORE COMPETENCIES / Areas of Expertise boundary",
+    "✅ Profile Summary removes '||||' bar artifacts from Naukri",
+    "✅ CTC extraction: ₹ X Lacs, INR X Lacs, INR X Cr, Rs. X Lacs, Compensation: X LPA, Package: Rs X Lacs",
+    "✅ Expected CTC: expects ₹ X Lacs, Expected CTC: X LPA, Exp CTC: X Lacs, Looking for X Lacs, Desired CTC: X Lacs",
+    "✅ Notice period from header: 3 Months pattern between company-since-date and Highest Qualification",
+    "✅ Address filtering regression: 'Residence Add.' never in employer/work exp",
+    "✅ Work experience boundary: 'Project Manager' designation does NOT truncate section",
+    "✅ Format A (pipe 'Title | Company') regression - still works",
+    "✅ Format B ('Title at Company') regression - still works",
+    "✅ Format C (date-anchored dense text) regression - still works",
+    "✅ Admin routes to regex parser (zero LLM cost)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration164.py"
+  ],
+  "success_rate": {
+    "backend": "100% (35/35 tests in iteration 164, 150/150 in previous iterations 158-163)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used test fixtures with sample CV and Naukri profile text",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Naukri Regex Parser (naukri_regex_parser.py) quality overhaul fully tested in iteration 164. Key improvements verified: 1) Skills extraction anchored to LINE START with (?:^|\\n)\\s* prefix - prevents matching 'key skills' inside summary sentences, 2) CORE COMPETENCIES as primary skills source, 3) _clean_skill() garbage filter strengthened (rejects conjunctions, sentence starters, >5 words, lowercase gerunds), 4) Profile Summary capped at ~500 chars with sentence-boundary cut, 5) Summary stops at CORE COMPETENCIES/Areas of Expertise boundary, 6) |||| bar artifacts removed, 7) CTC patterns expanded (INR/Rs./Compensation/Package), 8) Expected CTC patterns expanded (Exp CTC/Looking for/Desired CTC). All 185 tests across iterations 158-164 pass.",
+  "test_results": {
+    "TestSkillsLineStartAnchor": {
+      "test_skills_not_from_summary_sentence": "PASSED - Skills NOT extracted from 'key skills' inside summary sentence",
+      "test_skills_from_core_competencies_section": "PASSED - CORE COMPETENCIES extracted as primary skills source",
+      "test_skills_from_areas_of_expertise": "PASSED - Areas of Expertise extracted",
+      "test_skills_line_start_anchor_prevents_mid_sentence_match": "PASSED - No mid-sentence extraction"
+    },
+    "TestSkillsGarbageFilter": {
+      "test_clean_skill_rejects_conjunction_starters": "PASSED - All conjunction/preposition starters rejected (and/or/in/for/to/of/with/the/a/an/by/at/on/is/are/was/were/has/have/had/do/does/did/that/this/also/such/as/its/into/from)",
+      "test_clean_skill_rejects_proficient_adept_demonstrated": "PASSED - All Proficient/Adept/Demonstrated sentence starters rejected",
+      "test_clean_skill_rejects_more_than_5_words": "PASSED - All >5 word fragments rejected",
+      "test_clean_skill_rejects_lowercase_gerund_phrases": "PASSED - All lowercase gerund phrases rejected",
+      "test_clean_skill_accepts_valid_skills": "PASSED - All valid 1-4 word skills accepted"
+    },
+    "TestProfileSummary": {
+      "test_summary_capped_at_500_chars": "PASSED - Summary capped at ~500 chars",
+      "test_summary_stops_at_core_competencies_boundary": "PASSED - Summary stops before CORE COMPETENCIES",
+      "test_summary_stops_at_areas_of_expertise_boundary": "PASSED - Summary stops before Areas of Expertise",
+      "test_summary_removes_bar_artifacts": "PASSED - |||| artifacts removed",
+      "test_summary_not_2000_chars": "PASSED - Summary is NOT 2000+ chars"
+    },
+    "TestCTCExtraction": {
+      "test_ctc_rupee_symbol_lacs": "PASSED - ₹ 25 Lacs = 2500000",
+      "test_ctc_inr_lacs": "PASSED - INR 30 Lacs = 3000000",
+      "test_ctc_inr_crore": "PASSED - INR 1.5 Cr = 15000000",
+      "test_ctc_rs_lacs": "PASSED - Rs. 35 Lacs = 3500000",
+      "test_ctc_compensation_pattern": "PASSED - Compensation: 40 LPA = 4000000",
+      "test_ctc_package_pattern": "PASSED - Package: Rs 45 Lacs = 4500000"
+    },
+    "TestExpectedCTC": {
+      "test_expected_ctc_expects_format": "PASSED - expects ₹ 35 Lacs = 3500000",
+      "test_expected_ctc_labeled": "PASSED - Expected CTC: 40 LPA = 4000000",
+      "test_expected_ctc_exp_format": "PASSED - Exp CTC: 30 Lacs = 3000000",
+      "test_expected_ctc_looking_for": "PASSED - Looking for 45 Lacs = 4500000",
+      "test_expected_ctc_desired": "PASSED - Desired CTC: 50 Lacs = 5000000"
+    },
+    "TestNoticePeriod": {
+      "test_notice_period_header_pattern": "PASSED - Header notice period: 3 Months = 90 days",
+      "test_notice_period_labeled": "PASSED - Labeled notice period: 2 Months = 60 days"
+    },
+    "TestAddressFilteringRegression": {
+      "test_residence_add_not_in_employer": "PASSED - Address not in employer",
+      "test_residence_add_not_in_work_experience": "PASSED - Address not in work experience"
+    },
+    "TestWorkExperienceBoundary": {
+      "test_project_manager_not_boundary": "PASSED - Project Manager designation doesn't truncate work experience"
+    },
+    "TestFullNaukriHeaderProfile": {
+      "test_full_naukri_header_extraction": "PASSED - All header fields extracted correctly"
+    },
+    "TestFormatRegressions": {
+      "test_format_a_pipe_regression": "PASSED - Pipe format still works",
+      "test_format_b_at_regression": "PASSED - At format still works",
+      "test_format_c_dense_regression": "PASSED - Dense text format still works"
+    },
+    "TestAPIRouting": {
+      "test_admin_ai_extract_uses_regex": "PASSED - Admin uses regex parser"
+    }
+  },
+  "verified_features": {
+    "skills_line_start_anchor": {
+      "pattern": "(?:^|\\n)\\s* prefix on all skills section patterns",
+      "prevents": "Matching 'key skills' inside summary sentences",
+      "example_blocked": "'Demonstrating key skills and competencies in Procurement' - Procurement NOT extracted"
+    },
+    "core_competencies_as_primary_source": {
+      "pattern": "CORE COMPETENCIES section (Strategy 1)",
+      "extracts": "All competencies listed under CORE COMPETENCIES header"
+    },
+    "skills_garbage_filter": {
+      "conjunction_starters": "and/or/in/for/to/of/with/the/a/an/by/at/on/is/are/was/were/has/have/had/do/does/did/that/this/also/such/as/its/into/from",
+      "sentence_starters": "Proficient/Adept/Demonstrated/Experienced/Well-versed/Skilled/Expert/Proven/Capable + >3 words",
+      "word_limit": ">5 words rejected",
+      "lowercase_gerunds": "lowercase-starting + >2 words rejected"
+    },
+    "profile_summary": {
+      "length_cap": "~500 chars with sentence-boundary cut",
+      "boundary_detection": "Stops at CORE COMPETENCIES / Areas of Expertise",
+      "artifact_removal": "|||| bar artifacts removed"
+    },
+    "ctc_patterns": {
+      "rupee_symbol": "₹ X Lacs",
+      "inr": "INR X Lacs, INR X Cr",
+      "rs": "Rs. X Lacs",
+      "compensation": "Compensation: X LPA",
+      "package": "Package: Rs X Lacs"
+    },
+    "expected_ctc_patterns": {
+      "expects": "expects ₹ X Lacs",
+      "labeled": "Expected CTC: X LPA",
+      "exp": "Exp CTC: X Lacs",
+      "looking_for": "Looking for X Lacs",
+      "desired": "Desired CTC: X Lacs"
+    },
+    "notice_period": {
+      "header_pattern": "3 Months between company-since-date and Highest Qualification",
+      "labeled": "Notice Period: X Months"
+    },
+    "routing": {
+      "admin": "Uses regex parser (zero LLM cost)",
+      "recruiter": "Uses Claude (Anthropic)"
+    }
+  }
+}

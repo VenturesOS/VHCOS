@@ -1,0 +1,49 @@
+{
+  "summary": "Maintenance fix verification for 502 Bad Gateway errors. All code-level fixes verified successfully. API tests limited by MongoDB Atlas IP whitelist (expected per agent context).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "Returns 500 due to MongoDB Atlas timeout - expected in preview env (IP whitelist)", "priority": "INFO"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_maintenance_fixes.py",
+    "/app/test_reports/pytest/pytest_maintenance_502_fixes.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ VERIFIED: Async deadlock fix in candidates.py - removed new_event_loop, now uses async with sem + asyncio.wait_for",
+    "✅ VERIFIED: NotificationBell.jsx polls at 60s with setTimeout recursion and exponential backoff on failure",
+    "✅ VERIFIED: Rate limiter BULK_ROUTE_LIMITS allows 60 req/min for batch-parse, batch-save, cv-upload/parse",
+    "✅ VERIFIED: Notification DB indexes (user_id + is_read) configured in lifecycle.py",
+    "✅ VERIFIED: Auto-healer Redis handling gracefully skips when not configured"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_maintenance_fixes.py"
+  ],
+  "success_rate": {
+    "backend_code_verification": "100%",
+    "backend_api_tests": "N/A - MongoDB Atlas timeout expected",
+    "frontend": "100% - loads correctly"
+  },
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 (from test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "MongoDB Atlas connection times out from preview environment due to IP whitelisting. All code-level fixes for 502 errors have been verified by static analysis. The fixes are: 1) candidates.py batch-parse uses async with sem + asyncio.wait_for instead of new_event_loop, 2) NotificationBell polls at 60s with backoff, 3) Rate limiter allows 60 req/min for bulk endpoints, 4) Notification indexes added, 5) Auto-healer handles Redis gracefully.",
+  "rca_of_the_issue": {
+    "root_cause": "502 Bad Gateway errors caused by: 1) Gunicorn worker deadlocks from asyncio.new_event_loop() inside run_in_executor in batch CV parsing, 2) Aggressive notification polling (30s setInterval), 3) Rate limiting too strict for bulk imports",
+    "fix_verification": {
+      "deadlock_fix": "VERIFIED - candidates.py lines 113-135 now use async with sem + asyncio.wait_for pattern",
+      "polling_fix": "VERIFIED - NotificationBell.jsx lines 48-66 use 60s setTimeout with exponential backoff",
+      "rate_limit_fix": "VERIFIED - rate_limiter.py lines 35-43 have BULK_ROUTE_LIMITS with 60 req/min"
+    },
+    "reproduction_steps": "Cannot reproduce in preview env due to MongoDB Atlas IP whitelist - fixes verified by code inspection",
+    "mitigation": "All fixes applied correctly. Production deployment should resolve 502 errors."
+  }
+}

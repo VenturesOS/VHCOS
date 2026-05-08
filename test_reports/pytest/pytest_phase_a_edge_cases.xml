@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="26" time="16.266" timestamp="2026-01-23T07:46:03.634859+00:00" hostname="agent-env-5ba64262-c7a8-4de6-8b38-ff975ad2ec31"><testcase classname="tests.test_phase_a_edge_cases.TestJobStateMachine" name="test_active_to_on_hold_transition" time="0.402" /><testcase classname="tests.test_phase_a_edge_cases.TestJobStateMachine" name="test_on_hold_to_active_transition" time="0.389" /><testcase classname="tests.test_phase_a_edge_cases.TestJobStateMachine" name="test_active_to_closed_transition" time="0.343" /><testcase classname="tests.test_phase_a_edge_cases.TestJobStateMachine" name="test_closed_to_archived_transition" time="0.382" /><testcase classname="tests.test_phase_a_edge_cases.TestJobStateMachine" name="test_archived_cannot_transition" time="0.399" /><testcase classname="tests.test_phase_a_edge_cases.TestJobStateMachine" name="test_invalid_direct_to_archived" time="0.332" /><testcase classname="tests.test_phase_a_edge_cases.TestReferralStateMachine" name="test_submitted_to_validated" time="0.668" /><testcase classname="tests.test_phase_a_edge_cases.TestReferralStateMachine" name="test_validated_to_linked" time="0.679" /><testcase classname="tests.test_phase_a_edge_cases.TestReferralStateMachine" name="test_full_referral_lifecycle" time="0.766" /><testcase classname="tests.test_phase_a_edge_cases.TestReferralStateMachine" name="test_invalid_referral_transition" time="0.629" /><testcase classname="tests.test_phase_a_edge_cases.TestReferralStateMachine" name="test_closed_referral_cannot_transition" time="0.724" /><testcase classname="tests.test_phase_a_edge_cases.TestPermissionBoundaries" name="test_candidate_cannot_create_job" time="0.290" /><testcase classname="tests.test_phase_a_edge_cases.TestPermissionBoundaries" name="test_candidate_cannot_create_referral" time="0.296" /><testcase classname="tests.test_phase_a_edge_cases.TestPermissionBoundaries" name="test_recruiter_cannot_transition_job" time="0.590" /><testcase classname="tests.test_phase_a_edge_cases.TestPermissionBoundaries" name="test_recruiter_cannot_transition_referral" time="0.628" /><testcase classname="tests.test_phase_a_edge_cases.TestPermissionBoundaries" name="test_employer_cannot_create_team" time="0.296" /><testcase classname="tests.test_phase_a_edge_cases.TestCompanyEmployerAssignment" name="test_admin_can_assign_employer_to_company" time="0.360" /><testcase classname="tests.test_phase_a_edge_cases.TestCompanyEmployerAssignment" name="test_non_admin_cannot_assign_employer" time="0.578" /><testcase classname="tests.test_phase_a_edge_cases.TestTeamCRUD" name="test_admin_can_update_team" time="0.373" /><testcase classname="tests.test_phase_a_edge_cases.TestTeamCRUD" name="test_admin_can_delete_team" time="0.401" /><testcase classname="tests.test_phase_a_edge_cases.TestPublicJobsPrivacy" name="test_public_jobs_list_hides_company_id" time="0.035" /><testcase classname="tests.test_phase_a_edge_cases.TestPublicJobsPrivacy" name="test_public_job_detail_hides_company_id" time="0.329" /><testcase classname="tests.test_phase_a_edge_cases.TestPublicJobsPrivacy" name="test_public_jobs_show_alias_or_confidential" time="0.044" /><testcase classname="tests.test_phase_a_edge_cases.TestAuditTrail" name="test_job_transition_creates_audit_entry" time="0.381" /><testcase classname="tests.test_phase_a_edge_cases.TestAuditTrail" name="test_referral_transition_creates_audit_entry" time="5.025"><error message="failed on setup with &quot;httpx.ConnectTimeout: timed out&quot;">/root/.venv/lib/python3.11/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+/root/.venv/lib/python3.11/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/root/.venv/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/root/.venv/lib/python3.11/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/root/.venv/lib/python3.11/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpcore/_backends/sync.py:207: in connect_tcp
+    with map_exceptions(exc_map):
+/usr/local/lib/python3.11/contextlib.py:158: in __exit__
+    self.gen.throw(typ, value, traceback)
+/root/.venv/lib/python3.11/site-packages/httpcore/_exceptions.py:14: in map_exceptions
+    raise to_exc(exc) from exc
+E   httpcore.ConnectTimeout: timed out
+
+The above exception was the direct cause of the following exception:
+tests/test_phase_a_edge_cases.py:32: in admin_token
+    response = httpx.post(f"{API_URL}/api/auth/login", json=ADMIN_CREDS)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_api.py:304: in post
+    return request(
+/root/.venv/lib/python3.11/site-packages/httpx/_api.py:109: in request
+    return client.request(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_transports/default.py:249: in handle_request
+    with map_httpcore_exceptions():
+/usr/local/lib/python3.11/contextlib.py:158: in __exit__
+    self.gen.throw(typ, value, traceback)
+/root/.venv/lib/python3.11/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ConnectTimeout: timed out</error></testcase><testcase classname="tests.test_phase_a_edge_cases.TestReferralLinkCandidate" name="test_link_referral_creates_candidate" time="0.715" /></testsuite></testsuites>

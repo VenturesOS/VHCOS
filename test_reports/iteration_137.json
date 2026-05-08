@@ -1,0 +1,85 @@
+{
+  "summary": "Iteration 137 - Three features tested: 1) Salary Benchmark with Company/Industry filters, 2) Failed Captures tab in Candidate Bank, 3) Find Candidates with full profile fields. All features working correctly. Backend: 100% pass. Frontend: 100% pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_salary_benchmark_find_candidates.py",
+    "/app/test_reports/pytest/pytest_iteration137.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: Salary Benchmark API accepts company and industry filters (lines 368-408 in analytics.py)",
+    "VERIFIED: Salary Benchmark suggestions endpoint supports company and industry fields (lines 565-567 in analytics.py)",
+    "VERIFIED: Failed Captures API returns logs from naukri_capture_logs collection with pagination (lines 699-725 in candidates.py)",
+    "VERIFIED: Find Candidates matching returns full profile fields: phone, designation, current_employer, location, experience_years, current_salary, expected_salary, notice_period, industry, education, skills",
+    "VERIFIED: MatchResult model has field_validator to convert education list to string (lines 54-68 in matching.py)",
+    "VERIFIED: Frontend SalaryBenchmarkPage.jsx has Company and Industry filter inputs with autocomplete suggestions",
+    "VERIFIED: Frontend FailedCapturesTab.jsx component with recovery/dismiss functionality",
+    "VERIFIED: Frontend FindCandidatesPage.jsx displays full profile in result cards (location, experience, salary, notice period, phone, skills)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_salary_benchmark_find_candidates.py"
+  ],
+  "success_rate": {
+    "backend": "100% (all API endpoints working)",
+    "frontend": "100% (all UI features working)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "No test data created",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 137 tested three new features: 1) Salary Benchmark page now has Company and Industry filter inputs with autocomplete suggestions - API returns filtered results correctly. 2) Candidate Bank page has a new 'Failed Captures' tab showing failed Naukri extension captures with recovery/dismiss functionality - currently 0 unrecovered captures in the system. 3) Find Candidates matching results now show full candidate profile including designation, employer, location, experience, salary, notice period, phone, and skills - all displayed in the result cards.",
+  "features_tested": {
+    "salary_benchmark_company_filter": {
+      "status": "PASSED",
+      "api_endpoint": "GET /api/analytics/salary-benchmark?company=TCS",
+      "result": "Returns 999 candidates with avg salary 946916"
+    },
+    "salary_benchmark_industry_filter": {
+      "status": "PASSED",
+      "api_endpoint": "GET /api/analytics/salary-benchmark?industry=IT",
+      "result": "Returns 28389 candidates with avg salary 1089327"
+    },
+    "salary_benchmark_company_suggestions": {
+      "status": "PASSED",
+      "api_endpoint": "GET /api/analytics/salary-benchmark/suggestions?field=company&q=inf",
+      "result": "Returns suggestions: Infosys (651), Infosys Limited (56), Infosys BPM (43), etc."
+    },
+    "salary_benchmark_industry_suggestions": {
+      "status": "PASSED",
+      "api_endpoint": "GET /api/analytics/salary-benchmark/suggestions?field=industry&q=it",
+      "result": "Returns suggestions: IT Services & Consulting (24292), Accounting/Auditing (1622), etc."
+    },
+    "failed_captures_api": {
+      "status": "PASSED",
+      "api_endpoint": "GET /api/candidate-bank/failed-captures?page=1&limit=20&show=unrecovered",
+      "result": "Returns 0 unrecovered captures (no failed captures in system)"
+    },
+    "find_candidates_full_profile": {
+      "status": "PASSED",
+      "api_endpoint": "POST /api/matching/find-candidates",
+      "result": "Returns full profile fields: designation, current_employer, location, experience_years, current_salary, phone, skills, education (converted to string)"
+    },
+    "frontend_salary_benchmark_filters": {
+      "status": "PASSED",
+      "details": "Company and Industry filter inputs visible with autocomplete suggestions dropdown"
+    },
+    "frontend_failed_captures_tab": {
+      "status": "PASSED",
+      "details": "Failed Captures tab visible in Candidate Bank page with filter buttons (Unrecovered/Recovered/All) and Auto-Classify button"
+    },
+    "frontend_find_candidates_profile": {
+      "status": "PASSED",
+      "details": "Result cards show full profile: name, designation, employer, location (MapPin icon), experience (5 yrs), salary (₹ 19.0L), notice period (1 Months), phone, skills badges"
+    }
+  }
+}

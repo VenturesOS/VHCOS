@@ -1,0 +1,117 @@
+{
+  "summary": "Iteration 126 - API Metrics Dashboard Testing. Backend: 15/16 tests PASSED (1 rate-limited). Frontend: All features verified working. The new System Health Dashboard with API Metrics tab is fully functional with real-time monitoring, time range selection, charts, and endpoint analysis.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "Rate limiting (429) triggered during rapid test execution - expected behavior, not a bug"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_api_metrics_dashboard.py",
+    "/app/test_reports/pytest/pytest_api_metrics_dashboard.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: GET /api/system-health/api-metrics/overview?range=1h returns total_requests, error_rate, avg_response_ms, p95_response_ms, max_response_ms",
+    "VERIFIED: GET /api/system-health/api-metrics/overview accepts different time ranges (1h, 6h, 24h, 7d)",
+    "VERIFIED: GET /api/system-health/api-metrics/timeseries?range=1h returns array of time-bucketed data with time, requests, errors, error_rate, avg_ms",
+    "VERIFIED: GET /api/system-health/api-metrics/top-endpoints?range=1h&sort=errors returns endpoints sorted by error count",
+    "VERIFIED: GET /api/system-health/api-metrics/top-endpoints?range=1h&sort=slow returns endpoints sorted by avg_ms descending",
+    "VERIFIED: GET /api/system-health/api-metrics/db-health returns status, ping_ms, connections (current, available), collections_count",
+    "VERIFIED: API metrics endpoints require admin auth (non-admin gets 403)",
+    "VERIFIED: Unauthenticated requests get 403",
+    "VERIFIED: Frontend System Health page loads at /admin/system-health with two tabs",
+    "VERIFIED: API Metrics tab shows overview cards (Total Requests, Error Rate, Avg Response, P95, Max)",
+    "VERIFIED: Time range selector buttons (1h, 6h, 24h, 7d) are visible and functional",
+    "VERIFIED: Response Time chart and Error Rate chart are rendered with real data",
+    "VERIFIED: MongoDB Status card shows connection status and pool utilization",
+    "VERIFIED: Endpoint Analysis table shows sorted endpoint data with method badges (POST, GET, etc.)",
+    "VERIFIED: Services & Errors tab loads existing service monitoring and error logs",
+    "VERIFIED: Live indicator shows '10s refresh' auto-refresh functionality"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_api_metrics_dashboard.py"
+  ],
+  "success_rate": {
+    "backend": "94% (15/16 tests passed, 1 rate-limited)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "employer": "maneet@vhc.in / 12345678"
+  },
+  "seed_data_creation": "No seed data created - tests use existing credentials and generate traffic dynamically",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 126 tested the new API Metrics Dashboard feature. All backend endpoints are working correctly: /api/system-health/api-metrics/overview, /api/system-health/api-metrics/timeseries, /api/system-health/api-metrics/top-endpoints, and /api/system-health/api-metrics/db-health. The middleware buffers metrics and flushes every 10 seconds, so generate traffic before querying. Frontend shows real-time charts, MongoDB status, and endpoint analysis. The rate limiter on /api/auth/login may trigger 429 during rapid testing - this is expected behavior.",
+  "features_tested": {
+    "api_metrics_overview": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/system-health/api-metrics/overview?range=1h returns correct structure",
+        "GET /api/system-health/api-metrics/overview?range=24h accepts different time ranges",
+        "GET /api/system-health/api-metrics/overview?range=6h",
+        "GET /api/system-health/api-metrics/overview?range=7d"
+      ]
+    },
+    "api_metrics_timeseries": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/system-health/api-metrics/timeseries?range=1h returns array of time-bucketed data",
+        "GET /api/system-health/api-metrics/timeseries?range=24h"
+      ]
+    },
+    "api_metrics_top_endpoints": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/system-health/api-metrics/top-endpoints?range=1h&sort=errors returns endpoints sorted by error count",
+        "GET /api/system-health/api-metrics/top-endpoints?range=1h&sort=slow returns endpoints sorted by avg_ms descending"
+      ]
+    },
+    "api_metrics_db_health": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/system-health/api-metrics/db-health returns status, ping_ms, connections, collections_count"
+      ]
+    },
+    "authorization": {
+      "status": "PASSED",
+      "tests": [
+        "Non-admin users get 403 on api-metrics/overview",
+        "Non-admin users get 403 on api-metrics/timeseries",
+        "Non-admin users get 403 on api-metrics/top-endpoints",
+        "Non-admin users get 403 on api-metrics/db-health",
+        "Unauthenticated requests get 403"
+      ]
+    },
+    "frontend_api_metrics_tab": {
+      "status": "PASSED",
+      "tests": [
+        "System Health page loads at /admin/system-health",
+        "Two tabs visible: API Metrics and Services & Errors",
+        "Time range selector buttons (1h, 6h, 24h, 7d) visible",
+        "Overview cards show Total Requests, Error Rate, Avg Response, P95, Max",
+        "Response Time chart rendered",
+        "Error Rate chart rendered",
+        "MongoDB Status card shows connection status and pool utilization",
+        "Endpoint Analysis table with Most Errors and Slowest sort buttons",
+        "Live indicator shows 10s refresh"
+      ]
+    },
+    "frontend_services_errors_tab": {
+      "status": "PASSED",
+      "tests": [
+        "Services & Errors tab loads",
+        "Active Incidents panel visible",
+        "Error stats cards visible",
+        "Error Trend chart visible",
+        "Most Frequent Errors list visible"
+      ]
+    }
+  }
+}

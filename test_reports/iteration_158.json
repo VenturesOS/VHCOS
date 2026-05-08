@@ -1,0 +1,102 @@
+{
+  "summary": "Iteration 158: Verified admin vs non-admin AI extraction routing. All 17 tests passed. Admin (admin@vhc.in) correctly routes to ZERO-API regex parser ($0 cost), while non-admin users route to Claude Haiku 4.5 via Direct Anthropic SDK with 4-key rotation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_admin_regex_routing_iteration158.py",
+    "/app/test_reports/pytest/pytest_admin_regex_routing_iteration158.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ Admin check (_is_admin) correctly implemented at line 520 in extension.py: email.lower().strip() == 'admin@vhc.in'",
+    "✅ ai_extract_profile (line ~336) routes admin to extract_full_profile_regex, non-admin to Claude",
+    "✅ _background_regex_enrich (line ~648) exists and is called for admin capture enrichment",
+    "✅ _background_claude_enrich (line ~888) is called for non-admin capture enrichment",
+    "✅ Capture endpoint (line ~1582, ~1679) correctly routes based on user email",
+    "✅ re-enrich endpoint (line ~1895) correctly routes admin to regex, non-admin to Claude",
+    "✅ re-enrich returns source='regex_zero_cost' for admin, 'anthropic_direct' for non-admin",
+    "✅ Regex parser extracts all required fields: name, email, phone, CTC, expected CTC, notice period, location, experience, skills, education, work experience, gender, DOB",
+    "✅ API key stats endpoint (/api/api-keys/usage) working correctly with 4-key rotation tracking",
+    "✅ Direct Anthropic SDK with 4-key rotation confirmed in bedrock_service.py (lines 45-92)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_regex_routing_iteration158.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used existing candidates for re-enrich tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin vs non-admin AI extraction routing verified. Key routing points: (1) ai_extract_profile at line 520, (2) capture endpoint at lines 1582/1679, (3) re-enrich endpoint at line 1916. Admin uses naukri_regex_parser.extract_full_profile_regex (zero LLM cost), non-admin uses bedrock_service.extract_full_profile with use_direct_anthropic=True (Claude Haiku 4.5 with 4-key rotation).",
+  "test_results": {
+    "auth_tests": {
+      "admin_login": "PASSED - admin@vhc.in returns valid token",
+      "recruiter_login": "PASSED - yamini@vhc.in returns valid token"
+    },
+    "ai_extract_routing": {
+      "requires_auth": "PASSED - Returns 401/403 without token",
+      "admin_uses_regex": "PASSED - Admin AI extract returns structured data via regex parser",
+      "recruiter_uses_claude": "PASSED - Recruiter AI extract uses Direct Anthropic (confirmed in logs)"
+    },
+    "regex_parser_extraction": {
+      "name": "PASSED - Extracted correctly",
+      "email": "PASSED - Extracted correctly",
+      "phone": "PASSED - Extracted correctly",
+      "current_ctc": "PASSED - 18 Lacs -> 1800000",
+      "expected_ctc": "PASSED - 25 Lacs -> 2500000",
+      "notice_period": "PASSED - '2 Months' extracted",
+      "location": "PASSED - 'Bangalore' extracted",
+      "experience_years": "PASSED - 8.5 years extracted",
+      "skills": "PASSED - Skills array extracted",
+      "work_experience": "PASSED - Work experience entries extracted",
+      "education": "PASSED - Education entries extracted",
+      "gender": "PASSED - 'Male' extracted",
+      "date_of_birth": "PASSED - DOB extracted"
+    },
+    "re_enrich_routing": {
+      "requires_auth": "PASSED - Returns 401/403 without token",
+      "invalid_candidate_404": "PASSED - Returns 404 for non-existent candidate",
+      "admin_uses_regex": "PASSED - Returns source='regex_zero_cost'"
+    },
+    "capture_routing": {
+      "requires_auth": "PASSED - Returns 401/403/422 without token",
+      "admin_triggers_regex_enrichment": "PASSED - Code review confirms _background_regex_enrich is called"
+    },
+    "api_key_stats": {
+      "requires_admin": "PASSED - Returns 403 for non-admin",
+      "returns_usage_data": "PASSED - Returns keys, total_estimated_spent_usd, total_estimated_remaining_usd"
+    },
+    "code_review": {
+      "admin_check_exists": "PASSED - _is_admin check at line 520",
+      "background_regex_enrich_exists": "PASSED - Function at line 648",
+      "re_enrich_admin_routing": "PASSED - Admin routing at line 1920",
+      "regex_parser_complete": "PASSED - All required field extractions present"
+    }
+  },
+  "verified_routing_paths": {
+    "admin_ai_extract": "admin@vhc.in -> extract_full_profile_regex (naukri_regex_parser.py) -> $0 cost",
+    "non_admin_ai_extract": "other users -> _call_claude with use_direct_anthropic=True -> Claude Haiku 4.5 via Anthropic SDK",
+    "admin_capture_enrichment": "admin@vhc.in -> _fire_and_forget(_background_regex_enrich) -> $0 cost",
+    "non_admin_capture_enrichment": "other users -> _fire_and_forget(_background_claude_enrich) -> Claude Haiku 4.5",
+    "admin_re_enrich": "admin@vhc.in -> extract_full_profile_regex -> source='regex_zero_cost'",
+    "non_admin_re_enrich": "other users -> extract_full_profile with use_direct_anthropic=True -> source='anthropic_direct'"
+  },
+  "anthropic_key_rotation": {
+    "keys_configured": 4,
+    "rotation_logic": "Try key#1, on rate limit/auth error try key#2, then key#3, then key#4, then fallback to OpenRouter/Emergent",
+    "tracking": "Token usage tracked in MongoDB anthropic_key_usage collection per key per day"
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "summary": "VHC Talent OS v3.6.2 feature testing complete. All backend APIs work correctly. Frontend code verified. Backend: 16/16 tests passed for visibility settings, email stripping, name cleaning, AI extraction, profile endpoint, and extension download. Frontend: Code review confirms shortlistJobId job picker is correctly implemented in FindCandidatesPage.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Admin login works (admin@vhc.in / VhcAdmin@2024)",
+    "Recruiter login works (yamini@vhc.in / VhcAdmin@2024)",
+    "POST /api/extension/capture - sets visibility field with employer_ids and recruiter_ids",
+    "POST /api/extension/capture - strips recruiter's own email to null when it matches current_user.email",
+    "POST /api/extension/capture - keeps different (non-recruiter) emails",
+    "POST /api/extension/capture - name cleaning removes appended years ('Rahul Sharma - 15 Year(s)' -> 'Rahul Sharma')",
+    "POST /api/extension/capture - name cleaning removes decimal years ('Priya Patel - 3.5 Years' -> 'Priya Patel')",
+    "GET /api/candidate-bank (as recruiter yamini@vhc.in) - returns candidates visible to recruiter",
+    "GET /api/candidate-bank (as admin) - returns all candidates including naukri_extension sourced",
+    "POST /api/extension/ai-extract - uses dom_extracted_name to override AI-extracted name",
+    "POST /api/extension/ai-extract - uses dom_extracted_email to override AI-extracted email",
+    "GET /api/extension/profile/{id} - returns full candidate profile with all fields",
+    "GET /api/extension/profile/{id} - returns 404 for non-existent candidate",
+    "GET /api/download/naukri-extension - returns valid ZIP file",
+    "GET /api/download/naukri-extension - ZIP contains manifest.json with version 3.6.2",
+    "GET /api/download/naukri-extension - content.js has extractNameFromTitle and extractContactFromDOM functions",
+    "POST /api/matching/find-candidates - returns matching candidates (verified via curl)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_v362_visibility_email_ai.py",
+    "/app/test_reports/pytest/pytest_v362_visibility_email.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "FindCandidatesPage.jsx line 379: {!selectedJobId && ( ... shows job picker only when no job mandate selected (paste JD or upload JD mode)",
+    "FindCandidatesPage.jsx line 131: const jobId = selectedJobId || shortlistJobId; correctly uses either source for shortlisting",
+    "extension.py build_team_visibility() function correctly adds all team members (employer + recruiters) to visibility",
+    "extension.py line 478-481: email stripping checks current_user.email match",
+    "extension.py lines 445-449: name cleaning regex removes appended experience years",
+    "content.js extractNameFromTitle() extracts candidate name from page title (most reliable source)",
+    "content.js extractContactFromDOM() uses targeted selectors, NOT body text scan (prevents recruiter email leak)"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_v362_visibility_email_ai.py - New comprehensive test file"
+  ],
+
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "Code review: 100% - shortlistJobId implementation correct"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "recruiter": {"email": "yamini@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "seed_data_creation": "Created test candidates with test_v362b_ prefix for visibility, email stripping, and name cleaning tests",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "v3.6.2 features fully tested. Key implementations: 1) build_team_visibility() in extension.py sets visibility.employer_ids and visibility.recruiter_ids for captured candidates, 2) Email stripping compares submitted email with current_user.email and sets to null if match, 3) Name cleaning regex removes '- X Year(s)' patterns, 4) AI extraction accepts dom_extracted_name/email/phone and overrides AI output, 5) Extension content.js v3.6.2 extracts name from page title and contacts from targeted DOM selectors (not body text), 6) FindCandidatesPage shortlistJobId Select appears when !selectedJobId (paste JD or upload JD mode). Test prefix: test_v362b_",
+
+  "features_verified": {
+    "POST /api/extension/capture visibility": "WORKING - sets employer_ids and recruiter_ids from team",
+    "POST /api/extension/capture email stripping": "WORKING - recruiter's own email stripped to null",
+    "POST /api/extension/capture name cleaning": "WORKING - appended years removed",
+    "GET /api/candidate-bank recruiter visibility": "WORKING - returns candidates with recruiter_id in visibility",
+    "GET /api/candidate-bank admin access": "WORKING - returns all candidates",
+    "POST /api/extension/ai-extract DOM override": "WORKING - dom_extracted_name/email/phone override AI",
+    "GET /api/extension/profile/{id}": "WORKING - returns full profile",
+    "GET /api/download/naukri-extension": "WORKING - ZIP with v3.6.2 manifest",
+    "FindCandidatesPage shortlistJobId picker": "CODE VERIFIED - Select appears when !selectedJobId"
+  },
+
+  "mocked_apis": "None - all APIs are real (OpenAI API for ai-extract is real)"
+}

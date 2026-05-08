@@ -1,0 +1,69 @@
+{
+  "summary": "Production Stability Hardening - All features verified and working. Email normalization (lowercase + strip whitespace) works on login. Environment badge shows 'PREVIEW MODE' on recruiter and admin dashboards. Backend startup logs show environment report with ENV, DB, MONGO_CLUSTER fields.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_production_hardening.py",
+    "/app/test_reports/pytest/pytest_production_hardening.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_production_hardening.py"
+  ],
+  "success_rate": {
+    "backend": "100% (all core email normalization and env-info tests pass)",
+    "frontend": "100% (environment badge visible on recruiter and admin dashboards)"
+  },
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024, bhumika@vhc.in / 12345678",
+  "seed_data_creation": "None required",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Production stability hardening features verified: (1) Email normalization working - mixed-case 'Bhumika@VHC.in' and whitespace-padded '  bhumika@vhc.in  ' both login successfully and return lowercase email. (2) GET /api/system-health/env-info returns {environment: 'preview', is_production: false} for authenticated users. (3) Environment badge with data-testid='environment-badge' visible on recruiter and admin dashboards showing 'PREVIEW MODE — DATA MAY NOT MATCH LIVE'. (4) Backend startup logs show 'VHC TALENT OS — ENVIRONMENT REPORT' with ENV, DB, MONGO_CLUSTER, IS_PRODUCTION fields. (5) normalize_existing_emails startup hook ran and normalized 1 email to lowercase.",
+  "tests_executed": {
+    "backend_api_tests": [
+      "Login with lowercase email 'bhumika@vhc.in' - PASSED",
+      "Login with mixed-case email 'Bhumika@VHC.in' returns lowercase 'bhumika@vhc.in' - PASSED",
+      "Login with uppercase email 'BHUMIKA@VHC.IN' - PASSED",
+      "Login with whitespace-padded email '  bhumika@vhc.in  ' - PASSED",
+      "Login with mixed-case + whitespace '  Bhumika@VHC.in  ' - PASSED",
+      "Admin login with 'Admin@VHC.in' returns lowercase 'admin@vhc.in' - PASSED",
+      "GET /api/system-health/env-info without auth returns 403 - PASSED",
+      "GET /api/system-health/env-info with recruiter auth returns {environment: 'preview', is_production: false} - PASSED",
+      "GET /api/system-health/env-info with admin auth returns {environment: 'preview', is_production: false} - PASSED"
+    ],
+    "frontend_ui_tests": [
+      "Recruiter login with mixed-case email 'Bhumika@VHC.in' - PASSED",
+      "Recruiter dashboard shows environment badge with data-testid='environment-badge' - PASSED",
+      "Environment badge text contains 'PREVIEW MODE' - PASSED",
+      "Admin login works - PASSED",
+      "Admin dashboard shows environment badge - PASSED"
+    ],
+    "startup_logging_tests": [
+      "Backend logs show 'VHC TALENT OS — ENVIRONMENT REPORT' - VERIFIED",
+      "ENV field shows 'preview' - VERIFIED",
+      "DB field shows 'vhc_talent_os' - VERIFIED",
+      "MONGO_CLUSTER field shows 'cluster0.vuhdiod.mongodb.net' - VERIFIED",
+      "IS_PRODUCTION field shows 'False' - VERIFIED",
+      "[EMAIL_NORM] Normalised 1 existing user emails to lowercase - VERIFIED"
+    ]
+  },
+  "features_verified": [
+    "Email normalization on login - .lower().strip() applied",
+    "Environment badge showing 'PREVIEW MODE' on recruiter dashboard",
+    "Environment badge showing 'PREVIEW MODE' on admin dashboard",
+    "GET /api/system-health/env-info requires authentication (401/403 without token)",
+    "GET /api/system-health/env-info returns {environment: 'preview', is_production: false}",
+    "Startup environment logging with ENV, DB, MONGO_CLUSTER, IS_PRODUCTION",
+    "Centralized environment resolver in /app/backend/utils/environment.py",
+    "normalize_email function available for email normalization"
+  ],
+  "notes": "Some pytest runs hit rate limit (429) after rapid successive login attempts. Core functionality verified via curl and Playwright. All emails stored in DB are lowercase (normalize_existing_emails startup hook ran and normalized emails)."
+}

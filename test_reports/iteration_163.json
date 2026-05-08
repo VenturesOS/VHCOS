@@ -1,0 +1,179 @@
+{
+  "summary": "Iteration 163: Comprehensive quality overhaul testing of naukri_regex_parser.py. All 45 new tests passed (100%). Verified: Address line filtering (_is_address_line), skills garbage filtering (_clean_skill), notice period patterns (days/weeks/available-to-join/buyout), expected CTC patterns, education improvements (ITI/Graduation/Doctorate), work experience boundaries (Project Manager fix), employer/designation backfill from work experience, summary extraction with Resume Headline fallback. All 105 previous tests (iterations 158-162) also pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration163.py",
+    "/app/test_reports/pytest/pytest_naukri_regex_parser_iteration163.xml",
+    "/app/test_reports/pytest/pytest_naukri_regex_parser_iteration163_new.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ Address lines ('Residence Add.', 'C/o', 'H.No', 'Flat No', 'Colony') NEVER appear in employer, designation, or work experience - _is_address_line() helper works correctly",
+    "✅ Skills extraction filters garbage (addresses, nav text, numbers) - _clean_skill() helper works correctly",
+    "✅ Notice Period handles: X Months, X Days, X Weeks, Available to join, Can join, Immediate, Serving Notice, Buyout, standalone months",
+    "✅ Expected CTC handles: expects ₹ X Lacs, Expected CTC: X LPA, Exp CTC: X, Looking for X, Desired CTC: X",
+    "✅ Education handles: labeled sections (Education:, Qualification:), ITI/Graduation/Doctorate patterns",
+    "✅ Summary handles: Profile Summary, Career Objective, Resume Headline fallback, synthesized fallback with skills",
+    "✅ Work experience section boundaries don't stop at 'Project Manager' or 'Project Lead' (designation names containing 'Project')",
+    "✅ Employer extracted from work experience backfill when header/labeled patterns fail",
+    "✅ Designation extracted from work experience backfill when header/labeled patterns fail",
+    "✅ Naukri concatenated header: CTC, Expected CTC, Notice Period, Experience Years correctly extracted",
+    "✅ Full profile extraction with all fields populated correctly for clean Naukri format",
+    "✅ Full profile extraction for address-heavy profile (address NOT in employer/work exp)",
+    "✅ Format A (pipe 'Title | Company') regression - still works",
+    "✅ Format B ('Title at Company') regression - still works",
+    "✅ Format C (date-anchored) regression - still works",
+    "✅ Admin routes to regex parser, recruiter routes to Claude"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration163.py"
+  ],
+  "success_rate": {
+    "backend": "100% (45/45 tests in iteration 163, 105/105 in previous iterations 158-162)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used test fixtures with sample CV and Naukri profile text",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Naukri Regex Parser (naukri_regex_parser.py) comprehensive quality overhaul fully tested. Key improvements verified in iteration 163: 1) _is_address_line() helper filters residential addresses from all extraction fields, 2) _clean_skill() helper filters garbage from skills, 3) Notice period patterns expanded (days, weeks, available to join, buyout, standalone months), 4) Expected CTC patterns expanded (Exp CTC, Looking for, Desired CTC), 5) Education improved with ITI/Graduation/Doctorate patterns, 6) Work experience boundaries fixed (Project Manager/Lead not treated as section boundary), 7) Employer/designation backfill from work experience when header/labeled patterns fail, 8) Summary extraction with Resume Headline fallback. All 150 tests across iterations 158-163 pass.",
+  "test_results": {
+    "TestAddressLineFiltering": {
+      "test_is_address_line_helper": "PASSED - All address patterns detected correctly",
+      "test_address_not_in_employer": "PASSED - Address lines filtered from employer",
+      "test_address_not_in_work_experience": "PASSED - Address lines filtered from work experience",
+      "test_address_heavy_profile_extraction": "PASSED - Full profile with address in personal details extracted correctly"
+    },
+    "TestSkillsGarbageFiltering": {
+      "test_clean_skill_helper": "PASSED - Garbage filtered correctly",
+      "test_skills_extraction_multi_line": "PASSED - Multi-line skills extracted",
+      "test_skills_extraction_single_line": "PASSED - Single-line skills extracted",
+      "test_skills_extraction_it_skills_section": "PASSED - IT Skills section extracted",
+      "test_skills_no_garbage": "PASSED - No garbage in skills"
+    },
+    "TestNoticePeriodPatterns": {
+      "test_notice_period_months": "PASSED - 2 Months = 60 days",
+      "test_notice_period_days": "PASSED - 45 Days = 45 days",
+      "test_notice_period_weeks": "PASSED - 2 Weeks = 14 days",
+      "test_notice_period_available_to_join": "PASSED - Available to join 2 Months = 60 days",
+      "test_notice_period_can_join": "PASSED - Can join in 30 Days = 30 days",
+      "test_notice_period_immediate": "PASSED - Immediate = 0 days",
+      "test_notice_period_serving_notice": "PASSED - Serving Notice detected",
+      "test_notice_period_buyout": "PASSED - Buyout detected",
+      "test_notice_period_standalone_months": "PASSED - Standalone months extracted"
+    },
+    "TestExpectedCTCPatterns": {
+      "test_expected_ctc_expects_format": "PASSED - expects ₹ 35 Lacs = 3500000",
+      "test_expected_ctc_labeled": "PASSED - Expected CTC: 40 LPA = 4000000",
+      "test_expected_ctc_exp_format": "PASSED - Exp CTC: 30 Lacs = 3000000",
+      "test_expected_ctc_looking_for": "PASSED - Looking for 45 Lacs = 4500000",
+      "test_expected_ctc_desired": "PASSED - Desired CTC: 50 Lacs = 5000000"
+    },
+    "TestEducationPatterns": {
+      "test_education_labeled_section": "PASSED - Education: section extracted",
+      "test_education_qualification_section": "PASSED - Qualification: section extracted",
+      "test_education_iti_pattern": "PASSED - ITI pattern extracted",
+      "test_education_graduation_pattern": "PASSED - Graduation pattern extracted",
+      "test_education_doctorate_pattern": "PASSED - Ph.D/Doctorate pattern extracted"
+    },
+    "TestSummaryExtraction": {
+      "test_summary_profile_summary": "PASSED - Profile Summary extracted",
+      "test_summary_career_objective": "PASSED - Career Objective extracted",
+      "test_summary_resume_headline_fallback": "PASSED - Resume Headline fallback works",
+      "test_summary_synthesized_fallback": "PASSED - Synthesized fallback works"
+    },
+    "TestWorkExperienceBoundaries": {
+      "test_project_manager_not_section_boundary": "PASSED - Project Manager designation doesn't truncate work experience",
+      "test_project_lead_not_section_boundary": "PASSED - Project Lead designation doesn't truncate work experience"
+    },
+    "TestEmployerDesignationBackfill": {
+      "test_employer_backfill_from_work_experience": "PASSED - Employer backfilled from work experience",
+      "test_designation_backfill_from_work_experience": "PASSED - Designation backfilled from work experience"
+    },
+    "TestNaukriConcatenatedHeader": {
+      "test_naukri_header_full_extraction": "PASSED - All header fields extracted"
+    },
+    "TestFullProfileExtraction": {
+      "test_clean_naukri_format_full_extraction": "PASSED - All fields populated correctly"
+    },
+    "TestFormatRegressions": {
+      "test_format_a_pipe_regression": "PASSED - Pipe format still works",
+      "test_format_b_at_regression": "PASSED - At format still works",
+      "test_format_c_dense_text_regression": "PASSED - Dense text format still works"
+    },
+    "TestAPIRouting": {
+      "test_admin_ai_extract_uses_regex": "PASSED - Admin uses regex parser",
+      "test_recruiter_ai_extract_works": "PASSED - Recruiter uses Claude"
+    },
+    "TestEdgeCases": {
+      "test_empty_text": "PASSED - Low confidence returned",
+      "test_minimal_text": "PASSED - Basic extraction works"
+    }
+  },
+  "verified_features": {
+    "address_filtering": {
+      "helper": "_is_address_line() detects: Residence Add., C/o, H.No, Flat No, Plot No, Block, House No, Street No, Lane No, Sector, Pin Code, Colony, Apartment, Floor, Village, Tehsil, Post Office, Ward No",
+      "employer": "Address lines never appear in current_employer",
+      "work_experience": "Address lines never appear in work experience company/designation"
+    },
+    "skills_garbage_filtering": {
+      "helper": "_clean_skill() filters: emails, domains, nav text (Save123), addresses, durations (5 years), salaries (10 Lacs), personal info (Male, Married)",
+      "multi_line": "Multi-line skills sections extracted",
+      "single_line": "Single-line skills extracted",
+      "it_skills": "IT Skills section (Naukri-specific) extracted"
+    },
+    "notice_period_patterns": {
+      "months": "X Months notice",
+      "days": "X Days notice",
+      "weeks": "X Weeks notice",
+      "available_to_join": "Available to join X Months/Days/Weeks",
+      "can_join": "Can join in X Months/Days/Weeks",
+      "immediate": "Immediate joiner",
+      "serving_notice": "Currently Serving Notice",
+      "buyout": "Buyout Option Available",
+      "standalone_months": "Standalone months on own line"
+    },
+    "expected_ctc_patterns": {
+      "expects": "expects ₹ X Lacs",
+      "labeled": "Expected CTC: X LPA",
+      "exp": "Exp CTC: X Lacs",
+      "looking_for": "Looking for X Lacs",
+      "desired": "Desired CTC: X Lacs"
+    },
+    "education_patterns": {
+      "labeled": "Education:, Qualification: sections",
+      "iti": "ITI pattern",
+      "graduation": "Graduation pattern",
+      "doctorate": "Ph.D/Doctorate pattern"
+    },
+    "summary_extraction": {
+      "profile_summary": "Profile Summary: section",
+      "career_objective": "Career Objective: section",
+      "resume_headline_fallback": "Resume Headline as fallback when no explicit summary",
+      "synthesized_fallback": "Synthesized from designation + company + experience + skills"
+    },
+    "work_experience_boundaries": {
+      "project_manager": "Project Manager designation doesn't truncate work experience",
+      "project_lead": "Project Lead designation doesn't truncate work experience"
+    },
+    "employer_designation_backfill": {
+      "employer": "Backfilled from first/current work experience when header/labeled patterns fail",
+      "designation": "Backfilled from first/current work experience when header/labeled patterns fail"
+    },
+    "routing": {
+      "admin": "Uses regex parser (zero LLM cost)",
+      "recruiter": "Uses Claude (Anthropic)"
+    }
+  }
+}

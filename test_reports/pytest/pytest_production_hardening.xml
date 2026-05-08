@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="7" skipped="0" tests="13" time="22.935" timestamp="2026-02-22T10:34:07.940866+00:00" hostname="agent-env-a430d2fe-7199-41d7-bb42-de5b8ec08824"><testcase classname="tests.test_production_hardening.TestEmailNormalization" name="test_login_with_lowercase_email" time="15.965" /><testcase classname="tests.test_production_hardening.TestEmailNormalization" name="test_login_with_mixed_case_email" time="1.671" /><testcase classname="tests.test_production_hardening.TestEmailNormalization" name="test_login_with_uppercase_email" time="1.437" /><testcase classname="tests.test_production_hardening.TestEmailNormalization" name="test_login_with_whitespace_padded_email" time="1.438" /><testcase classname="tests.test_production_hardening.TestEmailNormalization" name="test_login_with_mixed_case_and_whitespace" time="1.441" /><testcase classname="tests.test_production_hardening.TestEmailNormalization" name="test_admin_login_with_mixed_case" time="0.118"><failure message="AssertionError: Admin mixed-case login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">tests/test_production_hardening.py:85: in test_admin_login_with_mixed_case
+    assert response.status_code == 200, f"Admin mixed-case login failed: {response.text}"
+E   AssertionError: Admin mixed-case login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="tests.test_production_hardening.TestEnvironmentInfoEndpoint" name="test_env_info_requires_authentication" time="0.105" /><testcase classname="tests.test_production_hardening.TestEnvironmentInfoEndpoint" name="test_env_info_with_admin_auth" time="0.102"><failure message="AssertionError: Failed to get admin token&#10;assert None">tests/test_production_hardening.py:113: in test_env_info_with_admin_auth
+    assert token, "Failed to get admin token"
+E   AssertionError: Failed to get admin token
+E   assert None</failure></testcase><testcase classname="tests.test_production_hardening.TestEnvironmentInfoEndpoint" name="test_env_info_with_recruiter_auth" time="0.129"><failure message="AssertionError: Failed to get recruiter token&#10;assert None">tests/test_production_hardening.py:131: in test_env_info_with_recruiter_auth
+    assert token, "Failed to get recruiter token"
+E   AssertionError: Failed to get recruiter token
+E   assert None</failure></testcase><testcase classname="tests.test_production_hardening.TestRecruiterDashboard" name="test_recruiter_login" time="0.097"><failure message="AssertionError: Recruiter login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">tests/test_production_hardening.py:154: in test_recruiter_login
+    assert response.status_code == 200, f"Recruiter login failed: {response.text}"
+E   AssertionError: Recruiter login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="tests.test_production_hardening.TestRecruiterDashboard" name="test_recruiter_can_access_auth_me" time="0.107"><failure message="assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">tests/test_production_hardening.py:169: in test_recruiter_can_access_auth_me
+    assert login_response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="tests.test_production_hardening.TestDatabaseEmailNormalization" name="test_admin_login_returns_lowercase_email" time="0.099"><failure message="assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">tests/test_production_hardening.py:194: in test_admin_login_returns_lowercase_email
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="tests.test_production_hardening.TestDatabaseEmailNormalization" name="test_recruiter_email_stored_lowercase" time="0.095"><failure message="assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">tests/test_production_hardening.py:209: in test_recruiter_email_stored_lowercase
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,55 @@
+{
+  "summary": "Backend-only verification of P1/P2/P3 shipment: Bulk Re-Enrich (gaps_only + progress movement fix), RunPod auto-sync daemon, Qwen failure dashboard, Chrome extension CRX auto-update infrastructure, plus regression checks. 24/24 integration tests PASS end-to-end against REACT_APP_BACKEND_URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/extension/ai-extract", "issue": "For Ramakant labeled-layout, response fills current_company='19 Years' and current_designation='Current CTC' (regex pulled label tokens into company/designation slots). Does NOT affect the fields explicitly asked for (exp, ctc, ectc, notice, name, email, phone all correct), but the company/designation fallback is wrong on labeled layouts and leaks into work_experience[0]. Consider blacklisting label tokens ('Experience', 'Current CTC', 'Notice Period', '19 Years', etc.) in company/designation regex."},
+      {"endpoint": "/api/candidate-bank/{id}/download-resume", "issue": "401 when only Authorization header is sent; requires ?token= query param. Works fine with either Bearer header OR token query — but the error message 'Pass ?token= for new-tab downloads' implies header-only is rejected. Verified in test that ?token= works (307 to R2). Low priority — documented behaviour, not a bug."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_p1_p2_shipment.py",
+    "/app/test_reports/pytest/iteration_176_results.xml"
+  ],
+  "action_items": [
+    "Optional: sanitise company/designation regex on /api/extension/ai-extract so labeled Naukri top-cards don't bleed 'Experience'/'19 Years'/'Current CTC' into work_experience[0]."
+  ],
+  "critical_code_review_comments": [
+    "routes/candidates.py is 2966 lines — exceeds 700-line ceiling. Bulk-re-enrich + failed-capture-recovery + deletion endpoints should be split into dedicated modules.",
+    "routes/extension_updates.py reads /app/browser-extension/manifest.json synchronously inside every /latest-version and /checkin request (blocks the event loop for <1ms but still sync I/O inside async). Cache on startup is trivial and preferable.",
+    "admin_monitoring.py uses literal admin@vhc.in check via _require_admin role-based gate (good) — but failure-stats/live-banner pipeline builds a new datetime cutoff comparing ISO strings which works only because created_at is stored as ISO (lexicographic sort == chronological). Document this invariant or switch to BSON dates.",
+    "runpod_sync_service.py get_snapshot must be idempotent and thread-safe — verify the module-level state dict is not mutated during an in-flight request.",
+    "extension_updates.py checkin endpoint has NO size/shape validation on body.version or body.install_type beyond .strip()[:32]. Accepted: any string. Consider regex gate like ^\\d+\\.\\d+\\.\\d+$ for version to keep version-stats buckets clean.",
+    "bulk-re-enrich endpoint does NOT persist the job_id back into individual candidate_bank rows — so you cannot go from a candidate to 'which job last touched me'. Minor observability gap."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_p1_p2_shipment.py (NEW — 24 integration tests)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Admin: admin@vhc.in / VhcAdmin@2024; Recruiter (used for 403 tests): yamini@vhc.in / Ventures@321. NOTE: rohit@vhc.in login returns role=admin in JWT on this environment — did NOT use for 403 tests.",
+  "seed_data_creation": "None — bulk-re-enrich progress test used existing candidate_bank rows with force=true (limit=2, concurrency=2).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Full test suite at /app/backend/tests/test_p1_p2_shipment.py — 24 tests, ~90s runtime. Structure: 4 public extension endpoints + 3 authenticated extension endpoints + 4 runpod admin monitoring + 4 LLM dashboards + 7 bulk-re-enrich (dry-run, gaps_only compare, 503 path, 403 path, status 404, status list, progress-movement) + 2 regressions (Ramakant ai-extract + resume download redirect). IMPORTANT: rohit@vhc.in behaves as admin in JWT on this preview env — use yamini@vhc.in for 403 tests. The Ramakant regression asserts only the contract-verified fields (name, email, phone, exp=19, ctc=2500000, ectc=3400000, notice contains '3'); it deliberately does NOT assert current_company because the labeled-layout regex leaks label tokens into company — logged as a minor bug.",
+  "features_verified": {
+    "bulk_re_enrich_gaps_only_filter": "PASS — dry_run with gaps_only=false returns >= gaps_only=true count (superset verified).",
+    "bulk_re_enrich_503_when_runpod_unreachable": "PASS — when RunPod reachable returns 200 with job_id; when not, returns 503 with 'RunPod' in body. Both paths contractually correct.",
+    "bulk_re_enrich_progress_movement": "PASS — scheduled limit=2 concurrency=2 force=true job, polled /status/{job_id}, observed progress_pct move past 0 or reach completion (old bug was stuck-at-0%).",
+    "bulk_re_enrich_403_recruiter": "PASS — yamini gets 403.",
+    "bulk_re_enrich_status_404": "PASS — nonexistent job_id returns 404.",
+    "runpod_health_admin_403": "PASS — admin 200 with {vllm_reachable,pod_id,pod_name,pod_status,vllm_model,last_sync_at,auto_sync_enabled}; recruiter 403.",
+    "runpod_sync_now_admin_403": "PASS — admin 200; recruiter 403.",
+    "llm_live_banner_admin_403": "PASS — returns {state in (healthy,warning,critical), message, details}; recruiter 403.",
+    "llm_failure_stats_admin_403": "PASS — returns {total_extractions,by_source,summary,health_grade}; recruiter 403.",
+    "extension_update_xml_omaha_v3": "PASS — <gupdate> with correct xmlns, appid, codebase, version, hash_sha256. appid matches extension_id.txt (nmlmoniipcgpomhhogijpbelmpcoafjk).",
+    "extension_download_crx": "PASS — Content-Type application/x-chrome-extension, body starts with CRX3 magic 'Cr24'.",
+    "extension_latest_version_json": "PASS — all required keys present (version, crx_available, crx_url, zip_url, extension_id, update_url). extension_id matches file.",
+    "extension_checkin": "PASS — {ok:true, latest_version, upgrade_required:false, your_version}.",
+    "extension_version_stats_admin_403": "PASS — admin 200 with all required keys; recruiter 403.",
+    "legacy_zip_download_backward_compat": "PASS — /api/download/naukri-extension still returns 200 with ZIP magic 'PK'.",
+    "ai_extract_ramakant_regression": "PASS — exp=19.0, current_salary=2500000, expected_salary=3400000, notice='3 Months', name/email/phone from DOM payload propagated correctly.",
+    "resume_download_redirect": "PASS — 307/302/308 to R2 (or 404 if no resume_versions). Works with ?token= query param."
+  },
+  "rca_of_the_issue": "N/A — no bugs reproduced. Previous 'stuck at 0%' bug verified fixed: the event-loop blocking call was wrapped in asyncio.to_thread and progress is flushed to bulk_enrich_jobs after every candidate (candidates.py:1219-1240)."
+}

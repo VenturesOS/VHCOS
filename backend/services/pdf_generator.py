@@ -1,0 +1,202 @@
+"""
+Pure-Python PDF resume generator using fpdf2.
+No system dependencies required — works in any deployment environment.
+"""
+from fpdf import FPDF
+import io
+import os
+import re
+
+# Font directory (optional — fpdf2 ships with Helvetica/Courier built-in)
+_FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+
+
+class _ResumePDF(FPDF):
+    """Minimal subclass to set consistent defaults."""
+
+    def __init__(self):
+        super().__init__(format="A4")
+        self.set_auto_page_break(auto=True, margin=15)
+        self.add_page()
+        self.set_margins(15, 12, 15)
+
+    def _section_heading(self, title: str):
+        self.set_font("Helvetica", "B", 11)
+        self.set_text_color(30, 30, 30)
+        self.cell(0, 7, title.upper(), new_x="LMARGIN", new_y="NEXT")
+        self.set_draw_color(180, 180, 180)
+        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
+        self.ln(2)
+
+    def _body_text(self, text: str, size: int = 10):
+        self.set_font("Helvetica", "", size)
+        self.set_text_color(60, 60, 60)
+        self.multi_cell(0, 5, text)
+        self.ln(1)
+
+
+def _clean(val) -> str:
+    """Safely convert to string, stripping None. Also normalize Unicode chars."""
+    if val is None:
+        return ""
+    text = str(val).strip()
+    # Replace common Unicode characters with ASCII equivalents
+    # (fpdf2's built-in Helvetica font doesn't support these)
+    unicode_replacements = {
+        '\u2013': '-',    # en-dash
+        '\u2014': '--',   # em-dash
+        '\u2018': "'",    # left single quote
+        '\u2019': "'",    # right single quote
+        '\u201c': '"',    # left double quote
+        '\u201d': '"',    # right double quote
+        '\u2022': '-',    # bullet
+        '\u2026': '...',  # ellipsis
+        '\u00a0': ' ',    # non-breaking space
+        '\u00b7': '-',    # middle dot
+        '\u2011': '-',    # non-breaking hyphen
+        '\u2010': '-',    # hyphen
+        '\u00ad': '-',    # soft hyphen
+    }
+    for char, replacement in unicode_replacements.items():
+        text = text.replace(char, replacement)
+    return text
+
+
+def build_pdf_from_profile(profile: dict) -> bytes:
+    """Generate a professional PDF resume from profile dict. Returns PDF bytes."""
+    p = profile
+    name = _clean(p.get("name"))
+    email = _clean(p.get("email"))
+    phone = _clean(p.get("phone"))
+    location = _clean(p.get("location"))
+    linkedin = _clean(p.get("linkedin"))
+    summary = _clean(p.get("summary"))
+    skills = p.get("skills") or []
+    experience = p.get("experience") or []
+    education = p.get("education") or []
+
+    pdf = _ResumePDF()
+
+    # ── Header ──────────────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(20, 20, 20)
+    pdf.cell(0, 10, name or "Candidate Resume", align="C", new_x="LMARGIN", new_y="NEXT")
+
+    contact_parts = [x for x in [phone, email, location] if x]
+    if contact_parts:
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 5, "  |  ".join(contact_parts), align="C", new_x="LMARGIN", new_y="NEXT")
+    if linkedin:
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(60, 100, 160)
+        pdf.cell(0, 5, linkedin, align="C", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(3)
+    pdf.set_draw_color(120, 120, 120)
+    pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+    pdf.ln(4)
+
+    # ── Summary ─────────────────────────────────────────────────────────
+    if summary:
+        pdf._section_heading("Summary")
+        pdf._body_text(summary)
+        pdf.ln(2)
+
+    # ── Experience ──────────────────────────────────────────────────────
+    if experience:
+        pdf._section_heading("Experience")
+        for exp in experience:
+            title = _clean(exp.get("title"))
+            company = _clean(exp.get("company"))
+            duration = _clean(exp.get("duration"))
+
+            # Title and duration on same line (handle long text gracefully)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(30, 30, 30)
+            dur_w = pdf.get_string_width(duration) + 2 if duration else 0
+            avail = pdf.w - pdf.l_margin - pdf.r_margin
+            title_w = avail - dur_w
+
+            # If title is too long for same line, put duration on next line
+            if title_w < 30 or pdf.get_string_width(title) > title_w:
+                pdf.multi_cell(0, 5, title)
+                if duration:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(130, 130, 130)
+                    pdf.cell(0, 5, duration, new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(title_w, 5, title)
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(130, 130, 130)
+                pdf.cell(dur_w, 5, duration, align="R", new_x="LMARGIN", new_y="NEXT")
+
+            if company:
+                pdf.set_font("Helvetica", "I", 9)
+                pdf.set_text_color(80, 80, 80)
+                pdf.cell(0, 5, company, new_x="LMARGIN", new_y="NEXT")
+
+            bullets = [b for b in (exp.get("bullets") or []) if b and _clean(b)]
+            for bullet in bullets:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(60, 60, 60)
+                # Use multi_cell with proper width calculation (leave indent space)
+                x_start = pdf.l_margin + 9  # 5 indent + 4 for dash
+                bullet_width = pdf.w - x_start - pdf.r_margin
+                pdf.set_x(pdf.l_margin)
+                pdf.cell(5)  # indent
+                pdf.cell(4, 4.5, "-")
+                # Use inline_multi_cell approach to handle long bullets
+                pdf.multi_cell(bullet_width, 4.5, _clean(bullet))
+
+            pdf.ln(3)
+
+    # ── Education ───────────────────────────────────────────────────────
+    if education:
+        pdf._section_heading("Education")
+        for edu in education:
+            degree = _clean(edu.get("degree"))
+            institution = _clean(edu.get("institution"))
+            year = _clean(edu.get("year"))
+            gpa = _clean(edu.get("gpa"))
+
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(30, 30, 30)
+            yr_w = pdf.get_string_width(year) + 2 if year else 0
+            avail = pdf.w - pdf.l_margin - pdf.r_margin
+            degree_w = avail - yr_w
+
+            # If degree is too long for same line, put year on next line
+            if degree_w < 30 or pdf.get_string_width(degree) > degree_w:
+                pdf.multi_cell(0, 5, degree)
+                if year:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(130, 130, 130)
+                    pdf.cell(0, 5, year, new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(degree_w, 5, degree)
+                if year:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(130, 130, 130)
+                    pdf.cell(yr_w, 5, year, align="R")
+                pdf.ln()
+
+            sub_line = institution
+            if gpa:
+                sub_line += f"  |  GPA: {gpa}"
+            if sub_line:
+                pdf.set_font("Helvetica", "I", 9)
+                pdf.set_text_color(80, 80, 80)
+                pdf.cell(0, 5, sub_line, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+
+    # ── Skills ──────────────────────────────────────────────────────────
+    if skills:
+        pdf._section_heading("Skills")
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(60, 60, 60)
+        skills_text = "  |  ".join(str(s) for s in skills if s)
+        pdf.multi_cell(0, 5, skills_text)
+
+    # ── Output ──────────────────────────────────────────────────────────
+    return pdf.output()

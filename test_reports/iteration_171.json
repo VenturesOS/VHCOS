@@ -1,0 +1,113 @@
+{
+  "summary": "Backend-only testing of 8 extraction architecture fixes in bedrock_service.py. All 27 tests passed (100%). Verified: temperature=0 on Claude calls, _preprocess_naukri_text adds section labels, regex-first architecture, _validate_extraction type enforcement with caps, ALREADY EXTRACTED prompt section, merge logic (regex wins for numeric), JSON parse fallback returns regex result, string CTC conversion.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_extraction_architecture_iteration171.py",
+    "/app/test_reports/pytest/pytest_extraction_architecture_iteration171.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix 1 VERIFIED: .with_params(temperature=0) set on LlmChat in _call_claude (line 151)",
+    "Fix 2 VERIFIED: _preprocess_naukri_text (lines 348-391) adds [PROFILE HEADER], [CANDIDATE CV/RESUME], [PROFILE + CV BODY] labels",
+    "Fix 3 VERIFIED: extract_full_profile calls _regex_backfill FIRST at line 492, BEFORE _call_claude at line 580",
+    "Fix 4 VERIFIED: _validate_extraction (lines 398-469) enforces CTC_MAX=200M, EXP_MAX=50, NOTICE_MAX=365",
+    "Fix 5 VERIFIED: Claude prompt includes 'ALREADY EXTRACTED' section built from regex_filled (lines 503-508)",
+    "Fix 6 VERIFIED: Merge logic (lines 597-604) — regex wins for current_ctc, expected_ctc, experience_years, notice_period_days",
+    "Fix 7 VERIFIED: JSONDecodeError fallback (line 621) returns _validate_extraction(regex_result), not error dict",
+    "Fix 8 VERIFIED: _validate_extraction handles string CTC like '60 Lacs' → 6000000, '1.3 Cr' → 13000000 (lines 416-425)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_extraction_architecture_iteration171.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (backend only testing)"
+  },
+  "seed_data_creation": "None - pure unit tests using function imports and code structure verification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 8 extraction architecture fixes verified via unit tests. Key functions tested: _preprocess_naukri_text (section labeling), _validate_extraction (type coercion + caps), _regex_backfill (deterministic extraction). The extract_full_profile function now follows regex-first architecture with Claude gap-fill. Test patterns: (1) Direct function imports from services.bedrock_service, (2) Code structure verification via file reading for async functions, (3) Edge case testing for type coercion (string CTC, string experience, boolean strings).",
+  "tests_executed": [
+    {"test_name": "test_temperature_zero_in_call_claude_code", "status": "PASSED", "description": "Fix 1: .with_params(temperature=0) exists in _call_claude"},
+    {"test_name": "test_preprocess_function_exists", "status": "PASSED", "description": "Fix 2: _preprocess_naukri_text function exists"},
+    {"test_name": "test_preprocess_adds_profile_header_label", "status": "PASSED", "description": "Fix 2: [PROFILE HEADER] label added"},
+    {"test_name": "test_preprocess_adds_cv_resume_label", "status": "PASSED", "description": "Fix 2: [CANDIDATE CV/RESUME] label added when CV markers found"},
+    {"test_name": "test_preprocess_adds_profile_cv_body_label_when_no_cv_marker", "status": "PASSED", "description": "Fix 2: [PROFILE + CV BODY] label added when no CV markers"},
+    {"test_name": "test_preprocess_detects_multiple_cv_markers", "status": "PASSED", "description": "Fix 2: Multiple CV markers detected"},
+    {"test_name": "test_regex_backfill_called_before_claude_in_code", "status": "PASSED", "description": "Fix 3: _regex_backfill runs BEFORE _call_claude"},
+    {"test_name": "test_regex_backfill_function_exists", "status": "PASSED", "description": "Fix 3: _regex_backfill function exists"},
+    {"test_name": "test_regex_backfill_extracts_ctc", "status": "PASSED", "description": "Fix 3: Regex extracts CTC correctly (39 Lacs → 3900000)"},
+    {"test_name": "test_regex_backfill_extracts_experience", "status": "PASSED", "description": "Fix 3: Regex extracts experience (Save13y → 13.0)"},
+    {"test_name": "test_validate_extraction_function_exists", "status": "PASSED", "description": "Fix 4: _validate_extraction function exists"},
+    {"test_name": "test_ctc_cap_at_200_million", "status": "PASSED", "description": "Fix 4: CTC > 200M → None"},
+    {"test_name": "test_experience_cap_at_50_years", "status": "PASSED", "description": "Fix 4: Experience > 50 → None"},
+    {"test_name": "test_notice_period_days_cap_at_365", "status": "PASSED", "description": "Fix 4: Notice > 365 → None"},
+    {"test_name": "test_string_ctc_conversion_60_lacs", "status": "PASSED", "description": "Fix 8: '60 Lacs' → 6000000"},
+    {"test_name": "test_string_ctc_conversion_1_3_cr", "status": "PASSED", "description": "Fix 8: '1.3 Cr' → 13000000"},
+    {"test_name": "test_string_ctc_conversion_35_lpa", "status": "PASSED", "description": "Fix 8: '35 LPA' → 3500000"},
+    {"test_name": "test_string_experience_conversion", "status": "PASSED", "description": "Fix 4: String '5.5' → float 5.5"},
+    {"test_name": "test_string_fields_must_be_strings", "status": "PASSED", "description": "Fix 4: List → string conversion"},
+    {"test_name": "test_list_fields_must_be_lists", "status": "PASSED", "description": "Fix 4: Comma-string → list conversion"},
+    {"test_name": "test_boolean_fields_must_be_booleans", "status": "PASSED", "description": "Fix 4: 'true'/'yes'/'1' → True"},
+    {"test_name": "test_already_extracted_section_in_code", "status": "PASSED", "description": "Fix 5: ALREADY EXTRACTED section in prompt"},
+    {"test_name": "test_merge_logic_in_code", "status": "PASSED", "description": "Fix 6: Regex wins for numeric fields"},
+    {"test_name": "test_json_parse_error_returns_regex_result", "status": "PASSED", "description": "Fix 7: JSONDecodeError → regex_result"},
+    {"test_name": "test_general_exception_returns_regex_result", "status": "PASSED", "description": "Fix 7: Exception → regex_result"},
+    {"test_name": "test_validate_extraction_caps_constants", "status": "PASSED", "description": "Cap constants: CTC_MAX=200M, EXP_MAX=50, NOTICE_MAX=365"},
+    {"test_name": "test_preprocess_cv_markers_list", "status": "PASSED", "description": "CV markers list is comprehensive"}
+  ],
+  "architecture_fixes_summary": {
+    "fix_1": {
+      "description": "Temperature=0 set on all Claude calls via .with_params(temperature=0)",
+      "location": "services/bedrock_service.py:151",
+      "status": "VERIFIED"
+    },
+    "fix_2": {
+      "description": "_preprocess_naukri_text adds section labels for structured LLM input",
+      "location": "services/bedrock_service.py:348-391",
+      "labels": ["[PROFILE HEADER]", "[CANDIDATE CV/RESUME]", "[PROFILE + CV BODY]"],
+      "status": "VERIFIED"
+    },
+    "fix_3": {
+      "description": "extract_full_profile runs _regex_backfill FIRST (before Claude)",
+      "location": "services/bedrock_service.py:492 (regex) vs 580 (claude)",
+      "status": "VERIFIED"
+    },
+    "fix_4": {
+      "description": "_validate_extraction enforces types with sanity caps",
+      "location": "services/bedrock_service.py:398-469",
+      "caps": {"CTC_MAX": 200000000, "EXP_MAX": 50, "NOTICE_MAX": 365},
+      "status": "VERIFIED"
+    },
+    "fix_5": {
+      "description": "Claude prompt includes ALREADY EXTRACTED section with regex pre-fill",
+      "location": "services/bedrock_service.py:503-508",
+      "status": "VERIFIED"
+    },
+    "fix_6": {
+      "description": "Merge logic — regex wins for numeric fields (CTC, experience, notice)",
+      "location": "services/bedrock_service.py:597-604",
+      "numeric_fields": ["current_ctc", "expected_ctc", "experience_years", "notice_period_days"],
+      "status": "VERIFIED"
+    },
+    "fix_7": {
+      "description": "JSON parse error fallback returns regex-only result (not error dict)",
+      "location": "services/bedrock_service.py:618-625",
+      "status": "VERIFIED"
+    },
+    "fix_8": {
+      "description": "_validate_extraction handles string CTC like '60 Lacs' → 6000000",
+      "location": "services/bedrock_service.py:416-425",
+      "conversions": {"60 Lacs": 6000000, "1.3 Cr": 13000000, "35 LPA": 3500000},
+      "status": "VERIFIED"
+    }
+  }
+}

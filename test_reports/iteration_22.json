@@ -1,0 +1,109 @@
+{
+  "summary": "P0 Governance Fix Testing Complete - Both issues VERIFIED FIXED. Issue 1 (Shareable Job Links): Public job page accessible, apply form with CV upload works, toggle controls visible in Admin/Employer Jobs pages for live jobs. Issue 2 (AI Screening Scope): Confirmed searches ENTIRE candidate database (15 candidates) regardless of user role visibility.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/mandates/team-recruiters", "issue": "Returns 404 for employer - may need team setup", "priority": "LOW"}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ ISSUE 1 - Public job page /jobs/{jobId} accessible without auth",
+    "✅ ISSUE 1 - Job ID format VHC/2026/0001 displayed correctly",
+    "✅ ISSUE 1 - Apply form with CV upload + parsing works",
+    "✅ ISSUE 1 - Consent checkbox required for application",
+    "✅ ISSUE 1 - Shareable link toggle visible in Admin Jobs page for live jobs",
+    "✅ ISSUE 1 - Copy link and Open in new tab buttons work",
+    "✅ ISSUE 1 - Shareable link requires career_page_status='live'",
+    "✅ ISSUE 1 - Non-live jobs return 404 on public endpoint",
+    "✅ ISSUE 2 - Admin AI screening searches ENTIRE database (15 candidates)",
+    "✅ ISSUE 2 - Employer AI screening searches ENTIRE database (15 candidates)",
+    "✅ ISSUE 2 - Recruiter AI screening searches ENTIRE database (15 candidates)",
+    "✅ ISSUE 2 - AI screening includes source tracking (source, source_role)",
+    "✅ ISSUE 2 - AI screening scope > Data Bank visibility (governance verified)",
+    "✅ FEATURE AUDIT - Job ID format VHC/YYYY/NNNN present and incrementing",
+    "✅ FEATURE AUDIT - JD Parsing (paste + upload) works with AI extraction",
+    "✅ FEATURE AUDIT - Mandate allocation endpoint exists",
+    "✅ FEATURE AUDIT - Audit logs recorded in career_page_history"
+  ],
+
+  "verified_fixes": {
+    "issue_1_shareable_job_links": {
+      "description": "Shareable Job Link feature restored and working",
+      "public_endpoint": "GET /api/public/jobs/{job_id}",
+      "apply_endpoint": "POST /api/public/apply",
+      "toggle_endpoint": "PUT /api/jobs/{job_id}/shareable-link",
+      "ui_locations": ["Admin Jobs page", "Employer Jobs page (for live jobs)"],
+      "test_job_id": "fb3514ce-2c16-40ab-ae4d-f0ae38016d3a",
+      "test_job_public_id": "VHC/2026/0001",
+      "status": "FIXED AND VERIFIED"
+    },
+    "issue_2_ai_screening_scope": {
+      "description": "AI Screening now searches ENTIRE candidate database",
+      "endpoint": "POST /api/matching/find-candidates",
+      "total_candidates_in_db": 15,
+      "admin_screened": 15,
+      "employer_screened": 15,
+      "recruiter_screened": 15,
+      "governance_comment": "DATA VISIBILITY ≠ AI SEARCH SCOPE - Results are READ-ONLY, CONTEXTUAL VISIBILITY",
+      "status": "FIXED AND VERIFIED"
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_shareable_jobs.py",
+    "/app/backend/tests/test_ai_screening_scope.py",
+    "/app/backend/tests/test_jd_parsing.py",
+    "/app/test_reports/pytest/pytest_governance_fix.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "AI Screening correctly implements system-level intelligence (searches all candidates)",
+    "Shareable link controls correctly gated behind career_page_status='live'",
+    "Public job endpoints properly sanitize company names (show alias, not real name)"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_ai_screening_scope.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (37/37 tests passed - 29 shareable/JD + 8 AI screening)",
+    "frontend": "100%"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "employer": {"email": "employer@vhctalent.com", "password": "VhcTalent@2024"},
+    "recruiter1": {"email": "recruiter@vhctalent.com", "password": "VhcTalent@2024"}
+  },
+
+  "test_data": {
+    "live_job_id": "fb3514ce-2c16-40ab-ae4d-f0ae38016d3a",
+    "live_job_public_id": "VHC/2026/0001",
+    "total_candidates_in_db": 15,
+    "employer_visible_candidates": 1,
+    "recruiter_visible_candidates": 1
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (SMS/WhatsApp)"],
+    "note": "Email and SMS notifications are MOCKED"
+  },
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "P0 Governance fixes verified: 1) Shareable Job Links feature fully restored - public job page at /jobs/{jobId}, apply form with CV upload, toggle controls in Admin/Employer Jobs pages. 2) AI Screening now searches ENTIRE candidate database (15 candidates) regardless of user role visibility. Test files: test_shareable_jobs.py (16 tests), test_ai_screening_scope.py (8 tests), test_jd_parsing.py (13 tests). All 37 tests passing."
+}

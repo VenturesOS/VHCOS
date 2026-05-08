@@ -1,0 +1,122 @@
+{
+  "summary": "Iteration 167: Verified all data quality sanity checks for candidate profile capture from Chrome Extension. All 27 tests passed (100%). Fixed a bug where `re_module` was not imported at the top of routes/extension.py, causing 500 errors when page_text field was used.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_data_quality_sanity_iteration167.py",
+    "/app/test_reports/pytest/pytest_data_quality_sanity_iteration167.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ CTC sanity cap (₹20 Cr max) working: 'Rs 30000 Cr' project values correctly rejected, '25 LPA' = 2500000, '50 Lacs' = 5000000",
+    "✅ Education validation working: 'Raw material handling systems' and 'Negotiate for best contract prices' correctly REJECTED",
+    "✅ Education validation working: 'MBA/PGDM from Jindal Global Business School' and 'B.Tech from NIT Jamshedpur' correctly KEPT",
+    "✅ Location word boundary working: 'Goal-oriented professional' does NOT produce location='Goa'",
+    "✅ Designation validation working: 'Engineering Manager' KEPT, 'Rate estimation and Capacity mapping' REJECTED",
+    "✅ page_text field parsing working: '₹ 78 Lacs Oman 1 Month' extracts CTC=7800000, notice='1 Month'",
+    "✅ POST /api/extension/ai-extract returns extraction_source='regex_hybrid' for well-structured profiles",
+    "✅ All 35 existing regex parser tests (iteration 164) still pass",
+    "✅ All 14 capture inline regex tests (iteration 166) still pass"
+  ],
+  "updated_files": [
+    "/app/backend/routes/extension.py",
+    "/app/backend/tests/test_data_quality_sanity_iteration167.py"
+  ],
+  "success_rate": {
+    "backend": "100% (27/27 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "Test candidates created and cleaned up during tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 167 verified all data quality sanity checks: 1) CTC capped at ₹20 Cr - project values like 'Rs 30000 Cr' are rejected, 2) Education validation rejects job responsibilities ('Raw material handling', 'Negotiate for best contract') and keeps valid degrees ('MBA/PGDM', 'B.Tech'), 3) Location uses word boundary matching - 'Goal-oriented' does NOT produce 'Goa', 4) Designation validation rejects responsibility text and entries >80 chars, 5) page_text field parsing extracts CTC/notice from structured Naukri page data. Fixed a bug where `re_module` was not imported at the top of routes/extension.py.",
+  "test_results": {
+    "TestHealthCheck": {
+      "test_health_check_returns_200": "PASSED - status=healthy, mongodb=ok"
+    },
+    "TestCTCSanityCap": {
+      "test_ctc_project_value_rejected": "PASSED - 'Rs 30000 Cr' project value correctly rejected (CTC=None)",
+      "test_ctc_25_lpa_under_cap": "PASSED - 25 LPA = 2500000",
+      "test_ctc_50_lacs_under_cap": "PASSED - 50 Lacs = 5000000",
+      "test_ctc_1_5_cr_under_cap": "PASSED - 1.5 Cr = 15000000",
+      "test_ctc_20_cr_at_cap": "PASSED - 20 Cr = 200000000 (at cap)",
+      "test_ctc_25_cr_exceeds_cap_rejected": "PASSED - 25 Cr correctly rejected (exceeds cap)",
+      "test_expected_ctc_exceeds_cap_rejected": "PASSED - Expected CTC 50 Cr correctly rejected"
+    },
+    "TestEducationValidation": {
+      "test_education_raw_material_handling_rejected": "PASSED - 'Raw material handling systems' rejected",
+      "test_education_negotiate_contract_rejected": "PASSED - 'Negotiate for best contract prices' rejected",
+      "test_education_mba_pgdm_kept": "PASSED - 'MBA/PGDM from Jindal Global Business School' kept",
+      "test_education_btech_kept": "PASSED - 'B.Tech from NIT Jamshedpur' kept",
+      "test_education_graduation_commerce_kept": "PASSED - 'Graduation in Commerce, Delhi University' kept"
+    },
+    "TestLocationWordBoundary": {
+      "test_location_goa_not_from_goal_oriented": "PASSED - 'Goal-oriented professional' does NOT produce location='Goa'",
+      "test_location_goa_extracted_when_valid": "PASSED - 'Goa' correctly extracted when explicitly mentioned",
+      "test_location_bangalore_extracted": "PASSED - 'Bangalore' correctly extracted"
+    },
+    "TestDesignationValidation": {
+      "test_designation_engineering_manager_kept": "PASSED - 'Engineering Manager' kept as valid designation",
+      "test_designation_rate_estimation_rejected": "PASSED - 'Rate estimation and Capacity mapping' rejected",
+      "test_designation_responsible_for_rejected": "PASSED - 'Responsible for...' rejected",
+      "test_designation_too_long_rejected": "PASSED - Designation >80 chars rejected"
+    },
+    "TestPageTextParsing": {
+      "test_parse_naukri_page_text_ctc": "PASSED - '₹ 78 Lacs Oman 1 Month' extracts CTC=7800000, notice='1 Month'"
+    },
+    "TestCaptureEndpointWithPageText": {
+      "test_capture_with_page_text_extracts_ctc": "PASSED - Capture with page_text field works"
+    },
+    "TestAIExtractEndpoint": {
+      "test_ai_extract_returns_regex_hybrid": "PASSED - extraction_source='regex_hybrid' for well-structured profiles"
+    },
+    "TestExistingRegexParserRegression": {
+      "test_ctc_rupee_symbol_lacs": "PASSED - ₹ 25 Lacs = 2500000",
+      "test_notice_period_labeled": "PASSED - Notice Period: 2 Months = 60 days",
+      "test_skills_from_core_competencies": "PASSED - CORE COMPETENCIES extracted",
+      "test_work_experience_format_b_at": "PASSED - Format B (at) works"
+    }
+  },
+  "verified_bug_fixes": {
+    "bug_1_ctc_absurd_numbers": {
+      "root_cause": "Regex matched project values like 'Rs 30000 Cr' instead of personal salary",
+      "fix_location": "services/naukri_regex_parser.py line 953-959 - CTC_MAX = 200_000_000 (₹20 Cr)",
+      "verification": "test_ctc_project_value_rejected PASSED - 'Rs 30000 Cr' correctly rejected"
+    },
+    "bug_2_education_job_responsibilities": {
+      "root_cause": "Education section captured job responsibilities like 'Raw material handling systems'",
+      "fix_location": "services/naukri_regex_parser.py line 962-999 - _DEGREE_KEYWORDS and _ACTION_VERBS validation",
+      "verification": "test_education_raw_material_handling_rejected PASSED, test_education_mba_pgdm_kept PASSED"
+    },
+    "bug_3_location_goa_from_goal": {
+      "root_cause": "Location extraction matched 'goa' substring in 'Goal-oriented'",
+      "fix_location": "services/naukri_regex_parser.py line 667 - word boundary matching with \\b",
+      "verification": "test_location_goa_not_from_goal_oriented PASSED"
+    },
+    "bug_4_designation_responsibility_text": {
+      "root_cause": "Designation captured responsibility text like 'Rate estimation and Capacity mapping'",
+      "fix_location": "services/naukri_regex_parser.py line 1007-1019 - _DESG_ACTION_STARTERS and length validation",
+      "verification": "test_designation_rate_estimation_rejected PASSED"
+    },
+    "bug_5_page_text_re_module_not_defined": {
+      "root_cause": "_parse_naukri_page_text used re_module but it was only imported inside capture_profile function",
+      "fix_location": "routes/extension.py line 17 - added 'import re as re_module' at top of file",
+      "verification": "test_capture_with_page_text_extracts_ctc PASSED (was 500 error before fix)"
+    }
+  },
+  "regression_tests": {
+    "iteration_164_regex_parser": "35/35 tests passed",
+    "iteration_166_capture_inline": "14/14 tests passed"
+  }
+}

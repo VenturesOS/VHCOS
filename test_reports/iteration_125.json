@@ -1,0 +1,107 @@
+{
+  "summary": "Iteration 125 - Maintenance Report Bug Fixes Testing. Backend: 19/19 tests PASSED. All critical API error handling fixes verified: CV parse returns 400 for bad files (not 500), notifications return 401/403 for unauthenticated (not 500), applications handle edge cases gracefully, batch-parse returns 422 for missing files (not 405).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_maintenance_report_iteration125.py",
+    "/app/test_reports/pytest/pytest_maintenance_report_iteration125.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: GET /api/health returns ok status",
+    "VERIFIED: POST /api/auth/login returns access_token for valid admin credentials",
+    "VERIFIED: POST /api/auth/login returns 401 for invalid credentials",
+    "VERIFIED: POST /api/cv-upload/parse parses valid PDF and returns success:true with profile_data",
+    "VERIFIED: POST /api/cv-upload/parse returns 400 for unsupported file types (not 500)",
+    "VERIFIED: POST /api/cv-upload/parse returns 400/422 for empty/corrupt PDFs (not 500)",
+    "VERIFIED: POST /api/cv-upload/parse returns 422 when no file provided",
+    "VERIFIED: GET /api/notifications/unread-count returns {count: N} for authenticated user",
+    "VERIFIED: GET /api/notifications/unread-count returns 401/403 for unauthenticated (not 500)",
+    "VERIFIED: GET /api/notifications returns {notifications: [], total: N} for authenticated user",
+    "VERIFIED: GET /api/notifications returns 401/403 for unauthenticated",
+    "VERIFIED: GET /api/applications returns list for admin user without 500",
+    "VERIFIED: GET /api/applications?job_id=nonexistent returns empty list (not 500)",
+    "VERIFIED: GET /api/applications returns 401/403 for unauthenticated",
+    "VERIFIED: POST /api/candidate-bank/batch-parse returns 422 when called without files (not 405)",
+    "VERIFIED: POST /api/candidate-bank/batch-parse accepts valid PDF files",
+    "VERIFIED: POST /api/candidate-bank/batch-parse returns 401/403 for unauthenticated",
+    "VERIFIED: CV parse returns proper error codes (400/422) for invalid content (not 500)",
+    "VERIFIED: Notifications endpoints handle DB issues gracefully (return 0 count, not 500)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_maintenance_report_iteration125.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "No seed data created - tests use existing admin credentials and create test PDFs dynamically using reportlab",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 125 tested the maintenance report bug fixes. All critical API error handling has been verified: CV parse endpoint properly returns 400 for bad files instead of 500, notifications endpoints return 401/403 for unauthenticated requests instead of 500, applications endpoint handles edge cases gracefully, and batch-parse returns 422 for missing files instead of 405. The fixes in cv_upload.py (lines 106-125), notifications.py (lines 69-105), applications.py (lines 289-335), and candidates.py (lines 64-100) are all working correctly.",
+  "features_tested": {
+    "health_endpoint": {
+      "status": "PASSED",
+      "tests": ["GET /api/health returns ok status"]
+    },
+    "auth_login": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/auth/login returns access_token for valid credentials",
+        "POST /api/auth/login returns 401 for invalid credentials"
+      ]
+    },
+    "cv_parse_endpoint": {
+      "status": "PASSED",
+      "tests": [
+        "Valid PDF parsing returns success:true with profile_data",
+        "Unsupported file types return 400 (not 500)",
+        "Empty/corrupt PDFs return 400/422 (not 500)",
+        "Missing file returns 422",
+        "Invalid content returns 400/422 (not 500)"
+      ]
+    },
+    "notifications_endpoints": {
+      "status": "PASSED",
+      "tests": [
+        "Authenticated unread-count returns {count: N}",
+        "Unauthenticated unread-count returns 401/403 (not 500)",
+        "Authenticated notifications list returns {notifications: [], total: N}",
+        "Unauthenticated notifications list returns 401/403",
+        "DB resilience - returns 0 count on errors (not 500)"
+      ]
+    },
+    "applications_endpoint": {
+      "status": "PASSED",
+      "tests": [
+        "Authenticated list returns applications without 500",
+        "Nonexistent job_id filter returns empty list (not 500)",
+        "Unauthenticated returns 401/403"
+      ]
+    },
+    "batch_parse_endpoint": {
+      "status": "PASSED",
+      "tests": [
+        "Missing files returns 422 (not 405)",
+        "Valid PDF files accepted",
+        "Unauthenticated returns 401/403"
+      ]
+    }
+  },
+  "maintenance_report_fixes_verified": {
+    "cv_parse_500s": "FIXED - Returns 400 for bad files, 422 for validation errors, 503 for AI service issues",
+    "notifications_500s_403s": "FIXED - Returns 401/403 for unauthenticated, handles DB errors gracefully",
+    "applications_500s": "FIXED - Handles edge cases gracefully, returns empty list for nonexistent filters",
+    "batch_parse_405": "FIXED - Returns 422 for missing files (validation error)"
+  }
+}

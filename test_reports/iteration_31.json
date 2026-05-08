@@ -1,0 +1,83 @@
+{
+  "summary": "VHC Talent OS - Candidate Name Fix and Expected CTC Feature Testing Complete. All backend tests passed (8/8 core tests). Frontend verified: Candidate names display correctly in pipeline (not 'Unknown'), Expected CTC section works with both Amount (₹) and Hike (%) modes.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ Recruiter login works correctly (HTTP 200)",
+    "✅ GET /api/candidate-bank returns candidates for recruiter",
+    "✅ GET /api/jobs returns active jobs",
+    "✅ Existing application fe012056-0a6f-4e2d-a44f-1be83697b1be has candidate_name (Jane Smith)",
+    "✅ POST /api/applications/link-candidate with expected_salary works correctly",
+    "✅ Application response includes candidate_name field (not 'Unknown')",
+    "✅ Application response includes expected_salary field",
+    "✅ GET /api/jobs/{id}/applicants shows candidate_name correctly in pipeline",
+    "✅ FRONTEND: Candidate Bank page shows candidate names correctly",
+    "✅ FRONTEND: Add as Applicant dialog has Expected CTC section",
+    "✅ FRONTEND: Expected CTC supports Amount (₹) input type",
+    "✅ FRONTEND: Expected CTC supports Hike (%) input type with calculation",
+    "✅ FRONTEND: Expected CTC calculation displays correctly (e.g., '₹15,60,000 (30% hike from ₹12,00,000)')",
+    "✅ FRONTEND: Pipeline shows all candidate names correctly (no 'Unknown')",
+    "✅ REGRESSION: Recruiter candidate bank accessible",
+    "✅ REGRESSION: Employer pipeline loads correctly"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_candidate_name_expected_ctc.py",
+    "/app/test_reports/pytest/pytest_candidate_name_ctc.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Bug fix correctly implemented: link_candidate_to_job now sets both 'candidate_name' and 'name' fields for backward compatibility",
+    "Expected CTC feature properly calculates percentage hike from current salary",
+    "ApplicationResponse model correctly includes expected_salary field",
+    "Frontend Expected CTC section has good UX with green background and clear calculation display"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_candidate_name_expected_ctc.py (new test file)"
+  ],
+
+  "success_rate": {
+    "backend": "100% (8/8 core tests passed, 2 skipped due to non-existent endpoints)",
+    "frontend": "100% (all UI elements verified)"
+  },
+
+  "test_credentials": {
+    "recruiter": {"email": "recruiter@vhctalent.com", "password": "VhcTalent@2024"},
+    "employer": {"email": "employer@vhctalent.com", "password": "VhcTalent@2024"}
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (WhatsApp)"],
+    "note": "Email and WhatsApp notifications are MOCKED"
+  },
+
+  "seed_data_creation": "Test application created during testing with expected_salary for verification",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Candidate name fix verified - link_candidate_to_job endpoint now correctly sets candidate_name field. Expected CTC feature works with both Amount and Percentage modes. The calculation formula for percentage is: current_salary * (1 + hike_percent/100). Test application fe012056-0a6f-4e2d-a44f-1be83697b1be has expected_salary=1500000 for Jane Smith.",
+
+  "rca_of_the_issue": {
+    "bug_fixed": "Candidate name showing as 'Unknown' in pipeline",
+    "root_cause": "The link_candidate_to_job endpoint was setting 'name' field instead of 'candidate_name' field in the application document",
+    "fix_applied": "Now both 'candidate_name' and 'name' fields are set for backward compatibility (lines 1452-1455 in candidates.py)",
+    "new_feature": "Expected CTC section added to Add as Applicant dialog with Amount (₹) and Hike (%) input types",
+    "verification": "Backend tests confirm candidate_name is populated correctly, frontend shows proper names in pipeline"
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "summary": "Iteration 124 - Candidate Activity Log Feature Testing. Backend: 13/13 tests PASSED. Frontend: Activity Feed page works correctly, Timeline tab on candidate profile had a bug (ReferenceError: id is not defined) which was FIXED. All features now working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "bugs_fixed": [
+    {
+      "file": "/app/frontend/src/pages/shared/NaukriProfileView.jsx",
+      "line": 552,
+      "issue": "ReferenceError: id is not defined - Timeline tab was using undefined variable 'id' instead of 'candidateId'",
+      "fix": "Changed CandidateActivityTimeline candidateId={id} to candidateId={candidateId}"
+    }
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_activity_log.py",
+    "/app/test_reports/pytest/pytest_activity_log.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: GET /api/activity/actions returns 14 action types with labels and styles",
+    "VERIFIED: GET /api/activity/feed returns global activity feed (excludes 'viewed' by default)",
+    "VERIFIED: GET /api/activity/feed?action=profile_edited filters correctly",
+    "VERIFIED: GET /api/activity/stats returns total_actions and by_action breakdown",
+    "VERIFIED: GET /api/activity/candidate/{id} returns candidate-specific timeline",
+    "VERIFIED: Viewing candidate (GET /api/candidate-bank/{id}) creates 'viewed' activity entry",
+    "VERIFIED: Editing candidate (PATCH /api/candidate-bank/{id}) creates 'profile_edited' activity entry",
+    "VERIFIED: Employer role can access all activity endpoints",
+    "VERIFIED: Activity Feed page at /admin/activity-feed loads correctly with sidebar link",
+    "VERIFIED: Activity Feed shows timeline entries with filter dropdown and stats sidebar",
+    "VERIFIED: Timeline tab on candidate full profile page works after bug fix",
+    "FIXED: NaukriProfileView.jsx line 552 - changed 'id' to 'candidateId' to fix ReferenceError"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_activity_log.py",
+    "/app/frontend/src/pages/shared/NaukriProfileView.jsx"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (Activity Feed page + Timeline tab working)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "employer": "maneet@vhc.in / 12345678"
+  },
+  "seed_data_creation": "No seed data created - tests use existing credentials and candidates",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 124 tested the new Candidate Activity Log feature. All 14 action types are tracked (captured, updated, cv_uploaded, cv_replaced, applied, linked, stage_changed, note_added, approval, match_scored, viewed, shortlisted, rejected, profile_edited). Activity logging is integrated into candidate view and edit endpoints. Frontend has Activity Feed page at /{role}/activity-feed and Timeline tab on candidate full profile. One bug was fixed: NaukriProfileView.jsx was using undefined 'id' variable instead of 'candidateId' from useParams().",
+  "features_tested": {
+    "activity_actions_endpoint": {
+      "status": "PASSED",
+      "tests": ["GET /api/activity/actions returns 14 action types with labels and styles"]
+    },
+    "activity_feed_endpoint": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/activity/feed returns global feed",
+        "Global feed excludes 'viewed' by default",
+        "Filter by action type works",
+        "Filter by 'viewed' returns viewed entries"
+      ]
+    },
+    "activity_stats_endpoint": {
+      "status": "PASSED",
+      "tests": ["GET /api/activity/stats returns total_actions and by_action breakdown"]
+    },
+    "candidate_activity_endpoint": {
+      "status": "PASSED",
+      "tests": ["GET /api/activity/candidate/{id} returns candidate-specific timeline"]
+    },
+    "activity_logging_on_view": {
+      "status": "PASSED",
+      "tests": ["Viewing candidate creates 'viewed' activity entry"]
+    },
+    "activity_logging_on_edit": {
+      "status": "PASSED",
+      "tests": ["Editing candidate creates 'profile_edited' activity entry"]
+    },
+    "employer_access": {
+      "status": "PASSED",
+      "tests": ["Employer can access actions, feed, and stats endpoints"]
+    },
+    "activity_feed_page": {
+      "status": "PASSED",
+      "tests": [
+        "Activity Feed page loads at /admin/activity-feed",
+        "Sidebar link present",
+        "Filter dropdown works",
+        "Stats sidebar shows total actions"
+      ]
+    },
+    "timeline_tab": {
+      "status": "PASSED (after fix)",
+      "tests": [
+        "Timeline tab visible on candidate full profile",
+        "CandidateActivityTimeline component renders",
+        "Filter dropdown present"
+      ]
+    }
+  }
+}

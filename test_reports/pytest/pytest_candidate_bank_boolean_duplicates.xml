@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="18" failures="0" skipped="0" tests="23" time="44.292" timestamp="2026-03-11T04:48:34.049345+00:00" hostname="agent-env-420193a8-97a8-4d31-a7e3-57d4354054de"><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_01_simple_search_returns_results" time="5.932" /><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_02_boolean_search_and_operator" time="4.047" /><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_03_boolean_search_or_operator" time="4.863" /><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_04_boolean_search_not_operator" time="5.056" /><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_05_boolean_search_quoted_phrase" time="4.111" /><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_06_boolean_search_parentheses" time="1.151"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:28: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_07_boolean_search_minus_prefix" time="1.118"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:28: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestBooleanSearchAPI" name="test_08_boolean_search_complex_query" time="1.100"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:28: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestDuplicateDetectionAPI" name="test_09_check_duplicates_by_email" time="1.103"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:149: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestDuplicateDetectionAPI" name="test_10_check_duplicates_by_phone" time="1.100"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:149: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestDuplicateDetectionAPI" name="test_11_check_duplicates_by_email_and_phone" time="1.112"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:149: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestDuplicateDetectionAPI" name="test_12_check_duplicates_empty_payload_rejected" time="1.194"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:149: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestDuplicateDetectionAPI" name="test_13_find_all_duplicates" time="1.097"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:149: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestCandidateBankFiltersAPI" name="test_14_filter_by_location" time="1.096"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:285: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestCandidateBankFiltersAPI" name="test_15_filter_by_experience_range" time="1.102"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:285: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestCandidateBankFiltersAPI" name="test_16_filter_by_skills" time="1.116"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:285: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestCandidateBankFiltersAPI" name="test_17_filter_by_notice_period" time="1.112"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:285: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestCandidateBankFiltersAPI" name="test_18_filter_by_has_resume" time="1.115"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:285: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestCandidateBankFiltersAPI" name="test_19_filter_by_source" time="1.106"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:285: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestCandidateBankFiltersAPI" name="test_20_pagination_works" time="1.101"><error message="failed on setup with &quot;AssertionError: Admin login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:285: in setup
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+E   AssertionError: Admin login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestRecruiterCandidateBankAccess" name="test_21_recruiter_can_access_candidate_bank" time="1.125"><error message="failed on setup with &quot;AssertionError: Recruiter login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:398: in setup
+    assert response.status_code == 200, f"Recruiter login failed: {response.text}"
+E   AssertionError: Recruiter login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestRecruiterCandidateBankAccess" name="test_22_recruiter_can_use_boolean_search" time="1.103"><error message="failed on setup with &quot;AssertionError: Recruiter login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:398: in setup
+    assert response.status_code == 200, f"Recruiter login failed: {response.text}"
+E   AssertionError: Recruiter login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_candidate_bank_boolean_duplicates.TestRecruiterCandidateBankAccess" name="test_23_recruiter_can_check_duplicates" time="1.111"><error message="failed on setup with &quot;AssertionError: Recruiter login failed: {&quot;detail&quot;:&quot;Too many requests. Please slow down.&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code&quot;">backend/tests/test_candidate_bank_boolean_duplicates.py:398: in setup
+    assert response.status_code == 200, f"Recruiter login failed: {response.text}"
+E   AssertionError: Recruiter login failed: {"detail":"Too many requests. Please slow down."}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</error></testcase></testsuite></testsuites>

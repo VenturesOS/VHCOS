@@ -1,0 +1,118 @@
+{
+  "summary": "VHC Talent OS - Company-Commercial Relationship Testing Complete. All 22 backend tests passed. Frontend verified: Admin Companies page shows Commercial Terms, Employer Create Job page shows mandatory company selector with warning for employers without assigned companies.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ Admin login works correctly (HTTP 200)",
+    "✅ Employer login works correctly (HTTP 200)",
+    "✅ GET /api/companies returns all companies for admin",
+    "✅ GET /api/commercials returns all commercials for admin",
+    "✅ Commercials have proper structure (company_id, fee_percentage, type)",
+    "✅ GET /api/employer/companies returns empty for employer with disabled team (expected)",
+    "✅ GET /api/employer/companies requires authentication (401/403)",
+    "✅ GET /api/employer/companies forbidden for admin (403)",
+    "✅ POST /api/companies - Admin can create company",
+    "✅ PUT /api/companies/{id} - Admin can update company",
+    "✅ PUT /api/companies/{id}/assign-employer - Admin can assign employer",
+    "✅ POST /api/commercials - Admin can create commercial",
+    "✅ Commercial types validated (percentage, fixed, level_based)",
+    "✅ GET /api/teams returns all teams with company_ids",
+    "✅ Team-Company relationship is valid",
+    "✅ GET /api/jobs returns all jobs",
+    "✅ Jobs can have company_id for revenue calculation",
+    "✅ Admin dashboard data works (users endpoint)",
+    "✅ Employer dashboard data works (pipeline endpoint)",
+    "✅ GET /api/admin/hierarchy returns complete structure",
+    "✅ POST /api/revenue/calculate validates input",
+    "✅ GET /api/revenue/pipeline returns revenue data",
+    "✅ FRONTEND: Admin Companies page shows Commercial Terms section",
+    "✅ FRONTEND: Admin Companies page shows fee percentage badges (8.33% Fee, 10% Fee)",
+    "✅ FRONTEND: Admin Companies page shows 'No commercial configured' for companies without commercials",
+    "✅ FRONTEND: Employer Create Job page shows 'Client Company *' mandatory section",
+    "✅ FRONTEND: Employer with no companies sees warning message",
+    "✅ FRONTEND: Admin Dashboard stats work (10 Users, 12 Jobs, 38 Applications, 11 Companies)",
+    "✅ FRONTEND: Business Analytics page loads with Revenue Funnel and Stage Distribution"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_company_commercial_relationship.py",
+    "/app/test_reports/pytest/pytest_company_commercial.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Admin Companies page correctly displays Commercial Terms for each company with fee badges",
+    "Employer Create Job page correctly shows mandatory company selector",
+    "Warning message displayed when employer has no assigned companies (disabled team)",
+    "Company selector hidden when no companies available (correct UX)",
+    "Revenue calculation chain (Job → Company → Commercial) is properly implemented",
+    "All data-testid attributes present for testing"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_company_commercial_relationship.py (new test file)"
+  ],
+
+  "success_rate": {
+    "backend": "100% (22/22 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "employer": {"email": "employer@vhctalent.com", "password": "VhcTalent@2024"}
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (WhatsApp)"],
+    "note": "Email and WhatsApp notifications are MOCKED"
+  },
+
+  "seed_data_creation": "Test companies and commercials created during testing (prefixed with TEST_)",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Company-Commercial relationship feature is complete. The employer@vhctalent.com user has a DISABLED team with no companies, so their /api/employer/companies returns empty - this is expected behavior. Admin Companies page shows Commercial Terms with fee badges. Employer Create Job page shows mandatory company selector with warning when no companies assigned. Revenue calculation uses: job.company_id → commercial.company_id → fee_percentage.",
+
+  "rca_of_the_issue": {
+    "feature_implemented": "Company-Commercial Relationship for Revenue Calculation",
+    "endpoints_tested": [
+      "GET /api/companies - Returns all companies",
+      "GET /api/commercials - Returns all commercials",
+      "GET /api/employer/companies - Returns employer's companies with commercial details",
+      "POST /api/companies - Create company",
+      "PUT /api/companies/{id} - Update company",
+      "PUT /api/companies/{id}/assign-employer - Assign employer to company",
+      "POST /api/commercials - Create commercial",
+      "GET /api/admin/hierarchy - Returns complete hierarchy",
+      "POST /api/revenue/calculate - Calculate revenue for application",
+      "GET /api/revenue/pipeline - Get revenue pipeline data"
+    ],
+    "frontend_pages_tested": [
+      "/admin/companies - Admin Companies page with Commercial Terms display",
+      "/employer/jobs/create - Employer Create Job page with company selector",
+      "/admin - Admin Dashboard with stats",
+      "/admin/analytics - Business Analytics page"
+    ],
+    "key_findings": [
+      "Admin Companies page correctly shows Commercial Terms section with fee badges",
+      "Employer Create Job page shows mandatory company selector",
+      "Warning message displayed for employers without assigned companies",
+      "All dashboard stats working correctly (regression verified)"
+    ]
+  }
+}

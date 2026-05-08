@@ -1,0 +1,89 @@
+{
+  "summary": "Naukri Extension Capture Monitoring feature testing complete. All NEW features verified: GET /api/system-health/failed-captures returns failed capture logs with stats (admin only), POST /api/system-health/failed-captures/{id}/recover marks capture as recovered, GET /api/system-health/live-status now includes naukri_capture as 9th service with success_rate/total_24h/failed_24h/unrecovered metrics, Maintenance Report PDF downloads and includes Section 7 for Naukri Failed Captures, System Health page shows 9 service cards including 'Naukri Capture' with 100% Success%, Failed Naukri Captures panel renders with Recover button and works correctly. All regression tests pass: admin login, Health Score badge (69/100), Health Score Trend chart, Active Incidents panel, Error Stats cards, Download Maintenance Report button, Refresh button.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_capture_monitoring.py",
+    "/app/test_reports/pytest/pytest_naukri_capture_monitoring.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Capture logging properly tracks full candidate identity (name, email, phone, profile_url)",
+    "Failed captures endpoint returns paginated results with stats (total_failed, unrecovered)",
+    "Recovery endpoint correctly updates is_recovered flag and timestamp",
+    "Health monitor check_naukri_capture function properly calculates success_rate and checks unrecovered count",
+    "Maintenance report Section 7 implemented with proper styling and data extraction",
+    "Frontend Failed Naukri Captures panel only renders when there are unrecovered failures (conditional rendering)",
+    "Service cards use data-testid='service-card-{name}' for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_naukri_capture_monitoring.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (All features verified)"
+  },
+  "test_credentials": {
+    "admin_email": "admin@vhc.in",
+    "admin_password": "VhcAdmin@2024"
+  },
+  "seed_data_creation": "Created test failed captures via POST /api/extension/capture with invalid names to trigger validation rejections. These were recovered during testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Naukri capture monitoring fully implemented. Key test IDs: failed-captures-panel (only shows when unrecovered > 0), recover-btn-{n}, service-card-naukri_capture, health-score-badge, download-maintenance-report-btn. The naukri_capture_logs collection stores all capture attempts. Failed captures are logged with status='failed', is_recovered=false. Recovery updates is_recovered=true. Health check considers unrecovered < 5 as healthy, < 20 as warning, else critical. Currently 0 unrecovered failures (all test data recovered).",
+  "features_verified": {
+    "NEW - GET /api/system-health/failed-captures": {
+      "endpoint exists": "PASS - Returns 200 with logs, stats, total, page, limit",
+      "stats structure": "PASS - Contains total_failed, unrecovered",
+      "pagination": "PASS - Supports page and limit params",
+      "recovered filter": "PASS - Supports recovered=true/false filter",
+      "admin only": "PASS - Returns 401/403 without auth"
+    },
+    "NEW - POST /api/system-health/failed-captures/{id}/recover": {
+      "admin only": "PASS - Returns 401/403 without auth",
+      "nonexistent capture": "PASS - Returns 404",
+      "successful recovery": "PASS - Updates is_recovered=true, shows toast"
+    },
+    "NEW - GET /api/system-health/live-status (9 services)": {
+      "9 services": "PASS - Includes mongodb, api_server, background_workers, queue_system, system_resources, automation_pipeline, ai_services, data_sync, naukri_capture",
+      "naukri_capture metrics": "PASS - Has success_rate, total_24h, failed_24h, unrecovered",
+      "score_history": "PASS - Present for trend chart",
+      "current_score": "PASS - Present (69/100 at test time)",
+      "incidents": "PASS - Present"
+    },
+    "NEW - Maintenance Report PDF Section 7": {
+      "download works": "PASS - PDF downloads (15.8KB)",
+      "Section 7": "PASS - Code review confirms Naukri Failed Captures section added"
+    },
+    "NEW - Naukri Capture Service Card": {
+      "card visible": "PASS - data-testid=service-card-naukri_capture",
+      "label": "PASS - Shows 'Naukri Capture'",
+      "metric": "PASS - Shows 100% Success%",
+      "status indicator": "PASS - Green dot (healthy)"
+    },
+    "NEW - Failed Naukri Captures Panel": {
+      "panel visible": "PASS - data-testid=failed-captures-panel (when unrecovered > 0)",
+      "unrecovered badge": "PASS - Shows '1 unrecovered'",
+      "capture details": "PASS - Shows name, validation badge, failure reason, missing fields",
+      "recover button": "PASS - data-testid=recover-btn-{n} works"
+    },
+    "NEW - Extension Capture Logging": {
+      "endpoint exists": "PASS - POST /api/extension/capture",
+      "requires auth": "PASS - Returns 401/403 without auth",
+      "validation rejection logged": "PASS - Invalid name creates failed capture log"
+    },
+    "REGRESSION - Health Score Badge": "PASS - Visible, shows 69/100",
+    "REGRESSION - Download Maintenance Report Button": "PASS - data-testid=download-maintenance-report-btn works",
+    "REGRESSION - Health Score Trend Chart": "PASS - data-testid=health-score-chart visible",
+    "REGRESSION - Active Incidents Panel": "PASS - data-testid=active-incidents-panel visible",
+    "REGRESSION - Error Stats Cards": "PASS - Total Errors, Last 1 Hour, Last 24 Hours, Frontend, Backend visible",
+    "REGRESSION - Admin Login": "PASS - admin@vhc.in / VhcAdmin@2024 works"
+  }
+}

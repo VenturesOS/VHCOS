@@ -1,0 +1,904 @@
+[
+  {
+    "id": "c72113dc-b62e-437c-8712-0fb9f6541d1d",
+    "title": "Senior Python Developer",
+    "description": "We are looking for an experienced Python developer to join our team. You will work on building scalable backend systems using Python, FastAPI, and MongoDB.",
+    "requirements": "5+ years of Python experience, FastAPI knowledge, MongoDB experience, Good communication skills",
+    "location": "Bangalore, India",
+    "job_type": "full-time",
+    "salary_min": 1500000,
+    "salary_max": 2500000,
+    "department": "Engineering",
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Confidential Client",
+    "posted_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "live",
+    "career_page_history": [
+      {
+        "from_status": "not_posted",
+        "to_status": "live",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "reason": "Initial posting",
+        "timestamp": "2026-01-28T06:22:31.936810+00:00"
+      }
+    ],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:22:31.823741+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:22:31.823741+00:00",
+    "updated_at": "2026-01-30T19:22:46.460730+00:00",
+    "applicant_count": 31,
+    "job_public_id": "VHC/2026/0050",
+    "shareable_link_enabled": true,
+    "mandate_shareable_link_enabled": true,
+    "mandate_share_token": "EkcsAID5B49w2pvuJb030SzN0gqCmfkX",
+    "skills": [
+      "Python",
+      "FastAPI",
+      "MongoDB",
+      "Docker"
+    ],
+    "experience_min": 5,
+    "experience_max": 10,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "191ee9ec-874d-43fb-95d6-3ab1170739d3",
+    "title": "Test Job bcd18e32",
+    "description": "Test job description for E2E testing",
+    "requirements": "Test requirements",
+    "location": "Remote",
+    "job_type": "full-time",
+    "salary_min": 1000000,
+    "salary_max": 2000000,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Test Company",
+    "posted_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:30:32.448722+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:30:32.448722+00:00",
+    "updated_at": "2026-01-28T06:30:32.448722+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0051",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [
+      "Python",
+      "FastAPI"
+    ],
+    "experience_min": 2,
+    "experience_max": 5,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "360a21ce-9adf-4e7b-8d61-0165a2c85400",
+    "title": "Career Page Test Job 4e1892d9",
+    "description": "Test job for career page testing",
+    "requirements": null,
+    "location": "Bangalore",
+    "job_type": "full-time",
+    "salary_min": null,
+    "salary_max": null,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Test Corp",
+    "posted_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "removed",
+    "career_page_history": [
+      {
+        "from_status": "not_posted",
+        "to_status": "live",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "reason": "Testing career page posting",
+        "timestamp": "2026-01-28T06:30:33.106001+00:00"
+      },
+      {
+        "from_status": "live",
+        "to_status": "removed",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "reason": "Test cleanup",
+        "timestamp": "2026-01-28T06:30:33.148087+00:00"
+      }
+    ],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:30:33.062450+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:30:33.062450+00:00",
+    "updated_at": "2026-01-28T06:30:33.148087+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0052",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [],
+    "experience_min": null,
+    "experience_max": null,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "d763de77-ddb4-4471-bc77-96f1e32762e0",
+    "title": "Non-Live Job 6e59664c",
+    "description": "Test job not on career page",
+    "requirements": null,
+    "location": "Remote",
+    "job_type": "full-time",
+    "salary_min": null,
+    "salary_max": null,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Confidential Client",
+    "posted_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:30:34.382777+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:30:34.382777+00:00",
+    "updated_at": "2026-01-28T06:30:34.382777+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0053",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [],
+    "experience_min": null,
+    "experience_max": null,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "2500f50d-227c-4235-930d-68788c985930",
+    "title": "Test Job 0dc6d30c",
+    "description": "Test job description for E2E testing",
+    "requirements": "Test requirements",
+    "location": "Remote",
+    "job_type": "full-time",
+    "salary_min": 1000000,
+    "salary_max": 2000000,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Test Company",
+    "posted_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:31:10.768960+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:31:10.768960+00:00",
+    "updated_at": "2026-01-28T06:31:10.768960+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0054",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [
+      "Python",
+      "FastAPI"
+    ],
+    "experience_min": 2,
+    "experience_max": 5,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "3d217c26-fc3b-4396-8b81-eeb9fbfa2d12",
+    "title": "Career Page Test Job 883c4677",
+    "description": "Test job for career page testing",
+    "requirements": null,
+    "location": "Bangalore",
+    "job_type": "full-time",
+    "salary_min": null,
+    "salary_max": null,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Test Corp",
+    "posted_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "removed",
+    "career_page_history": [
+      {
+        "from_status": "not_posted",
+        "to_status": "live",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "reason": "Testing career page posting",
+        "timestamp": "2026-01-28T06:31:11.408810+00:00"
+      },
+      {
+        "from_status": "live",
+        "to_status": "removed",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "reason": "Test cleanup",
+        "timestamp": "2026-01-28T06:31:11.448720+00:00"
+      }
+    ],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:31:11.370263+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:31:11.370263+00:00",
+    "updated_at": "2026-01-28T06:31:11.448720+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0055",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [],
+    "experience_min": null,
+    "experience_max": null,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "38d122c9-94cc-447e-8318-08932376c21e",
+    "title": "Non-Live Job 35a587f3",
+    "description": "Test job not on career page",
+    "requirements": null,
+    "location": "Remote",
+    "job_type": "full-time",
+    "salary_min": null,
+    "salary_max": null,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Confidential Client",
+    "posted_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "096ec385-98a3-4001-9230-dfd79a68353f",
+        "changed_by_name": "Test Employer",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:31:12.731420+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:31:12.731420+00:00",
+    "updated_at": "2026-01-28T06:31:12.731420+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0056",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [],
+    "experience_min": null,
+    "experience_max": null,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "7b6a6be0-1e7a-4730-b0b1-c4e614f8ee21",
+    "title": "Manager \u2013 Talent Acquisition",
+    "description": "The Manager \u2013 Talent Acquisition will work with functional heads and line managers to understand recruitment needs, prepare job advertisements, and coordinate the hiring process. This role involves managing the full hiring cycle, utilizing various recruitment tools, and ensuring a favorable sourcing mix.",
+    "requirements": "\u2022 12-15 years of experience\n\u2022 Graduation + MBA/PGDM HR (Full Time)\n\u2022 10 - 15 years of relevant work experience in Mfg./Engineering/Power industry",
+    "location": "Worli",
+    "job_type": "full-time",
+    "salary_min": 1300000,
+    "salary_max": 2000000,
+    "department": "HR",
+    "company_id": "",
+    "company_name": null,
+    "public_company_alias": "Cable manufacturing Company",
+    "posted_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "live",
+    "career_page_history": [
+      {
+        "from_status": "not_posted",
+        "to_status": "live",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "reason": null,
+        "timestamp": "2026-01-28T06:39:59.057185+00:00"
+      }
+    ],
+    "team_id": "34825c62-ce5d-482b-acc2-54aac16ffa4b",
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T06:39:48.875545+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T06:39:48.875545+00:00",
+    "updated_at": "2026-01-28T07:08:32.702616+00:00",
+    "applicant_count": 5,
+    "job_public_id": "VHC/2026/0057",
+    "shareable_link_enabled": true,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [
+      "Applicant Tracking Systems (ATS)",
+      "Competency-based evaluation methods",
+      "Recruitment metrics",
+      "Understanding of CTC structure",
+      "Understanding manpower planning",
+      "Requirement gathering",
+      "Sourcing, screening, shortlisting",
+      "Managing full hiring cycle",
+      "Clear and professional communication",
+      "Negotiation",
+      "Maintaining positive relationships",
+      "Objective selection decisions"
+    ],
+    "experience_min": 12,
+    "experience_max": 12,
+    "assigned_recruiters": [
+      "839f5e28-f97e-4e0d-ae18-091e0636fa60"
+    ],
+    "assignment_history": [
+      {
+        "action": "recruiters_assigned",
+        "previous_recruiters": [],
+        "new_recruiters": [
+          "839f5e28-f97e-4e0d-ae18-091e0636fa60"
+        ],
+        "assigned_by_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "assigned_by_name": "Ajit Yadav",
+        "assigned_by_role": "employer",
+        "timestamp": "2026-01-28T06:39:53.438502+00:00"
+      }
+    ]
+  },
+  {
+    "id": "528601b5-0fa6-44b2-84fb-d1914e8f28e8",
+    "title": "Sr. Officer Technical Services",
+    "description": "The role involves ensuring value addition and engineering to customers by monitoring paint application and output parameters. The candidate will coordinate with various departments for smooth operations.",
+    "requirements": "\u2022 2-5 years of experience in paint application in TC and/or PT/ED.\n\u2022 Experience in paint manufacturing, R&D, quality control.",
+    "location": "Gurgaon",
+    "job_type": "full-time",
+    "salary_min": 100000,
+    "salary_max": 1500000,
+    "department": "customer service",
+    "company_id": "",
+    "company_name": null,
+    "public_company_alias": "Lead commercial vehcile OEM",
+    "posted_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "live",
+    "career_page_history": [
+      {
+        "from_status": "not_posted",
+        "to_status": "live",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "reason": null,
+        "timestamp": "2026-01-28T11:39:15.498680+00:00"
+      }
+    ],
+    "team_id": "34825c62-ce5d-482b-acc2-54aac16ffa4b",
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-28T11:38:07.631266+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-28T11:38:07.631266+00:00",
+    "updated_at": "2026-01-28T11:40:00.063238+00:00",
+    "applicant_count": 1,
+    "job_public_id": "VHC/2026/0058",
+    "shareable_link_enabled": true,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [
+      "paint application",
+      "quality control",
+      "R&D",
+      "customer coordination"
+    ],
+    "experience_min": 3,
+    "experience_max": 3,
+    "assigned_recruiters": [
+      "839f5e28-f97e-4e0d-ae18-091e0636fa60",
+      "0e82b2aa-9c30-4a06-ab62-6b4336fccf76",
+      "f501f248-57c4-4d38-ae9b-febcbe43c133"
+    ],
+    "assignment_history": [
+      {
+        "action": "recruiters_assigned",
+        "previous_recruiters": [],
+        "new_recruiters": [
+          "839f5e28-f97e-4e0d-ae18-091e0636fa60",
+          "0e82b2aa-9c30-4a06-ab62-6b4336fccf76",
+          "f501f248-57c4-4d38-ae9b-febcbe43c133"
+        ],
+        "assigned_by_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "assigned_by_name": "Ajit Yadav",
+        "assigned_by_role": "employer",
+        "timestamp": "2026-01-28T11:38:47.722992+00:00"
+      }
+    ]
+  },
+  {
+    "id": "3efa09bc-635e-47a3-970c-3849419f0dac",
+    "title": "Test Job - Infra Wire",
+    "description": "Testing MongoDB Atlas wiring",
+    "requirements": null,
+    "location": "Mumbai",
+    "job_type": "full-time",
+    "salary_min": null,
+    "salary_max": null,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": "Confidential Client",
+    "posted_by": "eb962d6f-ad6f-454a-bd7b-edc68f8b4ff7",
+    "posted_by_role": "admin",
+    "status": "active",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": null,
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "eb962d6f-ad6f-454a-bd7b-edc68f8b4ff7",
+        "changed_by_name": "System Admin",
+        "changed_by_role": "admin",
+        "timestamp": "2026-01-29T06:12:27.761219+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-29T06:12:27.761219+00:00",
+    "updated_at": "2026-01-29T06:12:27.761219+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0059",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [],
+    "experience_min": null,
+    "experience_max": null,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "9d45dadb-d63d-4e1a-a1e1-4ffe671719a0",
+    "title": "Junior Manager, Compensation & Benefits",
+    "description": "This role involves designing, implementing, and managing compensation and benefits programs across the APAC markets in alignment with corporate policies and local regulations. The position offers exposure to global consulting partnerships and senior stakeholders, preparing candidates for progression to senior roles within the Rewards & Benefits function at American Express.",
+    "requirements": "\u2022 Strong understanding of employee benefits and compensation structures.\n\u2022 Knowledge of APAC market labor laws and regulatory frameworks.\n\u2022 Experience in vendor management and benefits benchmarking.\n\u2022 Strong analytical skills with ability to prepare reports and dashboards.\n\u2022 Proficiency in MS Excel and HRIS tools.\n\u2022 Excellent interpersonal and communication skills.\n\u2022 Ability to work in a multicultural, cross-border environment.",
+    "location": "India",
+    "job_type": "full-time",
+    "salary_min": 1000000,
+    "salary_max": 1500000,
+    "department": "HR",
+    "company_id": "",
+    "company_name": null,
+    "public_company_alias": "Confidential Client",
+    "posted_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "live",
+    "career_page_history": [
+      {
+        "from_status": "not_posted",
+        "to_status": "live",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "reason": null,
+        "timestamp": "2026-01-29T10:58:46.221948+00:00"
+      }
+    ],
+    "team_id": "34825c62-ce5d-482b-acc2-54aac16ffa4b",
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-29T10:58:35.224512+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-29T10:58:35.224512+00:00",
+    "updated_at": "2026-01-29T10:58:49.878304+00:00",
+    "applicant_count": 2,
+    "job_public_id": "VHC/2026/0063",
+    "shareable_link_enabled": true,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [
+      "Employee benefits",
+      "Compensation structures",
+      "Retirement plan administration",
+      "APAC market labor laws",
+      "Regulatory frameworks",
+      "Compliance requirements",
+      "Vendor management",
+      "Benefits benchmarking",
+      "Actuarial coordination",
+      "Analytical skills",
+      "MS Excel",
+      "HRIS tools",
+      "Benefits administration platforms",
+      "Interpersonal and communication skills"
+    ],
+    "experience_min": 3,
+    "experience_max": 3,
+    "assigned_recruiters": [
+      "839f5e28-f97e-4e0d-ae18-091e0636fa60"
+    ],
+    "assignment_history": [
+      {
+        "action": "recruiters_assigned",
+        "previous_recruiters": [],
+        "new_recruiters": [
+          "839f5e28-f97e-4e0d-ae18-091e0636fa60"
+        ],
+        "assigned_by_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "assigned_by_name": "Ajit Yadav",
+        "assigned_by_role": "employer",
+        "timestamp": "2026-01-29T10:58:39.857727+00:00"
+      }
+    ]
+  },
+  {
+    "id": "5203cc0d-851f-4b79-a782-5929c7a39ee7",
+    "title": "Test Recruiter Job Approval",
+    "description": "Job created by recruiter for testing approval workflow",
+    "requirements": null,
+    "location": "Delhi",
+    "job_type": "full-time",
+    "salary_min": 500000,
+    "salary_max": 800000,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": null,
+    "posted_by": "f501f248-57c4-4d38-ae9b-febcbe43c133",
+    "posted_by_role": "recruiter",
+    "status": "on_hold",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": "34825c62-ce5d-482b-acc2-54aac16ffa4b",
+    "approval_history": [
+      {
+        "status": "pending_approval",
+        "changed_by": "f501f248-57c4-4d38-ae9b-febcbe43c133",
+        "changed_by_name": "Test Recruiter",
+        "changed_by_role": "recruiter",
+        "timestamp": "2026-01-30T07:06:13.235487+00:00",
+        "reason": "Job created"
+      },
+      {
+        "from_status": "pending_approval",
+        "to_status": "on_hold",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-30T07:36:37.308314+00:00",
+        "reason": "Job holdd by employer"
+      }
+    ],
+    "created_at": "2026-01-30T07:06:13.235487+00:00",
+    "updated_at": "2026-01-30T07:36:37.308314+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0064",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [],
+    "experience_min": 2,
+    "experience_max": 5,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "87851d6f-16a1-4222-9f5e-c68dcdc14bd1",
+    "title": "TEST_Job_c9c27dc5",
+    "description": "Test job created by recruiter for approval workflow testing",
+    "requirements": "Test requirements",
+    "location": "Remote",
+    "job_type": "full-time",
+    "salary_min": 500000,
+    "salary_max": 1000000,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": null,
+    "posted_by": "f501f248-57c4-4d38-ae9b-febcbe43c133",
+    "posted_by_role": "recruiter",
+    "status": "on_hold",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": "34825c62-ce5d-482b-acc2-54aac16ffa4b",
+    "approval_history": [
+      {
+        "status": "pending_approval",
+        "changed_by": "f501f248-57c4-4d38-ae9b-febcbe43c133",
+        "changed_by_name": "Test Recruiter",
+        "changed_by_role": "recruiter",
+        "timestamp": "2026-01-30T07:08:35.005719+00:00",
+        "reason": "Job created"
+      },
+      {
+        "from_status": "pending_approval",
+        "to_status": "on_hold",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-30T07:36:40.707601+00:00",
+        "reason": "Job holdd by employer"
+      }
+    ],
+    "created_at": "2026-01-30T07:08:35.005719+00:00",
+    "updated_at": "2026-01-30T07:36:40.707601+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0065",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [
+      "Python",
+      "Testing"
+    ],
+    "experience_min": 2,
+    "experience_max": 5,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "9fac4328-2b12-4cf0-8f78-b9da27c9587c",
+    "title": "TEST_Job_Approval_aeeb1b89",
+    "description": "Test job for approval workflow",
+    "requirements": null,
+    "location": "Remote",
+    "job_type": "full-time",
+    "salary_min": null,
+    "salary_max": null,
+    "department": null,
+    "company_id": null,
+    "company_name": null,
+    "public_company_alias": null,
+    "posted_by": "f501f248-57c4-4d38-ae9b-febcbe43c133",
+    "posted_by_role": "recruiter",
+    "status": "active",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": "34825c62-ce5d-482b-acc2-54aac16ffa4b",
+    "approval_history": [
+      {
+        "status": "pending_approval",
+        "changed_by": "f501f248-57c4-4d38-ae9b-febcbe43c133",
+        "changed_by_name": "Test Recruiter",
+        "changed_by_role": "recruiter",
+        "timestamp": "2026-01-30T07:08:35.043298+00:00",
+        "reason": "Job created"
+      },
+      {
+        "from_status": "pending_approval",
+        "to_status": "active",
+        "changed_by": "eb962d6f-ad6f-454a-bd7b-edc68f8b4ff7",
+        "changed_by_name": "System Admin",
+        "changed_by_role": "admin",
+        "timestamp": "2026-01-30T07:08:35.118544+00:00",
+        "reason": "Approved by admin for testing"
+      }
+    ],
+    "created_at": "2026-01-30T07:08:35.043298+00:00",
+    "updated_at": "2026-01-30T07:08:35.118544+00:00",
+    "applicant_count": 1,
+    "job_public_id": "VHC/2026/0066",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [],
+    "experience_min": null,
+    "experience_max": null,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  },
+  {
+    "id": "36a27da3-00b4-4f45-80a6-eb73f980709c",
+    "title": "Assistant Manager, Area Sales Manager",
+    "description": "The position of an Assistant Manager/Area Sales Manager primarily involves expanding the current market share, maintaining relationships with key influencers at the customer end, and achieving annual company objectives. The role requires a combination of strategic planning and execution excellence.",
+    "requirements": "\u2022 6-10 years in relevant industry\n\u2022 Graduate/Diploma in Paint Technology\n\u2022 Preferably post graduate qualification in business administration with experience of sales",
+    "location": "All India",
+    "job_type": "full-time",
+    "salary_min": null,
+    "salary_max": null,
+    "department": "sales",
+    "company_id": "8066c10f-215b-4ed2-9b2d-8726b609e4fa",
+    "company_name": "Volvo Commercial Vehicle ",
+    "public_company_alias": "Commerical vehicles ",
+    "posted_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+    "posted_by_role": "employer",
+    "status": "active",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": "34825c62-ce5d-482b-acc2-54aac16ffa4b",
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "changed_by_name": "Ajit Yadav",
+        "changed_by_role": "employer",
+        "timestamp": "2026-01-30T18:25:19.697440+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-01-30T18:25:19.697440+00:00",
+    "updated_at": "2026-01-30T18:25:34.244981+00:00",
+    "applicant_count": 2,
+    "job_public_id": "VHC/2026/0067",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": false,
+    "mandate_share_token": null,
+    "skills": [
+      "Partnership Building",
+      "Entrepreneurial/Business Acumen",
+      "Execution Excellence",
+      "Building High Performance Teams",
+      "Think and Act Strategically",
+      "Innovation Led Change"
+    ],
+    "experience_min": 6,
+    "experience_max": 6,
+    "assigned_recruiters": [
+      "839f5e28-f97e-4e0d-ae18-091e0636fa60"
+    ],
+    "assignment_history": [
+      {
+        "action": "recruiters_assigned",
+        "previous_recruiters": [],
+        "new_recruiters": [
+          "839f5e28-f97e-4e0d-ae18-091e0636fa60"
+        ],
+        "assigned_by_id": "cf36890a-b8fa-47e2-abf3-d4600f04c831",
+        "assigned_by_name": "Ajit Yadav",
+        "assigned_by_role": "employer",
+        "timestamp": "2026-01-30T18:25:34.244981+00:00"
+      }
+    ]
+  },
+  {
+    "id": "afeea144-0b75-4dfd-8d39-88d0cf291745",
+    "title": "AM/DM \u2013 Warranty Specialist",
+    "description": "The role involves administering warranty and extended warranty programs for construction equipment, ensuring accurate documentation and processing of claims. It requires collaboration with dealers and technicians, providing technical guidance on warranty coverage, and implementing strategies to reduce unnecessary claims.",
+    "requirements": "\u2022 Bachelor's degree in mechanical engineering\n\u2022 3\u20135 years in warranty management or after-sales service within the construction equipment/Automobile industry\n\u2022 Good understanding of machinery components and OEM warranty standards\n\u2022 Customer-centric approach\n\u2022 Technical knowledge of construction equipment\n\u2022 Process orientation\n\u2022 Problem-solving and conflict resolution\n\u2022 Data-driven decision-making",
+    "location": "Ballabgarh, Haryana",
+    "job_type": "full-time",
+    "salary_min": 100000,
+    "salary_max": 1800000,
+    "department": "Construction Equipment ",
+    "company_id": "f5f9d37e-9fd3-44d8-b6c5-69cf7354cab7",
+    "company_name": "TEST_Company_HR_569d4d80",
+    "public_company_alias": "A leading construction equipment manufacturer ",
+    "posted_by": "8dc5f7b9-be24-4e65-81d7-7af78fd07c18",
+    "posted_by_role": "employer",
+    "status": "archived",
+    "career_page_status": "not_posted",
+    "career_page_history": [],
+    "team_id": "5ef29ba3-4a36-401d-9fe9-e9773ddab03e",
+    "approval_history": [
+      {
+        "status": "active",
+        "changed_by": "8dc5f7b9-be24-4e65-81d7-7af78fd07c18",
+        "changed_by_name": "Bikash Das",
+        "changed_by_role": "employer",
+        "timestamp": "2026-02-16T10:56:46.644086+00:00",
+        "reason": "Job created"
+      }
+    ],
+    "created_at": "2026-02-16T10:56:46.644086+00:00",
+    "updated_at": "2026-02-17T05:17:15.268858+00:00",
+    "applicant_count": 0,
+    "job_public_id": "VHC/2026/0068",
+    "shareable_link_enabled": false,
+    "mandate_shareable_link_enabled": true,
+    "mandate_share_token": "zXUeRhI50kNEIAZlh_XF2LiHdXuzDdI3",
+    "skills": [
+      "Warranty management",
+      "After-sales service",
+      "Machinery components understanding",
+      "OEM warranty standards",
+      "Customer-centric approach",
+      "Technical knowledge of construction equipment",
+      "Process orientation",
+      "Problem-solving",
+      "Conflict resolution",
+      "Data-driven decision-making"
+    ],
+    "experience_min": 3,
+    "experience_max": 10,
+    "assigned_recruiters": [],
+    "assignment_history": []
+  }
+]

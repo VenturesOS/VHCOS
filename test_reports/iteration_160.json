@@ -1,0 +1,141 @@
+{
+  "summary": "Iteration 160: Comprehensive testing of Naukri Regex Parser improvements. All 34 backend tests passed (100%). Tested concatenated header parsing, labeled format parsing, immediate joiner/serving notice detection, headline/summary extraction with fallbacks, education boundary parsing, Indian city fallback, notice period false positive prevention, and admin/recruiter routing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration160.py",
+    "/app/test_reports/pytest/pytest_naukri_regex_parser_iteration160.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ _parse_naukri_header() correctly extracts CTC from '₹ XX Lacs' format (tested Lacs and Crore)",
+    "✅ Expected CTC correctly parsed from '(expects: ₹ YY Lacs)' pattern",
+    "✅ Location extracted from city name between CTC and 'Current' keyword",
+    "✅ Notice period extracted from 'since Jan 2020 3 Months' pattern in header",
+    "✅ Experience years extracted from 'Save{N}y₹' pattern",
+    "✅ Labeled patterns ('Notice Period: X Months') correctly parsed and take PRIORITY over header values",
+    "✅ 'Current CTC: 45 Lacs' labeled format correctly parsed to 4500000",
+    "✅ 'Expected CTC: 60 Lacs' labeled format correctly parsed to 6000000",
+    "✅ 'Current Location: Gurugram' labeled format correctly parsed",
+    "✅ Immediate Joiner detection works ('Immediate', 'Immediately Available')",
+    "✅ Serving Notice detection works ('Currently Serving Notice', 'Serving Notice Period')",
+    "✅ Resume Headline extraction works with proper section boundaries",
+    "✅ Profile Summary extraction works with proper section boundaries",
+    "✅ Headline fallback synthesizes from designation + company when explicit headline missing",
+    "✅ Summary fallback synthesizes from designation + company + experience when explicit summary missing",
+    "✅ Education section correctly parsed without including certifications",
+    "✅ Indian city fallback (100+ cities) finds city names from text when no label exists",
+    "✅ Notice Period does NOT falsely match 'X Years Y Months' experience patterns",
+    "✅ Admin (admin@vhc.in) routes to regex parser (zero LLM cost)",
+    "✅ Non-admin (recruiter) routes to Claude Haiku 4.5 via direct Anthropic SDK"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_naukri_regex_parser_iteration160.py"
+  ],
+  "success_rate": {
+    "backend": "100% (34/34 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used test fixtures with sample Naukri profile text",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Naukri Regex Parser (naukri_regex_parser.py) fully tested. Key improvements verified: 1) _parse_naukri_header() handles concatenated format '{name}Save{years}y₹ XX Lacs (expects: ₹ YY Lacs){City}Current{Title}...{N} Months'. 2) Labeled patterns ALWAYS take priority over header-parsed values for notice period. 3) INDIAN_CITIES set (100+ cities) enables location fallback. 4) Headline/Summary fallback synthesis from designation+company+experience. 5) Notice parser excludes 'X Years Y Months' false positives. Admin users route to regex (zero cost), non-admin to Claude.",
+  "test_results": {
+    "TestNaukriHeaderParsing": {
+      "test_header_ctc_extraction_lacs": "PASSED - ₹18 Lacs = 1800000",
+      "test_header_expected_ctc_extraction": "PASSED - expects ₹18 Lacs = 1800000",
+      "test_header_ctc_crore_format": "PASSED - ₹1.3 Cr = 13000000, expects ₹1.8 Cr = 18000000",
+      "test_header_location_extraction": "PASSED - Bangalore extracted from header",
+      "test_header_notice_from_since_pattern": "PASSED - 3 Months = 90 days",
+      "test_header_experience_years": "PASSED - Save12y = 12 years"
+    },
+    "TestLabeledFormatParsing": {
+      "test_labeled_notice_period": "PASSED - 'Notice Period: 2 Months' = 60 days",
+      "test_labeled_current_ctc": "PASSED - 'Current CTC: 45 Lacs' = 4500000",
+      "test_labeled_expected_ctc": "PASSED - 'Expected CTC: 60 Lacs' = 6000000",
+      "test_labeled_current_location": "PASSED - 'Current Location: Gurugram'",
+      "test_labeled_patterns_priority_over_header": "PASSED - Labeled '2 Months' takes priority over header '3 Months'"
+    },
+    "TestImmediateJoinerAndServingNotice": {
+      "test_immediate_joiner_detection": "PASSED - 'Immediate' = 0 days",
+      "test_immediately_available_detection": "PASSED - 'Immediately Available' = Immediate",
+      "test_serving_notice_detection": "PASSED - 'Currently Serving Notice' sets is_serving_notice=True",
+      "test_serving_notice_period_pattern": "PASSED - 'Serving Notice Period' sets is_serving_notice=True"
+    },
+    "TestHeadlineAndSummary": {
+      "test_resume_headline_extraction": "PASSED - Headline extracted from 'Resume Headline:' section",
+      "test_profile_summary_extraction": "PASSED - Summary extracted from 'Profile Summary:' section",
+      "test_headline_fallback_synthesis": "PASSED - Headline synthesized from designation + company",
+      "test_summary_fallback_synthesis": "PASSED - Summary synthesized from designation + company + experience"
+    },
+    "TestEducationParsing": {
+      "test_education_section_extraction": "PASSED - Education entries correctly parsed",
+      "test_education_does_not_include_certifications": "PASSED - Certifications excluded from education"
+    },
+    "TestIndianCityFallback": {
+      "test_indian_city_fallback_bangalore": "PASSED - 'Bangalore' found in text",
+      "test_indian_city_fallback_gurugram": "PASSED - 'Gurugram' found in text",
+      "test_indian_city_fallback_hyderabad": "PASSED - 'Hyderabad' found in text"
+    },
+    "TestNoticePeriodFalsePositives": {
+      "test_no_false_positive_from_experience_years_months": "PASSED - '8 Years 6 Months' NOT parsed as notice",
+      "test_no_false_positive_from_total_experience": "PASSED - '5 Years 3 Months' NOT parsed as notice",
+      "test_experience_years_correctly_parsed": "PASSED - Experience and Notice parsed separately"
+    },
+    "TestAdminRegexRouting": {
+      "test_admin_ai_extract_uses_regex": "PASSED - Admin extraction via /api/extension/ai-extract works",
+      "test_recruiter_ai_extract_works": "PASSED - Recruiter extraction via /api/extension/ai-extract works"
+    },
+    "TestMixedFormatParsing": {
+      "test_mixed_format_complete_extraction": "PASSED - All fields extracted from mixed format profile"
+    },
+    "TestEdgeCases": {
+      "test_empty_text": "PASSED - Empty text returns low confidence",
+      "test_minimal_text": "PASSED - Minimal text handled gracefully",
+      "test_special_characters_in_ctc": "PASSED - ₹ symbol handled correctly",
+      "test_lpa_format": "PASSED - '28 LPA' = 2800000"
+    }
+  },
+  "verified_features": {
+    "naukri_concatenated_header": {
+      "ctc_extraction": "₹ XX Lacs format → integer INR",
+      "expected_ctc": "(expects: ₹ YY Lacs) → integer INR",
+      "location": "City name between CTC and 'Current'",
+      "notice": "'since Jan 2020 3 Months' pattern",
+      "experience": "Save{N}y₹ pattern"
+    },
+    "labeled_format": {
+      "notice_period": "'Notice Period: X Months' → X Months, X*30 days",
+      "current_ctc": "'Current CTC: XX Lacs' → integer INR",
+      "expected_ctc": "'Expected CTC: XX Lacs' → integer INR",
+      "location": "'Current Location: City' → City"
+    },
+    "special_cases": {
+      "immediate_joiner": "'Immediate', 'Immediately Available' → 0 days",
+      "serving_notice": "'Currently Serving Notice' → is_serving_notice=True"
+    },
+    "fallbacks": {
+      "headline": "Synthesized from designation + company when missing",
+      "summary": "Synthesized from designation + company + experience when missing",
+      "location": "Indian city lookup (100+ cities) when no label"
+    },
+    "false_positive_prevention": {
+      "notice_period": "Does NOT match 'X Years Y Months' experience patterns"
+    },
+    "routing": {
+      "admin": "Regex parser (zero LLM cost)",
+      "non_admin": "Claude Haiku 4.5 via direct Anthropic SDK"
+    }
+  }
+}

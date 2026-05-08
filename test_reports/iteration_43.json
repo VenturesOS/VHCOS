@@ -1,0 +1,98 @@
+{
+  "summary": "Semantic Search & Embeddings Feature Testing Complete - All 15 backend tests passed. Embeddings service is healthy with 96.53% coverage (1642/1701 candidates). Semantic search integration working correctly in quick match mode.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ GET /api/embeddings/health - Returns status=healthy with model=text-embedding-3-small, dimensions=1536",
+    "✅ GET /api/embeddings/health - Requires authentication (401/403)",
+    "✅ GET /api/embeddings/health - Admin role has access",
+    "✅ GET /api/embeddings/stats - Returns correct stats (1642/1701 candidates with embeddings, 96.53% coverage)",
+    "✅ GET /api/embeddings/stats - Requires authentication (401/403)",
+    "✅ GET /api/embeddings/stats - Coverage exceeds 76% threshold (actual: 96.53%)",
+    "✅ POST /api/matching/find-candidates - Semantic search enabled returns results with semantic_score",
+    "✅ POST /api/matching/find-candidates - semantic_score field present in MatchResult (0-100 range)",
+    "✅ POST /api/matching/find-candidates - All semantic_score values within valid range (0-100)",
+    "✅ POST /api/matching/find-candidates - Quick match without semantic search works",
+    "✅ POST /api/matching/find-candidates - JD text matching with semantic search works",
+    "✅ POST /api/matching/find-candidates - Score blending verified (40% skill + 25% exp + 25% semantic + 10% base)",
+    "✅ POST /api/matching/find-candidates - Requires authentication (401/403)",
+    "✅ POST /api/matching/find-candidates - Quick match performance acceptable (3.52s for 41 results)",
+    "✅ Auto-embed integration verified - _auto_embed_candidate function integrated in candidate creation"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_semantic_search_embeddings.py",
+    "/app/test_reports/pytest/pytest_semantic_search.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Embeddings service properly initialized with OpenAI text-embedding-3-small model",
+    "Semantic search correctly integrated into find_matching_candidates endpoint",
+    "Score blending formula correctly implemented: 40% skill + 25% exp + 25% semantic + 10% base for quick match",
+    "Full AI match blending: 70% AI + 30% semantic as documented",
+    "Auto-embed on candidate creation implemented via asyncio.create_task (non-blocking)",
+    "96.53% embedding coverage exceeds the 76% target mentioned in requirements"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_semantic_search_embeddings.py - New test file for semantic search and embeddings"
+  ],
+
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "N/A (backend-only testing requested)"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"}
+  },
+
+  "seed_data_creation": "None - used existing candidates and jobs",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Semantic search and embeddings features fully tested and working. Key endpoints: /api/embeddings/health (returns healthy status), /api/embeddings/stats (96.53% coverage), /api/matching/find-candidates with semantic_search=true returns semantic_score in results. Auto-embed on candidate creation is integrated via _auto_embed_candidate function. The batch embedding generation has completed with 1642/1701 candidates having embeddings.",
+
+  "features_verified": {
+    "embeddings_health": "GET /api/embeddings/health returns status=healthy, model=text-embedding-3-small, dimensions=1536",
+    "embeddings_stats": "GET /api/embeddings/stats returns total_candidates=1701, with_embeddings=1642, coverage_percent=96.53",
+    "semantic_search_quick_match": "POST /api/matching/find-candidates with semantic_search=true returns semantic_score (0-100) in results",
+    "score_blending": "Quick match: 40% skill + 25% exp + 25% semantic + 10% base. Full AI: 70% AI + 30% semantic",
+    "auto_embed_on_creation": "_auto_embed_candidate function called via asyncio.create_task when new candidate is added"
+  },
+
+  "sample_test_results": {
+    "embeddings_health": {
+      "status": "healthy",
+      "model": "text-embedding-3-small",
+      "dimensions": 1536
+    },
+    "embeddings_stats": {
+      "total_candidates": 1701,
+      "with_embeddings": 1642,
+      "without_embeddings": 59,
+      "coverage_percent": 96.53
+    },
+    "sample_match_result": {
+      "candidate_name": "Test User",
+      "score": 74,
+      "skill_match_score": 75,
+      "experience_match_score": 70,
+      "semantic_score": 69.9
+    }
+  }
+}

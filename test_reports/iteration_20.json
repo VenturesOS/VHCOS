@@ -1,0 +1,111 @@
+{
+  "summary": "Employer-led Mandate Allocation to Recruiters feature - All tests PASSED. Backend: 14/15 tests passed (1 skipped - no closed jobs). Frontend: All UI components working correctly.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "✅ GET /api/employer/team-recruiters - Returns recruiters with mandate counts",
+    "✅ POST /api/jobs/{job_id}/assign-recruiters - Employer can assign recruiters",
+    "✅ DELETE /api/jobs/{job_id}/assign-recruiters/{recruiter_id} - Employer can remove recruiters",
+    "✅ GET /api/jobs/{job_id}/assignments - Returns assignment details with history",
+    "✅ Recruiter visibility: Recruiter1 (assigned) sees 1 job",
+    "✅ Recruiter visibility: Recruiter2 (unassigned) sees 0 jobs - CRITICAL BUSINESS RULE VERIFIED",
+    "✅ Employer sees all team jobs",
+    "✅ Recruiters cannot self-assign (403 Forbidden)",
+    "✅ Recruiters cannot access team-recruiters endpoint (403 Forbidden)",
+    "✅ Assignment history tracked with audit trail",
+    "✅ UI: 'Assign Recruiter' / 'Manage Recruiters' button appears for active jobs",
+    "✅ UI: Assignment modal shows team recruiters with checkboxes and mandate counts",
+    "✅ UI: Modal shows job details (title, location, job_public_id)",
+    "✅ UI: 'Assigned' badge shows on jobs with assigned recruiters",
+    "✅ UI: Assignment history dialog shows audit trail"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_mandate_assignment.py",
+    "/app/test_reports/pytest/pytest_mandate_assignment.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_mandate_assignment.py"
+  ],
+
+  "success_rate": {
+    "backend": "93% (14/15 tests passed, 1 skipped)",
+    "frontend": "100%"
+  },
+
+  "test_credentials": {
+    "admin": {"email": "admin@vhc.in", "password": "VhcAdmin@2024"},
+    "employer": {"email": "employer@vhctalent.com", "password": "VhcTalent@2024"},
+    "recruiter1": {"email": "recruiter@vhctalent.com", "password": "VhcTalent@2024", "note": "Assigned to job VHC/2026/0025"},
+    "recruiter2": {"email": "recruiter2@vhctalent.com", "password": "VhcTalent@2024", "note": "NOT assigned - sees 0 jobs"}
+  },
+
+  "seed_data_creation": "No new seed data created - used existing team and job data",
+
+  "verified_features": {
+    "team_recruiters_endpoint": {
+      "endpoint": "GET /api/employer/team-recruiters",
+      "response": "List of recruiters with id, name, email, active_mandates_count",
+      "access": "Employer (team only), Admin (all recruiters)",
+      "status": "WORKING"
+    },
+    "assign_recruiters_endpoint": {
+      "endpoint": "POST /api/jobs/{job_id}/assign-recruiters",
+      "request": "Array of recruiter IDs",
+      "response": "Success with assigned_recruiters details",
+      "access": "Employer, Admin only",
+      "status": "WORKING"
+    },
+    "remove_recruiter_endpoint": {
+      "endpoint": "DELETE /api/jobs/{job_id}/assign-recruiters/{recruiter_id}",
+      "response": "Success with remaining_recruiters",
+      "access": "Employer, Admin only",
+      "status": "WORKING"
+    },
+    "assignments_endpoint": {
+      "endpoint": "GET /api/jobs/{job_id}/assignments",
+      "response": "Job details, assigned_recruiters, assignment_history",
+      "access": "Employer, Admin, Assigned Recruiter",
+      "status": "WORKING"
+    },
+    "recruiter_visibility": {
+      "rule": "Recruiters ONLY see jobs where they are in assigned_recruiters OR jobs they posted",
+      "verified": "Recruiter2 (unassigned) sees 0 jobs, Recruiter1 (assigned) sees 1 job",
+      "status": "WORKING"
+    },
+    "employer_ui": {
+      "assign_button": "Shows 'Assign Recruiter' for new jobs, 'Manage Recruiters' for assigned jobs",
+      "modal": "Shows job details, team recruiters with checkboxes and mandate counts",
+      "assigned_badge": "Shows '1 Assigned' badge on jobs with recruiters",
+      "history_dialog": "Shows audit trail with timestamps, actions, and who made changes",
+      "status": "WORKING"
+    }
+  },
+
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend (email)", "Twilio (SMS/WhatsApp)"],
+    "note": "Email and SMS notifications are MOCKED"
+  },
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Employer-led Mandate Allocation feature fully tested and working. Key business rule verified: Recruiters can ONLY see jobs explicitly assigned to them. Test file created at /app/backend/tests/test_mandate_assignment.py with 15 comprehensive tests. Team exists with employer and 2 recruiters. Job VHC/2026/0025 (Software Engineer) has recruiter1 assigned."
+}

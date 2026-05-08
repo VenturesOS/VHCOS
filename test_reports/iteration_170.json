@@ -1,0 +1,174 @@
+{
+  "summary": "Backend audit testing for 9 candidate capture pipeline fixes. All 15 tests passed (100%). Verified: experience_years cap at 50 years (regex parser + capture endpoint), CTC cap at ₹20 Cr (200M) in all enrichment paths, skills garbage filter with expanded tech-word whitelist, auto-merge application duplicate check, raw_text_for_enrichment storage, and re-enrich endpoint caps.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_audit_fixes_iteration170.py",
+    "/app/test_reports/pytest/pytest_audit_fixes_iteration170.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix 1 VERIFIED: naukri_regex_parser.py line 968-971 - EXP_MAX=50, experience_years > 50 set to None",
+    "Fix 2 VERIFIED: extension.py line 1769-1771 - profile.total_experience_years > 50 set to None in capture endpoint",
+    "Fix 3 VERIFIED: CTC cap (_CTC_MAX=200_000_000) in _background_regex_enrich (line 844), _apply_bg_enrichment (line 999), _background_claude_enrich (line 1159)",
+    "Fix 4 VERIFIED: re-enrich endpoint line 2576-2580 - CTC cap at 200M",
+    "Fix 5 VERIFIED: _clean_skills() called before build_complete_candidate in both update (line 1865) and create (line 2093) paths",
+    "Fix 6 VERIFIED: _clean_skills tech-word list (line 2477) includes 'sap', 'sigma', 'power', 'spring', 'red hat' - valid skills like 'Power BI', 'Six Sigma', 'SAP HANA', 'Spring Boot', 'Red Hat' are preserved",
+    "Fix 7 VERIFIED: Auto-merge path (line 2038-2065) checks existing_app before creating application - prevents duplicates",
+    "Fix 8 VERIFIED: raw_text_for_enrichment stored in both update_data (line 1871) and candidate_data (line 2099)",
+    "Fix 9 VERIFIED: re-enrich endpoint line 2570-2573 - experience_years cap at 50"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_audit_fixes_iteration170.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (backend only testing)"
+  },
+  "seed_data_creation": "Test candidates created with unique UUIDs for capture endpoint tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 9 audit fixes verified. Key test patterns: (1) Direct function imports from services.naukri_regex_parser and routes.extension for unit tests, (2) Capture endpoint requires 'scraped_at' field, (3) Phone numbers must start with 6-9 for Indian format, (4) Code structure verification via file reading for complex async functions.",
+  "tests_executed": [
+    {
+      "test_name": "test_regex_parser_experience_cap_at_50",
+      "status": "PASSED",
+      "description": "Fix 1: naukri_regex_parser rejects experience > 50 years"
+    },
+    {
+      "test_name": "test_regex_parser_valid_experience_preserved",
+      "status": "PASSED",
+      "description": "Fix 1: Valid experience <= 50 years is preserved"
+    },
+    {
+      "test_name": "test_capture_endpoint_experience_sanitize",
+      "status": "PASSED",
+      "description": "Fix 2: Capture endpoint sanitizes experience > 50 years"
+    },
+    {
+      "test_name": "test_regex_parser_ctc_cap_at_20cr",
+      "status": "PASSED",
+      "description": "Fix 3: Regex parser rejects CTC > ₹20 Cr"
+    },
+    {
+      "test_name": "test_regex_parser_valid_ctc_preserved",
+      "status": "PASSED",
+      "description": "Fix 3: Valid CTC <= ₹20 Cr is preserved"
+    },
+    {
+      "test_name": "test_ctc_cap_constant_value",
+      "status": "PASSED",
+      "description": "Fix 3: CTC_MAX constant (200,000,000) verified in code"
+    },
+    {
+      "test_name": "test_clean_skills_rejects_garbage",
+      "status": "PASSED",
+      "description": "Fix 5: _clean_skills rejects garbage entries (dates, phones, emails, section headers)"
+    },
+    {
+      "test_name": "test_clean_skills_preserves_valid_tech_skills",
+      "status": "PASSED",
+      "description": "Fix 6: _clean_skills preserves Power BI, Six Sigma, SAP HANA, Spring Boot, Red Hat"
+    },
+    {
+      "test_name": "test_clean_skills_tech_word_list_coverage",
+      "status": "PASSED",
+      "description": "Fix 6: Tech-word whitelist includes required terms (sap, sigma, power, spring, red hat)"
+    },
+    {
+      "test_name": "test_auto_merge_application_dedup_check_exists",
+      "status": "PASSED",
+      "description": "Fix 7: Auto-merge path checks for existing application before creating"
+    },
+    {
+      "test_name": "test_auto_merge_creates_application_only_once",
+      "status": "PASSED",
+      "description": "Fix 7: Auto-merge with mandate_id creates application only if not exists"
+    },
+    {
+      "test_name": "test_raw_text_stored_on_capture",
+      "status": "PASSED",
+      "description": "Fix 8: raw_text_for_enrichment stored in both create and update paths"
+    },
+    {
+      "test_name": "test_re_enrich_experience_cap_code_exists",
+      "status": "PASSED",
+      "description": "Fix 9: Re-enrich endpoint has experience cap at 50 years"
+    },
+    {
+      "test_name": "test_re_enrich_ctc_cap_code_exists",
+      "status": "PASSED",
+      "description": "Fix 4: Re-enrich endpoint has CTC cap at ₹20 Cr"
+    },
+    {
+      "test_name": "test_health_endpoint",
+      "status": "PASSED",
+      "description": "Health check returns 200"
+    }
+  ],
+  "audit_fixes_summary": {
+    "fix_1": {
+      "description": "experience_years sanity cap at 50 years in naukri_regex_parser.py",
+      "location": "services/naukri_regex_parser.py:968-971",
+      "status": "VERIFIED"
+    },
+    "fix_2": {
+      "description": "experience_years sanitize at 50 years in capture endpoint",
+      "location": "routes/extension.py:1769-1771",
+      "status": "VERIFIED"
+    },
+    "fix_3": {
+      "description": "CTC sanity cap (₹20 Cr = 200,000,000) in ALL background enrichment functions",
+      "locations": [
+        "routes/extension.py:844 (_background_regex_enrich)",
+        "routes/extension.py:999 (_apply_bg_enrichment)",
+        "routes/extension.py:1159 (_background_claude_enrich)"
+      ],
+      "status": "VERIFIED"
+    },
+    "fix_4": {
+      "description": "CTC sanity cap in re-enrich endpoint",
+      "location": "routes/extension.py:2576-2580",
+      "status": "VERIFIED"
+    },
+    "fix_5": {
+      "description": "Skills garbage filter applied on initial save",
+      "locations": [
+        "routes/extension.py:1865 (update path)",
+        "routes/extension.py:2093 (create path)"
+      ],
+      "status": "VERIFIED"
+    },
+    "fix_6": {
+      "description": "_clean_skills expanded tech-word list doesn't reject valid skills",
+      "location": "routes/extension.py:2477",
+      "preserved_skills": ["Power BI", "Six Sigma", "SAP HANA", "Spring Boot", "Red Hat"],
+      "status": "VERIFIED"
+    },
+    "fix_7": {
+      "description": "Auto-merge path creates application with duplicate check",
+      "location": "routes/extension.py:2038-2065",
+      "status": "VERIFIED"
+    },
+    "fix_8": {
+      "description": "raw_text_for_enrichment stored during capture",
+      "locations": [
+        "routes/extension.py:1871 (update path)",
+        "routes/extension.py:2099 (create path)"
+      ],
+      "status": "VERIFIED"
+    },
+    "fix_9": {
+      "description": "Experience years cap in re-enrich endpoint",
+      "location": "routes/extension.py:2570-2573",
+      "status": "VERIFIED"
+    }
+  }
+}

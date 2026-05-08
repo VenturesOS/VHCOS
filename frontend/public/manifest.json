@@ -1,0 +1,25 @@
+{
+  "short_name": "VHC",
+  "name": "VHC Talent OS",
+  "description": "VHC Talent Operating System - Recruitment & Talent Management",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/login",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#7CB342",
+  "background_color": "#ffffff",
+  "scope": "/",
+  "categories": ["business", "productivity"]
+}

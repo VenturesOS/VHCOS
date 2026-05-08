@@ -1,0 +1,134 @@
+{
+  "summary": "Iteration 120 - Post-Deployment Maintenance Report Fixes - ALL 18 tests PASSED. Verified all 6 maintenance report issues have been fixed: (1) /notifications/unread-count returns 200 with valid token, (2) Invalid token returns 401/403 correctly, (3) /applications returns 200 without 500 errors, (4) /candidate-bank/batch-parse accepts POST with multipart form data, (5) /candidate-bank/upload returns 422 with helpful error for unreadable PDFs, (6) Health monitor thresholds and regex patterns are correctly configured.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_post_deployment_maintenance_fixes.py",
+    "/app/test_reports/pytest/pytest_post_deployment_maintenance.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: errorCapture.js (lines 74-77) correctly skips 401, 403, 429, and 422 errors - these are expected behaviors, not system errors",
+    "VERIFIED: api.js (line 30) handles 403 same as 401 - clears token and redirects to /login",
+    "VERIFIED: ApplicationResponse model has updated_at as Optional[str] = None (line 53)",
+    "VERIFIED: health_monitor.py check_data_sync uses tighter regex pattern for sync errors",
+    "VERIFIED: health_monitor.py check_system_resources uses 85%/95% thresholds",
+    "VERIFIED: health_monitor.py check_background_workers uses 30 min cutoff for stuck jobs",
+    "VERIFIED: /candidate-bank/batch-parse endpoint accepts POST with multipart form data (not 405)",
+    "VERIFIED: /candidate-bank/upload returns 422 with helpful error message for image-based PDFs"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_post_deployment_maintenance_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100% - Login flow and admin dashboard verified working"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "employer": "maneet@vhc.in / 12345678"
+  },
+  "seed_data_creation": "No seed data created - tests use existing credentials",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 120 verified all 6 post-deployment maintenance report fixes. Key findings: (1) GET /api/notifications/unread-count with valid token returns 200 - PASS, (2) Invalid/missing token returns 401/403 - PASS, (3) GET /api/applications returns 200 with list of applications - PASS, (4) POST /api/candidate-bank/batch-parse accepts multipart form data - PASS (not 405), (5) POST /api/candidate-bank/upload returns 422 with helpful error for unreadable PDFs - PASS, (6) Frontend errorCapture.js skips 403/422 errors - PASS, (7) Frontend api.js handles 403 same as 401 - PASS, (8) Health monitor functions exist and are callable - PASS, (9) ApplicationResponse model has optional updated_at - PASS. All fixes verified working.",
+  "features_tested": {
+    "notifications_unread_count_with_valid_token": {
+      "status": "PASSED",
+      "tests": ["GET /api/notifications/unread-count with valid admin token returns 200"]
+    },
+    "notifications_unread_count_with_invalid_token": {
+      "status": "PASSED",
+      "tests": ["GET /api/notifications/unread-count with invalid token returns 401/403"]
+    },
+    "notifications_unread_count_without_token": {
+      "status": "PASSED",
+      "tests": ["GET /api/notifications/unread-count without token returns 401/403"]
+    },
+    "applications_list_admin": {
+      "status": "PASSED",
+      "tests": ["GET /api/applications with admin token returns 200 with list"]
+    },
+    "applications_list_employer": {
+      "status": "PASSED",
+      "tests": ["GET /api/applications with employer token returns 200 with list"]
+    },
+    "batch_parse_accepts_multipart": {
+      "status": "PASSED",
+      "tests": ["POST /api/candidate-bank/batch-parse accepts multipart form data (not 405)"]
+    },
+    "upload_returns_422_for_unreadable": {
+      "status": "PASSED",
+      "tests": ["POST /api/candidate-bank/upload returns 422 with helpful error for image-based PDFs"]
+    },
+    "health_monitor_functions": {
+      "status": "PASSED",
+      "tests": ["check_data_sync, check_system_resources, check_background_workers all exist and callable"]
+    },
+    "frontend_error_capture": {
+      "status": "PASSED",
+      "tests": ["errorCapture.js skips 401, 403, 429, 422 errors"]
+    },
+    "frontend_api_interceptor": {
+      "status": "PASSED",
+      "tests": ["api.js handles 403 same as 401 (clears token, redirects)"]
+    },
+    "application_response_model": {
+      "status": "PASSED",
+      "tests": ["ApplicationResponse has optional updated_at field"]
+    },
+    "admin_login": {
+      "status": "PASSED",
+      "tests": ["Admin login returns 200 with access_token"]
+    },
+    "employer_login": {
+      "status": "PASSED",
+      "tests": ["Employer login returns 200 with access_token"]
+    }
+  },
+  "maintenance_report_fixes_verified": {
+    "fix_1_403_not_authenticated": {
+      "original_issue": "403 Not authenticated on /notifications/unread-count",
+      "fix_verified": "Endpoint returns 200 with valid token, 401/403 with invalid/missing token",
+      "status": "FIXED"
+    },
+    "fix_2_500_internal_server_error": {
+      "original_issue": "500 Internal Server Error on /notifications/unread-count & /applications",
+      "fix_verified": "Both endpoints return 200 with valid token, no 500 errors",
+      "status": "FIXED"
+    },
+    "fix_3_405_method_not_allowed": {
+      "original_issue": "405 Method Not Allowed on /candidate-bank/batch-parse",
+      "fix_verified": "Endpoint accepts POST with multipart form data",
+      "status": "FIXED"
+    },
+    "fix_4_422_cv_extraction_failing": {
+      "original_issue": "422 on /candidate-bank/upload (CV extraction failing)",
+      "fix_verified": "Returns 422 with helpful error message for image-based PDFs",
+      "status": "FIXED"
+    },
+    "fix_5_high_sync_mismatch_recovery": {
+      "original_issue": "High Sync Mismatch Recovery count (91)",
+      "fix_verified": "Health monitor data_sync uses tighter regex, won't match generic 'mismatch'",
+      "status": "FIXED"
+    },
+    "fix_6_high_memory_recovery_actions": {
+      "original_issue": "High Memory Recovery Actions count (91)",
+      "fix_verified": "Health monitor system_resources thresholds raised to 85%/95%",
+      "status": "FIXED"
+    }
+  },
+  "frontend_verification": {
+    "login_flow": "PASS - Admin login works, redirects to /admin dashboard",
+    "notification_bell": "PASS - Notification bell visible in header",
+    "pipeline_page": "PASS - Pipeline page loads without errors",
+    "console_errors": "NONE - No console errors detected"
+  }
+}

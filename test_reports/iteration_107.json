@@ -1,0 +1,85 @@
+{
+  "summary": "P0 and P1 Bug Fix Testing Complete. P0 Rate Limiter Fix VERIFIED - 30 login requests per minute now allowed (was 5). P1 Auth Context Fix VERIFIED - only logs out on 401 errors. emergentintegrations removed from requirements.txt VERIFIED.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rate_limiter_fix.py",
+    "/app/test_reports/pytest/pytest_rate_limiter_fix.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "P0 FIX VERIFIED: /app/backend/middleware/rate_limiter.py line 20 shows login limit at (30, 60) - 30 requests per 60 seconds",
+    "P0 FIX VERIFIED: /app/backend/services/rate_limiter.py line 16 shows auth limit at 30 requests per minute",
+    "P1 FIX VERIFIED: /app/frontend/src/lib/auth.js lines 27-33 only logs out on 401 errors, NOT on 429 or 500",
+    "emergentintegrations NOT present in /app/backend/requirements.txt - VERIFIED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rate_limiter_fix.py"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5 tests passed when run appropriately)",
+    "frontend": "100% (login flow verified via Playwright)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024 - WORKING"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Rate limiter uses in-memory store that resets on backend restart. Tests that exceed 30 requests per minute will fail unless rate limit window expires (60 seconds) or backend is restarted between test runs. Run rate limit tests independently with 'sudo supervisorctl restart backend' + 60s wait between each test class for accurate results.",
+  "tests_executed": {
+    "P0_rate_limiter_20_requests": {
+      "description": "Send 20 sequential login requests - ALL should succeed without 429",
+      "result": "PASSED",
+      "details": "All 20/20 requests returned 200 OK"
+    },
+    "P0_brute_force_protection_35_requests": {
+      "description": "Send 35 sequential login requests - blocking should start after ~30",
+      "result": "PASSED",
+      "details": "First 30 requests succeeded, rate limiting kicked in at request #31"
+    },
+    "health_endpoint": {
+      "description": "GET /api/health returns OK status",
+      "result": "PASSED",
+      "details": "Response: {status: 'ok', import_failures: 0}"
+    },
+    "admin_login": {
+      "description": "POST /api/auth/login with admin credentials",
+      "result": "PASSED",
+      "details": "admin@vhc.in / VhcAdmin@2024 returns access_token and user data"
+    },
+    "auth_me_endpoint": {
+      "description": "GET /api/auth/me returns user data with valid token",
+      "result": "PASSED",
+      "details": "Returns user email, role, and other profile data"
+    },
+    "frontend_login_flow": {
+      "description": "UI login flow works correctly",
+      "result": "PASSED",
+      "details": "User redirected to /admin dashboard after successful login"
+    },
+    "code_review_P1_fix": {
+      "description": "Auth context only logs out on 401 errors",
+      "result": "VERIFIED",
+      "details": "Lines 27-33 of auth.js show catch block only calls logout() when err?.response?.status === 401"
+    },
+    "code_review_emergentintegrations": {
+      "description": "emergentintegrations NOT in requirements.txt",
+      "result": "VERIFIED",
+      "details": "grep found no 'emergent' string in requirements.txt"
+    }
+  },
+  "rate_limiter_configuration": {
+    "middleware_rate_limiter": "/app/backend/middleware/rate_limiter.py",
+    "login_limit": "30 requests per 60 seconds per IP",
+    "service_rate_limiter": "/app/backend/services/rate_limiter.py",
+    "auth_limit": "30 requests per 60 seconds"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "summary": "Iteration 118 - Chrome Extension Source Platform Routing Tests - ALL 10 tests PASSED. Verified: source_platform field correctly routes to {platform}_extension source values, stats endpoint counts all _extension sources, work experience with responsibilities/achievements stored correctly, dedup logic works across sources, evaluate-fit still works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_source_platform_routing.py",
+    "/app/test_reports/pytest/pytest_source_platform_routing.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "source_platform field correctly implemented in CompleteNaukriProfileInput model with default 'naukri'",
+    "build_complete_candidate() correctly sets source as '{source_platform}_extension'",
+    "build_complete_update() correctly updates source when profile is updated",
+    "Stats endpoint uses regex '_extension$' to count all extension sources (not just naukri_extension)",
+    "Dedup logic checks source pattern matching with source_platform for name+source dedup"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_source_platform_routing.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "N/A - backend only testing per request"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "Test candidates created with TEST_ prefix and cleaned up after each test class",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 118 fully tested the source_platform routing fix. Key findings: (1) POST /api/extension/capture with source_platform='linkedin' stores source as 'linkedin_extension' - PASS, (2) source_platform='naukri' stores as 'naukri_extension' - PASS, (3) source_platform='naukri_mailer' stores as 'naukri_mailer_extension' - PASS, (4) Missing source_platform defaults to 'naukri_extension' - PASS, (5) source_platform='foundit' stores as 'foundit_extension' - PASS, (6) GET /api/extension/stats correctly counts all _extension sources using regex - PASS, (7) Work experience with responsibilities[] and achievements[] arrays stored correctly - PASS, (8) Dedup logic works - same name+email from different sources updates existing record - PASS, (9) POST /api/extension/evaluate-fit still returns verdict, criteria, summary - PASS, (10) Update preserves/updates source_platform correctly - PASS",
+  "features_tested": {
+    "linkedin_source_platform": {
+      "status": "PASSED",
+      "tests": ["source_platform='linkedin' → source='linkedin_extension'"]
+    },
+    "naukri_source_platform": {
+      "status": "PASSED", 
+      "tests": ["source_platform='naukri' → source='naukri_extension'"]
+    },
+    "naukri_mailer_source_platform": {
+      "status": "PASSED",
+      "tests": ["source_platform='naukri_mailer' → source='naukri_mailer_extension'"]
+    },
+    "default_source_platform": {
+      "status": "PASSED",
+      "tests": ["No source_platform → source='naukri_extension' (default)"]
+    },
+    "foundit_source_platform": {
+      "status": "PASSED",
+      "tests": ["source_platform='foundit' → source='foundit_extension'"]
+    },
+    "stats_all_extension_sources": {
+      "status": "PASSED",
+      "tests": ["GET /api/extension/stats uses regex '_extension$' to count linkedin/naukri/mailer/foundit sources"]
+    },
+    "work_experience_details": {
+      "status": "PASSED",
+      "tests": ["responsibilities[] and achievements[] arrays stored in work experience"]
+    },
+    "dedup_across_sources": {
+      "status": "PASSED",
+      "tests": ["Same name+email from different sources updates existing record, source is updated"]
+    },
+    "evaluate_fit_endpoint": {
+      "status": "PASSED",
+      "tests": ["POST /api/extension/evaluate-fit returns verdict, criteria, summary correctly"]
+    },
+    "update_preserves_source": {
+      "status": "PASSED",
+      "tests": ["Updating profile via capture endpoint preserves/updates source_platform"]
+    }
+  },
+  "bug_fixes_verified": {
+    "linkedin_stored_as_naukri_bug": {
+      "original_issue": "LinkedIn profiles were being stored as 'naukri_extension' source instead of 'linkedin_extension'",
+      "fix_verified": "source_platform field now routes correctly to '{platform}_extension'",
+      "test_results": "PASS"
+    },
+    "stats_only_counting_naukri_bug": {
+      "original_issue": "Stats endpoint was only counting naukri_extension sources",
+      "fix_verified": "Stats now uses regex '_extension$' to count all extension sources",
+      "test_results": "PASS"
+    },
+    "work_experience_brief_description_bug": {
+      "original_issue": "Work experience only had brief descriptions, missing responsibilities/achievements",
+      "fix_verified": "responsibilities[] and achievements[] arrays are now stored correctly",
+      "test_results": "PASS"
+    }
+  }
+}

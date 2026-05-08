@@ -1,0 +1,97 @@
+{
+  "summary": "Iteration 159: Tested Regex Parser Quality Card on Admin Dashboard. All 13 backend tests passed (100%). Frontend verified - Admin Dashboard loads all 3 sections (stat cards, API Keys card, Regex Parser Quality card). Extraction quality endpoint returns correct schema with field fill rates, missed/strong fields classification.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_extraction_quality_iteration159.py",
+    "/app/test_reports/pytest/pytest_extraction_quality_iteration159.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ GET /api/stats/extraction-quality returns correct schema with all required fields",
+    "✅ Endpoint uses single $facet aggregation pipeline for performance optimization",
+    "✅ Admin-only access control working (returns 403 for non-admin users)",
+    "✅ field_stats array contains 14 tracked fields with label, filled, total, rate",
+    "✅ missed_fields correctly filters fields under 80% fill rate",
+    "✅ strong_fields correctly filters fields at 80%+ fill rate",
+    "✅ overall_quality_score is average of all field rates (71.4%)",
+    "✅ recent_regex_enriched shows last 10 regex-enriched profiles",
+    "✅ Frontend ExtractionQualityCard component renders correctly with data-testid='extraction-quality-card'",
+    "✅ Field fill rate bars display with correct colors (green >=80%, amber >=50%, red <50%)",
+    "✅ Needs Improvement and Strong Extraction sections display correctly",
+    "✅ API Key Usage card shows 4 Anthropic keys with correct status (1 exhausted, 3 active)",
+    "✅ Admin AI extract still routes to regex parser (zero cost) - verified via test"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_extraction_quality_iteration159.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (all dashboard sections verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regex Parser Quality card fully functional on Admin Dashboard. Endpoint at /api/stats/extraction-quality uses $facet aggregation for performance. Currently shows 2 regex-enriched profiles with 71.4% avg fill rate. Strong fields: Phone, Email, Employer, Designation, Experience, Skills, Work History (100%). Weak fields: Notice Period (0%), Location/CTC/Education/Summary/Headline (50%).",
+  "test_results": {
+    "backend_api_tests": {
+      "extraction_quality_requires_auth": "PASSED - Returns 401/403 without token",
+      "extraction_quality_requires_admin": "PASSED - Returns 403 for recruiter",
+      "extraction_quality_returns_correct_schema": "PASSED - All required fields present",
+      "extraction_quality_field_stats_structure": "PASSED - 14 fields with correct structure",
+      "extraction_quality_missed_fields_under_80": "PASSED - All missed fields have rate < 80%",
+      "extraction_quality_strong_fields_at_80_plus": "PASSED - All strong fields have rate >= 80%",
+      "extraction_quality_overall_score_calculation": "PASSED - Score matches avg of field rates",
+      "extraction_quality_recent_regex_enriched": "PASSED - Contains valid entries with regex source",
+      "admin_stats_returns_correct_schema": "PASSED - All dashboard stats present",
+      "api_key_usage_requires_admin": "PASSED - Returns 403 for non-admin",
+      "api_key_usage_returns_4_keys": "PASSED - 4 Anthropic keys configured",
+      "admin_ai_extract_uses_regex": "PASSED - Admin extraction works",
+      "recruiter_ai_extract_uses_claude": "PASSED - Non-admin extraction works"
+    },
+    "frontend_ui_tests": {
+      "admin_dashboard_loads": "PASSED - Dashboard heading visible",
+      "stat_cards_section": "PASSED - Total Users (79), Active Jobs (181), Applications (1264), Companies (93)",
+      "users_by_role_section": "PASSED - Admin (5), Recruiter (42), Employer (10), Candidate (21), Accounts (1)",
+      "recent_applications_section": "PASSED - Shows recent applications with stage",
+      "api_key_usage_card": "PASSED - Shows 4 keys, Key #1 exhausted, Keys #2-4 active, $15 remaining",
+      "extraction_quality_card": "PASSED - Shows 71.4% score, 2 regex / 4702 claude badges",
+      "field_extraction_rates": "PASSED - 14 fields with progress bars and percentages",
+      "needs_improvement_section": "PASSED - Shows fields under 80% (Notice Period 0%, Location 50%, etc.)",
+      "strong_extraction_section": "PASSED - Shows fields at 80%+ (Phone, Email, Employer, etc. at 100%)"
+    }
+  },
+  "verified_features": {
+    "extraction_quality_endpoint": {
+      "schema": {
+        "total_regex_enriched": 2,
+        "total_claude_enriched": 4690,
+        "overall_quality_score": 71.4,
+        "field_stats": "14 fields with label, filled, total, rate",
+        "missed_fields": "7 fields under 80%",
+        "strong_fields": "7 fields at 80%+",
+        "recent_regex_enriched": "Last 10 regex-enriched profiles"
+      },
+      "performance": "Single $facet aggregation pipeline (optimized from 11s to 2.6s per main agent)"
+    },
+    "admin_dashboard_sections": [
+      "Stat cards (Total Users, Active Jobs, Applications, Companies)",
+      "Users by Role breakdown",
+      "Recent Applications list",
+      "Anthropic API Keys usage card",
+      "Regex Parser Quality card"
+    ],
+    "admin_ai_routing": "Admin (admin@vhc.in) routes to regex parser (zero cost), non-admin routes to Claude"
+  }
+}

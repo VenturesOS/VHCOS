@@ -1,0 +1,64 @@
+{
+  "summary": "Pipeline Enrichment Bug Fix - Complete Testing. Backend: All 11 API tests passed verifying admin pipeline enrichment, job applicants enrichment, tracker auto-fill, and no regression. Frontend: Pipeline UI displays enriched candidate data (salary, notice period) from candidate_bank - no longer showing dashes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pipeline_enrichment_bugfix.py",
+    "/app/test_reports/pytest/pytest_pipeline_enrichment.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_pipeline_enrichment_bugfix.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (Pipeline displays enriched data correctly)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024 - WORKING"
+  },
+  "seed_data_creation": "None - tested with existing applications for job_id 3f943892-b692-4417-818c-5e2359af3288",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pipeline enrichment bug fix fully tested. Backend APIs return enriched fields (location, current_employer, designation, industry, education, expected_salary, headline) from candidate_bank with proper fallback. Frontend displays enriched data in pipeline cards (Harsha D. shows ₹20,00,000 CTC, 60 days notice; VANDANA B SINGH shows ₹21,00,000 CTC, 60 days notice).",
+  "features_verified": {
+    "backend_api_tests": [
+      "GET /api/admin/pipeline - Returns enriched fields from candidate_bank",
+      "Harsha D. specific data verified: location=Pune, employer=Pan India Manufacturing, designation=General Manager Compliance, industry=Manufacturing, education=MBA/PGDM",
+      "Stage counts preserved after enrichment fix",
+      "Total applications count accurate",
+      "Pipeline filters (employer, recruiter, job) still working",
+      "GET /api/jobs/{job_id}/applicants - Returns enriched fields (current_employer, designation, industry, education, expected_salary, ug_course)",
+      "GET /api/tracker/templates - Accessible",
+      "GET /api/tracker/columns - Returns master columns for auto-fill",
+      "Response structure intact - no regression"
+    ],
+    "frontend_verification": [
+      "Admin Pipeline page loads successfully",
+      "Harsha D. card displays CTC (₹20,00,000) and notice period (60 days)",
+      "VANDANA B SINGH card displays CTC (₹21,00,000) and notice period (60 days)",
+      "No dashes shown for salary/notice period fields",
+      "Stage summary counts display correctly",
+      "Filters (Employer, Recruiter, Job) render properly"
+    ]
+  },
+  "bug_fix_verification": {
+    "original_bug": "Candidate fields (Location, Current Employer, Designation, Industry, Education) showed as '-' (dashes) in pipeline even when data existed in candidate_bank",
+    "fix_applied": [
+      "Admin pipeline: Batch lookup from candidate_bank with app.get(field) or cb.get(field) fallback",
+      "Employer pipeline: Same enrichment pattern",
+      "Job applicants: Enrichment from candidate_bank for current_employer, designation, industry, education, expected_salary, ug_course",
+      "Application creation: Denormalization of fields from candidate_bank",
+      "Tracker auto-fill: Changed db.candidates to db.candidate_bank with correct field names"
+    ],
+    "fix_verified": "YES - API returns enriched data, UI displays values instead of dashes"
+  }
+}

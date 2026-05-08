@@ -1,0 +1,106 @@
+{
+  "summary": "Iteration 166: Verified three critical bug fixes in capture endpoint - 1) _score_extraction_quality no longer returns 0% (fixed _[0] bug), 2) Profiles are populated INLINE with skills/CTC/notice/education/work experience (not empty shells), 3) CTC extraction is correct (25 LPA = 2500000, not absurdly large numbers). All 14 tests passed (100%). Backend logs confirm SKIP ENRICH messages and inline regex quality=100% for well-structured profiles.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_capture_inline_regex_iteration166.py",
+    "/app/test_reports/pytest/pytest_capture_inline_regex_iteration166.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ _score_extraction_quality (line 650-667) now correctly uses field_name instead of field_name[0] - quality scores show 100% for rich profiles",
+    "✅ Inline regex extraction (lines 1417-1510) runs extract_full_profile_regex BEFORE DB save - profiles populated with skills, CTC, notice period, education, work experience",
+    "✅ Background enrichment skip (lines 1672-1677, 1772-1777) checks _inline_regex_quality >= 0.5 - Claude API NOT called for well-structured profiles",
+    "✅ CTC extraction uses battle-tested naukri_regex_parser - 25 LPA = 2500000, 50 Lacs = 5000000, 1.5 Cr = 15000000 (NOT absurdly large)",
+    "✅ ai_enrichment_source='regex_inline' set in DB when inline regex quality >= 50%",
+    "✅ Re-capture shows SKIP ENRICH in backend logs - no duplicate Claude API calls",
+    "✅ POST /api/extension/ai-extract returns _extraction_source='regex_hybrid' for well-structured profiles"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_capture_inline_regex_iteration166.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "yamini@vhc.in / Ventures@321"
+  },
+  "seed_data_creation": "Test candidates created and cleaned up during tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 166 verified the three critical bug fixes: 1) _score_extraction_quality was always returning 0% due to _[0] bug (took first CHARACTER of field name instead of full name) - NOW FIXED, quality shows 100% for rich profiles, 2) Empty profiles on initial capture - NOW FIXED, extract_full_profile_regex runs INLINE before DB save, 3) CTC showing absurdly large numbers - NOW FIXED, uses battle-tested naukri_regex_parser. Backend logs confirm: '[Capture-Regex] ENRICHED inline: Arun Krishnan | quality=100% | skills=9 exp=2 edu=1 ctc=4500000' and '[Extension] SKIP ENRICH (new): Arun Krishnan inline regex quality=100% — no Claude needed'. All 14 tests passed.",
+  "test_results": {
+    "TestHealthCheck": {
+      "test_health_check_returns_200": "PASSED - status=healthy, mongodb=ok"
+    },
+    "TestScoreExtractionQualityFix": {
+      "test_ai_extract_returns_regex_hybrid_for_rich_profile": "PASSED - _extraction_source='regex_hybrid' for well-structured profiles"
+    },
+    "TestCTCExtraction": {
+      "test_ctc_25_lpa_equals_2500000": "PASSED - 25 LPA = 2500000",
+      "test_ctc_50_lacs_equals_5000000": "PASSED - 50 Lacs = 5000000",
+      "test_ctc_1_5_cr_equals_15000000": "PASSED - 1.5 Cr = 15000000",
+      "test_ctc_not_absurdly_large": "PASSED - 80 Lacs = 8000000 (not 8000000000)"
+    },
+    "TestExpectedCTCExtraction": {
+      "test_expected_ctc_30_lpa_equals_3000000": "PASSED - 30 LPA = 3000000",
+      "test_expected_ctc_50_80_lacs_equals_5080000": "PASSED - 50.80 Lacs = 5080000"
+    },
+    "TestNoticePeriodExtraction": {
+      "test_notice_period_3_months": "PASSED - '3 Months' extracted correctly",
+      "test_notice_period_60_days": "PASSED - '60 Days' extracted correctly"
+    },
+    "TestSkillsExtraction": {
+      "test_skills_extraction_at_least_3_skills": "PASSED - 12 skills extracted from KEY SKILLS section"
+    },
+    "TestCaptureEndpointInlineRegex": {
+      "test_capture_creates_profile_with_inline_fields": "PASSED - skills=9, CTC=4500000, notice=3 Months, experience=2, education=1 filled INLINE",
+      "test_capture_with_rich_profile_shows_regex_inline_source": "PASSED - ai_enrichment_source='regex_inline'"
+    },
+    "TestRecaptureSkipsEnrichment": {
+      "test_recapture_existing_profile_skips_enrichment": "PASSED - SKIP ENRICH in logs, ai_enrichment_source still 'regex_inline'"
+    }
+  },
+  "verified_bug_fixes": {
+    "bug_1_score_extraction_quality_always_0": {
+      "root_cause": "_[0] bug took first CHARACTER of field name string instead of full field name",
+      "fix_location": "routes/extension.py line 666 - changed from field_name[0] to field_name",
+      "verification": "Quality scores now show 100% for rich profiles (was always 0%)",
+      "backend_log_evidence": "[Capture-Regex] ENRICHED inline: Arun Krishnan | quality=100%"
+    },
+    "bug_2_empty_profiles_on_initial_capture": {
+      "root_cause": "extract_full_profile_regex only ran in background, not inline at capture time",
+      "fix_location": "routes/extension.py lines 1417-1510 - runs extract_full_profile_regex BEFORE DB save",
+      "verification": "Profiles now have skills, CTC, notice period, education, work experience filled INLINE",
+      "backend_log_evidence": "[Capture-Regex] ENRICHED inline: Arun Krishnan | quality=100% | skills=9 exp=2 edu=1 ctc=4500000"
+    },
+    "bug_3_ctc_absurdly_large_numbers": {
+      "root_cause": "Ad-hoc inline CTC regex was buggy, produced numbers like ₹8,00,00,00,000",
+      "fix_location": "routes/extension.py - replaced with battle-tested naukri_regex_parser (168 tests)",
+      "verification": "CTC extraction correct: 25 LPA = 2500000, 50 Lacs = 5000000, 1.5 Cr = 15000000",
+      "test_evidence": "test_ctc_not_absurdly_large PASSED - 80 Lacs = 8000000 (not 8000000000)"
+    }
+  },
+  "backend_log_evidence": {
+    "skip_enrich_messages": [
+      "[Extension] SKIP ENRICH (new): 'Arun Krishnan' inline regex quality=100% — no Claude needed",
+      "[Extension] SKIP ENRICH (new): 'Meera Reddy' inline regex quality=100% — no Claude needed",
+      "[Extension] SKIP ENRICH (new): 'Karthik Iyer' inline regex quality=100% — no Claude needed",
+      "[Extension] SKIP ENRICH: 'Karthik Iyer' inline regex quality=100% — no Claude needed"
+    ],
+    "inline_enrichment_messages": [
+      "[Capture-Regex] ENRICHED inline: Arun Krishnan | quality=100% | skills=9 exp=2 edu=1 ctc=4500000",
+      "[Capture-Regex] ENRICHED inline: Meera Reddy | quality=100% | skills=10 exp=2 edu=1 ctc=3500000",
+      "[Capture-Regex] ENRICHED inline: Karthik Iyer | quality=100% | skills=9 exp=2 edu=1 ctc=4000000"
+    ]
+  }
+}

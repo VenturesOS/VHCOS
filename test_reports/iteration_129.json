@@ -1,0 +1,112 @@
+{
+  "summary": "Iteration 129 - Naukri Excel Import Feature Testing. Backend: 10/10 tests PASSED. Frontend: All features verified working. The complete flow (Upload → Parse → Preview → Save → Result) is fully functional. Deduplication correctly merges duplicate candidates.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_naukri_excel_import.py",
+    "/app/test_reports/pytest/pytest_naukri_excel_import.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: POST /api/admin/bulk-import/excel parses 40 candidates from sample Naukri Excel file",
+    "VERIFIED: Response includes batch_id, total_rows=40, valid_rows=40, candidates array",
+    "VERIFIED: Parsed candidates contain naukri_data with key_skills, notice_period, resume_headline, etc.",
+    "VERIFIED: POST /api/admin/bulk-import/save accepts actual candidate dict objects (not indices)",
+    "VERIFIED: Save response includes successful, duplicates_merged, failed counts",
+    "VERIFIED: Deduplication works - second save returns duplicates_merged > 0",
+    "VERIFIED: Created candidates have source='naukri_excel_import' in candidate_bank",
+    "VERIFIED: Both endpoints require admin authentication (401/403 without token)",
+    "VERIFIED: Frontend Naukri Import page loads at /admin/bulk-import with data-testid='naukri-import-page'",
+    "VERIFIED: Upload section visible with file input accepting .xlsx/.xls/.csv",
+    "VERIFIED: Parse & Preview button triggers Excel parsing",
+    "VERIFIED: Preview shows 40 candidate rows with names, emails, skills badges, notice period",
+    "VERIFIED: Import button shows 'Import 40 Candidates' with correct count",
+    "VERIFIED: After import, result screen shows 'Import Complete' with Imported/Merged/Failed counts",
+    "VERIFIED: Result screen uses correct field names: saveResult.successful, saveResult.duplicates_merged, saveResult.failed",
+    "VERIFIED: 'Import Another File' and 'View Candidate Bank' buttons visible on result screen",
+    "VERIFIED: Toast notification shows 'Imported X candidates, merged Y'"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_naukri_excel_import.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "Test imported 5 candidates from sample Excel file during backend tests. Frontend tests imported all 40 candidates. Candidates have source='naukri_excel_import' in candidate_bank collection.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 129 tested the Naukri Excel Import feature after bug fixes. Two bugs were fixed by main agent: (1) Frontend handleSave was sending integer indices instead of actual candidate objects - now sends filter(c => c.is_valid), (2) Frontend result screen was referencing wrong field names (inserted/updated/skipped instead of successful/duplicates_merged/failed). Both fixes verified working. The sample Excel file 'Senior-Data-Scientis_20260325125105_40.xlsx' with 40 candidates is at /tmp/naukri_sample.xlsx. The candidate_bank collection now has candidates with source='naukri_excel_import' from testing.",
+  "features_tested": {
+    "parse_excel_endpoint": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/admin/bulk-import/excel returns 200 with batch_id, total_rows, valid_rows, candidates",
+        "Parses 40 candidates from sample Naukri Excel file",
+        "All 40 candidates are valid (valid_rows=40)",
+        "Candidates contain naukri_data dict with key_skills, notice_period, resume_headline, etc.",
+        "Candidates have required fields: candidate_name, email/contact_no",
+        "Endpoint requires admin authentication"
+      ]
+    },
+    "save_candidates_endpoint": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/admin/bulk-import/save accepts candidate dict objects (not indices)",
+        "Returns successful, duplicates_merged, failed counts",
+        "Creates candidates in candidate_bank with source='naukri_excel_import'",
+        "Endpoint requires admin authentication"
+      ]
+    },
+    "deduplication": {
+      "status": "PASSED",
+      "tests": [
+        "Second save of same candidates returns duplicates_merged > 0",
+        "Duplicates are merged, not created as new records"
+      ]
+    },
+    "frontend_upload_section": {
+      "status": "PASSED",
+      "tests": [
+        "Naukri Import page loads at /admin/bulk-import",
+        "Upload section visible with data-testid='upload-section'",
+        "File input accepts .xlsx, .xls, .csv files",
+        "File name displayed after selection",
+        "Parse & Preview button triggers parsing"
+      ]
+    },
+    "frontend_preview_section": {
+      "status": "PASSED",
+      "tests": [
+        "Parse stats show Total Found, Valid, Invalid, Columns Detected",
+        "Candidates preview shows 40 candidate rows",
+        "Each row shows name, email, phone, location, experience, notice period",
+        "Skills badges displayed (blue background)",
+        "Preview button on each row",
+        "Import button shows correct count 'Import 40 Candidates'"
+      ]
+    },
+    "frontend_result_section": {
+      "status": "PASSED",
+      "tests": [
+        "Import Complete heading displayed after save",
+        "Imported count displayed (green)",
+        "Merged count displayed (blue)",
+        "Failed count displayed (amber)",
+        "Import Another File button visible",
+        "View Candidate Bank button visible",
+        "Toast notification shows success message"
+      ]
+    }
+  }
+}

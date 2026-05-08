@@ -1,0 +1,96 @@
+{
+  "summary": "Iteration 132 - Claude Opus 4.6 Integration for Extension Capture Flow. Backend: 11/11 tests PASSED. All features verified working: (1) POST /api/extension/capture with raw_profile_text triggers Claude Opus 4.6 extraction via Emergent Universal Key, (2) Capture without raw_profile_text works (no AI enrichment), (3) Graceful fallback when Claude returns error, (4) POST /api/extension/ai-extract works (OpenAI primary, Claude fallback), (5) Recruiter phone/email filtering from AI results, (6) GET /api/extension/profile/{id} returns enriched data.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_claude_opus_extension_capture.py",
+    "/app/test_reports/pytest/pytest_claude_opus_extension.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: POST /api/extension/capture with raw_profile_text > 100 chars triggers Claude Opus 4.6 extraction",
+    "VERIFIED: Claude extracts phone, email, current_salary, expected_salary, notice_period, notice_period_days, current_employer, designation, experience_years, skills",
+    "VERIFIED: POST /api/extension/capture without raw_profile_text saves data without AI enrichment",
+    "VERIFIED: POST /api/extension/capture with raw_profile_text < 100 chars skips AI extraction (threshold check)",
+    "VERIFIED: POST /api/extension/ai-extract uses OpenAI as primary, Claude Opus 4.6 as fallback via Emergent Key",
+    "VERIFIED: Recruiter phone/email filtering works - system blocks recruiter's own contact info from being saved as candidate data",
+    "VERIFIED: Stale phone protection works - system blocks phone numbers that already belong to different candidates",
+    "VERIFIED: GET /api/extension/profile/{id} returns enriched candidate data with all AI-extracted fields",
+    "VERIFIED: Graceful fallback on AI error - capture still succeeds with manually provided data",
+    "VERIFIED: GET /api/extension/profile/{invalid_id} returns 404",
+    "VERIFIED: DOM hints (dom_extracted_name, dom_extracted_email, dom_extracted_phone) override AI extraction in ai-extract endpoint",
+    "VERIFIED: AI extract handles insufficient text gracefully (returns success=False with error)",
+    "CODE QUALITY: Claude integration uses Emergent Universal Key via emergentintegrations library (NOT AWS Bedrock)",
+    "CODE QUALITY: extract_full_profile function in bedrock_service.py handles comprehensive extraction with proper JSON parsing and validation"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_claude_opus_extension_capture.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "rohit@vhc.in / 12345678"
+  },
+  "seed_data_creation": "Test candidates created during testing were cleaned up after tests completed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 132 tested Claude Opus 4.6 integration for extension capture flow. The integration uses Emergent Universal Key via emergentintegrations library (NOT AWS Bedrock). Key functions: extract_full_profile in /app/backend/services/bedrock_service.py, capture endpoint in /app/backend/routes/extension.py (lines 635-706). The capture endpoint requires 'scraped_at' field (ISO timestamp). Phone numbers may be blocked by stale phone protection if they already belong to another candidate. AI extraction is triggered when raw_profile_text > 100 chars.",
+  "features_tested": {
+    "capture_with_ai_extraction": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/extension/capture with raw_profile_text triggers Claude Opus 4.6 extraction",
+        "AI extracts: phone, email, current_salary, expected_salary, notice_period, notice_period_days, current_employer, designation, experience_years, skills",
+        "Enriched data is saved to candidate_bank collection"
+      ]
+    },
+    "capture_without_ai": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/extension/capture without raw_profile_text saves data as-is",
+        "POST /api/extension/capture with raw_profile_text < 100 chars skips AI extraction"
+      ]
+    },
+    "ai_extract_endpoint": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/extension/ai-extract uses OpenAI as primary",
+        "Falls back to Claude Opus 4.6 via Emergent Key when OpenAI fails",
+        "DOM hints override AI extraction",
+        "Handles insufficient text gracefully"
+      ]
+    },
+    "recruiter_filtering": {
+      "status": "PASSED",
+      "tests": [
+        "Recruiter email is filtered from capture",
+        "Recruiter phone is filtered from capture",
+        "Stale phone protection blocks phones belonging to other candidates"
+      ]
+    },
+    "get_profile": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/extension/profile/{id} returns enriched candidate data",
+        "GET /api/extension/profile/{invalid_id} returns 404"
+      ]
+    },
+    "graceful_fallback": {
+      "status": "PASSED",
+      "tests": [
+        "Capture succeeds even when AI extraction fails",
+        "Manually provided data is saved correctly"
+      ]
+    }
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "summary": "Frontend testing of Analytics Dashboard with 4 tabs (Overview, Pipeline Funnel, Revenue, Performance) and sidebar fix. All features working correctly except slow API response time on /api/analytics/admin endpoint (~11 seconds).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/analytics/admin",
+        "issue": "API response time is ~11 seconds which causes Overview tab to appear stuck loading when switching tabs. Performance optimization needed.",
+        "priority": "MEDIUM"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "PERFORMANCE: Optimize /api/analytics/admin endpoint - currently takes ~11 seconds to respond, causing perceived slow loading when switching to Overview tab"
+  ],
+  "critical_code_review_comments": [
+    "AdminAnalyticsPage.jsx is 800+ lines - consider splitting into separate component files for each tab",
+    "Overview tab re-fetches data every time it's selected - consider caching or state persistence"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only test)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin_email": "admin@vhc.in",
+    "admin_password": "VhcAdmin@2024"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Analytics dashboard at /admin/analytics has 4 tabs all working. Sidebar order fixed - Submission Tracker now at 4th position (y=265, visible without scrolling). Slow API response on /api/analytics/admin (~11s) is a known issue affecting Overview tab load time.",
+  "features_verified": {
+    "Sidebar Order": {
+      "Dashboard at position 1": "PASS",
+      "Jobs at position 2": "PASS",
+      "Pipeline at position 3": "PASS",
+      "Submission Tracker at position 4": "PASS - visible at y=265 (no scrolling needed)",
+      "Analytics at position 5": "PASS",
+      "Revenue at position 6": "PASS",
+      "Candidates at position 7": "PASS"
+    },
+    "Analytics Page - Overview Tab": {
+      "Tab loads at /admin/analytics": "PASS",
+      "Tab is default active": "PASS",
+      "KPI: Total Captures (1,758)": "PASS",
+      "KPI: Today (19)": "PASS",
+      "KPI: Avg Daily 30d (58.6)": "PASS",
+      "KPI: Active Sources (8)": "PASS",
+      "Capture Trends Chart (30 days)": "PASS",
+      "Source Distribution Pie Chart": "PASS",
+      "Recruiter Performance Bar Chart": "PASS",
+      "Funnel Velocity Card": "PASS",
+      "Stage Distribution Card": "PASS",
+      "Export PDF Button": "PASS",
+      "Filters (Employers, Teams, Recruiters, Dates)": "PASS"
+    },
+    "Analytics Page - Pipeline Funnel Tab": {
+      "Tab click switches content": "PASS",
+      "KPI: Total Applications (46)": "PASS",
+      "KPI: Shortlisted (13, 28.3%)": "PASS",
+      "KPI: Offered (7, 77.8%)": "PASS",
+      "KPI: Joined (1, 2.2%)": "PASS",
+      "Visual Funnel (Applied 32 → Joined 1)": "PASS",
+      "Stage Conversion Rate Cards": "PASS",
+      "Stage Distribution Bar Chart": "PASS"
+    },
+    "Analytics Page - Revenue Tab": {
+      "Tab click switches content": "PASS",
+      "KPI: Weighted Forecast (48K)": "PASS",
+      "KPI: Realized Revenue (0)": "PASS",
+      "KPI: In Revenue Pipeline (2)": "PASS",
+      "Revenue by Stage Chart": "PASS",
+      "Probability Map (0% → 100%)": "PASS",
+      "Forecast vs Realized Progress Bars": "PASS"
+    },
+    "Analytics Page - Performance Tab": {
+      "Tab click switches content": "PASS",
+      "Recruiter Performance Table": "PASS (empty - no recruiter data)",
+      "Mandate Performance Table": "PASS",
+      "Mandate: Senior Python Developer (33 total)": "PASS",
+      "Mandate: AM - Panasonic India (100%)": "PASS",
+      "7 mandates displayed with metrics": "PASS"
+    },
+    "Tab Switching": {
+      "Overview → Pipeline Funnel": "PASS",
+      "Pipeline Funnel → Revenue": "PASS",
+      "Revenue → Performance": "PASS",
+      "Performance → Overview": "PASS (loads slowly due to API ~11s response time)"
+    }
+  }
+}

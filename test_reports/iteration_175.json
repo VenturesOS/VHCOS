@@ -1,0 +1,54 @@
+{
+  "summary": "Backend-only testing of AI capture consistency fix + admin extraction-trace endpoint. All 19 tests PASS (6 regex unit tests + 13 HTTP integration tests). Ramakant labeled-layout bug is confirmed fixed end-to-end through /api/extension/ai-extract.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_extract_api.py",
+    "/app/backend/tests/test_extraction_consistency.py",
+    "/app/test_reports/pytest/full_results.xml",
+    "/app/test_reports/pytest/ai_extract_api_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/extension.py is 2904 lines — recommend splitting into ai_extract.py / capture.py / enrichment.py for maintainability (File Size policy violation >700 lines).",
+    "routes/extraction_trace.py correctly excludes mongo _id via projection {'_id': 0} (good).",
+    "Admin gate in extraction_trace.py is tied to literal 'admin@vhc.in' — if another admin is added later, they will not be able to read traces. Consider config-driven allow-list.",
+    "/api/extension/ai-extract records trace ONLY when has_name AND has_contact are both true (line 605). If only a name is DOM-extracted and the raw_text lacks email/phone, no trace row is written — worth documenting for admins debugging 'no trace appears' cases.",
+    "record_trace_async is fire-and-forget with asyncio.create_task and no error handler on the task itself; silent failures will only surface through the internal try/except in record_trace_async."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ai_extract_api.py (new — 13 HTTP integration tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19)",
+    "frontend": "N/A (skipped per request)"
+  },
+  "test_credentials": "Admin: admin@vhc.in / VhcAdmin@2024 ; Recruiter: rohit@vhc.in / 12345678",
+  "seed_data_creation": "None — tests use in-memory fixtures; trace rows auto-expire via 72h TTL.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New integration suite at /app/backend/tests/test_ai_extract_api.py covers (a) all 3 Naukri layouts on /api/extension/ai-extract, (b) full admin/non-admin/unauth matrix for /api/debug/extraction-trace, (c) trace auto-record verification, (d) /api/health, (e) /api/extension/capture regression. IMPORTANT: trace writes only fire when has_name AND has_contact are both true in /ai-extract — if writing future trace tests, include dom_extracted_email+dom_extracted_phone in payload, otherwise the trace row is skipped.",
+  "features_verified": {
+    "ai_extract_labeled_ramakant": "PASS — exp=19, CTC=2500000, ECTC=3400000, notice='3 Months', location contains Rudrapur/Pantnagar, company=Advik",
+    "ai_extract_compact_layout": "PASS — exp=10, CTC=1800000, ECTC=2500000, notice='2 Months', loc=Bangalore",
+    "ai_extract_mixed_layout": "PASS — exp=14, CTC=3000000, notice='15 Days or less', loc=Pune",
+    "ai_extract_auth_required": "PASS — returns 401/403 without bearer token",
+    "ai_extract_insufficient_text": "PASS — returns success=false with error message",
+    "extraction_trace_admin_list": "PASS — 200 with {count, filter, traces} JSON",
+    "extraction_trace_non_admin_403": "PASS — recruiter gets 403",
+    "extraction_trace_unauth_401_403": "PASS — no token rejected",
+    "extraction_trace_ensure_ttl_admin": "PASS — 200 with {index: 'created_at TTL 72h ensured'}",
+    "extraction_trace_ensure_ttl_non_admin": "PASS — 403 for recruiter",
+    "extraction_trace_auto_record": "PASS — trace row is persisted in MongoDB extraction_traces within ~2-4s of /ai-extract call (requires has_name + has_contact both true)",
+    "health_endpoint": "PASS — 200 {status: healthy, checks: {mongodb: ok, redis: ok}}",
+    "capture_regression": "PASS — /api/extension/capture did not 500"
+  },
+  "rca_of_the_issue": "Original bug: Ramakant's 'Experience\\n19 Years\\nCurrent CTC\\n₹ 25 Lacs' labeled stacked layout was returning 0y/Unknown. Root cause was the regex parser only matching the compact adjacency pattern ('19y ₹25 Lacs'). Fix verified: naukri_regex_parser.py now has label-aware patterns plus a safety-net backfill in _apply_bg_enrichment. Confirmed end-to-end through /api/extension/ai-extract — returns exp=19.0, current_salary=2500000, expected_salary=3400000, notice='3 Months', location='Rudrapur, Pantnagar', current_company='Advik Hi Tech Pvt Ltd' with HTTP 200 and success=true."
+}

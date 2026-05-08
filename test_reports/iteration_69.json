@@ -1,0 +1,80 @@
+{
+  "summary": "Dual-Layer Revenue Engine tested. 41 total tests (19 API + 22 unit tests). All core features verified: percentage/fixed/level_based calculation, forecast storage in application, offered/joined stage processing, slab shift detection, immutability after joined, aggregation endpoints, role-based revenue field stripping. Employer endpoints no regression.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "revenue collection", "issue": "No explicit MongoDB indexes created for revenue collection (company_id, job_id, recruiter_id, join_date, revenue_status). Should be added for performance.", "priority": "LOW"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_revenue_engine.py",
+    "/app/backend/tests/test_revenue_engine_unit.py",
+    "/app/test_reports/pytest/pytest_revenue_engine.xml",
+    "/app/test_reports/pytest/pytest_revenue_engine_unit.xml"
+  ],
+  "action_items": [
+    "Consider adding MongoDB indexes on revenue collection for: company_id, job_id, recruiter_id, join_date, revenue_status, compound(status+join_date), application_id(unique)"
+  ],
+  "critical_code_review_comments": [
+    "calculate_revenue() in revenue_engine.py correctly handles all 3 commercial types",
+    "RevenueCalculationError raised for invalid inputs - no silent fallback to 0",
+    "commercial_snapshot correctly deep-copied at offered stage",
+    "slab_shift detection works - logs when forecast slab != offered slab",
+    "Revenue locked after joined - returns 400 on re-offer attempt",
+    "Role-based field stripping in applications.py correctly removes forecast_revenue, offered_ctc, expected_ctc for non-admin/employer",
+    "Stage transition enforcement in applications.py: offered blocked without offered_ctc, joined blocked without offered_ctc",
+    "Legacy wrapper in commercials.py correctly delegates to engine with try/except returning 0"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_revenue_engine.py",
+    "/app/backend/tests/test_revenue_engine_unit.py"
+  ],
+  "success_rate": {
+    "backend": "100% (41/41 tests passed - 19 API + 22 unit)",
+    "frontend": "Not tested (backend only request)"
+  },
+  "test_credentials": {
+    "admin_email": "admin@vhc.in",
+    "admin_password": "VhcAdmin@2024",
+    "employer_email": "ajit@vhc.in",
+    "employer_password": "12345678"
+  },
+  "seed_data_creation": "Test company/job/application created and deleted for slab shift test. One revenue record created (application a0b952b1-7961-413b-9df4-0f89aaa83888 now at joined status).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Revenue Engine fully implemented. API endpoints: /api/revenue/forecast (stores in application), /api/revenue/offered/{app_id} (creates revenue record with commercial_snapshot), /api/revenue/joined/{app_id} (locks record), /api/revenue/aggregate/by-company|by-job|by-recruiter, /api/revenue/records, /api/revenue/by-application/{app_id}. Unit tests cover all 3 commercial types, error cases, structured return format.",
+  "features_verified": {
+    "POST /api/revenue/forecast percentage": "PASS - 1200000 * 8.33% = 99960",
+    "POST /api/revenue/forecast level_based": "PASS - matches correct slab",
+    "POST /api/revenue/forecast missing salary": "PASS - returns 400",
+    "POST /api/revenue/offered creates revenue record": "PASS - with commercial_snapshot",
+    "POST /api/revenue/offered slab shift detection": "PASS - logs shift when forecast!=offered slab",
+    "POST /api/revenue/offered missing ctc": "PASS - returns 400/422",
+    "POST /api/revenue/joined locks record": "PASS - revenue_status=joined, locked_at set",
+    "POST /api/revenue/joined missing join_date": "PASS - returns 400/422",
+    "POST /api/revenue/offered after joined": "PASS - returns 400 (immutable)",
+    "GET /api/revenue/aggregate/by-company": "PASS - filters by join_date range",
+    "GET /api/revenue/aggregate/by-job": "PASS - correct grouping",
+    "GET /api/revenue/aggregate/by-recruiter": "PASS - enriches with recruiter name",
+    "GET /api/revenue/records admin": "PASS - returns all records",
+    "GET /api/revenue/by-application": "PASS - returns revenue for app",
+    "PUT /api/applications stage=offered without ctc": "PASS - blocked (returns 400)",
+    "PUT /api/applications stage=joined without ctc": "PASS - blocked (returns 400)",
+    "GET /api/employer/my-team": "PASS - no regression",
+    "GET /api/employer/companies": "PASS - no regression",
+    "GET /api/employer/pipeline": "PASS - no regression",
+    "GET /api/analytics/admin": "PASS - no regression",
+    "Unit test: percentage calculation": "PASS - 22/22 tests",
+    "Unit test: fixed calculation": "PASS",
+    "Unit test: level_based slab matching": "PASS",
+    "Unit test: level_based no slab match error": "PASS",
+    "Unit test: error cases (salary, commercial)": "PASS",
+    "Unit test: structured return format": "PASS"
+  },
+  "notes": "Recruiter role restriction could not be fully tested via API because recruiter user password is unknown (yamini@vhc.in, jatin@vhc.in) and registration only allows candidate role. Code review confirms the stripping logic is in place in applications.py lines 368-376 and revenue.py lines 406-408."
+}

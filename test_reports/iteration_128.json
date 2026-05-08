@@ -1,0 +1,127 @@
+{
+  "summary": "Iteration 128 - Auto-Classification of Failed Captures Feature Testing. Backend: All tests PASSED. Frontend: All features verified working. The new auto-classification feature correctly identifies junk (UI text) vs genuine candidates using rule-based pattern matching.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_128.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: POST /api/candidate-bank/failed-captures/auto-classify with auto_dismiss=false returns classification results",
+    "VERIFIED: Response includes total, junk[], genuine[], uncertain[], junk_count, genuine_count, uncertain_count, auto_dismissed=0",
+    "VERIFIED: POST /api/candidate-bank/failed-captures/auto-classify with auto_dismiss=true dismisses junk captures",
+    "VERIFIED: After auto_dismiss=true, auto_dismissed count matches junk_count",
+    "VERIFIED: Classification correctly identifies junk names: 'Search candidates', 'Resdex', 'Page 1 of 10', 'Filter by location', '500 profiles found'",
+    "VERIFIED: Classification returns confidence scores between 0-1 (0.95, 0.98) and reason strings",
+    "VERIFIED: Auto-classify endpoint requires admin authentication (returns 401 without token)",
+    "VERIFIED: Frontend Auto-Classify button visible in failed captures header",
+    "VERIFIED: Clicking Auto-Classify shows Classification Results panel with 3 category cards (Junk/UI Text, Genuine Candidates, Needs Review)",
+    "VERIFIED: Junk details list shows name, reason, confidence percentage",
+    "VERIFIED: Auto-Dismiss button appears when junk captures exist (shows count)",
+    "VERIFIED: After auto-dismiss, success badge shows '6 junk captures auto-dismissed'",
+    "VERIFIED: GET /api/candidate-bank/failed-captures still works after auto-dismiss (shows reduced unrecovered count)",
+    "VERIFIED: Recovery method 'auto_classified_junk' is set for auto-dismissed captures"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024"
+  },
+  "seed_data_creation": "Created 7 test captures (6 junk + 1 genuine) in naukri_capture_logs collection for testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 128 tested the auto-classification enhancement for failed captures. The classifier uses rule-based pattern matching (no AI calls). Known junk patterns include: names in _JUNK_NAMES set, 'Nav-text name:' in failure_reason, UI keywords like 'profiles found', 'page', 'filter by'. After testing, 6 junk captures were auto-dismissed, leaving 1 genuine candidate (Rahul Sharma). The naukri_capture_logs collection now has 39 recovered captures with various recovery_method values: auto_classified_junk, duplicate_found, manual_save_to_bank, bulk_dismissed.",
+  "features_tested": {
+    "auto_classify_preview_mode": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/candidate-bank/failed-captures/auto-classify with auto_dismiss=false",
+        "Returns total, junk[], genuine[], uncertain[] arrays",
+        "Returns junk_count, genuine_count, uncertain_count",
+        "Returns auto_dismissed=0 in preview mode",
+        "Each item has id, name, email, profile_url, label, confidence, reason"
+      ]
+    },
+    "auto_classify_dismiss_mode": {
+      "status": "PASSED",
+      "tests": [
+        "POST /api/candidate-bank/failed-captures/auto-classify with auto_dismiss=true",
+        "Dismisses all junk captures",
+        "Returns auto_dismissed count matching junk_count",
+        "Sets recovery_method='auto_classified_junk' on dismissed captures"
+      ]
+    },
+    "classification_accuracy": {
+      "status": "PASSED",
+      "tests": [
+        "Correctly identifies 'Search candidates' as junk (Known UI element)",
+        "Correctly identifies 'Resdex' as junk (Single-word UI/platform term)",
+        "Correctly identifies 'Page 1 of 10' as junk (Nav-text pattern)",
+        "Correctly identifies '500 profiles found' as junk (UI pattern)",
+        "Correctly identifies 'Filter by location' as junk (Known UI element)",
+        "Correctly identifies 'Rahul Sharma' as genuine (Real profile URL + valid name)",
+        "Confidence scores between 0.90-0.98 for junk items"
+      ]
+    },
+    "authentication": {
+      "status": "PASSED",
+      "tests": [
+        "Returns 401 'Not authenticated' without token"
+      ]
+    },
+    "frontend_auto_classify_button": {
+      "status": "PASSED",
+      "tests": [
+        "Auto-Classify button visible in failed captures header",
+        "Button has sparkles icon and correct styling",
+        "Button triggers classification API call"
+      ]
+    },
+    "frontend_classification_results_panel": {
+      "status": "PASSED",
+      "tests": [
+        "Panel appears after clicking Auto-Classify",
+        "Shows 3 category cards: Junk/UI Text (red), Genuine Candidates (green), Needs Review (amber)",
+        "Each card shows count",
+        "Junk details list shows name, reason, confidence percentage",
+        "Close button (X) dismisses panel"
+      ]
+    },
+    "frontend_auto_dismiss_button": {
+      "status": "PASSED",
+      "tests": [
+        "Auto-Dismiss button appears when junk_count > 0 and auto_dismissed = 0",
+        "Button shows count: 'Auto-Dismiss 6 Junk Captures'",
+        "Button has red styling with trash icon",
+        "Clicking triggers auto-classify with auto_dismiss=true"
+      ]
+    },
+    "frontend_success_badge": {
+      "status": "PASSED",
+      "tests": [
+        "Success badge appears after auto-dismiss",
+        "Badge shows '6 junk captures auto-dismissed'",
+        "Badge has green checkmark icon",
+        "Toast notification shows 'Auto-dismissed 6 junk capture(s)'"
+      ]
+    },
+    "failed_captures_after_dismiss": {
+      "status": "PASSED",
+      "tests": [
+        "GET /api/candidate-bank/failed-captures?show=unrecovered returns reduced count",
+        "Only genuine candidate (Rahul Sharma) remains unrecovered",
+        "Recovered captures show recovery_method='auto_classified_junk'"
+      ]
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "summary": "Iteration 112 testing complete - All three requested fixes verified working: (1) Mandate link error messages improved, (2) Recruiter can manage mandate links for their jobs, (3) Employer/Recruiter can edit candidate profiles",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mandate_fixes_iteration112.py",
+    "/app/test_reports/pytest/pytest_mandate_fixes_iteration112.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The credential 'siddharth@vhc.in' mentioned in test request is now an admin role, not recruiter. Updated tests to use 'simran@vhc.in' which is an actual recruiter"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mandate_fixes_iteration112.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (All UI features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@vhc.in / VhcAdmin@2024",
+    "recruiter": "simran@vhc.in / 12345678",
+    "employer": "maneet@vhc.in / 12345678"
+  },
+  "seed_data_creation": "None - used existing jobs and candidates",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All three fix requests have been verified: (1) GET /api/public/mandate/{jobId}?token=WRONG_TOKEN returns 403 with 'Invalid or expired share token' when mandate is enabled, or 'Mandate sharing is not enabled' when disabled - 404 for non-existent jobs with 'Job not found'; (2) Recruiter simran@vhc.in can enable/disable mandate links for jobs via PUT /api/jobs/{id}/mandate-shareable-link - UI shows toggle with Copy/Open buttons when enabled; (3) Both EmployerCandidateBankPage and RecruiterCandidateBankPage have Edit button in candidate profile dialog that enables inline editing of name, phone, location, experience, salary, notice period, employer, industry with Save/Cancel functionality",
+  "features_tested": {
+    "mandate_error_messages": {
+      "status": "PASSED",
+      "details": [
+        "GET /api/public/mandate/{jobId}?token=WRONG_TOKEN -> 403 'Invalid or expired share token' (when mandate enabled)",
+        "GET /api/public/mandate/nonexistent-id?token=test -> 404 'Job not found'",
+        "Frontend MandateApplyPage shows 'Access Denied' with specific error messages",
+        "Missing token returns 422 validation error"
+      ]
+    },
+    "recruiter_mandate_link_access": {
+      "status": "PASSED",
+      "details": [
+        "Recruiter simran@vhc.in can login and access their jobs",
+        "Recruiter can enable/disable mandate shareable link for jobs they have access to",
+        "UI shows Mandate Link toggle on RecruiterJobsPage job cards",
+        "Copy and Open buttons appear when mandate link is enabled"
+      ]
+    },
+    "candidate_profile_editing": {
+      "status": "PASSED",
+      "details": [
+        "EmployerCandidateBankPage shows Edit button in candidate profile dialog",
+        "RecruiterCandidateBankPage shows Edit button in candidate profile dialog",
+        "Edit mode exposes 8 editable fields: name, designation, phone, location, experience, salary, notice period, employer, industry",
+        "Save button updates via PUT /api/candidate-bank/{id}/salary-notice",
+        "Cancel button restores original values and returns to view mode"
+      ]
+    }
+  }
+}
