@@ -132,7 +132,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '5.4.2';
+  const VERSION = '5.4.1';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -1698,33 +1698,9 @@
     const headlineEl = document.querySelector('[class*="currentDesignation"], [class*="current-designation"], .profile-designation');
     if (headlineEl) parts.push(`Headline: ${cleanText(headlineEl.innerText)}`);
 
-    // Location — prefer specific current-city/location selectors and
-    // skip anything inside a "preferred locations" subtree (Phase 54.9).
-    const locCandidates = [
-      '[class*="currentCity"]', '[class*="current-city"]',
-      '[class*="currentLocation"]', '[class*="current-location"]',
-      '.profile-location',
-      // generic — LAST resort, excluded from any pref-* container
-      '[class*="location"]', '[class*="Location"]',
-    ];
-    let locEl = null;
-    for (const sel of locCandidates) {
-      let el;
-      try { el = document.querySelector(sel); } catch { continue; }
-      if (!el) continue;
-      if (el.closest('[class*="pref" i]') || el.closest('[class*="Pref"]')) continue;
-      locEl = el;
-      break;
-    }
-    if (locEl) {
-      let txt = cleanText(locEl.innerText);
-      // Reject "list of cities" values (commas + multiple capitalised words)
-      const commaCount = (txt.match(/,/g) || []).length;
-      const capitalisedWords = (txt.match(/\b[A-Z][a-z]+/g) || []).length;
-      if (!(commaCount >= 1 && capitalisedWords >= 2)) {
-        parts.push(`Location: ${txt}`);
-      }
-    }
+    // Location
+    const locEl = document.querySelector('[class*="currentLocation"], [class*="location"], .profile-location');
+    if (locEl) parts.push(`Location: ${cleanText(locEl.innerText)}`);
 
     // Email and phone (visible in profile)
     const emailEl = document.querySelector('[class*="email"], a[href^="mailto:"]');
@@ -2602,40 +2578,22 @@
         }
       }
 
-      // Location — try SPECIFIC current-city selectors first; greedy
-      // class="*location*" runs LAST and is filtered to exclude
-      // preferred-locations / pref-locations / *Pref* divs (otherwise
-      // the candidate's first preferred city leaks in here, e.g. a
-      // Patna-based candidate gets "Kolkata" because Pref. locations
-      // appears before Current location in the DOM — Phase 54.9).
+      // Location — look for known patterns or dedicated location elements
       const locationSelectors = [
-        // Most specific first
+        '[class*="location"]', '[class*="Location"]',
         '[class*="currentCity"]', '[class*="current-city"]',
-        '[class*="currentLocation"]', '[class*="current-location"]',
         'i.naukri-icon-location', 'i.naukri-icon-pin',
-        // Generic LAST + exclude pref-locations descendants
-        '[class*="location"]:not([class*="pref" i] *):not([class*="Pref"] *):not([class*="pref" i]):not([class*="Pref"])',
-        '[class*="Location"]:not([class*="pref" i] *):not([class*="Pref"] *):not([class*="pref" i]):not([class*="Pref"])',
       ];
       for (const sel of locationSelectors) {
-        let el;
-        try { el = document.querySelector(sel); } catch { continue; }
-        if (!el) continue;
-        // Defensive: walk up — but stop if we hit a known pref-locations
-        // ancestor (covers cases where :not() above missed something).
-        if (el.closest('[class*="pref" i]') || el.closest('[class*="Pref"]')) continue;
-        const parent = el.closest('[class*="highlight"]') || el.closest('[class*="detail"]') || el.parentElement;
-        let text = cleanText(parent ? parent.textContent : el.textContent);
-        if (!text || text.length <= 1 || text.length >= 80 || /\d{4,}/.test(text)) continue;
-        // Strip any "Location:" / "Current Location -" / "Pref. locations:" leftovers
-        text = text.replace(/^(?:pref(?:erred|\.)?\s*locations?|location|city|current\s*location)\s*[:\-]?\s*/i, '').trim();
-        // Reject obvious LIST of cities (e.g. "Kolkata, Ahmedabad, Noida")
-        const commaCount = (text.match(/,/g) || []).length;
-        const capitalisedWords = (text.match(/\b[A-Z][a-z]+/g) || []).length;
-        if (commaCount >= 1 && capitalisedWords >= 2) continue;  // list, not a single city
-        if (text) {
-          fields.current_location = text;
-          break;
+        const el = document.querySelector(sel);
+        if (el) {
+          const parent = el.closest('[class*="highlight"]') || el.closest('[class*="detail"]') || el.parentElement;
+          const text = cleanText(parent ? parent.textContent : el.textContent);
+          if (text && text.length > 1 && text.length < 80 && !/\d{4,}/.test(text)) {
+            // Remove "Location:" prefix if present
+            fields.current_location = text.replace(/^(?:location|city|current\s*location)\s*[:\-]\s*/i, '').trim();
+            break;
+          }
         }
       }
 
