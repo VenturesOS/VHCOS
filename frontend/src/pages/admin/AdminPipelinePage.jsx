@@ -211,7 +211,13 @@ export default function AdminPipelinePage() {
     }
   };
 
-  if (loading) {
+  // Phase 54.10 — distinguish FIRST load from re-fetch:
+  //  • First load (no data yet)        → full-page spinner (existing behaviour)
+  //  • Re-fetch on filter change       → keep table visible + overlay
+  // This eliminates the 3-4s "page goes blank then comes back" jank
+  // visible after selecting an employer / recruiter / job.
+  const isFirstLoad = loading && totalApplications === 0 && Object.keys(pipelineData).length === 0;
+  if (isFirstLoad) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7CB342]" />
@@ -220,7 +226,19 @@ export default function AdminPipelinePage() {
   }
 
   return (
-    <div className="space-y-6" data-testid="admin-pipeline-page">
+    <div className="space-y-6 relative" data-testid="admin-pipeline-page">
+      {/* Re-fetch indicator (Phase 54.10) — small floating pill that appears
+          while applying a filter, so the user gets immediate feedback even
+          though the table itself stays in place. */}
+      {loading && !isFirstLoad && (
+        <div
+          className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full shadow-md text-xs text-slate-700"
+          data-testid="pipeline-refetch-indicator"
+        >
+          <div className="animate-spin rounded-full h-3 w-3 border-2 border-[#7CB342] border-t-transparent" />
+          Updating…
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -327,7 +345,7 @@ export default function AdminPipelinePage() {
                   <SelectItem value="all">All Jobs</SelectItem>
                   {filters.jobs.map((job) => (
                     <SelectItem key={job.id} value={job.id}>
-                      {job.title}
+                      {job.company_name ? `${job.company_name} · ${job.title}` : job.title}
                     </SelectItem>
                   ))}
                 </SelectContent>
