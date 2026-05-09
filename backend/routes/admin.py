@@ -594,7 +594,26 @@ async def get_admin_pipeline(
       • employer selected → recruiters dropdown lists only that employer's
         team members (not all 50+ recruiters in the org).
       • employer or recruiter selected → jobs dropdown narrows accordingly.
+
+    Phase 54.11 — Redis cache (60s TTL) keyed by the filter tuple.
+    Repeat filter combinations served in ~10ms instead of 3-4s. Cache
+    is per-filter-tuple (not per-user) since pipeline data is identical
+    for any admin viewer. TTL is short enough that stage drags +
+    new applications surface within a minute.
     """
+    from services.cache import cache
+
+    _cache_key = (
+        f"admin:pipeline:v1:"
+        f"emp={employer_id or 'all'}|"
+        f"rec={recruiter_id or 'all'}|"
+        f"team={team_id or 'all'}|"
+        f"job={job_id or 'all'}"
+    )
+    _cached = cache.get(_cache_key)
+    if _cached is not None:
+        return _cached
+
     # ── Build the job filter — combine, not override ───────────────────────
     job_clauses = []
 
@@ -781,7 +800,7 @@ async def get_admin_pipeline(
     ).to_list(1000)
     teams = await db.teams.find({}, {"_id": 0, "id": 1, "name": 1, "employer_id": 1}).to_list(1000)
     
-    return {
+    result = {
         "pipeline": pipeline_data,
         "stage_counts": stage_counts,
         "total_applications": len(applications),
@@ -803,6 +822,10 @@ async def get_admin_pipeline(
             ],
         }
     }
+    # Phase 54.11 — populate cache for 60s. Filter changes within a minute
+    # hit Redis (~10ms) instead of recomputing the full aggregation.
+    cache.set(_cache_key, result, ttl=60)
+    return result
 
 
 
