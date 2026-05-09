@@ -160,6 +160,17 @@ class CacheService:
             return 2
         return self.delete_pattern("match:*")
 
+    # ── Pipeline Cache (Phase 54.11) ──────────────────────────────────────
+    def invalidate_pipeline_cache(self) -> int:
+        """Active invalidation hook called by stage-change / delete /
+        revenue endpoints so the pipeline reflects writes instantly
+        instead of waiting up to 60s for natural TTL expiry. Clears
+        BOTH the data cache AND the filters cache (covers job
+        creation, team membership change, etc)."""
+        n1 = self.delete_pattern("admin:pipeline:v2:*")
+        n2 = self.delete_pattern("admin:pipeline:filters:v1:*")
+        return n1 + n2
+
     # ── Candidate Embeddings Cache ────────────────────────────────────────
 
     def get_candidate_embedding(self, candidate_id: str) -> Optional[List[float]]:

@@ -62,25 +62,42 @@ export default function AdminPipelinePage() {
     }
   };
 
-  const loadPipeline = useCallback(async () => {
-    setLoading(true);
+  const loadFilters = useCallback(async () => {
+    // Phase 54.12 — dropdowns load separately from data so filter
+    // changes don't pay the dropdown-fetch cost every click.
     try {
       const params = {};
       if (selectedEmployer !== 'all') params.employer_id = selectedEmployer;
+      const res = await adminAPI.getPipelineFilters(params);
+      setFilters(res.data);
+    } catch (e) {
+      // Non-fatal — pipeline still loads, just without dropdowns
+    }
+  }, [selectedEmployer]);
+
+  const loadPipeline = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { include_filters: false };  // Phase 54.12
+      if (selectedEmployer !== 'all') params.employer_id = selectedEmployer;
       if (selectedRecruiter !== 'all') params.recruiter_id = selectedRecruiter;
       if (selectedJob !== 'all') params.job_id = selectedJob;
-      
+
       const res = await adminAPI.getPipeline(params);
       setPipelineData(res.data.pipeline);
       setStageCounts(res.data.stage_counts);
       setTotalApplications(res.data.total_applications);
-      setFilters(res.data.filters);
     } catch (error) {
       toast.error('Failed to load pipeline data');
     } finally {
       setLoading(false);
     }
   }, [selectedEmployer, selectedRecruiter, selectedJob]);
+
+  // Load filters once on mount + whenever employer cascade changes
+  useEffect(() => {
+    loadFilters();
+  }, [loadFilters]);
 
   useEffect(() => {
     loadPipeline();

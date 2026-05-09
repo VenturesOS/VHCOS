@@ -145,6 +145,7 @@ export const userAPI = {
 // Admin APIs
 export const adminAPI = {
   getPipeline: (params) => api.get('/admin/pipeline', { params }),
+  getPipelineFilters: (params) => api.get('/admin/pipeline/filters', { params }),  // Phase 54.12
   getHiringFunnel: (params) => api.get('/hiring-funnel', { params }),
   getCompanyProfile: (companyId) => api.get(`/companies/${companyId}/profile`),
 };

@@ -573,12 +573,105 @@ async def assign_recruiter_to_employer(
 
 # ============== ADMIN PIPELINE VIEW ==============
 
+@admin_router.get("/admin/pipeline/filters")
+async def get_admin_pipeline_filters(
+    employer_id: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """
+    Phase 54.12 — Lightweight dropdown-data endpoint for the Collective
+    Pipeline page. Returns ONLY the filter options (employers, recruiters,
+    teams, jobs). The frontend calls this ONCE on mount + whenever the
+    `employer_id` cascade changes. Heavy data calls then go to
+    `/admin/pipeline?include_filters=false` (skips ~300ms of duplicate
+    dropdown computation per filter change).
+
+    Cached 5 minutes per (employer_id) tuple — these dropdowns rarely
+    change vs pipeline data.
+    """
+    from services.cache import cache
+
+    _key = f"admin:pipeline:filters:v1:emp={employer_id or 'all'}"
+    _cached = cache.get(_key)
+    if _cached is not None:
+        return _cached
+
+    test_accounts_filter = {
+        "$nor": [
+            {"name": {"$regex": "^Test ", "$options": "i"}},
+            {"name": {"$regex": "^Demo ", "$options": "i"}},
+            {"email": {"$regex": "^test_", "$options": "i"}},
+            {"is_test_account": True},
+        ]
+    }
+    employers = await db.users.find(
+        {"role": "employer", **test_accounts_filter},
+        {"_id": 0, "id": 1, "name": 1, "email": 1},
+    ).to_list(1000)
+
+    # Cascading recruiter list when employer is selected
+    recruiter_query = {"role": "recruiter", **test_accounts_filter}
+    if employer_id:
+        employer_team_docs = await db.teams.find(
+            {"employer_id": employer_id},
+            {"_id": 0, "recruiter_ids": 1}
+        ).to_list(100)
+        scoped_recruiter_ids = set()
+        for t in employer_team_docs:
+            for rid in (t.get("recruiter_ids") or []):
+                if rid:
+                    scoped_recruiter_ids.add(rid)
+        if scoped_recruiter_ids:
+            recruiter_query["id"] = {"$in": list(scoped_recruiter_ids)}
+        else:
+            recruiter_query["id"] = {"$in": []}
+
+    recruiters = await db.users.find(
+        recruiter_query, {"_id": 0, "id": 1, "name": 1, "email": 1},
+    ).to_list(1000)
+    teams = await db.teams.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "employer_id": 1}
+    ).to_list(1000)
+
+    # Jobs scoped to employer if specified, else all
+    jobs_query = {}
+    if employer_id:
+        # Same logic as the data endpoint: jobs belong to the employer's
+        # teams. Reuse the team_ids gathered above if any.
+        scoped_team_ids = [t["id"] for t in teams if t.get("employer_id") == employer_id]
+        if scoped_team_ids:
+            jobs_query["team_id"] = {"$in": scoped_team_ids}
+        else:
+            jobs_query["team_id"] = {"$in": []}
+    jobs_docs = await db.jobs.find(
+        jobs_query,
+        {"_id": 0, "id": 1, "title": 1, "company_name": 1},
+    ).to_list(10000)
+
+    result = {
+        "employers": employers,
+        "recruiters": recruiters,
+        "teams": teams,
+        "jobs": [
+            {
+                "id": j["id"],
+                "title": j.get("title", "Untitled"),
+                "company_name": j.get("company_name", ""),
+            }
+            for j in jobs_docs
+        ],
+    }
+    cache.set(_key, result, ttl=300)   # 5 min — dropdowns change slowly
+    return result
+
+
 @admin_router.get("/admin/pipeline")
 async def get_admin_pipeline(
     employer_id: Optional[str] = None,
     recruiter_id: Optional[str] = None,
     team_id: Optional[str] = None,
     job_id: Optional[str] = None,
+    include_filters: bool = True,   # Phase 54.12 — skip if frontend already has them
     current_user: dict = Depends(require_role(["admin"]))
 ):
     """
@@ -604,11 +697,12 @@ async def get_admin_pipeline(
     from services.cache import cache
 
     _cache_key = (
-        f"admin:pipeline:v1:"
+        f"admin:pipeline:v2:"
         f"emp={employer_id or 'all'}|"
         f"rec={recruiter_id or 'all'}|"
         f"team={team_id or 'all'}|"
-        f"job={job_id or 'all'}"
+        f"job={job_id or 'all'}|"
+        f"filters={'1' if include_filters else '0'}"
     )
     _cached = cache.get(_cache_key)
     if _cached is not None:
@@ -700,8 +794,10 @@ async def get_admin_pipeline(
     if candidate_ids:
         cands = await db.candidate_bank.find(
             {"id": {"$in": candidate_ids}},
+            # Phase 54.13 — projection trimmed: removed industry, education,
+            # ug_course, headline (none are rendered in the kanban view).
+            # ~10% smaller payload, plus less per-doc memory in Python.
             {"_id": 0, "id": 1, "location": 1, "current_employer": 1, "designation": 1,
-             "industry": 1, "education": 1, "ug_course": 1, "headline": 1,
              "expected_salary": 1, "current_salary": 1, "experience_years": 1,
              "notice_period": 1, "phone": 1, "name": 1, "email": 1}
         ).to_list(len(candidate_ids))
@@ -748,15 +844,26 @@ async def get_admin_pipeline(
             "location": app.get("location") or cb.get("location"),
             "current_employer": app.get("current_employer") or cb.get("current_employer"),
             "designation": app.get("designation") or cb.get("designation"),
-            "industry": app.get("industry") or cb.get("industry"),
-            "education": app.get("education") or cb.get("education"),
-            "ug_course": app.get("ug_course") or cb.get("ug_course"),
-            "headline": app.get("headline") or cb.get("headline"),
+            # Phase 54.13: industry, education, ug_course, headline removed
+            # — not rendered in the kanban. Re-fetch via /candidates/{id}
+            # if a future detail dialog needs them.
         })
     
     # Calculate stage counts
     stage_counts = {stage: len(apps) for stage, apps in pipeline_data.items()}
     
+    # Phase 54.12 — skip dropdown computation when the frontend already
+    # has them (loaded once via /admin/pipeline/filters). Saves ~300ms
+    # per filter click since we don't re-query employers/recruiters/teams.
+    if not include_filters:
+        result = {
+            "pipeline": pipeline_data,
+            "stage_counts": stage_counts,
+            "total_applications": len(applications),
+        }
+        cache.set(_cache_key, result, ttl=60)
+        return result
+
     # Get filter options. Exclude obvious test/demo accounts so the dropdown
     # stops showing non-existent / orphan entries.
     test_accounts_filter = {

@@ -538,6 +538,12 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
         except Exception:
             pass
 
+    # Phase 54.11 — active cache invalidation: any change that affects
+    # the pipeline view (stage move, note, revenue, deletion etc.) must
+    # purge the cached snapshot so admins see the change instantly
+    # instead of waiting up to 60s for natural TTL expiry.
+    _bust_pipeline_cache()
+
     return ApplicationResponse(**updated_application)
 
 
@@ -699,12 +705,24 @@ async def delete_application(
             "previous_stage": application.get("stage")
         }
     })
-    
+
+    _bust_pipeline_cache()  # Phase 54.11
+
     return {
         "message": "Candidate removed from pipeline successfully",
         "application_id": app_id,
         "candidate_name": application.get("candidate_name")
     }
+
+
+def _bust_pipeline_cache():
+    """Phase 54.11 — fire-and-forget pipeline cache invalidation. Used
+    by every write endpoint that affects the pipeline view."""
+    try:
+        from services.cache import cache
+        cache.invalidate_pipeline_cache()
+    except Exception:
+        pass
 
 
 @applications_router.post("/applications/{app_id}/notes")
@@ -738,6 +756,7 @@ async def add_note(app_id: str, note_data: NoteCreate, current_user: dict = Depe
             details={"application_id": app_id, "note_preview": note_data.content[:100]},
         )
 
+    _bust_pipeline_cache()  # Phase 54.11
     return {"message": "Note added successfully", "note": note}
 
 
@@ -857,7 +876,8 @@ async def update_application_details(
                             )
     
     updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
-    
+
+    _bust_pipeline_cache()  # Phase 54.11
     return {
         "message": "Application details updated successfully",
         "application_id": app_id,
