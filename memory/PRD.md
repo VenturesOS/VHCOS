@@ -1444,3 +1444,113 @@ between PyPDF2 and OCR that fires only when prior extractors yielded
 
 See `/app/memory/PHASE54_PART7_TABLE_AWARE_PDF.md`
 
+---
+
+## Phase 54.8 — RunPod Auto Schedule (2026-05-08) ✅
+EC2 cron-based start/stop scheduler for the Qwen14B vLLM pod.
+Mon-Sat 08:50 IST start, 18:30 IST stop. Sunday off.
+3 bash helpers in /usr/local/bin/: `runpod-start`, `runpod-stop`,
+`runpod-status`. Calls RunPod REST API (`/v1/pods/{id}/start|stop`).
+
+Cuts pod billing from 168 h/week → 57 h/week.
+
+### Cost timeline
+- Original A40 24/7: $329/mo
+- Migrated to A5000 24/7: $200/mo (this session)
+- A5000 office-hours only: ~$73/mo
+- **Total saved: ~$256/mo (~₹21,400/mo)** 🎉
+
+### Files
+- `backend/scripts/runpod_schedule.py`
+- `backend/scripts/install_runpod_cron.sh`
+- 2 cron lines on EC2 + 3 PATH helpers
+
+See `/app/memory/PHASE54_PART8_RUNPOD_SCHEDULER.md`
+
+---
+
+## Phase 54.9 — DEFERRED ❌
+Naukri location capture wrong-field bug. User rechecked and confirmed
+the example actually had Kolkata as the real current location (CV
+verified). False alarm. Workspace changes reverted.
+
+---
+
+## Phase 54.10 — Pipeline Filter UX (2026-05-09) ✅
+Job dropdown on Admin Pipeline now shows **`Company · Role`**
+(e.g. "JSW · Area Manager", "JCB INDIA · Channel Sales") instead of
+ambiguous bare titles. Plus distinguished first-load vs re-fetch:
+table stays visible during filter change, floating "Updating…" pill
+in top-right gives instant feedback. Backend added projection on
+`db.jobs.find()` cutting transfer ~85%.
+
+See `/app/memory/PHASE54_PART10_PIPELINE_FILTER_UX.md`
+
+---
+
+## Phase 54.11 — Pipeline Redis Cache (2026-05-09) ✅
+60s TTL cache on `/admin/pipeline` keyed by filter tuple. Repeat
+filter clicks hit Redis (~1-2s warm vs 3-4s cold).
+
+See `/app/memory/PHASE54_PART11_PIPELINE_REDIS_CACHE.md`
+
+---
+
+## Phase 54.12 + 54.13 — Pipeline Perf Triple-Win (2026-05-09) ✅
+1. **Active cache invalidation** on every pipeline-affecting write
+   (`_bust_pipeline_cache()` wired into 4 endpoints in applications.py).
+   Stage moves visible instantly instead of up-to-60s wait.
+2. **Split filter dropdowns** into `GET /admin/pipeline/filters`
+   (cached 5 min). Frontend loads once on mount; data calls now use
+   `?include_filters=false`.
+3. **GZip middleware + field trim**. Removed unused fields
+   (`industry`, `education`, `ug_course`, `headline`) and added
+   `GZipMiddleware(minimum_size=500)` to FastAPI.
+
+### Live measured (EC2 production)
+| | Before | After |
+|---|---|---|
+| Wire size | 2.5 MB | **266 KB** (9.3× smaller) |
+| Filter click warm | 3-4 s | **179 ms** (17× faster) |
+| Stage move → visible | up to 60 s | **instant** |
+
+### Deferred
+Per-stage pagination (Phase 54.14, ~2-3 hrs) — biggest remaining win
+beyond this. Frontend kanban refactor needed.
+
+See `/app/memory/PHASE54_PART12_13_PIPELINE_PERF_3X.md`
+
+---
+
+## End of session 2026-05-09
+
+### Active backlog (priority ordered)
+- 🟡 **P1** — Phase 54.14 per-stage pagination (~2-3 hrs)
+- 🟡 **P1** — MongoDB Round 2/3 index drops (8 indexes ~250 MB; user
+  paused after Round 1 to be cautious; revisit when ready)
+- 🟢 **P2** — Notifications System architecture (need design decisions)
+- 🟢 **P2** — `docling`/`unstructured` enhancement (deferred, current
+  pdfplumber covers 80/20)
+- 🟢 **P2** — Phase 54.6 Bug B (Naukri auto-capture URL pattern) —
+  re-investigate when reproducible
+
+### Crossed permanently (per user)
+- ❌ Gemini Vision fallback for multi-column PDFs
+- ❌ Sidebar accordion reorganization
+
+### Engagement ideas not picked up yet
+- Auto-refresh pipeline every 60s with smart pause-on-tab-blur
+- Apply gzip + projection trim pattern to `/api/admin/dashboard/stats`
+  and `/api/employer/pipeline`
+- Convert RunPod env vars to RunPod Secrets (currently plaintext, low risk)
+
+### Production state at end of session
+- Backend EC2: gunicorn 1 worker, --preload, --timeout 180,
+  MemoryMax=6G; current memory ~3 GB, swap 0B, healthy
+- RunPod pod: `31uikf6dsy0z8w` (RTX A5000, $0.27/hr) RUNNING
+- RunPod scheduler: cron installed, first auto-start tomorrow
+  08:50 IST Mon-Sat
+- Atlas vector_index: ACTIVE on `candidate_embeddings` (118,575 docs)
+- LTR re-ranker: live, returning real XGBoost predictions, 1.2 s warm
+- Pipeline page: 266 KB wire / 179 ms warm / instant cache invalidation
+
