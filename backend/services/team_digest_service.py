@@ -495,7 +495,9 @@ async def build_daily_digest(db, date_ist: Optional[datetime] = None) -> Dict[st
         max(captures_made, key=lambda x: x["capture_quality"])
         if captures_made else None
     )
-    eff_made = [rm for rm in recruiter_metrics if rm["mandate_efficiency"] >= 0]
+    # Only highlight mandate efficiency if at least one submission happened —
+    # else the "best" is just the alphabetically-first 0%, which is misleading.
+    eff_made = [rm for rm in recruiter_metrics if rm["mandate_efficiency"] > 0]
     best_efficiency = (
         max(eff_made, key=lambda x: x["mandate_efficiency"])
         if eff_made else None
