@@ -639,9 +639,18 @@ def format_whatsapp_message(d: Dict[str, Any]) -> str:
         L.append(f"*INACTIVE TODAY ({len(d['inactive_recruiters'])} recruiters)*")
         L.append("• " + ", ".join(d["inactive_recruiters"][:15]))
         L.append("")
-    if d["inactive_employers"]:
-        L.append(f"*LOW TEAM OUTPUT ({len(d['inactive_employers'])} team leads)*")
-        L.append("• " + ", ".join(d["inactive_employers"][:10]))
+
+    # Positive team-output framing — ranked highest → lowest by team avg score.
+    # Replaces the older "Low Team Output" block which highlighted laggards.
+    if d.get("employer_scores"):
+        L.append("*TEAM RANKING*")
+        medals = ["🥇", "🥈", "🥉"]
+        for i, e in enumerate(d["employer_scores"]):
+            prefix = medals[i] if i < 3 else f"  {i + 1}."
+            L.append(
+                f"{prefix} {e['team_name']} (Lead: {e['name']}) — "
+                f"{_fmt_score(e['activity_score'])} pts/recruiter · {e['team_size']} on team"
+            )
         L.append("")
 
     quality_lines = []
