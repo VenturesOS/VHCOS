@@ -829,8 +829,8 @@ def format_whatsapp_message(d: Dict[str, Any]) -> str:
             prefix = medals[i] if i < len(medals) else f"{i + 1}."
             L.append(
                 f"{prefix} {e['name']} — {_fmt_score(e['efficiency_pct'])}% "
-                f"({e['qualifying_submissions']}/{e['qualifying_captures']} submits/captures · "
-                f"{e['qualifying_mandates']} of {e['mandates_worked']} mandates)"
+                f"({e['qualifying_submissions']} submits / {e['qualifying_captures']} captures · "
+                f"{e['qualifying_mandates']} qualifying mandates of {e['mandates_worked']} worked)"
             )
         if building:
             names = [
