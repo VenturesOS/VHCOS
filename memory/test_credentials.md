@@ -12,6 +12,7 @@
 ## Recruiter Account
 - Email: rohit@vhc.in
 - Password: 12345678
+- ⚠ NOTE: In current DB this user's role is **admin**, not recruiter (test_credentials.md previously mis-labeled). Use yamini@vhc.in or any recruiter from the seed for negative-auth tests on admin-only routes.
 
 ## Recruiter Account (Yamini)
 - Email: yamini@vhc.in

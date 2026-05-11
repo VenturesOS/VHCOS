@@ -1611,3 +1611,67 @@ fixed automation), EC2 (m7i-flex.large → t3.large → t3a.large).
    cluster hits 7-day uptime; drop Tier-2 unused MongoDB indexes.
 3. Within 30 days: delete old RunPod A40 pod permanently.
 4. Next week: implement D1 BGE sidecar.
+
+
+---
+
+## Phase 54.15 (2026-05-11) — Daily Team Performance Digest (WhatsApp-ready)
+
+### Built
+- `services/team_digest_service.py` — computes per-recruiter daily KPIs
+  (activity_score, capture_quality, mandate_efficiency, stage counts)
+  using 3 bulk MongoDB aggregations across a 14-day window. Builds the
+  full digest (top 3 overall, top per team, improving/falling D-o-D,
+  improving/falling W-o-W, inactive recruiters & employers, quality
+  highlights) and a WhatsApp-ready Markdown text blob.
+- `routes/daily_digest.py` — 5 admin-only endpoints:
+  - `GET  /api/admin/daily-digest`              (lazy-build if missing)
+  - `GET  /api/admin/daily-digest/recent?days=N`
+  - `GET  /api/admin/daily-digest/{YYYY-MM-DD}`
+  - `POST /api/admin/daily-digest/regenerate`
+  - `POST /api/admin/daily-digest/{YYYY-MM-DD}/regenerate`
+- APScheduler cron added in `lifecycle.py`: 12:30 UTC daily =
+  **18:00 IST**, runs `run_daily_digest()` → stores in
+  `daily_team_digests` collection.
+- Frontend `/admin/daily-digest` page (DailyDigestPage.jsx) with:
+  preview card, Copy-to-clipboard, Open-WhatsApp-Web deep link,
+  date picker, regenerate, stat tiles, detail panels for each ranking
+  category, inactive callouts. Wired into Sidebar (admin nav).
+- Tests at `/app/backend/tests/test_daily_digest.py` — 9/9 pass.
+
+### KPI weights (locked in this session)
+| Pipeline stage | Points |
+|---|---|
+| joined | +10 |
+| hired | +7 |
+| offered | +5 |
+| interview | +3 |
+| shortlisted | +2 |
+| submitted_to_client | +1 |
+| sourced | +0.5 |
+| on_hold | 0 |
+| rejected | −1 |
+
+- Activity score = Σ pipeline_points + 0.5×candidates_added + 1.0×cv_uploads
+- Capture quality = avg fill-rate of 6 required fields, −30 ppt
+  penalty per capture edited >60 s after first save (recapture proxy).
+- Mandate efficiency = submissions_to_client / captures across all
+  mandates the recruiter touched today.
+
+### Ranking & comparison rules
+- Recruiters ranked individually; employers ranked by avg of team.
+- D-o-D delta computed vs the recruiter's *last active* working day
+  within last 7 days (skips days with 0 activity, so a Monday digest
+  defaults to comparing against Friday/Saturday).
+- W-o-W = mean of last 7 days vs mean of 7-14 days ago.
+- Inactive list = activity_score < 5 AND zero captures AND no
+  pipeline events (both recruiters and employers surfaced).
+
+### Open follow-ups (LOW priority)
+- Hardening: future-dated regenerate quietly returns an empty digest;
+  add upper-bound date check on the route.
+- Currently lazy generation of today's digest can take ~12 s on first
+  GET if scheduler hasn't run yet — consider priming the cache on
+  app startup (or returning 202).
+- Long-term: change inactive_recruiters/employers payload from list of
+  strings to list of {user_id, name} so frontend uses user_id for keys.

@@ -328,8 +328,8 @@ export default function DailyDigestPage() {
                       {digest.inactive_recruiters.length} Recruiters
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {digest.inactive_recruiters.map((n) => (
-                        <Badge key={n} variant="outline" className="bg-white border-red-200 text-red-700">{n}</Badge>
+                      {digest.inactive_recruiters.map((n, i) => (
+                        <Badge key={`inactive-rec-${i}-${n}`} variant="outline" className="bg-white border-red-200 text-red-700">{n}</Badge>
                       ))}
                     </div>
                   </div>
@@ -340,8 +340,8 @@ export default function DailyDigestPage() {
                       {digest.inactive_employers.length} Team Leads (low team output)
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {digest.inactive_employers.map((n) => (
-                        <Badge key={n} variant="outline" className="bg-white border-red-200 text-red-700">{n}</Badge>
+                      {digest.inactive_employers.map((n, i) => (
+                        <Badge key={`inactive-emp-${i}-${n}`} variant="outline" className="bg-white border-red-200 text-red-700">{n}</Badge>
                       ))}
                     </div>
                   </div>
