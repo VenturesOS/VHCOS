@@ -66,6 +66,10 @@ LOW_ACTIVITY_THRESHOLD = 5.0
 RECAPTURE_PENALTY_PCT = 30
 RECAPTURE_GRACE_SECS = 60
 
+# Real `source` values in candidate_bank (verified via /_audit/today endpoint)
+EXTENSION_CAPTURE_SOURCES = {"naukri_extension", "linkedin_extension"}
+CV_UPLOAD_SOURCES = {"cv_upload", "batch_upload", "resume_upload", "bulk_upload"}
+
 REQUIRED_CAPTURE_FIELDS = [
     "current_company",
     "current_designation",
@@ -242,13 +246,13 @@ async def _build_metric_matrix(
             continue
         cell["candidates_added"] += 1
         source = (doc.get("source") or "").lower()
-        if source == "extension_capture":
+        if source in EXTENSION_CAPTURE_SOURCES:
             cell["captures_count"] += 1
             cell["capture_qualities"].append(_capture_quality_for_doc(doc))
             mid = sd.get("mandate_id") or doc.get("mandate_id")
             if mid:
                 cell["mandate_captures"][mid] += 1
-        elif source in ("resume_upload", "cv_upload", "bulk_upload"):
+        elif source in CV_UPLOAD_SOURCES:
             cell["cv_uploads"] += 1
 
     # Finalize aggregates per cell
