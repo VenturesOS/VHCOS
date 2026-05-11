@@ -66,6 +66,11 @@ LOW_ACTIVITY_THRESHOLD = 5.0
 RECAPTURE_PENALTY_PCT = 30
 RECAPTURE_GRACE_SECS = 60
 
+# Lifetime Mandate Efficiency thresholds
+MIN_MANDATES_FOR_RANKING = 10   # < 10 mandates → "Building track record" bucket
+MIN_CAPTURES_PER_MANDATE = 5    # mandates with <5 captures excluded as noise
+LIFETIME_TOP_N = 5              # top-N shown in the WhatsApp digest
+
 # Real `source` values in candidate_bank (verified via /_audit/today endpoint)
 EXTENSION_CAPTURE_SOURCES = {"naukri_extension", "linkedin_extension"}
 CV_UPLOAD_SOURCES = {"cv_upload", "batch_upload", "resume_upload", "bulk_upload"}
@@ -306,6 +311,121 @@ def _empty_day_metric() -> Dict[str, Any]:
 
 
 # ─────────────────────────────────────────────────────────────────────
+# LIFETIME Mandate Efficiency (separate from daily KPIs)
+# ─────────────────────────────────────────────────────────────────────
+async def _compute_lifetime_mandate_efficiency(
+    db, recruiter_ids: List[str]
+) -> Dict[str, Dict[str, Any]]:
+    """For each recruiter, compute lifetime mandate efficiency.
+
+    Rules (locked-in with user 2026-05-11):
+    - "Worked on mandate" = captured ≥ 1 candidate against it via extension.
+    - Window = lifetime (no time bound, ends only when user is deleted).
+    - Submission cap = 1 per candidate (resubmits don't double-count).
+    - Min mandates worked on = 10 to be ranked; else "building track record".
+    - Min captures per mandate = 5 (drops noisy one-shot mandates).
+    - Avg method = capture-weighted overall =
+            total_submissions_capped / total_qualifying_captures × 100
+            (capped at 100 % to absorb edge cases).
+
+    Returns:
+        {user_id: {
+            "total_captures": int,
+            "total_submissions": int,
+            "mandates_worked": int,
+            "qualifying_mandates": int,
+            "efficiency_pct": float,
+            "eligible": bool,
+        }}
+    """
+    rec_set = set(recruiter_ids)
+
+    # 1) Per-mandate captures per recruiter
+    captures_by_mandate: Dict[str, Dict[str, int]] = {rid: {} for rid in recruiter_ids}
+    cap_pipeline = [
+        {"$match": {"source": {"$in": list(EXTENSION_CAPTURE_SOURCES)}}},
+        {"$addFields": {
+            "_uid": {"$ifNull": [
+                "$source_details.captured_by",
+                {"$ifNull": ["$captured_by", "$created_by"]},
+            ]},
+            "_mid": {"$ifNull": [
+                "$mandate_id",
+                "$source_details.mandate_id",
+            ]},
+        }},
+        {"$match": {"_uid": {"$ne": None}, "_mid": {"$ne": None}}},
+        {"$group": {
+            "_id": {"uid": "$_uid", "mid": "$_mid"},
+            "captures": {"$sum": 1},
+        }},
+    ]
+    async for r in db.candidate_bank.aggregate(cap_pipeline, allowDiskUse=True):
+        uid = r["_id"]["uid"]
+        if uid not in rec_set:
+            continue
+        captures_by_mandate[uid][r["_id"]["mid"]] = r["captures"]
+
+    # 2) Distinct submissions per (recruiter, mandate, candidate) — cap = 1
+    subs_by_mandate: Dict[str, Dict[str, int]] = {rid: {} for rid in recruiter_ids}
+    sub_pipeline = [
+        {"$match": {
+            "new_stage": "submitted_to_client",
+            "user_id": {"$in": recruiter_ids},
+        }},
+        # Dedupe per (user, mandate, candidate) — submission cap = 1
+        {"$group": {
+            "_id": {
+                "uid": "$user_id",
+                "mid": "$mandate_id",
+                "cand": "$candidate_id",
+            },
+        }},
+        # Roll up to (user, mandate) → count distinct candidates submitted
+        {"$group": {
+            "_id": {"uid": "$_id.uid", "mid": "$_id.mid"},
+            "submissions": {"$sum": 1},
+        }},
+    ]
+    async for r in db.tracker_events.aggregate(sub_pipeline, allowDiskUse=True):
+        uid = r["_id"]["uid"]
+        mid = r["_id"]["mid"]
+        if uid not in rec_set or not mid:
+            continue
+        subs_by_mandate[uid][mid] = r["submissions"]
+
+    # 3) Compute per-recruiter aggregates
+    out: Dict[str, Dict[str, Any]] = {}
+    for uid in recruiter_ids:
+        caps = captures_by_mandate.get(uid, {})
+        subs = subs_by_mandate.get(uid, {})
+        mandates_worked = len(caps)
+
+        # Qualifying mandates = ≥ MIN_CAPTURES_PER_MANDATE captures
+        qual_mid = {m for m, c in caps.items() if c >= MIN_CAPTURES_PER_MANDATE}
+        qual_captures = sum(c for m, c in caps.items() if m in qual_mid)
+        # Cap subs at captures per mandate (subs can't outnumber captures by same recruiter)
+        qual_subs = 0
+        for m in qual_mid:
+            qual_subs += min(subs.get(m, 0), caps.get(m, 0))
+
+        eff = round((qual_subs / qual_captures * 100), 1) if qual_captures > 0 else 0.0
+        eff = min(eff, 100.0)  # safety cap
+
+        out[uid] = {
+            "total_captures": sum(caps.values()),
+            "total_submissions": sum(min(subs.get(m, 0), caps.get(m, 0)) for m in caps),
+            "mandates_worked": mandates_worked,
+            "qualifying_mandates": len(qual_mid),
+            "qualifying_captures": qual_captures,
+            "qualifying_submissions": qual_subs,
+            "efficiency_pct": eff,
+            "eligible": mandates_worked >= MIN_MANDATES_FOR_RANKING,
+        }
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Public API — build the full digest
 # ─────────────────────────────────────────────────────────────────────
 async def build_daily_digest(db, date_ist: Optional[datetime] = None) -> Dict[str, Any]:
@@ -511,6 +631,24 @@ async def build_daily_digest(db, date_ist: Optional[datetime] = None) -> Dict[st
         if eff_made else None
     )
 
+    # Lifetime mandate efficiency (separate from today's daily metric)
+    lifetime_eff_map = await _compute_lifetime_mandate_efficiency(db, recruiter_ids)
+    uid_to_name_local = {rm["user_id"]: rm["name"] for rm in recruiter_metrics}
+    lifetime_ranked = []
+    building = []
+    for uid, m in lifetime_eff_map.items():
+        name = uid_to_name_local.get(uid)
+        if not name:
+            continue
+        entry = {"user_id": uid, "name": name, **m}
+        if m["eligible"]:
+            lifetime_ranked.append(entry)
+        elif m["mandates_worked"] > 0:
+            building.append(entry)
+    lifetime_ranked.sort(key=lambda x: x["efficiency_pct"], reverse=True)
+    building.sort(key=lambda x: x["mandates_worked"], reverse=True)
+    lifetime_top = lifetime_ranked[:LIFETIME_TOP_N]
+
     payload = {
         "date": today_str,
         "weekday": weekday,
@@ -528,6 +666,8 @@ async def build_daily_digest(db, date_ist: Optional[datetime] = None) -> Dict[st
         "inactive_employers": inactive_employers,
         "best_quality": best_quality,
         "best_efficiency": best_efficiency,
+        "lifetime_mandate_efficiency_top": lifetime_top,
+        "lifetime_mandate_efficiency_building": building[:10],
         "employer_scores": sorted(
             employer_scores, key=lambda x: x["activity_score"], reverse=True
         ),
@@ -557,6 +697,8 @@ def _empty_digest_response(date_str, weekday, pretty) -> Dict[str, Any]:
         "inactive_employers": [],
         "best_quality": None,
         "best_efficiency": None,
+        "lifetime_mandate_efficiency_top": [],
+        "lifetime_mandate_efficiency_building": [],
         "employer_scores": [],
         "all_recruiter_metrics": [],
     }
@@ -675,6 +817,28 @@ def format_whatsapp_message(d: Dict[str, Any]) -> str:
     if quality_lines:
         L.append("*QUALITY HIGHLIGHTS*")
         L.extend(quality_lines)
+        L.append("")
+
+    # Lifetime mandate efficiency (capture → submission ratio) — top 5
+    lifetime_top = d.get("lifetime_mandate_efficiency_top") or []
+    building = d.get("lifetime_mandate_efficiency_building") or []
+    if lifetime_top or building:
+        L.append(f"*MANDATE EFFICIENCY — LIFETIME (top {LIFETIME_TOP_N}, min {MIN_MANDATES_FOR_RANKING} mandates)*")
+        medals = ["🥇", "🥈", "🥉", "4.", "5."]
+        for i, e in enumerate(lifetime_top):
+            prefix = medals[i] if i < len(medals) else f"{i + 1}."
+            L.append(
+                f"{prefix} {e['name']} — {_fmt_score(e['efficiency_pct'])}% "
+                f"({e['qualifying_submissions']}/{e['qualifying_captures']} submits/captures · "
+                f"{e['qualifying_mandates']} of {e['mandates_worked']} mandates)"
+            )
+        if building:
+            names = [
+                f"{b['name']} ({b['mandates_worked']})"
+                for b in building[:6]
+            ]
+            extra = f" +{len(building) - 6} more" if len(building) > 6 else ""
+            L.append(f"_Building track record:_ {', '.join(names)}{extra}")
         L.append("")
 
     L.append("_Generated by VHC Talent OS._")
