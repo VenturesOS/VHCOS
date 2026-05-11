@@ -60,24 +60,55 @@ def _get_embed_model():
 # ──────────────────────────────────────────────────────────────────────────────
 
 def embed_text(text: str) -> Optional[List[float]]:
-    """Encode a single string → 384-d vector. Returns None on failure."""
+    """Encode a single string → 384-d vector. Returns None on failure.
+
+    Phase 54.16 (2026-05-11) — tries the RunPod sidecar first (frees ~1 GB
+    EC2 RAM by removing the local sentence-transformers model). Falls back
+    to local model if the sidecar is unreachable.
+    """
     if not text or not text.strip():
         return None
+
+    # Remote path (preferred — unloads BGE from EC2 RAM)
+    try:
+        from services.embed_client import embed_remote, is_remote_enabled
+        if is_remote_enabled():
+            vecs = embed_remote([text])
+            if vecs is not None and vecs and vecs[0] is not None:
+                return vecs[0]
+    except Exception as e:
+        logger.debug(f"[TalentGraph] remote embed_text issue: {e}")
+
+    # Local fallback (legacy path — kept until BGE is fully decommissioned)
     model = _get_embed_model()
     if not model:
         return None
     try:
-        # Truncate to ~2000 chars (model max context after tokenization)
         text = text.strip()[:2000]
         vec = model.encode(text, normalize_embeddings=True, show_progress_bar=False)
         return vec.tolist()
     except Exception as e:
-        logger.error(f"[TalentGraph] embed_text failed: {e}")
+        logger.error(f"[TalentGraph] embed_text local failed: {e}")
         return None
 
 
 def embed_texts_batch(texts: List[str]) -> List[Optional[List[float]]]:
-    """Batch-encode for the backfill script. Much faster than one-by-one."""
+    """Batch-encode for the backfill script. Much faster than one-by-one.
+
+    Phase 54.16 — sidecar-first. Local fallback only if sidecar disabled
+    or fails.
+    """
+    # Remote path
+    try:
+        from services.embed_client import embed_remote, is_remote_enabled
+        if is_remote_enabled():
+            vecs = embed_remote([(t or "")[:2000] for t in texts])
+            if vecs is not None:
+                return vecs
+    except Exception as e:
+        logger.debug(f"[TalentGraph] remote embed_texts_batch issue: {e}")
+
+    # Local fallback
     model = _get_embed_model()
     if not model:
         return [None] * len(texts)
@@ -88,7 +119,7 @@ def embed_texts_batch(texts: List[str]) -> List[Optional[List[float]]]:
         )
         return [v.tolist() for v in vecs]
     except Exception as e:
-        logger.error(f"[TalentGraph] embed_texts_batch failed: {e}")
+        logger.error(f"[TalentGraph] embed_texts_batch local failed: {e}")
         return [None] * len(texts)
 
 

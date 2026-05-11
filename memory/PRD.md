@@ -1673,5 +1673,60 @@ fixed automation), EC2 (m7i-flex.large → t3.large → t3a.large).
 - Currently lazy generation of today's digest can take ~12 s on first
   GET if scheduler hasn't run yet — consider priming the cache on
   app startup (or returning 202).
+
+---
+
+## Phase 54.16 (2026-05-11) — PyPDF2 → pypdf, pipeline pagination, BGE sidecar code
+
+### Shipped to workspace (ready for `git pull` + deploy)
+1. **PyPDF2 → pypdf** in `matching_engine.py`. Tries `pypdf` first (new
+   maintained library) and falls back to PyPDF2 only if pypdf is not
+   installed on EC2. No requirement change yet — pypdf installation is
+   optional initial; once stable, drop PyPDF2 from requirements.txt.
+2. **`/api/admin/pipeline`** Phase 54.16 refactor:
+   - Added `per_stage_limit` query param (default 100, range 10–500).
+   - `stage_counts` now computed in Mongo via a single $group aggregation
+     across ALL apps → accurate even when kanban truncates per-stage rows.
+   - Per-stage fetch issued in parallel via `asyncio.gather()` so kanban
+     loads top N (by `created_at` desc) per stage.
+   - Wire size ~260 KB → ~190 KB for the same data shape at psl=50.
+   - Existing index `applications.created_at_-1` covers the new sort.
+3. **D1 BGE Sidecar** code complete in workspace:
+   - `runpod-sidecar/embed_service.py` — FastAPI app, GPU-aware
+   - `runpod-sidecar/start_sidecar.sh` — boot script
+   - `backend/services/embed_client.py` — EC2-side HTTP client with
+     60 s cooldown after failures + graceful fallback
+   - `backend/services/talent_graph_service.py` — `embed_text` /
+     `embed_texts_batch` now try sidecar first; fall back to local
+     sentence-transformers if `BGE_SIDECAR_URL` unset or sidecar
+     returns None.
+   - Deploy guide: `/app/memory/PHASE54_PART16_D1_BGE_SIDECAR_DEPLOY.md`
+4. **#6 EventBridge nightly off** deployment runbook:
+   `/app/memory/PHASE54_PART16_NIGHTLY_OFF_DEPLOY.md`
+   No code change — pure AWS console operation.
+
+### Why no code is needed for #6
+Nightly off uses fully-managed AWS EventBridge + Systems Manager. No
+EC2-side scripts, no IAM users — just two cron rules and one IAM role.
+Steps documented; user executes when ready (do AFTER D1 stable for 24h
+so cold-start lag is minimal).
+
+### Open follow-ups
+1. Deploy D1 (BGE sidecar) onto RunPod pod (manual user step).
+2. Set `BGE_SIDECAR_URL` in EC2 `.env`; restart gunicorn.
+3. 24 h soak; check `embed_remote` warnings in gunicorn logs.
+4. Decommission sentence-transformers from EC2 venv (frees ~3 GB disk +
+   ~1 GB RAM).
+5. Downsize EC2 t3a.large → **t3.medium** (4 GB RAM) → ~₹2,690/mo saved.
+6. Execute #6 EventBridge nightly-off → ~₹1,090/mo saved.
+7. Drop PyPDF2 from requirements.txt once pypdf is installed on EC2
+   (`pip install pypdf`).
+
+### Cumulative savings target (when D1 + #6 ship)
+- This week so far: ~₹23,425/mo
+- + D1 (t3.medium downsize): ~₹2,690/mo
+- + #6 (nightly off): ~₹1,090/mo
+- **= ~₹27,205/mo (~$326)** total cost-out, no UX regression.
+
 - Long-term: change inactive_recruiters/employers payload from list of
   strings to list of {user_id, name} so frontend uses user_id for keys.

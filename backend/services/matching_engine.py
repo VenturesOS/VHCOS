@@ -69,13 +69,18 @@ try:
 except ImportError:
     pass
 
-_PyPDF2 = None
+_pypdf = None
 try:
-    import PyPDF2 as _PyPDF2
+    # pypdf is the maintained successor to PyPDF2 (same API at the points we
+    # use). Falling back to PyPDF2 if pypdf isn't installed yet on EC2.
+    import pypdf as _pypdf
 except ImportError:
-    pass
+    try:
+        import PyPDF2 as _pypdf  # type: ignore
+    except ImportError:
+        pass
 
-# pdfplumber: table-aware fallback when fitz/PyPDF2 yield too little text
+# pdfplumber: table-aware fallback when fitz/pypdf yield too little text
 # (often the case for resumes where contact info / experience hides in
 # tables, multi-column layouts, or text-as-image-fragments).
 _pdfplumber = None
@@ -1242,11 +1247,11 @@ def extract_text_from_file(content: bytes, filename: str) -> str:
                 except Exception as e1:
                     logger.warning(f"fitz extraction failed for {filename}: {e1}")
 
-            # Fallback: PyPDF2
+            # Fallback: pypdf
             if not text or len(text.strip()) < 30:
-                if _PyPDF2:
+                if _pypdf:
                     try:
-                        reader = _PyPDF2.PdfReader(_io.BytesIO(content))
+                        reader = _pypdf.PdfReader(_io.BytesIO(content))
                         text = "\n".join(
                             page.extract_text() or "" for page in reader.pages
                         )
@@ -1257,7 +1262,7 @@ def extract_text_from_file(content: bytes, filename: str) -> str:
             # Triggered when standard text extractors yield a tiny amount
             # of text (< 500 chars). This catches resumes where contact
             # info / experience / education is laid out inside tables or
-            # multi-column boxes that fitz / PyPDF2 collapse into noise.
+            # multi-column boxes that fitz / pypdf collapse into noise.
             # Output preserves table row structure so the downstream LLM
             # parser sees clean "Header | Value" rows.
             if (not text or len(text.strip()) < 500) and _pdfplumber:
