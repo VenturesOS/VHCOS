@@ -315,17 +315,25 @@ async def build_daily_digest(db, date_ist: Optional[datetime] = None) -> Dict[st
     weekday = date_ist.strftime("%a")
     pretty = date_ist.strftime("%d %b %Y")
 
-    # Fetch users + teams
+    # Fetch users + teams — STRICT active filter to exclude deactivated/disabled users.
+    # The previous `status != "inactive"` left through `status="deactivated"`,
+    # `status="disabled"`, and users with `is_active: false`. We now require both
+    # an active-ish status AND is_active not explicitly false.
+    ACTIVE_STATUSES = ["active", "Active", None]  # None = field missing → legacy active user
+    _active_user_filter = {
+        "status": {"$in": ACTIVE_STATUSES},
+        "is_active": {"$ne": False},
+    }
     recruiters = await db.users.find(
-        {"role": "recruiter", "status": {"$ne": "inactive"}},
+        {**_active_user_filter, "role": "recruiter"},
         {"_id": 0, "id": 1, "name": 1},
     ).to_list(length=500)
     employers = await db.users.find(
-        {"role": "employer", "status": {"$ne": "inactive"}},
+        {**_active_user_filter, "role": "employer"},
         {"_id": 0, "id": 1, "name": 1},
     ).to_list(length=200)
     teams = await db.teams.find(
-        {"status": {"$ne": "inactive"}},
+        {"status": {"$in": ACTIVE_STATUSES}},
         {"_id": 0, "id": 1, "name": 1, "employer_id": 1, "recruiter_ids": 1},
     ).to_list(length=200)
 

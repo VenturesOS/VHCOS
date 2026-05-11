@@ -141,6 +141,22 @@ async def audit_today(
         "utc_window": [start_utc, end_utc],
     }
 
+    # Z) Distinct status values + is_active distribution for users (helps
+    # find why deactivated users still leak into rankings)
+    out["users_status_distribution"] = []
+    async for r in db.users.aggregate([
+        {"$group": {
+            "_id": {
+                "role": "$role",
+                "status": "$status",
+                "is_active": "$is_active",
+            },
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}},
+    ]):
+        out["users_status_distribution"].append({**r["_id"], "count": r["count"]})
+
     # A) Source values last 7d
     out["sources_7d"] = []
     async for r in db.candidate_bank.aggregate([
