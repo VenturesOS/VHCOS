@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import DailyDigestWidget from '../../components/admin/dashboard/DailyDigestWidget';
 
 const envUrl = process.env.REACT_APP_BACKEND_URL;
 const API_BASE = envUrl ? `${envUrl.replace(/\/+$/, '')}/api` : '/api';
@@ -413,6 +414,10 @@ export default function AdminDashboard() {
       {/* Hiring Funnel widget — moved here from standalone sidebar item on
           2026-05-01. Full deep-dive view still available at /admin/hiring-funnel */}
       <HiringFunnelWidget />
+
+      {/* Phase 54.15 — Daily Team Performance Digest. WhatsApp-ready message
+          for daily team standup. Auto-generates at 18:00 IST. */}
+      <DailyDigestWidget />
     </div>
   );
 }
