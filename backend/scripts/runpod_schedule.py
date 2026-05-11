@@ -55,20 +55,34 @@ def _load_env() -> dict:
 
 
 def _setup_logging() -> logging.Logger:
+    """Single-destination logger.
+
+    - When invoked from cron (stdout is redirected to LOG_FILE via `>> ...`),
+      we only need StreamHandler → cron's shell redirection writes to the file.
+    - When invoked interactively (stdout is a TTY), we ALSO log to LOG_FILE
+      via FileHandler so that ad-hoc `runpod-status` calls still leave an
+      audit trail.
+
+    This avoids the previous bug where every line was logged twice when
+    running under cron (FileHandler wrote once, cron's redirect wrote again).
+    """
     log = logging.getLogger("runpod-schedule")
     log.setLevel(logging.INFO)
-    # Console handler — visible when run interactively
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    # Always log to stdout (cron captures via shell redirect, terminal shows live)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    ch.setFormatter(formatter)
     log.addHandler(ch)
-    # File handler — visible in cron output
-    try:
-        fh = logging.FileHandler(LOG_FILE)
-        fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-        log.addHandler(fh)
-    except PermissionError:
-        # Falls back to stdout only — cron will still capture via redirect
-        pass
+    # ALSO log to file ONLY when stdout is a TTY (interactive run). Cron
+    # invocations have stdout connected to the log file already, so adding
+    # a FileHandler here would duplicate every line.
+    if sys.stdout.isatty():
+        try:
+            fh = logging.FileHandler(LOG_FILE)
+            fh.setFormatter(formatter)
+            log.addHandler(fh)
+        except PermissionError:
+            pass
     return log
 
 
