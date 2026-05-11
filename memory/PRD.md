@@ -1554,3 +1554,60 @@ See `/app/memory/PHASE54_PART12_13_PIPELINE_PERF_3X.md`
 - LTR re-ranker: live, returning real XGBoost predictions, 1.2 s warm
 - Pipeline page: 266 KB wire / 179 ms warm / instant cache invalidation
 
+
+
+---
+
+## Phase 54 (2026-05-10 / 2026-05-11) — EC2 cost ladder + RunPod automation fix
+
+### 2026-05-10 (Sun) — EC2 instance downgrade Plan A1
+- **Migration:** m7i-flex.large → t3.large (x86_64, 2 vCPU, 8 GB)
+- Allocated Elastic IP `3.108.98.192`, updated Cloudflare A records for
+  api / app / test / apex; CNAME `www` follows apex.
+- Pre-flight EBS snapshot taken: `pre-t3-large-downgrade-2026-05-10`.
+- Post-migration verification: gunicorn + nginx active, /api/health 200,
+  RAM 1.2 GB used / 5.7 GB free, swap 0, RunPod cron persisted.
+- **Saving:** $0.1008 → $0.0896 /hr ≈ ₹880/mo.
+
+### 2026-05-11 (Mon) — RunPod scheduler fixed + t3a swap
+- **RunPod API key fix:** previous `RUNPOD_ACCOUNT_API_KEY` was created
+  with Read-only scope. Cron fired correctly at 03:20 UTC + 13:00 UTC
+  but every POST start/stop returned HTTP 403. Replaced with new
+  `vhc-scheduler-rw` key (Read & Write scope). Manual stop+start now
+  both HTTP 200.
+- **Crontab cleanup:** removed two legacy entries that still pointed
+  at the now-dead A40 pod ID `7tuntnx4unbbym` AND embedded the
+  rotated/leaked plaintext key. Old keys revoked in RunPod console.
+- **Log de-dup fix:** `backend/scripts/runpod_schedule.py` now adds the
+  FileHandler only when stdout is a TTY (interactive runs) — under cron
+  the existing `>> /var/log/runpod-schedule.log` redirect handles
+  persistence. Eliminates the double-printed lines seen in prior logs.
+  Takes effect on next `git pull` on EC2.
+- **EC2 swap:** t3.large → t3a.large (AMD EPYC 7571). Same arch, same
+  RAM, same EIP, no DNS changes. Verified: instance type `t3a.large`,
+  vendor AuthenticAMD, services active, memory 1.3 GB / 7.7 GB.
+- **Saving:** $0.0896 → $0.0806 /hr ≈ ₹545/mo.
+
+### Decisions taken
+- Compute Savings Plan **deferred** (3 weeks) until t3.medium downsize
+  is live — buying SP now risks over-commit when usage drops 60–70%
+  after EventBridge nightly off + BGE sidecar.
+- Roadmap re-confirmed:
+  - ~~A~~ Savings Plan → DEFERRED to ~2026-06-01 (revisit after D1+C)
+  - ✅ B → t3a.large swap (done)
+  - 🔜 C → EventBridge nightly off 12:30–6:30 AM IST (~₹1,090/mo)
+  - 🔜 D1 → BGE → RunPod sidecar (~₹2,690/mo), arch in
+    `/app/memory/PHASE54_PART14_BGE_SIDECAR_PLAN.md`
+
+### Cumulative stack savings this week
+~₹23,425/mo (~$280/mo) across RunPod (A40→A5000 + auto-schedule fix +
+fixed automation), EC2 (m7i-flex.large → t3.large → t3a.large).
+
+### Open items
+1. Tomorrow morning verify auto-start cron fires at 03:20 UTC on
+   t3a.large (`tail /var/log/runpod-schedule.log` should show `→ HTTP 200`
+   for the start call).
+2. Within 7 days: re-run `backend/scripts/audit_indexes.py` once
+   cluster hits 7-day uptime; drop Tier-2 unused MongoDB indexes.
+3. Within 30 days: delete old RunPod A40 pod permanently.
+4. Next week: implement D1 BGE sidecar.
