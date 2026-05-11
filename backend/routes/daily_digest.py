@@ -118,3 +118,111 @@ async def regenerate_for_date(
     digest = await build_daily_digest(db, target_ist)
     await store_digest(db, digest)
     return digest
+
+
+# ─────────────────────────────────────────────────────────────────────
+# DEBUG / Audit endpoint — admin only, helps diagnose missing data
+# ─────────────────────────────────────────────────────────────────────
+@digest_router.get("/daily-digest/_audit/today")
+async def audit_today(
+    current_user: dict = Depends(require_role(["admin"])),
+) -> Dict[str, Any]:
+    """One-shot audit of today's raw data — used to debug why the
+    digest shows 0 captures / wrong counts."""
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    from services.team_digest_service import IST_OFFSET, _ist_day_bounds_utc, _ist_now
+
+    ist = _ist_now()
+    start_utc, end_utc = _ist_day_bounds_utc(ist)
+    week_ago = (_dt.now(_tz.utc) - _td(days=7)).isoformat()
+
+    out: Dict[str, Any] = {
+        "ist_today": ist.strftime("%Y-%m-%d %H:%M"),
+        "utc_window": [start_utc, end_utc],
+    }
+
+    # A) Source values last 7d
+    out["sources_7d"] = []
+    async for r in db.candidate_bank.aggregate([
+        {"$match": {"created_at": {"$gte": week_ago}}},
+        {"$group": {"_id": "$source", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]):
+        out["sources_7d"].append({"source": r["_id"], "count": r["count"]})
+
+    # B) Today by source
+    out["sources_today"] = []
+    out["total_today"] = 0
+    async for r in db.candidate_bank.aggregate([
+        {"$match": {"created_at": {"$gte": start_utc, "$lte": end_utc}}},
+        {"$group": {"_id": "$source", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]):
+        out["sources_today"].append({"source": r["_id"], "count": r["count"]})
+        out["total_today"] += r["count"]
+
+    # C) 5 sample docs
+    out["samples"] = []
+    async for s in db.candidate_bank.find(
+        {"created_at": {"$gte": start_utc, "$lte": end_utc}},
+        {"_id": 0, "source": 1, "captured_by": 1, "created_by": 1, "source_details": 1, "mandate_id": 1},
+    ).limit(5):
+        sd = s.get("source_details") or {}
+        out["samples"].append({
+            "source": s.get("source"),
+            "captured_by": s.get("captured_by"),
+            "created_by": s.get("created_by"),
+            "sd_captured_by": sd.get("captured_by"),
+            "sd_source": sd.get("source"),
+            "mandate_id": s.get("mandate_id") or sd.get("mandate_id"),
+        })
+
+    # D) Top 10 users who added candidates today (by best-effort user field)
+    uid_to_name: Dict[str, str] = {}
+    async for u in db.users.find({}, {"_id": 0, "id": 1, "name": 1}):
+        uid_to_name[u["id"]] = u.get("name") or "(unnamed)"
+    out["top_adders"] = []
+    async for r in db.candidate_bank.aggregate([
+        {"$match": {"created_at": {"$gte": start_utc, "$lte": end_utc}}},
+        {"$addFields": {"_uid": {"$ifNull": [
+            "$source_details.captured_by",
+            {"$ifNull": ["$captured_by", "$created_by"]},
+        ]}}},
+        {"$group": {
+            "_id": "$_uid",
+            "count": {"$sum": 1},
+            "sources": {"$addToSet": "$source"},
+        }},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]):
+        out["top_adders"].append({
+            "user_id": r["_id"],
+            "name": uid_to_name.get(r["_id"], "(unknown)"),
+            "count": r["count"],
+            "sources": r["sources"],
+        })
+
+    # E) Today's tracker_events stages
+    out["stages_today"] = []
+    async for r in db.tracker_events.aggregate([
+        {"$match": {"timestamp": {"$gte": start_utc, "$lte": end_utc}}},
+        {"$group": {"_id": "$new_stage", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]):
+        out["stages_today"].append({"stage": r["_id"], "count": r["count"]})
+
+    # F) Bhumika's pipeline today
+    bhumika = await db.users.find_one(
+        {"name": {"$regex": "Bhumika", "$options": "i"}}, {"_id": 0, "id": 1, "name": 1},
+    )
+    out["bhumika_events"] = []
+    if bhumika:
+        out["bhumika"] = {"id": bhumika["id"], "name": bhumika.get("name")}
+        async for ev in db.tracker_events.find(
+            {"user_id": bhumika["id"], "timestamp": {"$gte": start_utc, "$lte": end_utc}},
+            {"_id": 0, "new_stage": 1, "previous_stage": 1, "timestamp": 1, "mandate_id": 1},
+        ):
+            out["bhumika_events"].append(ev)
+
+    return out
