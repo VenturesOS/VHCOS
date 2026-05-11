@@ -156,6 +156,7 @@ admin_monitoring_router = _safe_import("routes.admin_monitoring", "router")
 extension_updates_router = _safe_import("routes.extension_updates", "router")
 reports_router = _safe_import("routes.reports", "router")
 talent_graph_router = _safe_import("routes.talent_graph", "router")
+daily_digest_router = _safe_import("routes.daily_digest", "digest_router")
 
 # Health router
 from routes.health import health_router, set_route_import_failures
@@ -247,6 +248,7 @@ _all_routers = [
     extension_updates_router,
     reports_router,
     talent_graph_router,
+    daily_digest_router,
     sourcing_router,
 ]
 

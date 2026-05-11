@@ -493,6 +493,15 @@ export const digestAPI = {
   subscriptionStats: () => api.get('/admin/blog-digest/subscription-stats'),
 };
 
+// Phase 54.15 — Daily Team Performance Digest (WhatsApp-ready)
+export const teamDigestAPI = {
+  today:        () => api.get('/admin/daily-digest'),
+  byDate:       (date) => api.get(`/admin/daily-digest/${date}`),
+  recent:       (days = 7) => api.get('/admin/daily-digest/recent', { params: { days } }),
+  regenerate:   () => api.post('/admin/daily-digest/regenerate'),
+  regenForDate: (date) => api.post(`/admin/daily-digest/${date}/regenerate`),
+};
+
 export const revenueAPI = {
   forecast: (applicationId, expectedCtc) => api.post('/revenue/forecast', { application_id: applicationId, expected_ctc: expectedCtc }),
   offered: (appId, data) => api.post(`/revenue/offered/${appId}`, data),

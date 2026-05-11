@@ -37,6 +37,7 @@ import {
   MonitorCheck,
   TrendingUp,
   FileSpreadsheet,
+  MessageCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -63,6 +64,7 @@ const navItems = {
     { icon: UsersRound, label: 'Teams', path: '/admin/teams' },
     { icon: FileText, label: 'Blog Engine', path: '/admin/blog-engine' },
     { icon: Mail, label: 'Digest Email', path: '/admin/digest-email' },
+    { icon: MessageCircle, label: 'Daily Digest', path: '/admin/daily-digest' },
     { icon: Mail, label: 'Contact Leads', path: '/admin/contact-submissions' },
     { icon: Activity, label: 'System Health', path: '/admin/system-health' },
     { icon: ShieldCheck, label: 'Security Audit', path: '/admin/security-audit' },

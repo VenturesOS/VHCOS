@@ -61,6 +61,7 @@ const AdminPipelinePage = React.lazy(() => import("./pages/admin/AdminPipelinePa
 const BatchUploadPage = React.lazy(() => import("./pages/admin/BatchUploadPage"));
 const AdminAnalyticsPage = React.lazy(() => import("./pages/admin/AdminAnalyticsPage"));
 const DigestEmailPage = React.lazy(() => import("./pages/admin/DigestEmailPage"));
+const DailyDigestPage = React.lazy(() => import("./pages/admin/DailyDigestPage"));
 const RevenueDashboardPage = React.lazy(() => import("./pages/admin/RevenueDashboardPage"));
 const SalaryBenchmarkPage = React.lazy(() => import("./pages/admin/SalaryBenchmarkPage"));
 const ContactSubmissionsPage = React.lazy(() => import("./pages/admin/ContactSubmissionsPage"));
@@ -201,6 +202,7 @@ function App() {
             <Route path="contact-submissions" element={<ContactSubmissionsPage />} />
             <Route path="blog-engine" element={<BlogTabsPage />} />
             <Route path="digest-email" element={<DigestEmailPage />} />
+            <Route path="daily-digest" element={<DailyDigestPage />} />
             <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="hiring-funnel" element={<HiringFunnelPage />} />
             <Route path="attendance" element={<AttendanceTabsPage />} />

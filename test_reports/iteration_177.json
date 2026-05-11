@@ -1,0 +1,42 @@
+{
+  "summary": "Phase 54.15 Daily Team Performance Digest tested end-to-end. 9/9 backend pytest cases pass (auth-gated GET/POST endpoints, schema, regenerate, by-date, 404, 400, /recent). Frontend UI test passes: sidebar 'Daily Digest' link, /admin/daily-digest page loads, WhatsApp preview renders 1.4 KB message starting with '*Daily Performance' and contains all 5 required sections (TOP 3 OVERALL, TOP PER TEAM, IMPROVING, FALLING, WEEK-OVER-WEEK), Copy/Open-WhatsApp/Date-picker/Regenerate buttons all present and functional. Regenerate for 2026-05-11 (Mon) returned a populated digest (43 recruiters, 4 team leads, Bhumika Anand 15 pts top).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "auth (data hygiene, not code)", "issue": "User rohit@vhc.in is role='admin' in DB but /app/memory/test_credentials.md labels them as 'Recruiter'. Either update the credentials doc or fix the DB row. Negative-auth recruiter test had to be switched to maneet@vhc.in (employer)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "DailyDigestPage › inactive_recruiters Badge list", "issue": "React console warning 'Encountered two children with the same key, Rakshita' — Badge uses key={n} (name). Duplicate recruiter names produce duplicate React keys. Use a composite key like `${n}-${i}` or include user_id.", "selector": "[data-testid=card-inactive] .badge", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_daily_digest.py",
+    "/app/test_reports/pytest/daily_digest_results.xml"
+  ],
+  "action_items": [
+    "Frontend: fix duplicate-name React key warning in DailyDigestPage inactive recruiters/employers Badge maps (use composite key with index or user_id).",
+    "Memory hygiene: reconcile test_credentials.md — rohit@vhc.in is admin in DB, not recruiter. Either downgrade the user or relabel the doc and add a real recruiter for negative-auth testing."
+  ],
+  "critical_code_review_comments": [
+    "team_digest_service.py is ~700 lines — borderline; still cohesive (KPI weights, matrix builder, message formatter, persistence). Acceptable for now.",
+    "build_daily_digest performs 3 bulk Mongo aggregations for the 14-day window — good, avoids N×M query explosion. Reading 500 users + 200 employers + 200 teams unbounded; for larger orgs consider pagination/projection (already projects {_id:0} which is good).",
+    "/api/admin/daily-digest lazy-generates on first GET inside an HTTP handler (12 s observed). For a cold cache the dashboard could time out behind a CDN/ingress with shorter timeouts. Consider returning a 202 + 'building' status, or ensuring the scheduler primes today's cache on app startup.",
+    "format_whatsapp_message uses Markdown asterisks/underscores expected by WhatsApp; whatsapp_text is stored on every digest doc — works but duplicates ~1 KB of data per row; OK at one-per-day cardinality.",
+    "Date validation in routes/daily_digest.py only checks YYYY-MM-DD format; no upper bound check (future-dated regenerate will silently produce an empty digest). Optional hardening.",
+    "Frontend DailyDigestPage ISTToday() computes IST date using device timezone offset — correct for IST/Asia browsers but admins outside IST will see a 1-day skew on initial selectedDate. Consider deriving from digest.date on first load (already done after loadToday)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_daily_digest.py"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all required testids + flows verified)"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 (admin), maneet@vhc.in / 12345678 (employer for 403). NOTE: rohit@vhc.in returns role=admin from DB despite memory doc claiming 'recruiter'.",
+  "seed_data_creation": "None — used existing seed (43 recruiters, 4 team leads, 6 teams). Generated/persisted digest doc for 2026-05-11 in daily_team_digests collection via /regenerate.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_daily_digest.py and can be re-run with `pytest backend/tests/test_daily_digest.py -v`. All 5 endpoints validated: GET /api/admin/daily-digest, GET /api/admin/daily-digest/recent?days=N, GET /api/admin/daily-digest/{YYYY-MM-DD}, POST /api/admin/daily-digest/regenerate, POST /api/admin/daily-digest/{YYYY-MM-DD}/regenerate. Auth gating verified (admin=200, no-token=403, employer=403). WhatsApp text schema markers locked in. Only open follow-up is the React duplicate-key console warning on inactive recruiters list with duplicate names.",
+  "rca of the issue": "React duplicate key warning RCA: in DailyDigestPage.jsx the inactive_recruiters/employers map renders Badges with `key={n}` where n is the recruiter name string. The seed has two recruiters named 'Rakshita', so the resulting key array contains 'Rakshita' twice. Fix: change to `key={`${n}-${i}`}` or include user_id in the payload (currently inactive_recruiters is a plain list of names; could be promoted to [{user_id,name}] in team_digest_service.py — preferred long-term)."
+}
