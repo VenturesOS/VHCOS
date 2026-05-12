@@ -429,13 +429,19 @@ async def update_user(user_id: str, update_data: UserUpdate, current_user: dict 
 
 @admin_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(require_role(["admin"]))):
-    # Soft delete - set is_active to False instead of hard delete
+    # Soft delete - set is_active to False instead of hard delete.
+    # SEC-04: bump token_version + purge refresh tokens so the user's
+    # extension / browser sessions are invalidated immediately.
     result = await db.users.update_one(
-        {"id": user_id}, 
-        {"$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()}}
+        {"id": user_id},
+        {
+            "$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()},
+            "$inc": {"token_version": 1},
+        },
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
+    await db.refresh_tokens.delete_many({"user_id": user_id})
     return {"message": "User deactivated successfully"}
 
 
@@ -532,11 +538,18 @@ async def admin_toggle_user_status(user_id: str, current_user: dict = Depends(re
         raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
     
     new_status = not user.get("is_active", True)
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"is_active": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
+    update_doc = {
+        "$set": {"is_active": new_status, "updated_at": datetime.now(timezone.utc).isoformat()},
+    }
+    # SEC-04: when DEACTIVATING, bump token_version so existing JWTs are
+    # rejected immediately and purge refresh tokens so the extension /
+    # browser can't keep refreshing under the offboarded user.
+    if not new_status:
+        update_doc["$inc"] = {"token_version": 1}
+    await db.users.update_one({"id": user_id}, update_doc)
+    if not new_status:
+        await db.refresh_tokens.delete_many({"user_id": user_id})
+
     return {"message": f"User {'activated' if new_status else 'deactivated'} successfully", "is_active": new_status}
 
 

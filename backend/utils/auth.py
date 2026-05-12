@@ -81,6 +81,12 @@ async def validate_refresh_token(refresh_token: str) -> dict:
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
+    # SEC-04: block refresh attempts by deactivated/offboarded users.
+    # Also purge any remaining refresh tokens so the extension can't keep retrying.
+    if not user.get("is_active", True):
+        await db.refresh_tokens.delete_many({"user_id": record["user_id"]})
+        raise HTTPException(status_code=401, detail="Account deactivated")
+
     user_ver = user.get("token_version", 0)
     if record.get("token_version", 0) < user_ver:
         # Token version mismatch — all refresh tokens for this user are invalidated
@@ -103,6 +109,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
+        # Reject deactivated users (SEC-04: block deactivated/offboarded accounts)
+        if not user.get("is_active", True):
+            raise HTTPException(status_code=401, detail="Account deactivated")
         # Validate token_version (CRIT-3: token revocation)
         token_ver = payload.get("tv", 0)
         user_ver = user.get("token_version", 0)
@@ -140,6 +149,9 @@ async def get_current_user_from_token(request, token_param=None):
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
+        # SEC-04: block deactivated accounts on download endpoints too
+        if not user.get("is_active", True):
+            raise HTTPException(status_code=401, detail="Account deactivated")
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
