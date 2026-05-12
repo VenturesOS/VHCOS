@@ -37,11 +37,12 @@ async def health_check():
 
     # Redis ping
     try:
-        from services.redis_client import get_redis
+        from services.redis_client import get_redis, get_backend
         r = get_redis()
         if r:
             r.ping()
             checks["redis"] = "ok"
+            checks["redis_backend"] = get_backend()
         else:
             checks["redis"] = "not_configured"
     except Exception as e:
@@ -187,9 +188,12 @@ async def aws_readiness_check():
     if _route_imports_failed:
         all_pass = False
 
-    # 11. Redis/Upstash (optional)
-    redis_url = os.environ.get("UPSTASH_REDIS_REST_URL", "")
-    if redis_url:
+    # 11. Redis cache (local or Upstash)
+    local_redis = os.environ.get("REDIS_URL", "").strip()
+    upstash_url = os.environ.get("UPSTASH_REDIS_REST_URL", "").strip()
+    if local_redis:
+        checks["redis_cache"] = {"status": "pass", "detail": f"Local Redis configured ({local_redis.split('@')[-1]})."}
+    elif upstash_url:
         checks["redis_cache"] = {"status": "pass", "detail": "Upstash Redis configured."}
     else:
         checks["redis_cache"] = {"status": "skip", "detail": "Not configured. Using in-memory cache (fine for single-worker)."}
