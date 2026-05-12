@@ -68,7 +68,7 @@ def _load_env() -> dict:
 
 
 def _sidecar_url(env: dict) -> str:
-    pod_id = env.get("BGE_POD_ID") or DEFAULT_POD_ID
+    pod_id = env.get("BGE_POD_ID") or env.get("RUNPOD_POD_ID") or DEFAULT_POD_ID
     return env.get("BGE_SIDECAR_URL") or f"https://{pod_id}-8001.proxy.runpod.net"
 
 
@@ -168,12 +168,17 @@ def main() -> int:
     if _health_ok(url):
         return 0  # silent OK
 
-    api_key = env.get("RUNPOD_API_KEY") or os.environ.get("RUNPOD_API_KEY")
+    api_key = (
+        env.get("RUNPOD_API_KEY")
+        or env.get("RUNPOD_ACCOUNT_API_KEY")
+        or os.environ.get("RUNPOD_API_KEY")
+        or os.environ.get("RUNPOD_ACCOUNT_API_KEY")
+    )
     if not api_key:
-        print("[Keeper] RUNPOD_API_KEY missing", file=sys.stderr)
+        print("[Keeper] RUNPOD_API_KEY/RUNPOD_ACCOUNT_API_KEY missing", file=sys.stderr)
         return 1
 
-    pod_id = env.get("BGE_POD_ID") or DEFAULT_POD_ID
+    pod_id = env.get("BGE_POD_ID") or env.get("RUNPOD_POD_ID") or DEFAULT_POD_ID
     pod = _query_pod(api_key, pod_id)
     if not pod:
         return 1
