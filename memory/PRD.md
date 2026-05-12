@@ -33,6 +33,19 @@ features. Provide daily team-performance digests (WhatsApp-shareable).
   all devices (extension, browser, mobile)
 
 ## Recent changelog
+- **2026-02-12 (Phase 54.19) — User Leaderboard KPI overhaul**
+  - Activity Monitor's User Leaderboard now ranks by **blended composite**:
+    `0.6 × activity_score_norm + 0.2 × capture_quality + 0.2 × mandate_efficiency`
+    — same KPI engine as the WhatsApp Daily Digest.
+  - Columns trimmed to digest-relevant: Score, Activity, Captures,
+    Pipeline Pts, Quality %, Mandate Eff %, Last Active.
+  - Profile Views moved to a small "👁 N views" engagement badge under
+    the user name (not scored).
+  - Period filter expanded: today / week / month / **quarter** / year /
+    **all time** / custom — added as a dropdown right inside the
+    leaderboard card header for visibility.
+  - New service: `services/leaderboard_kpis.py` — bulk Mongo sweep for
+    arbitrary date ranges (reuses digest helpers; safe for 100+ users).
 - **2026-02-12 (Phase 54.17 + SEC-04)**
   - Local Redis live on EC2 (replaced Upstash quota-exhausted REST).
   - pypdf migration deployed.
