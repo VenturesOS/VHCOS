@@ -69,6 +69,15 @@ function UserActivityRow({ user, rank, expanded, onToggle }) {
     ? Math.floor((Date.now() - new Date(user.last_active).getTime()) / 86400000)
     : null;
 
+  const qualityColor =
+    user.capture_quality >= 80 ? 'text-emerald-600'
+    : user.capture_quality >= 50 ? 'text-amber-600'
+    : 'text-rose-600';
+  const efficiencyColor =
+    user.mandate_efficiency >= 25 ? 'text-emerald-600'
+    : user.mandate_efficiency >= 10 ? 'text-amber-600'
+    : 'text-rose-600';
+
   return (
     <>
       <tr
@@ -90,6 +99,16 @@ function UserActivityRow({ user, rank, expanded, onToggle }) {
             <div>
               <p className="text-sm font-medium text-slate-800 leading-tight">{user.name}</p>
               <p className="text-[10px] text-slate-400">{user.email}</p>
+              {(user.profiles_viewed || 0) > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-600"
+                  title="Profile views (engagement, not scored)"
+                  data-testid={`views-badge-${user.user_id}`}
+                >
+                  <Eye className="w-2.5 h-2.5" />
+                  {user.profiles_viewed.toLocaleString()} views
+                </span>
+              )}
             </div>
           </div>
         </td>
@@ -98,17 +117,18 @@ function UserActivityRow({ user, rank, expanded, onToggle }) {
             {user.role}
           </Badge>
         </td>
-        <td className="py-2.5 px-3 text-center">
+        <td className="py-2.5 px-3 text-center" data-testid={`composite-${user.user_id}`}>
           <span className={`text-sm font-bold ${isInactive ? 'text-red-500' : 'text-slate-800'}`}>
-            {user.total_actions.toLocaleString()}
+            {(user.composite_score || 0).toFixed(1)}
           </span>
         </td>
+        <td className="py-2.5 px-3 text-center text-sm text-slate-700 font-semibold" data-testid={`activity-${user.user_id}`}>
+          {(user.activity_score || 0).toLocaleString()}
+        </td>
         <td className="py-2.5 px-3 text-center text-sm text-emerald-600 font-medium">{user.profiles_captured}</td>
-        <td className="py-2.5 px-3 text-center text-sm text-blue-600 font-medium">{user.profiles_viewed}</td>
-        <td className="py-2.5 px-3 text-center text-sm text-purple-600 font-medium">{user.applications_created}</td>
-        <td className="py-2.5 px-3 text-center text-sm text-amber-600 font-medium">{user.stage_changes}</td>
-        <td className="py-2.5 px-3 text-center text-sm text-cyan-600 font-medium">{user.mandates_created}</td>
-        <td className="py-2.5 px-3 text-center text-sm text-slate-500 font-medium">{user.logins}</td>
+        <td className="py-2.5 px-3 text-center text-sm text-purple-600 font-medium">{(user.pipeline_points || 0).toFixed(0)}</td>
+        <td className={`py-2.5 px-3 text-center text-sm font-medium ${qualityColor}`}>{(user.capture_quality || 0).toFixed(0)}%</td>
+        <td className={`py-2.5 px-3 text-center text-sm font-medium ${efficiencyColor}`}>{(user.mandate_efficiency || 0).toFixed(0)}%</td>
         <td className="py-2.5 px-3 text-center">
           {isInactive ? (
             <Badge variant="destructive" className="text-[10px]">Inactive</Badge>
@@ -123,7 +143,7 @@ function UserActivityRow({ user, rank, expanded, onToggle }) {
       </tr>
       {expanded && (
         <tr className="bg-slate-50/60">
-          <td colSpan={11} className="px-4 py-3">
+          <td colSpan={10} className="px-4 py-3">
             <div className="grid grid-cols-6 gap-2">
               {METRIC_DEFS.map(m => (
                 <div key={m.key} className="flex items-center gap-1.5 text-[11px]">
@@ -184,7 +204,15 @@ export default function ActivityMonitorPage({ embedded = false }) {
   }) || [];
 
   const pt = summaryData?.platform_totals || {};
-  const periodLabel = { today: 'Today', week: 'Last 7 Days', month: 'Last 30 Days', year: 'Last 365 Days', custom: 'Custom Range' }[period];
+  const periodLabel = {
+    today: 'Today',
+    week: 'Last 7 Days',
+    month: 'Last 30 Days',
+    quarter: 'Last 90 Days',
+    year: 'Last 365 Days',
+    all: 'All Time',
+    custom: 'Custom Range',
+  }[period];
 
   if (loading && !summaryData) {
     return (
@@ -214,7 +242,9 @@ export default function ActivityMonitorPage({ embedded = false }) {
               <SelectItem value="today">Today</SelectItem>
               <SelectItem value="week">Last 7 Days</SelectItem>
               <SelectItem value="month">Last 30 Days</SelectItem>
+              <SelectItem value="quarter">Last 90 Days</SelectItem>
               <SelectItem value="year">Last Year</SelectItem>
+              <SelectItem value="all">All Time</SelectItem>
               <SelectItem value="custom">Custom Range</SelectItem>
             </SelectContent>
           </Select>
@@ -328,13 +358,12 @@ export default function ActivityMonitorPage({ embedded = false }) {
                   <th className="py-2 px-3 text-[10px] font-semibold text-slate-500 text-center w-12">#</th>
                   <th className="py-2 px-3 text-[10px] font-semibold text-slate-500">User</th>
                   <th className="py-2 px-3 text-[10px] font-semibold text-slate-500">Role</th>
-                  <th className="py-2 px-3 text-[10px] font-semibold text-slate-500 text-center">Total</th>
-                  <th className="py-2 px-3 text-[10px] font-semibold text-emerald-600 text-center">Captured</th>
-                  <th className="py-2 px-3 text-[10px] font-semibold text-blue-600 text-center">Viewed</th>
-                  <th className="py-2 px-3 text-[10px] font-semibold text-purple-600 text-center">Pipeline</th>
-                  <th className="py-2 px-3 text-[10px] font-semibold text-amber-600 text-center">Stages</th>
-                  <th className="py-2 px-3 text-[10px] font-semibold text-cyan-600 text-center">Mandates</th>
-                  <th className="py-2 px-3 text-[10px] font-semibold text-slate-500 text-center">Logins</th>
+                  <th className="py-2 px-3 text-[10px] font-semibold text-slate-700 text-center" title="Blended composite: 0.6× activity (normalised) + 0.2× quality + 0.2× efficiency">Score</th>
+                  <th className="py-2 px-3 text-[10px] font-semibold text-slate-500 text-center" title="Pipeline points + 0.5× captures + 1.0× CV uploads">Activity</th>
+                  <th className="py-2 px-3 text-[10px] font-semibold text-emerald-600 text-center">Captures</th>
+                  <th className="py-2 px-3 text-[10px] font-semibold text-purple-600 text-center" title="Weighted: joined×10, hired×7, offered×5, interview×3, shortlisted×2, submitted×1, sourced×0.5, rejected×−1">Pipeline Pts</th>
+                  <th className="py-2 px-3 text-[10px] font-semibold text-slate-500 text-center" title="Avg fill-rate of required fields, penalised for recaptures">Quality %</th>
+                  <th className="py-2 px-3 text-[10px] font-semibold text-slate-500 text-center" title="Submissions ÷ captures across mandates touched">Mandate Eff %</th>
                   <th className="py-2 px-3 text-[10px] font-semibold text-slate-500 text-center">Last Active</th>
                 </tr>
               </thead>
@@ -349,7 +378,7 @@ export default function ActivityMonitorPage({ embedded = false }) {
                   />
                 ))}
                 {filteredUsers.length === 0 && (
-                  <tr><td colSpan={11} className="text-center py-8 text-sm text-slate-400">No users found</td></tr>
+                  <tr><td colSpan={10} className="text-center py-8 text-sm text-slate-400">No users found</td></tr>
                 )}
               </tbody>
             </table>

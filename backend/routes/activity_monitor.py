@@ -18,16 +18,23 @@ async def get_db():
 
 
 from utils.auth import get_current_user
+from services.leaderboard_kpis import (
+    compute_leaderboard_kpis,
+    parse_extended_date_range,
+)
 
 
 def _parse_date_range(period: str, start_date: Optional[str], end_date: Optional[str]):
-    """Convert period filter to start/end datetime."""
+    """Convert period filter to start/end datetime. Supports
+    today/week/month/quarter/year/all/custom."""
     now = datetime.now(timezone.utc)
     if period == "custom" and start_date and end_date:
         start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
         end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
         return start, end
-    offsets = {"today": 0, "week": 7, "month": 30, "year": 365}
+    if period == "all":
+        return datetime(1970, 1, 1, tzinfo=timezone.utc), now
+    offsets = {"today": 0, "week": 7, "month": 30, "quarter": 90, "year": 365}
     days = offsets.get(period, 30)
     if days == 0:
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -90,13 +97,22 @@ async def _aggregate_collection(db, collection, match_field, user_ids, start_iso
 
 @router.get("/summary")
 async def get_activity_summary(
-    period: str = Query("month", regex="^(today|week|month|year|custom)$"),
+    period: str = Query("month", regex="^(today|week|month|quarter|year|all|custom)$"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     db=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Returns per-user activity summary with all metrics. Admin-only."""
+    """Returns per-user activity summary with all metrics. Admin-only.
+
+    Ranking is by a **blended composite score** that mirrors the WhatsApp
+    Daily Digest KPIs:
+        composite = 0.6 × activity_score_normalised
+                  + 0.2 × capture_quality_pct
+                  + 0.2 × mandate_efficiency_pct
+    Existing action counts (captures, views, pipeline, stages, mandates,
+    logins, …) are still included for transparency + the expanded row.
+    """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -151,13 +167,37 @@ async def get_activity_summary(
             if last_login and (not user_map[uid]["last_active"] or str(last_login) > str(user_map[uid]["last_active"])):
                 user_map[uid]["last_active"] = last_login
 
-    # Calculate totals
+    # Calculate totals (action counts — kept for transparency)
     metric_keys = list(ACTION_FIELD_MAP.values()) + ["mandates_created", "applications_created", "trackers_created", "batch_uploads", "logins"]
     user_list = []
     for data in user_map.values():
         data["total_actions"] = sum(data[k] for k in metric_keys)
         user_list.append(data)
-    user_list.sort(key=lambda x: x["total_actions"], reverse=True)
+
+    # ── Blended composite KPI ranking (Phase 54.19) ────────────────────
+    # Mirrors WhatsApp Daily Digest scoring: activity score + quality +
+    # mandate efficiency. Bulk Mongo sweep, safe for 100+ users.
+    kpi_matrix = await compute_leaderboard_kpis(db, user_ids, start_iso, end_iso)
+    for u in user_list:
+        kpi = kpi_matrix.get(u["user_id"], {})
+        u["activity_score"] = kpi.get("activity_score", 0.0)
+        u["pipeline_points"] = round(kpi.get("pipeline_points", 0.0), 1)
+        u["capture_quality"] = kpi.get("capture_quality", 0.0)
+        u["mandate_efficiency"] = kpi.get("mandate_efficiency", 0.0)
+        u["composite_score"] = kpi.get("composite_score", 0.0)
+        # Digest-side capture count (extension only, source-filtered) —
+        # different from `profiles_captured` (activity_logs-based).
+        u["captures_digest"] = kpi.get("captures", 0)
+        u["cv_uploads_digest"] = kpi.get("cv_uploads", 0)
+
+    # Rank by composite, fall back to activity_score, then total_actions
+    user_list.sort(
+        key=lambda x: (
+            -x["composite_score"],
+            -x["activity_score"],
+            -x["total_actions"],
+        )
+    )
 
     platform_totals = {k: sum(u[k] for u in user_list) for k in metric_keys}
     platform_totals["total_actions"] = sum(u["total_actions"] for u in user_list)
@@ -170,7 +210,7 @@ async def get_activity_summary(
 
 @router.get("/trend")
 async def get_activity_trend(
-    period: str = Query("month", regex="^(today|week|month|year|custom)$"),
+    period: str = Query("month", regex="^(today|week|month|quarter|year|all|custom)$"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     db=Depends(get_db),
