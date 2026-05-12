@@ -63,8 +63,13 @@ features. Provide daily team-performance digests (WhatsApp-shareable).
 
 ## Backlog
 ### P1
-- [ ] **24h soak BGE sidecar** → if clean, `pip uninstall sentence-transformers` on EC2 to free ~800 MB RAM, then downsize EC2 → `t3.medium`.
-- [ ] Persist BGE sidecar on pod restart (currently restarts wipe it). Option: add a single `nohup uvicorn …` line manually each morning, OR edit pod template to chain it after vLLM start.
+- [ ] **Phase 54.18 (TOMORROW LUNCH, Feb 13)** — combined maintenance:
+  - Pre-flight: tail sidecar log to confirm clean overnight soak
+  - Phase 1: `pip uninstall sentence-transformers` on EC2 → free ~800 MB
+  - Phase 2: edit pod Container Start Command to launch sidecar +
+    vLLM together (one-time, survives every restart forever)
+  - Phase 3: AWS Console → EC2 t3a.large → t3.medium
+  - Full plan + commands: `/app/memory/PHASE54_PART18_LUNCH_MAINTENANCE.md`
 - [ ] EventBridge nightly EC2 off (12:30–6:30 AM IST) — after t3.medium.
 - [ ] Drop unused Mongo indexes after 7-day cluster uptime.
 
