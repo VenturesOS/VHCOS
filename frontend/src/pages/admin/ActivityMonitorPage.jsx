@@ -319,12 +319,26 @@ export default function ActivityMonitorPage({ embedded = false }) {
       {/* User Leaderboard */}
       <Card className="border-slate-200/80" data-testid="user-leaderboard">
         <CardHeader className="pb-2 pt-4 px-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-600" /> User Leaderboard
               <Badge variant="secondary" className="text-[10px] ml-1">{filteredUsers.length} users</Badge>
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={period} onValueChange={setPeriod}>
+                <SelectTrigger className="w-32 h-7 text-xs" data-testid="leaderboard-period-filter">
+                  <Calendar className="w-3 h-3 mr-1 text-slate-400" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">Last 7 Days</SelectItem>
+                  <SelectItem value="month">Last 30 Days</SelectItem>
+                  <SelectItem value="quarter">Last 90 Days</SelectItem>
+                  <SelectItem value="year">Last Year</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                 <Input
