@@ -26,7 +26,8 @@ async def main() -> None:
     if backend_root not in sys.path:
         sys.path.insert(0, backend_root)
 
-    from config import db  # noqa: WPS433 (lazy import — needs sys.path tweak first)
+    from config import db, initialize_db  # noqa: WPS433 (lazy import — needs sys.path tweak first)
+    initialize_db()
 
     deactivated_cursor = db.users.find(
         {"is_active": False},
