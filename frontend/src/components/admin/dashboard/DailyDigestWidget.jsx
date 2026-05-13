@@ -66,6 +66,27 @@ export default function DailyDigestWidget() {
     window.open(`https://web.whatsapp.com/send?text=${encoded}`, '_blank', 'noopener');
   };
 
+  const [waSending, setWaSending] = useState(false);
+  const handleSendCloudAPI = async () => {
+    setWaSending(true);
+    try {
+      const res = await teamDigestAPI.whatsappSendTest();
+      const { enabled, sent, failed, total_admins, results } = res.data || {};
+      if (!enabled) {
+        toast.error('WhatsApp Cloud API not configured on backend');
+      } else if (failed > 0) {
+        const errMsg = results?.find((r) => !r.success)?.error_message || 'Unknown error';
+        toast.error(`Sent ${sent}/${total_admins}. Failure: ${errMsg}`);
+      } else {
+        toast.success(`✅ Digest sent to ${sent}/${total_admins} admin(s) via Cloud API`);
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Cloud API send failed');
+    } finally {
+      setWaSending(false);
+    }
+  };
+
   if (loading) {
     return (
       <Card className="border-slate-200/80" data-testid="daily-digest-widget">
@@ -155,6 +176,20 @@ export default function DailyDigestWidget() {
             >
               <Send className="w-3.5 h-3.5 mr-1" />
               WhatsApp
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSendCloudAPI}
+              disabled={waSending}
+              data-testid="digest-widget-cloudapi-btn"
+              title="Send via Meta WhatsApp Cloud API to all configured admin numbers"
+              className="h-7 px-2 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            >
+              {waSending
+                ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                : <MessageCircle className="w-3.5 h-3.5 mr-1" />}
+              Auto-Send
             </Button>
           </div>
         </div>

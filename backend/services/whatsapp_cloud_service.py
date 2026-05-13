@@ -1,0 +1,228 @@
+"""
+WhatsApp Cloud API (Meta) — Daily Digest delivery service.
+
+Phase 54.21 — Feb 2026. Replaces the manual copy/share button with
+official Meta Cloud API delivery using a pre-approved Utility template.
+
+Flow
+----
+1. Cron at 18:00 IST builds the daily digest (existing).
+2. After storing it, this service maps digest → template variables and
+   POSTs to graph.facebook.com.
+3. Delivery + per-admin status is persisted in `whatsapp_send_log`.
+
+Required env (`backend/.env`):
+    WHATSAPP_ACCESS_TOKEN
+    WHATSAPP_PHONE_NUMBER_ID
+    WHATSAPP_API_VERSION         (default v25.0)
+    WHATSAPP_ADMIN_NUMBERS       (comma-separated, with country code, no +)
+    WHATSAPP_TEMPLATE_NAME       (default team_daily_digest_v1)
+    WHATSAPP_TEMPLATE_LANG       (default en)
+    WHATSAPP_DIGEST_URL          (link surfaced in {{7}} - admin dashboard)
+
+If any required var is missing the service is silently disabled and the
+digest cron continues to work (status quo).
+"""
+from __future__ import annotations
+
+import logging
+import os
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_API_VERSION = "v25.0"
+DEFAULT_TEMPLATE_NAME = "team_daily_digest_v1"
+DEFAULT_TEMPLATE_LANG = "en"
+DEFAULT_DIGEST_URL = "https://app.ventureshrd.com/admin/dashboard"
+
+GRAPH_BASE = "https://graph.facebook.com"
+SEND_TIMEOUT_SECS = 20.0
+
+
+def _env(name: str, default: Optional[str] = None) -> str:
+    return (os.environ.get(name) or default or "").strip()
+
+
+def is_enabled() -> bool:
+    return bool(
+        _env("WHATSAPP_ACCESS_TOKEN")
+        and _env("WHATSAPP_PHONE_NUMBER_ID")
+        and _env("WHATSAPP_ADMIN_NUMBERS")
+    )
+
+
+def admin_numbers() -> List[str]:
+    raw = _env("WHATSAPP_ADMIN_NUMBERS")
+    return [n.strip().lstrip("+") for n in raw.split(",") if n.strip()]
+
+
+def _api_url() -> str:
+    version = _env("WHATSAPP_API_VERSION", DEFAULT_API_VERSION)
+    phone_id = _env("WHATSAPP_PHONE_NUMBER_ID")
+    return f"{GRAPH_BASE}/{version}/{phone_id}/messages"
+
+
+def _digest_to_template_params(digest: Dict[str, Any]) -> List[str]:
+    """Map a stored digest record to the 7 template variables.
+
+    Template body (approved Utility):
+      {{1}} pretty_date  - "Mon, 12 May"
+      {{2}} top_activity_score
+      {{3}} total_captures_today
+      {{4}} total_pipeline_points
+      {{5}} avg_capture_quality_pct
+      {{6}} top_performer  - "Mukta Kumari (84.3 pts)"
+      {{7}} dashboard_url
+    """
+    pretty = digest.get("pretty_date") or digest.get("date") or "today"
+    top_overall = digest.get("top_overall") or []
+    top = top_overall[0] if top_overall else {}
+    top_name = top.get("name", "—")
+    top_score = round(top.get("activity_score", 0) or 0, 1)
+    top_label = f"{top_name} ({top_score} pts)" if top_overall else "No activity"
+
+    totals = digest.get("platform_totals") or {}
+    total_captures = (
+        totals.get("captures_today")
+        or sum(int(r.get("captures_count", 0)) for r in (digest.get("recruiters") or []))
+    )
+    total_pipeline = (
+        totals.get("pipeline_points")
+        or sum(float(r.get("pipeline_points", 0) or 0) for r in (digest.get("recruiters") or []))
+    )
+
+    qualities = [
+        float(r.get("capture_quality", 0) or 0)
+        for r in (digest.get("recruiters") or [])
+        if float(r.get("captures_count", 0) or 0) > 0
+    ]
+    avg_quality = round(sum(qualities) / len(qualities), 0) if qualities else 0
+
+    dash_url = _env("WHATSAPP_DIGEST_URL", DEFAULT_DIGEST_URL)
+
+    return [
+        str(pretty),
+        str(top_score),
+        str(int(total_captures)),
+        str(int(total_pipeline)),
+        str(int(avg_quality)),
+        top_label,
+        dash_url,
+    ]
+
+
+async def send_template_message(
+    recipient: str,
+    params: List[str],
+    template_name: Optional[str] = None,
+    language: Optional[str] = None,
+) -> Dict[str, Any]:
+    """POST one template message. Returns dict with success/error/message_id."""
+    token = _env("WHATSAPP_ACCESS_TOKEN")
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "template",
+        "template": {
+            "name": template_name or _env("WHATSAPP_TEMPLATE_NAME", DEFAULT_TEMPLATE_NAME),
+            "language": {"code": language or _env("WHATSAPP_TEMPLATE_LANG", DEFAULT_TEMPLATE_LANG)},
+            "components": [{
+                "type": "body",
+                "parameters": [{"type": "text", "text": p} for p in params],
+            }],
+        },
+    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=SEND_TIMEOUT_SECS) as client:
+            r = await client.post(_api_url(), json=payload, headers=headers)
+        body = r.json() if r.content else {}
+        if r.status_code == 200:
+            msg = (body.get("messages") or [{}])[0]
+            return {"success": True, "message_id": msg.get("id"), "status": "accepted"}
+        err = (body.get("error") or {})
+        return {
+            "success": False,
+            "error_code": err.get("code"),
+            "error_message": err.get("message") or f"HTTP {r.status_code}",
+            "error_details": err.get("error_data") or err,
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"[WA] send_template_message failed for {recipient}: {e}")
+        return {"success": False, "error_message": str(e)}
+
+
+async def send_digest_to_admins(db, digest: Dict[str, Any]) -> Dict[str, Any]:
+    """Fan out the digest to every admin number; log every attempt.
+
+    Returns summary suitable for the admin UI / logs.
+    """
+    if not is_enabled():
+        logger.info("[WA] disabled — missing creds; skipping send")
+        return {"enabled": False, "sent": 0, "failed": 0, "results": []}
+
+    params = _digest_to_template_params(digest)
+    results: List[Dict[str, Any]] = []
+    sent = failed = 0
+
+    for number in admin_numbers():
+        res = await send_template_message(number, params)
+        entry = {
+            "recipient": number,
+            "digest_date": digest.get("date"),
+            "message_id": res.get("message_id"),
+            "success": res.get("success", False),
+            "error_code": res.get("error_code"),
+            "error_message": res.get("error_message"),
+            "delivery_status": "accepted" if res.get("success") else "failed",
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "params": params,
+        }
+        results.append(entry)
+        try:
+            await db.whatsapp_send_log.insert_one(dict(entry))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[WA] could not persist send log: {e}")
+        if entry["success"]:
+            sent += 1
+        else:
+            failed += 1
+
+    logger.info(f"[WA] digest fan-out — sent={sent} failed={failed}")
+    return {
+        "enabled": True,
+        "sent": sent,
+        "failed": failed,
+        "total_admins": len(admin_numbers()),
+        "results": results,
+    }
+
+
+async def update_status_from_webhook(db, statuses: List[Dict[str, Any]]) -> int:
+    """Apply Meta delivery-status webhook updates to whatsapp_send_log."""
+    updated = 0
+    for s in statuses or []:
+        mid = s.get("id")
+        st = s.get("status")  # sent|delivered|read|failed
+        ts = s.get("timestamp")
+        if not (mid and st):
+            continue
+        try:
+            await db.whatsapp_send_log.update_one(
+                {"message_id": mid},
+                {"$set": {
+                    "delivery_status": st,
+                    "delivery_timestamp": ts,
+                    "delivery_updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            updated += 1
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[WA] webhook update failed for {mid}: {e}")
+    return updated

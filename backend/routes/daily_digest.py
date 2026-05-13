@@ -121,6 +121,52 @@ async def regenerate_for_date(
 
 
 # ─────────────────────────────────────────────────────────────────────
+# WhatsApp Cloud API delivery — Phase 54.21
+# ─────────────────────────────────────────────────────────────────────
+@digest_router.post("/daily-digest/whatsapp/send-test")
+async def whatsapp_send_test(
+    current_user: dict = Depends(require_role(["admin"])),
+) -> Dict[str, Any]:
+    """Force-send today's digest to all configured admin WhatsApp numbers
+    NOW. Useful to validate template + creds without waiting for 18:00 IST."""
+    from services.whatsapp_cloud_service import is_enabled, send_digest_to_admins
+
+    if not is_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail="WhatsApp Cloud API not configured. "
+                   "Set WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, "
+                   "and WHATSAPP_ADMIN_NUMBERS in backend/.env.",
+        )
+    today = _today_ist_str()
+    digest = await get_stored_digest(db, today)
+    if not digest:
+        digest = await build_daily_digest(db)
+        await store_digest(db, digest)
+    return await send_digest_to_admins(db, digest)
+
+
+@digest_router.get("/daily-digest/whatsapp/status")
+async def whatsapp_status(
+    current_user: dict = Depends(require_role(["admin"])),
+) -> Dict[str, Any]:
+    """Show WhatsApp integration status + last 10 send attempts."""
+    from services.whatsapp_cloud_service import is_enabled, admin_numbers
+
+    last = (
+        db.whatsapp_send_log
+        .find({}, {"_id": 0, "params": 0})
+        .sort("sent_at", -1)
+        .limit(10)
+    )
+    return {
+        "enabled": is_enabled(),
+        "admin_numbers": admin_numbers(),
+        "recent_sends": await last.to_list(length=10),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
 # DEBUG / Audit endpoint — admin only, helps diagnose missing data
 # ─────────────────────────────────────────────────────────────────────
 @digest_router.get("/daily-digest/_audit/today")

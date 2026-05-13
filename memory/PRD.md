@@ -33,6 +33,16 @@ features. Provide daily team-performance digests (WhatsApp-shareable).
   all devices (extension, browser, mobile)
 
 ## Recent changelog
+- **2026-02-13 (Phase 54.21) — WhatsApp Cloud API integration shipped**
+  - Backend: `services/whatsapp_cloud_service.py` + webhook receiver +
+    fan-out from 18:00 IST cron + admin endpoints for status/test-send.
+  - Frontend: green "Auto-Send" button on Daily Digest widget.
+  - Meta credentials saved to EC2 `.env`. Awaiting template approval
+    (`team_daily_digest_v1`, ~24-48h).
+  - Full runbook: `/app/memory/PHASE54_PART21_WHATSAPP_CLOUD_API.md`.
+- **2026-02-13 (EventBridge nightly off)** — Two schedules created in
+  ap-south-1: stop 00:30 IST daily, start 06:30 IST Mon–Sat. Sunday is
+  fully off. ~₹830/mo locked in.
 - **2026-02-12 (Phase 54.19) — User Leaderboard KPI overhaul**
   - Activity Monitor's User Leaderboard now ranks by **blended composite**:
     `0.6 × activity_score_norm + 0.2 × capture_quality + 0.2 × mandate_efficiency`

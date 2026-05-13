@@ -877,5 +877,16 @@ async def run_daily_digest(db) -> None:
             f"[TeamDigest] ✅ Done — {len(digest['top_overall'])} top, "
             f"{len(digest['inactive_recruiters'])} inactive recruiters"
         )
+        # WhatsApp Cloud API fan-out — silent no-op if env not configured.
+        try:
+            from services.whatsapp_cloud_service import is_enabled, send_digest_to_admins
+            if is_enabled():
+                result = await send_digest_to_admins(db, digest)
+                logger.warning(
+                    f"[TeamDigest] WA fan-out sent={result['sent']} "
+                    f"failed={result['failed']} of {result.get('total_admins', 0)}"
+                )
+        except Exception as wa_err:  # noqa: BLE001
+            logger.warning(f"[TeamDigest] WhatsApp fan-out skipped: {wa_err}")
     except Exception as e:
         logger.exception(f"[TeamDigest] Failed: {e}")

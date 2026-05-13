@@ -157,6 +157,7 @@ extension_updates_router = _safe_import("routes.extension_updates", "router")
 reports_router = _safe_import("routes.reports", "router")
 talent_graph_router = _safe_import("routes.talent_graph", "router")
 daily_digest_router = _safe_import("routes.daily_digest", "digest_router")
+whatsapp_webhook_router = _safe_import("routes.whatsapp_webhook", "webhook_router")
 
 # Health router
 from routes.health import health_router, set_route_import_failures
@@ -249,6 +250,7 @@ _all_routers = [
     reports_router,
     talent_graph_router,
     daily_digest_router,
+    whatsapp_webhook_router,
     sourcing_router,
 ]
 

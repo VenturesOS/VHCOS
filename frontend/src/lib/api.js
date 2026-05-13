@@ -500,6 +500,8 @@ export const teamDigestAPI = {
   recent:       (days = 7) => api.get('/admin/daily-digest/recent', { params: { days } }),
   regenerate:   () => api.post('/admin/daily-digest/regenerate'),
   regenForDate: (date) => api.post(`/admin/daily-digest/${date}/regenerate`),
+  whatsappStatus:   () => api.get('/admin/daily-digest/whatsapp/status'),
+  whatsappSendTest: () => api.post('/admin/daily-digest/whatsapp/send-test'),
 };
 
 export const revenueAPI = {
