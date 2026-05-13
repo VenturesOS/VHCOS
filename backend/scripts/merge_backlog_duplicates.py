@@ -34,9 +34,27 @@ def _bootstrap() -> None:
 
 _bootstrap()
 from config import db, initialize_db  # noqa: E402 (deferred import)
+from services.candidate_merge import normalize_phone  # noqa: E402
+from services.extension_service import _names_are_similar  # noqa: E402
 
 
 SKIP_FIELDS = {"_id", "id", "created_at"}
+
+
+def _match_score(a: Dict, b: Dict) -> int:
+    """Returns 0-3: name_similar + email_exact + phone_exact."""
+    score = 0
+    if a.get("name") and b.get("name") and _names_are_similar(a["name"], b["name"]):
+        score += 1
+    ea = (a.get("email") or "").strip().lower()
+    eb = (b.get("email") or "").strip().lower()
+    if ea and eb and ea == eb:
+        score += 1
+    pa = a.get("phone_normalized") or normalize_phone(a.get("phone") or "")
+    pb = b.get("phone_normalized") or normalize_phone(b.get("phone") or "")
+    if pa and pb and pa == pb:
+        score += 1
+    return score
 
 
 def _completeness(d: Dict) -> int:
@@ -47,42 +65,6 @@ def _completeness(d: Dict) -> int:
         if v and v != "" and v != [] and v != {}:
             score += 1
     return score
-
-
-def _merge_into_master(docs: List[Dict]) -> Dict:
-    """Reuses the merge logic from /api/candidates/merge-duplicates."""
-    docs.sort(
-        key=lambda d: (d.get("updated_at") or d.get("created_at") or "", _completeness(d)),
-        reverse=True,
-    )
-    master = dict(docs[0])
-
-    for donor in docs[1:]:
-        for key, value in donor.items():
-            if key in SKIP_FIELDS:
-                continue
-            master_val = master.get(key)
-            if not master_val and value:
-                master[key] = value
-            elif isinstance(master_val, list) and isinstance(value, list):
-                combined = list(master_val)
-                existing = set(str(x) for x in combined)
-                for item in value:
-                    if str(item) not in existing:
-                        combined.append(item)
-                        existing.add(str(item))
-                master[key] = combined
-            elif key in ("key_skills", "skills") and isinstance(master_val, str) and isinstance(value, str):
-                existing_skills = set(s.strip().lower() for s in master_val.split(",") if s.strip())
-                new_skills = [
-                    s.strip() for s in value.split(",")
-                    if s.strip() and s.strip().lower() not in existing_skills
-                ]
-                if new_skills:
-                    master[key] = master_val + ", " + ", ".join(new_skills)
-
-    master["updated_at"] = datetime.now(timezone.utc).isoformat()
-    return master
 
 
 async def _find_groups() -> List[Dict]:
@@ -130,10 +112,66 @@ async def _find_groups() -> List[Dict]:
 async def _merge_group(group: Dict, apply: bool) -> Dict:
     docs = list(group["members"])
     if len(docs) < 2:
-        return {"merged": 0}
-    master_doc = _merge_into_master(docs)
+        return {"merged": 0, "skipped": []}
+
+    # Pick the provisional master FIRST so we can score each donor against it.
+    docs.sort(
+        key=lambda d: (d.get("updated_at") or d.get("created_at") or "", _completeness(d)),
+        reverse=True,
+    )
+    master_doc = dict(docs[0])
     master_id = master_doc["id"]
-    donor_ids = [d["id"] for d in docs if d["id"] != master_id]
+
+    actual_donors: List[Dict] = []
+    skipped: List[Dict] = []
+    for donor in docs[1:]:
+        s = _match_score(master_doc, donor)
+        if s >= 2:
+            actual_donors.append(donor)
+        else:
+            skipped.append({
+                "id": donor["id"],
+                "name": donor.get("name"),
+                "email": donor.get("email"),
+                "phone": donor.get("phone"),
+                "match_score": s,
+                "reason": "needs 2-of-3 match (name+email+phone)",
+            })
+
+    if not actual_donors:
+        return {
+            "master_id": master_id, "master_name": master_doc.get("name"),
+            "donor_ids": [], "donor_count": 0,
+            "skipped": skipped, "merged": False,
+        }
+
+    # Merge fields from passing donors only
+    for donor in actual_donors:
+        for key, value in donor.items():
+            if key in SKIP_FIELDS:
+                continue
+            master_val = master_doc.get(key)
+            if not master_val and value:
+                master_doc[key] = value
+            elif isinstance(master_val, list) and isinstance(value, list):
+                combined = list(master_val)
+                existing = set(str(x) for x in combined)
+                for item in value:
+                    if str(item) not in existing:
+                        combined.append(item)
+                        existing.add(str(item))
+                master_doc[key] = combined
+            elif key in ("key_skills", "skills") and isinstance(master_val, str) and isinstance(value, str):
+                existing_skills = set(s.strip().lower() for s in master_val.split(",") if s.strip())
+                new_skills = [
+                    s.strip() for s in value.split(",")
+                    if s.strip() and s.strip().lower() not in existing_skills
+                ]
+                if new_skills:
+                    master_doc[key] = master_val + ", " + ", ".join(new_skills)
+
+    master_doc["updated_at"] = datetime.now(timezone.utc).isoformat()
+    donor_ids = [d["id"] for d in actual_donors]
 
     master_doc["merge_history"] = master_doc.get("merge_history", [])
     master_doc["merge_history"].append({
@@ -142,13 +180,14 @@ async def _merge_group(group: Dict, apply: bool) -> Dict:
         "merged_by": "bulk_backfill_phase54_22",
         "reason": group["reason"],
         "key": group["key"],
+        "skipped": skipped or None,
     })
 
     if not apply:
         return {
             "master_id": master_id, "master_name": master_doc.get("name"),
             "donor_ids": donor_ids, "donor_count": len(donor_ids),
-            "would_merge": True,
+            "skipped": skipped, "would_merge": True,
         }
 
     update_doc = {k: v for k, v in master_doc.items() if k != "_id"}
@@ -166,7 +205,7 @@ async def _merge_group(group: Dict, apply: bool) -> Dict:
             "source": "bulk_backfill_phase54_22",
             "reason": group["reason"], "key": group["key"],
             "master_id": master_id, "master_name": master_doc.get("name"),
-            "donor_ids": donor_ids,
+            "donor_ids": donor_ids, "skipped": skipped,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
     except Exception:
@@ -174,7 +213,8 @@ async def _merge_group(group: Dict, apply: bool) -> Dict:
 
     return {
         "master_id": master_id, "master_name": master_doc.get("name"),
-        "donor_ids": donor_ids, "donor_count": len(donor_ids), "merged": True,
+        "donor_ids": donor_ids, "donor_count": len(donor_ids),
+        "skipped": skipped, "merged": True,
     }
 
 
@@ -184,6 +224,7 @@ async def main(apply: bool) -> None:
     print(f"Found {len(groups)} duplicate group(s)\n")
 
     total_donors = 0
+    total_skipped = 0
     for i, g in enumerate(groups, 1):
         names = ", ".join(sorted({m.get("name") or "?" for m in g["members"]}))
         prefix = "[APPLY]" if apply else "[DRY]"
@@ -191,18 +232,24 @@ async def main(apply: bool) -> None:
               f"× {len(g['members'])}")
         res = await _merge_group(g, apply=apply)
         donors = res.get("donor_count", 0)
+        skipped = res.get("skipped") or []
         total_donors += donors
-        if apply:
-            print(f"      → master='{res.get('master_name')}' "
-                  f"id={(res.get('master_id') or '')[:12]} "
-                  f"deleted {donors} donor(s)")
-        else:
-            print(f"      → would-merge {donors} donor(s) into "
-                  f"'{res.get('master_name')}'")
+        total_skipped += len(skipped)
+        if donors:
+            if apply:
+                print(f"      → master='{res.get('master_name')}' "
+                      f"id={(res.get('master_id') or '')[:12]} "
+                      f"deleted {donors} donor(s)")
+            else:
+                print(f"      → would-merge {donors} donor(s) into "
+                      f"'{res.get('master_name')}'")
+        for sk in skipped:
+            print(f"      ⚠ SKIPPED donor '{sk.get('name')}' "
+                  f"(match_score={sk.get('match_score')}/3) — manual review needed")
 
     print()
-    print(f"Total duplicate records that {'WERE' if apply else 'WOULD BE'} "
-          f"removed: {total_donors}")
+    print(f"Records {'WERE' if apply else 'WOULD BE'} removed: {total_donors}")
+    print(f"Donors skipped (low match score): {total_skipped}")
     if not apply:
         print("\nRe-run with --apply to actually perform the merges.")
 

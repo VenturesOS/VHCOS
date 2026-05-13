@@ -2333,9 +2333,16 @@ async def merge_duplicates(
 ):
     """
     Merge a group of duplicate candidates into one master record.
-    Strategy: combine fields from all records, preferring the most recent
-    and most complete data. Deletes duplicates after merge.
+
+    SEC-05 (Feb 2026): every donor must match the master on at least
+    2 of (name_similar, email_exact, phone_normalized_exact). This
+    prevents bulk-merging two different people who happen to share a
+    phone or email (e.g. spouse sharing a number).
+    Donors that fail the gate are returned in `skipped` for manual review.
     """
+    from services.extension_service import _names_are_similar
+    from services.candidate_merge import normalize_phone
+
     candidate_ids = payload.get("candidate_ids", [])
     if len(candidate_ids) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 candidate IDs to merge")
@@ -2367,7 +2374,44 @@ async def merge_duplicates(
     master_id = master["id"]
     SKIP_FIELDS = {"_id", "id", "created_at"}
 
+    def _match_score(a: dict, b: dict) -> int:
+        score = 0
+        if a.get("name") and b.get("name") and _names_are_similar(a["name"], b["name"]):
+            score += 1
+        ea = (a.get("email") or "").strip().lower()
+        eb = (b.get("email") or "").strip().lower()
+        if ea and eb and ea == eb:
+            score += 1
+        pa = a.get("phone_normalized") or normalize_phone(a.get("phone") or "")
+        pb = b.get("phone_normalized") or normalize_phone(b.get("phone") or "")
+        if pa and pb and pa == pb:
+            score += 1
+        return score
+
+    actual_donors = []
+    skipped = []
     for donor in docs[1:]:
+        s = _match_score(master, donor)
+        if s >= 2:
+            actual_donors.append(donor)
+        else:
+            skipped.append({
+                "id": donor["id"],
+                "name": donor.get("name"),
+                "match_score": s,
+                "reason": "needs 2-of-3 match (name+email+phone); flagged for manual review",
+            })
+
+    if not actual_donors:
+        return {
+            "master_id": master_id,
+            "merged_count": 0,
+            "merged_ids": [],
+            "skipped": skipped,
+            "message": "No donors passed the 2-of-3 match gate — nothing merged.",
+        }
+
+    for donor in actual_donors:
         for key, value in donor.items():
             if key in SKIP_FIELDS:
                 continue
@@ -2392,15 +2436,16 @@ async def merge_duplicates(
     master["updated_at"] = datetime.now(timezone.utc).isoformat()
     master["merge_history"] = master.get("merge_history", [])
     master["merge_history"].append({
-        "merged_ids": [d["id"] for d in docs[1:]],
+        "merged_ids": [d["id"] for d in actual_donors],
         "merged_at": datetime.now(timezone.utc).isoformat(),
         "merged_by": current_user.get("email", "unknown"),
+        "skipped": skipped or None,
     })
 
     update_doc = {k: v for k, v in master.items() if k != "_id"}
     await db.candidate_bank.replace_one({"id": master_id}, update_doc)
 
-    duplicate_ids = [d["id"] for d in docs[1:]]
+    duplicate_ids = [d["id"] for d in actual_donors]
     delete_result = await db.candidate_bank.delete_many({"id": {"$in": duplicate_ids}})
 
     await db.applications.update_many(
@@ -2412,7 +2457,9 @@ async def merge_duplicates(
         "master_id": master_id,
         "merged_count": delete_result.deleted_count,
         "merged_ids": duplicate_ids,
-        "message": f"Merged {len(docs)} candidates into {master.get('name', master_id)}",
+        "skipped": skipped,
+        "message": f"Merged {len(actual_donors) + 1} candidates into {master.get('name', master_id)}"
+                   + (f"; {len(skipped)} donor(s) skipped (low match score)" if skipped else ""),
     }
 
 
