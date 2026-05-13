@@ -108,56 +108,12 @@ def _extract_json_from_response(response_text: str) -> str:
 
 async def _try_groq(system_prompt: str, user_prompt: str, temperature: float = 0, max_tokens: int = 2000) -> Optional[Dict]:
     """
-    Attempt extraction using Groq API.
-    
-    Returns:
-        dict: Parsed JSON response
-        None: If Groq fails (rate limit, timeout, etc.)
+    DEPRECATED (Phase 51, 2026-05-05) — Groq tier removed when consolidating
+    on the Option-A fallback chain (RunPod Qwen → Emergent Haiku). Module-level
+    `groq_client` no longer exists; this stub keeps the call site safe.
     """
-    if not groq_client:
-        logger.warning("[Fallback] Groq client not configured — skipping")
-        return None
-    
-    try:
-        logger.info("[Fallback] Attempting Groq extraction...")
-        
-        completion = await groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=30.0  # 30 second timeout
-        )
-        
-        result = completion.choices[0].message.content.strip()
-        
-        # Log token usage
-        tokens_used = completion.usage.total_tokens
-        logger.info(f"[Fallback][Groq] ✅ Success | tokens: {tokens_used}")
-        
-        # Parse JSON
-        clean_result = _extract_json_from_response(result)
-        data = json.loads(clean_result)
-        
-        return data
-        
-    except Exception as e:
-        error_msg = str(e)
-        
-        # Detect specific error types
-        if "429" in error_msg or "rate_limit" in error_msg.lower():
-            logger.warning("[Fallback][Groq] ⚠️ Rate limit exceeded — falling back")
-        elif "503" in error_msg or "service unavailable" in error_msg.lower():
-            logger.warning("[Fallback][Groq] ⚠️ Service unavailable — falling back")
-        elif "timeout" in error_msg.lower():
-            logger.warning("[Fallback][Groq] ⚠️ Timeout — falling back")
-        else:
-            logger.warning(f"[Fallback][Groq] ❌ Error: {error_msg}")
-        
-        return None
+    logger.debug("[Fallback] Groq tier deprecated — skipping (no-op)")
+    return None
 
 
 async def _try_emergent_openai(system_prompt: str, user_prompt: str, temperature: float = 0, max_tokens: int = 2000) -> Optional[Dict]:
