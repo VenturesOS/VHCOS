@@ -104,3 +104,30 @@ def health_check() -> dict:
         return {"enabled": True, "ok": True, **r.json()}
     except Exception as e:
         return {"enabled": True, "ok": False, "error": str(e)}
+
+
+def rerank_remote(query: str, documents: List[str], top_k: Optional[int] = None) -> Optional[List[dict]]:
+    """POST /rerank to the sidecar. Returns list of {index, score} dicts
+    sorted by score desc, or None if the sidecar is unreachable / disabled.
+
+    Caller can fall back to bi-encoder cosine ordering on None.
+    """
+    if not SIDECAR_URL or _should_skip_remote() or not documents or not query:
+        return None
+    try:
+        r = requests.post(
+            f"{SIDECAR_URL}/rerank",
+            json={"query": query, "documents": documents, "top_k": top_k},
+            timeout=SIDECAR_TIMEOUT_SECS,
+        )
+        if r.status_code == 503:
+            logger.warning("[EmbedClient] rerank 503 — model not warm yet")
+            _mark_remote_failed()
+            return None
+        r.raise_for_status()
+        _mark_remote_healthy()
+        return r.json().get("results")
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"[EmbedClient] rerank call failed: {e!s}")
+        _mark_remote_failed()
+        return None
