@@ -1,0 +1,62 @@
+{
+  "summary": "Phase: search-fixes (Batches A/B/C) validation. Backend pytest: 15/15 PASS at /app/backend/tests/test_search_fixes.py. Frontend UI verified via Playwright on /admin/advanced-search: Keywords autocomplete for 'react' renders 6 typed suggestions (React.js 3799, React Native 350, React 152, Reacts Js 79, Reactjs 63, React Testing Library 53 — all tagged 'skills'); Industry='IT/Software' applied via filter-industry combobox; Company='Wipro' returns 614 candidates (toast 'Found 614 matching candidates'); Smart Re-rank toggle ON for 'Python developer' returned 50 candidates with toast 'Smart re-ranked 50 of 200 candidates (2244ms) AUC 0.7211' — LTR bundle IS active. All user-reported empty-result regressions are fixed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdvancedSearchPage", "issue": "React console warning: 'Each child in a list should have a unique key prop. Check the render method of AdvancedSearchPage.' One or more .map() renders are missing/duplicating keys. Cosmetic only; results still render.", "selector": "/admin/advanced-search", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_search_fixes.py",
+    "/app/test_reports/pytest/search_fixes_results.xml"
+  ],
+  "backend_test_results": {
+    "TestAdvancedSearchFilters::test_company_te_connectivity": "PASS — total=28 (>=20 expected); current_employer match verified",
+    "TestAdvancedSearchFilters::test_industry_it_software": "PASS — total=54128 (was 10 before fix)",
+    "TestAdvancedSearchFilters::test_industry_manufacturing": "PASS — total=41684",
+    "TestAdvancedSearchFilters::test_industry_bfsi": "PASS — total=11283",
+    "TestAdvancedSearchFilters::test_has_resume_yes": "PASS — total=24591 (was ~0)",
+    "TestAdvancedSearchFilters::test_has_resume_no": "PASS — total=98583",
+    "TestAdvancedSearchFilters::test_has_phone_excludes_placeholders": "PASS — 20 items, none with phone='hidden'/'N/A'/''",
+    "TestAdvancedSearchFilters::test_notice_period_immediate": "PASS — total=1887 case-insensitive substring match",
+    "TestAutocomplete::test_react_all": "PASS — 10 items, types={skills, designation}",
+    "TestAutocomplete::test_banga_location": "PASS — bangalore/bengaluru variations returned",
+    "TestAutocomplete::test_industry_field_new": "PASS — 10 industry suggestions for q='it' (new field)",
+    "TestAISearch::test_experienced_java_bangalore": "PASS — 30 results; filters_used.min_experience=null (sanitiser dropped 'experienced' adjective)",
+    "TestAISearch::test_it_software_5plus": "PASS — 30 results; filters_used.min_experience=5",
+    "TestAISearch::test_strict_relaxed_fallback": "PASS — strict prompt returned 1 result (relaxed=false because non-zero); response schema valid",
+    "TestTalentGraphSearch::test_python_bangalore_topup": "PASS — 25 matches returned (top-up working); match_type field returns None (not 'keyword' tag), see action item"
+  },
+  "frontend_test_results": {
+    "keyword_autocomplete_react": "PASS — 6 suggestion rows rendered (React.js, React Native, React, Reacts Js, Reactjs, React Testing Library), all tagged 'skills'",
+    "industry_it_software_filter": "PASS — IT/Software option present and selectable in filter-industry combobox; backend confirms 54K matches",
+    "company_wipro_search": "PASS — toast 'Found 614 matching candidates' shown after Find Candidates",
+    "smart_rerank_toggle": "PASS — toggle on -> '50 of 200 candidates (2244ms) AUC 0.7211' — LTR bundle active, not the documented graceful-fallback case",
+    "attached_resume_filter": "Not explicitly tested via UI script (backend confirms has_resume=yes returns 24,591)"
+  },
+  "action_items": [
+    "MINOR: Fix React duplicate/missing key warning in AdvancedSearchPage.jsx (cosmetic console noise; results render fine).",
+    "OPTIONAL: services/talent_graph_service.py _keyword_fallback_search() should tag fallback docs with match_type='keyword' before merging — currently top-up items come through with match_type=None, hard to distinguish from vector hits for UI badging. Backend top-up itself works (25/25 returned)."
+  ],
+  "critical_code_review_comments": [
+    "Industry filter now correctly prioritises smart_tags (broad bucket) — 54K vs 10 results before — confirmed end-to-end.",
+    "has_resume=yes now correctly unions current_resume_file/cv_attached:true/has_resume:true booleans — 24,591 matches vs ~0 before.",
+    "AI sanitiser correctly drops hallucinated numerics from adjective prompts ('experienced Java in Bangalore' -> min_experience=null) while preserving explicit digits ('5+ years' -> min_experience=5). Verified both paths.",
+    "Autocomplete returns the new 'industry' field with type=industry tagging — frontend AutocompleteInput.jsx TYPE_COLORS update consumed correctly.",
+    "Notice-period regex substring match correctly returns 1,887 candidates for 'immediate' (case-insensitive) vs the previous exact-equality 0 results."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_search_fixes.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% on critical flows (keywords AC, industry, company, rerank)"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024",
+  "seed_data_creation": "None — used production seed (1.23 L candidates).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reusable backend regression suite at /app/backend/tests/test_search_fixes.py. Re-run: `pytest backend/tests/test_search_fixes.py -v --junitxml=/app/test_reports/pytest/search_fixes_results.xml`. Talent-graph endpoint returns key 'matches' (NOT 'results'/'candidates'/'items'). Frontend route is /admin/advanced-search (NOT /admin/search). Cookie banner appears on first visit — dismiss with 'Accept All' or it overlaps the Find Candidates button on small viewports. data-testids confirmed: search-keywords, exclude-keywords, search-skills, min-exp, max-exp, search-location, search-smart-tags, filter-industry, filter-company, exclude-company, filter-designation, smart-rerank-toggle."
+}

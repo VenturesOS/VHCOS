@@ -440,10 +440,16 @@ async def find_candidates_by_text(
     (location, industry, role tokens) rank above those that only match
     semantically. The displayed `score` remains pure cosine so scores stay
     comparable across queries.
+
+    FIX (Phase 55, 2026-02): only ~1.4% of `candidate_bank` has embeddings
+    indexed, so a pure vector search misses ~98% of the talent pool. When the
+    embedding pool returns fewer hits than requested, top up with a keyword +
+    smart-tag fallback over the live `candidate_bank` so users never see an
+    empty page just because the backfill hasn't caught up.
     """
     qvec = await asyncio.to_thread(embed_text, query)
     if not qvec:
-        return []
+        return await _keyword_fallback_search(db, query, limit)
 
     # Pull a wider pool than the user asked for so re-rank has room to work.
     fetch_limit = max(limit * 3, 60)
@@ -488,7 +494,93 @@ async def find_candidates_by_text(
 
     ranked = _hybrid_rerank(pool, query, limit)
     await _enrich_with_candidate_bank(db, ranked)
+
+    # Top-up with keyword fallback so users always see a usable list even
+    # when embedding coverage is sparse.
+    if len(ranked) < limit:
+        seen_ids = {r.get("candidate_id") for r in ranked if r.get("candidate_id")}
+        needed   = limit - len(ranked)
+        fallback = await _keyword_fallback_search(db, query, needed, exclude_ids=seen_ids)
+        ranked.extend(fallback)
+
     return ranked
+
+
+async def _keyword_fallback_search(
+    db,
+    query: str,
+    limit: int,
+    exclude_ids: Optional[set] = None,
+) -> List[Dict[str, Any]]:
+    """Keyword + smart-tag fallback over `candidate_bank` when the embedding
+    pool is sparse. Returns docs in the same shape as the vector search path
+    so downstream code doesn't branch.
+    """
+    import re as _re_kw
+    tokens = [t.strip() for t in _re_kw.findall(r"[A-Za-z0-9\.\+\#]{2,}", query) if t.strip()]
+    # Drop very common stopwords so "with", "in", "the" don't dominate
+    STOP = {"with", "and", "the", "for", "from", "in", "of", "to", "a", "an",
+            "or", "at", "on", "by", "is", "be", "as", "into", "experience",
+            "experienced", "senior", "junior", "lead"}
+    tokens = [t for t in tokens if t.lower() not in STOP][:8]
+    if not tokens:
+        return []
+
+    pat = "|".join(_re_kw.escape(t) for t in tokens)
+    base_or = [
+        {"smart_tags":  {"$regex": pat, "$options": "i"}},
+        {"skills":      {"$regex": pat, "$options": "i"}},
+        {"designation": {"$regex": pat, "$options": "i"}},
+        {"headline":    {"$regex": pat, "$options": "i"}},
+        {"current_employer": {"$regex": pat, "$options": "i"}},
+        {"location":    {"$regex": pat, "$options": "i"}},
+        {"industry":    {"$regex": pat, "$options": "i"}},
+        {"summary":     {"$regex": pat, "$options": "i"}},
+    ]
+    q = {"$or": base_or}
+    if exclude_ids:
+        q = {"$and": [q, {"id": {"$nin": list(exclude_ids)}}]}
+
+    docs = await db.candidate_bank.find(
+        q,
+        {
+            "_id": 0, "id": 1, "name": 1,
+            "designation": 1, "current_designation": 1, "headline": 1,
+            "current_employer": 1, "current_company": 1,
+            "location": 1, "current_location": 1,
+            "experience_years": 1, "total_experience_years": 1,
+            "skills": 1, "smart_tags": 1, "summary": 1,
+        },
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+
+    # Score = how many query tokens overlap with the document text
+    out = []
+    q_tokens_lower = {t.lower() for t in tokens}
+    for d in docs:
+        text = " ".join([
+            str(d.get("designation") or d.get("current_designation") or ""),
+            str(d.get("headline") or ""),
+            str(d.get("current_employer") or d.get("current_company") or ""),
+            str(d.get("location") or d.get("current_location") or ""),
+            " ".join(d.get("skills") or []),
+            " ".join(d.get("smart_tags") or []),
+            str(d.get("summary") or "")[:500],
+        ]).lower()
+        hits = sum(1 for t in q_tokens_lower if t in text)
+        score = hits / max(len(q_tokens_lower), 1)
+        out.append({
+            "candidate_id":  d.get("id"),
+            "candidate_name": d.get("name"),
+            "current_employer": d.get("current_employer") or d.get("current_company"),
+            "current_designation": d.get("designation") or d.get("current_designation") or d.get("headline"),
+            "current_location": d.get("location") or d.get("current_location"),
+            "experience_years": d.get("experience_years") or d.get("total_experience_years"),
+            "summary": d.get("summary"),
+            "score": round(0.35 + 0.5 * score, 4),   # 0.35..0.85, clearly < pure vector hits
+            "match_type": "keyword",
+        })
+    out.sort(key=lambda x: x["score"], reverse=True)
+    return out
 
 
 async def _enrich_with_candidate_bank(db, results: List[Dict[str, Any]]) -> None:

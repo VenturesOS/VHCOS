@@ -40,7 +40,13 @@ You must:
 - Never include backticks.
 - Never guess values not explicitly implied.
 
-If a value is not specified, return null or empty array.
+CRITICAL RULES — be CONSERVATIVE, do NOT over-constrain:
+- Only set `min_experience` or `max_experience` when the user supplies an EXPLICIT NUMBER
+  (e.g. "5+ years", "3 to 7 years", "minimum 4 years"). NEVER infer from adjectives like
+  "experienced", "senior", "junior" — those are role-level descriptors, not numeric filters.
+- Only set `current_ctc_range` / `expected_ctc_range` when explicit numbers + currency/units appear.
+- If a value is not specified, return null or empty array.
+- A short prompt like "Java developer Bangalore" should produce JUST {skills:["Java"], location_include:["Bangalore"]}.
 
 Stability interpretation rules:
 - "Not a job hopper" → max_switches: 4 and min_avg_tenure_years: 2.5
@@ -125,8 +131,30 @@ async def extract_filters(prompt: str) -> dict:
     try:
         filters = json.loads(raw_content)
     except json.JSONDecodeError:
-        logger.error(f"[AI Search] LLM returned invalid JSON: {raw_content[:300]}")
-        raise ValueError("AI could not parse the search prompt. Please rephrase.")
+        # Some models ignore the "no markdown" instruction and wrap the JSON in
+        # ```json fences. Strip them and retry once before giving up.
+        stripped = raw_content.strip()
+        if stripped.startswith("```"):
+            stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+            stripped = re.sub(r"\s*```\s*$", "", stripped)
+        try:
+            filters = json.loads(stripped)
+        except json.JSONDecodeError:
+            logger.error(f"[AI Search] LLM returned invalid JSON: {raw_content[:300]}")
+            raise ValueError("AI could not parse the search prompt. Please rephrase.")
+
+    # Sanity sweep: drop LLM-hallucinated numeric constraints when the prompt
+    # has NO explicit digits. Prevents adjectives like "senior"/"experienced"
+    # from collapsing the result set to zero.
+    if not re.search(r"\d", prompt):
+        for k in ("min_experience", "max_experience"):
+            if filters.get(k) is not None:
+                logger.info(f"[AI Search] Dropping hallucinated {k}={filters[k]} (no digits in prompt)")
+                filters[k] = None
+        for k in ("current_ctc_range", "expected_ctc_range"):
+            filters[k] = None
+        if filters.get("max_switches") is not None and "hop" not in prompt.lower() and "switch" not in prompt.lower():
+            filters["max_switches"] = None
 
     elapsed   = time.time() - start
     log_entry = {
@@ -198,15 +226,27 @@ def build_mongo_query(filters: dict) -> dict:
             {"raw_profile_text":    {"$regex": skill_pattern, "$options": "i"}},
         ]})
 
-    # ── Industry ──────────────────────────────────────────────────────────
+    # ── Industry ──
+    # FIX (Phase 55, 2026-02): match against `smart_tags` first (broad
+    # category buckets like "IT/Software", "BFSI", "Manufacturing") because
+    # the granular `industry` field stores values like "IT Services &
+    # Consulting" / "Financial Services" which never match the dropdown labels.
     industry_inc = [i for i in (filters.get("industry_include") or []) if i]
     industry_exc = [i for i in (filters.get("industry_exclude") or []) if i]
     if industry_inc:
         pattern = _safe_pattern(industry_inc)
+        # Use first significant token for loose industry matching
+        loose_terms = []
+        for ind in industry_inc:
+            first = ind.split("/")[0].split()[0] if ind else ind
+            if first:
+                loose_terms.append(first)
+        loose_pattern = _safe_pattern(loose_terms) or pattern
         conditions.append({"$or": [
-            {"current_industry":  {"$regex": pattern, "$options": "i"}},  # canonical
-            {"industry":          {"$regex": pattern, "$options": "i"}},  # alias
-            {"preferred_industry":{"$regex": pattern, "$options": "i"}},
+            {"smart_tags":         {"$regex": pattern, "$options": "i"}},
+            {"current_industry":   {"$regex": loose_pattern, "$options": "i"}},
+            {"industry":           {"$regex": loose_pattern, "$options": "i"}},
+            {"preferred_industry": {"$regex": loose_pattern, "$options": "i"}},
         ]})
     for ind in industry_exc:
         p = re.escape(ind)

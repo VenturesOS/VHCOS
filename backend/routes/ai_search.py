@@ -67,13 +67,35 @@ async def ai_search(
     mongo_query = build_mongo_query(filters)
     logger.info(f"[AI Search] Mongo query: {mongo_query}")
 
-    # Execute query
+    # Execute query — sort by recency for fresh data (industry feedback: stale
+    # captures were burying recent ones when sorted by experience_years desc).
     candidates = await db.candidate_bank.find(
         mongo_query, CANDIDATE_PROJECTION
-    ).sort("experience_years", -1).limit(min(req.limit, 200)).to_list(min(req.limit, 200))
+    ).sort("created_at", -1).limit(min(req.limit, 200)).to_list(min(req.limit, 200))
 
-    # Apply post-query stability filters
-    candidates = apply_stability_filters(candidates, filters)
+    # Auto-relax: when strict AND produces 0 hits, retry without the most
+    # restrictive filters (notice period + stability) so the user still sees
+    # *something* with a "broadened" badge instead of an empty page.
+    relaxed = False
+    if not candidates and filters:
+        relaxed_filters = {**filters,
+                           "notice_period": None,
+                           "min_avg_tenure_years": None,
+                           "max_switches": None,
+                           "current_ctc_range": None,
+                           "expected_ctc_range": None}
+        relaxed_query = build_mongo_query(relaxed_filters)
+        if relaxed_query != mongo_query:
+            candidates = await db.candidate_bank.find(
+                relaxed_query, CANDIDATE_PROJECTION
+            ).sort("created_at", -1).limit(min(req.limit, 200)).to_list(min(req.limit, 200))
+            if candidates:
+                relaxed = True
+                logger.info(f"[AI Search] Auto-relaxed query returned {len(candidates)} candidates")
+
+    # Apply post-query stability filters (skipped if we already relaxed them)
+    if not relaxed:
+        candidates = apply_stability_filters(candidates, filters)
 
     total = len(candidates)
     logger.info(f"[AI Search] DB returned {total} candidates in {time.time() - start:.2f}s")
@@ -109,5 +131,6 @@ async def ai_search(
         "candidates": candidates,
         "total": total,
         "filters_used": filters,
+        "relaxed": relaxed,
         "log": {"model": extraction_log.get("model"), "time_s": elapsed, "tokens": extraction_log.get("token_usage", {})},
     }

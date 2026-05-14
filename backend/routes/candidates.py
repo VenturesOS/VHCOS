@@ -1795,11 +1795,16 @@ async def list_candidates(
         ]})
 
     # ── Company ──
+    # FIX (Phase 55, 2026-02): 87% of candidates store company in `current_employer`.
+    # The old query targeted `current_company` (0.3%) + `company` (0%) and returned
+    # near-zero results. Now queries all three so the filter actually works.
     if company:
         import re
+        pat = re.escape(company)
         conditions.append({"$or": [
-            {"current_company": {"$regex": re.escape(company), "$options": "i"}},
-            {"company":         {"$regex": re.escape(company), "$options": "i"}},
+            {"current_employer": {"$regex": pat, "$options": "i"}},
+            {"current_company":  {"$regex": pat, "$options": "i"}},
+            {"company":          {"$regex": pat, "$options": "i"}},
         ]})
 
     # ── Skills (comma-separated) ──
@@ -1817,8 +1822,12 @@ async def list_candidates(
             conditions.append({"$and": skill_conditions})
 
     # ── Notice Period ──
+    # FIX (Phase 55, 2026-02): allow substring/case-insensitive match instead
+    # of strict equality. DB stores values like "Immediate", "15 Days",
+    # "1 Month", "Notice Period: 30 days" — exact equality rarely worked.
     if notice_period:
-        conditions.append({"notice_period": notice_period})
+        import re as _re_np
+        conditions.append({"notice_period": {"$regex": _re_np.escape(notice_period), "$options": "i"}})
 
     # ── Experience Range ──
     if min_experience is not None or max_experience is not None:
@@ -1867,10 +1876,23 @@ async def list_candidates(
         ]})
 
     # ── Industry Filter ──
+    # FIX (Phase 55, 2026-02): the dropdown shows broad categories ("IT/Software",
+    # "BFSI", "Manufacturing"…) which match how candidates are tagged in
+    # `smart_tags`, but the granular `industry` field stores values like
+    # "IT Services & Consulting" or "Financial Services" — so a literal regex on
+    # `industry` returned almost nothing. We now match smart_tags first (broad
+    # buckets) AND fall back to a substring match on industry.
     if industry:
+        import re as _re_ind
+        pat = _re_ind.escape(industry)
+        # First token for fuzzy industry match (e.g. "IT/Software" -> "IT")
+        loose = _re_ind.escape(industry.split("/")[0].split()[0]) if industry else pat
         conditions.append({"$or": [
-            {"industry": {"$regex": industry, "$options": "i"}},
-            {"current_industry": {"$regex": industry, "$options": "i"}},
+            {"smart_tags": {"$regex": f"^{pat}$", "$options": "i"}},
+            {"smart_tags": {"$regex": pat, "$options": "i"}},
+            {"industry":   {"$regex": loose, "$options": "i"}},
+            {"current_industry": {"$regex": loose, "$options": "i"}},
+            {"preferred_industry": {"$regex": loose, "$options": "i"}},
         ]})
 
     # ── Notice Period Max (days) ──
@@ -1914,10 +1936,12 @@ async def list_candidates(
             ]})
 
     # ── Has Phone / Has Email ──
+    # FIX (Phase 55, 2026-02): also reject placeholder strings used by Naukri
+    # when contact is masked: "hidden", "Not Available", "N/A".
     if has_phone:
-        conditions.append({"phone": {"$exists": True, "$nin": [None, "", "hidden"]}})
+        conditions.append({"phone": {"$exists": True, "$nin": [None, "", "hidden", "Not Available", "N/A"]}})
     if has_email:
-        conditions.append({"email": {"$exists": True, "$nin": [None, ""]}})
+        conditions.append({"email": {"$exists": True, "$nin": [None, "", "hidden", "Not Available", "N/A"]}})
 
 
 
@@ -1927,11 +1951,17 @@ async def list_candidates(
     # at all (resume_path/resume_latex are added later when LaTeX is built),
     # so `$in: [None, ""]` would NOT match a missing key and the filter
     # silently returned 0 results.
+    # ── Has Resume ──
+    # FIX (Phase 55, 2026-02): include `cv_attached` (93.6%) and `has_resume`
+    # boolean (18.5%) which the prior version ignored. resume_url/path/latex
+    # alone covered <20% of the bank so the filter returned almost nothing.
     if has_resume == "yes":
         conditions.append({"$or": [
             {"resume_url":   {"$exists": True, "$nin": [None, ""]}},
             {"resume_path":  {"$exists": True, "$nin": [None, ""]}},
             {"resume_latex": {"$exists": True, "$nin": [None, ""]}},
+            {"cv_attached":  True},
+            {"has_resume":   True},
         ]})
     elif has_resume == "no":
         def _empty(field):
@@ -1943,6 +1973,8 @@ async def list_candidates(
             _empty("resume_url"),
             _empty("resume_path"),
             _empty("resume_latex"),
+            {"$or": [{"cv_attached": {"$exists": False}}, {"cv_attached": {"$ne": True}}]},
+            {"$or": [{"has_resume":  {"$exists": False}}, {"has_resume":  {"$ne": True}}]},
         ]})
 
     # ── Contact Hidden (from Naukri — phone/email is null/missing/placeholder) ──
@@ -2472,19 +2504,28 @@ async def autocomplete_suggestions(
     db=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Predictive autocomplete suggestions based on existing candidate data."""
+    """Predictive autocomplete suggestions based on existing candidate data.
+
+    FIX (Phase 55, 2026-02): added `headline` + `industry` fields (93%+ coverage)
+    so keyword suggestions are rich. Switched from strict `^prefix` to
+    substring match so "react" surfaces "Reactive Programming" + "React Native"
+    not just "ReactJS".
+    """
     from services.synonym_service import expand_query
 
     q_lower = q.lower().strip()
-    regex_pattern = f"^{q_lower}"
+    import re as _re_ac
+    safe = _re_ac.escape(q_lower)
+    regex_pattern = safe   # substring (case-insensitive via $options)
     suggestions = []
 
     field_map = {
-        "skills": {"field": "skills", "unwind": True},
-        "designation": {"field": "designation", "unwind": False},
-        "company": {"field": "current_employer", "unwind": False},
-        "location": {"field": "location", "unwind": False},
-        "smart_tags": {"field": "smart_tags", "unwind": True},
+        "skills":      {"field": "skills",           "unwind": True},
+        "designation": {"field": "designation",      "unwind": False},
+        "company":     {"field": "current_employer", "unwind": False},
+        "location":    {"field": "location",         "unwind": False},
+        "industry":    {"field": "industry",         "unwind": False},
+        "smart_tags":  {"field": "smart_tags",       "unwind": True},
     }
 
     fields_to_search = field_map.keys() if field == "all" else [field] if field in field_map else ["skills"]

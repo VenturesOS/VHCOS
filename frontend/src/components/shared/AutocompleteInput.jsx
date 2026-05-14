@@ -69,6 +69,7 @@ export function AutocompleteInput({ value, onChange, placeholder, field = 'all',
     designation: 'bg-blue-50 text-blue-600',
     company: 'bg-purple-50 text-purple-600',
     location: 'bg-amber-50 text-amber-600',
+    industry: 'bg-teal-50 text-teal-600',
     smart_tags: 'bg-indigo-50 text-indigo-600',
     synonym: 'bg-slate-50 text-slate-500 italic',
   };
