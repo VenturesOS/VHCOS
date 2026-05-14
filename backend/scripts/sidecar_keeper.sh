@@ -47,7 +47,8 @@ fi
 
 # ── Health probe ──────────────────────────────────────────────────────────────
 http_code=$(curl -s -o /tmp/keeper_health.json -w "%{http_code}" --max-time 5 "$SIDECAR_URL/health" || echo "000")
-if [[ "$http_code" == "200" ]] && grep -q '"ready"\s*:\s*true' /tmp/keeper_health.json 2>/dev/null; then
+if [[ "$http_code" == "200" ]] && \
+   grep -qE '"(ready|model_loaded)"\s*:\s*true' /tmp/keeper_health.json 2>/dev/null; then
   echo "OK: sidecar already healthy — $(cat /tmp/keeper_health.json)"
   exit 0
 fi
@@ -76,7 +77,8 @@ echo "Waiting for sidecar to warm up..."
 for i in {1..12}; do
   sleep 5
   http_code=$(curl -s -o /tmp/keeper_health.json -w "%{http_code}" --max-time 5 "$SIDECAR_URL/health" || echo "000")
-  if [[ "$http_code" == "200" ]] && grep -q '"ready"\s*:\s*true' /tmp/keeper_health.json 2>/dev/null; then
+  if [[ "$http_code" == "200" ]] && \
+     grep -qE '"(ready|model_loaded)"\s*:\s*true' /tmp/keeper_health.json 2>/dev/null; then
     echo "OK: sidecar warmed up in $((i*5))s — $(cat /tmp/keeper_health.json)"
     exit 0
   fi

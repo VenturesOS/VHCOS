@@ -54,7 +54,10 @@ fi
 echo "Probing sidecar at $SIDECAR_URL/health ..."
 for i in {1..18}; do
   http_code=$(curl -s -o /tmp/sidecar_health.json -w "%{http_code}" --max-time 5 "$SIDECAR_URL/health" || echo "000")
-  if [[ "$http_code" == "200" ]] && grep -q '"ready"\s*:\s*true' /tmp/sidecar_health.json 2>/dev/null; then
+  # Accept either the new schema ("ready":true) or the current sidecar schema
+  # ("ok":true,"model_loaded":true).
+  if [[ "$http_code" == "200" ]] && \
+     grep -qE '"(ready|model_loaded)"\s*:\s*true' /tmp/sidecar_health.json 2>/dev/null; then
     echo "Sidecar OK ($http_code): $(cat /tmp/sidecar_health.json)"
     break
   fi
