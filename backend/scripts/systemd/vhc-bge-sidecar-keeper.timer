@@ -1,0 +1,14 @@
+[Unit]
+Description=VHC BGE Sidecar keeper (watchdog every 30 minutes)
+After=network-online.target
+
+[Timer]
+# Run shortly after EC2 boot (06:30 IST = 01:00 UTC) plus every 30 minutes
+# while the box is up. Idempotent: it only acts if the sidecar is unhealthy.
+OnBootSec=2min
+OnUnitActiveSec=30min
+Persistent=true
+Unit=vhc-bge-sidecar-keeper.service
+
+[Install]
+WantedBy=timers.target

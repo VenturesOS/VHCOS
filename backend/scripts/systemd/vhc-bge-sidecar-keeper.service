@@ -1,0 +1,17 @@
+[Unit]
+Description=VHC BGE Sidecar keeper (auto-restart on RunPod)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/vhc-platform/backend
+ExecStart=/home/ubuntu/vhc-platform/backend/scripts/sidecar_keeper.sh
+TimeoutStartSec=5m
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=VHC BGE embedding nightly top-up
+After=network-online.target
+
+[Timer]
+# 22:00 IST = 16:30 UTC (well before EC2 stops at 00:30 IST / 19:00 UTC)
+OnCalendar=Mon..Sat *-*-* 16:30:00 UTC
+# If the box was off when the schedule fired (rare), run on next boot
+Persistent=true
+# Light jitter so we don't all start exactly at the same second
+RandomizedDelaySec=60
+Unit=vhc-bge-backfill.service
+
+[Install]
+WantedBy=timers.target

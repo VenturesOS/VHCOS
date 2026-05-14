@@ -174,3 +174,23 @@ User complaint: Advanced Search, AI Search, and Autocomplete returned empty / in
 - (P2) Drop unused Mongo indexes after 7-day uptime audit.
 - (P3) Email template management; auto-persist BGE sidecar in unified vLLM Docker image.
 
+
+
+
+## Phase 55.1 — BGE Backfill + Sidecar Auto-Persistence (2026-02-14)
+
+Ships the deployment kit to bring embedding coverage from 1.4% → 100% and eliminate the manual daily sidecar startup chore. See `/app/memory/PHASE55_BGE_BACKFILL_RUNBOOK.md` for the full step-by-step.
+
+### Added files (in repo, copy to EC2 per runbook)
+- `backend/scripts/run_bge_backfill.sh` — wrapper: probes sidecar health, runs `backfill_talent_graph.py` with `--concurrency 16 --fast-summary --skip-cold-days 0`. Supports `--full` (first run) and `--incremental` (nightly).
+- `backend/scripts/sidecar_keeper.sh` — SSH-based watchdog that (re)starts `embed_service.py` on the RunPod pod when health probe fails. Idempotent.
+- `backend/scripts/systemd/vhc-bge-backfill.{service,timer}` — Nightly incremental top-up at **22:00 IST (16:30 UTC)** Mon–Sat, before EC2 stops at 00:30 IST.
+- `backend/scripts/systemd/vhc-bge-sidecar-keeper.{service,timer}` — Fires 2 min after EC2 boot + every 30 min. Idempotent — no-op when sidecar is healthy.
+
+### One-time SSH setup (RunPod ↔ EC2)
+Required for the keeper to be able to restart the sidecar remotely. Generate an ed25519 key on EC2, register it with the RunPod pod, add a `Host runpod-bge` alias in `~/.ssh/config`. Full steps in runbook §3.1.
+
+### Outcomes after deployment
+- Semantic / AI search becomes the **primary** path; keyword fallback only fires for genuinely-unindexable text.
+- Daily manual paste-1-liner for sidecar startup is eliminated.
+- Newly captured candidates are auto-embedded within ≤24h (nightly timer).
