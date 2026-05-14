@@ -270,8 +270,8 @@ async def run_deferred_init(app):
             await run_daily_digest(_db)
 
         reports_scheduler = AsyncIOScheduler()
-        # Team digest at 18:00 IST = 12:30 UTC — 30 min before email reports
-        reports_scheduler.add_job(_run_team_digest, 'cron', hour=12, minute=30, id='daily_team_digest')
+        # Team digest at 18:29 IST = 12:59 UTC — 1 min before email reports
+        reports_scheduler.add_job(_run_team_digest, 'cron', hour=12, minute=59, id='daily_team_digest')
         # 18:30 IST = 13:00 UTC (APScheduler default timezone is UTC)
         reports_scheduler.add_job(_run_daily, 'cron', hour=13, minute=0, id='daily_recruiter_report')
         # 09:00 IST Monday = 03:30 UTC Monday
@@ -279,7 +279,7 @@ async def run_deferred_init(app):
         reports_scheduler.start()
         app.state.reports_scheduler = reports_scheduler
         # Use WARNING level so it surfaces in gunicorn logs alongside other schedulers
-        logging.warning("[ReportsScheduler] Team digest (18:00 IST) + Daily (18:30 IST) + Weekly (Mon 09:00 IST) jobs started")
+        logging.warning("[ReportsScheduler] Team digest (18:29 IST) + Daily (18:30 IST) + Weekly (Mon 09:00 IST) jobs started")
         for j in reports_scheduler.get_jobs():
             logging.warning(f"[ReportsScheduler] Job: {j.id} | next_run={j.next_run_time}")
     except Exception as e:
