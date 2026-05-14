@@ -494,6 +494,10 @@ async def find_candidates_by_text(
 
     ranked = _hybrid_rerank(pool, query, limit)
     await _enrich_with_candidate_bank(db, ranked)
+    # Tag vector hits so the UI / API consumers can distinguish them from
+    # the keyword fallback top-up below.
+    for r in ranked:
+        r.setdefault("match_type", "vector")
 
     # Top-up with keyword fallback so users always see a usable list even
     # when embedding coverage is sparse.

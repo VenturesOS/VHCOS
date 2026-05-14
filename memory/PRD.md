@@ -130,3 +130,47 @@ See `/app/memory/test_credentials.md`.
 - `/app/memory/PHASE54_PART16_NIGHTLY_OFF_DEPLOY.md`
 - `/app/memory/EC2_DOWNGRADE_PLAN_A1.md`
 - `/app/backend/scripts/sec04_purge_deactivated_sessions.py` (one-time)
+
+
+## Phase 55 — Search Quality Last Milestone (2026-02-14)
+
+User complaint: Advanced Search, AI Search, and Autocomplete returned empty / inaccurate results. Root cause: backend filters were querying the wrong canonical fields while 87–99% of real candidate data lives in alias fields. Embedding coverage was <2% so semantic search missed almost everything.
+
+### Batch A — Advanced Search filters (`/app/backend/routes/candidates.py`)
+- **Company filter** now matches `current_employer` (87.4% coverage) in addition to `current_company` / `company`. Was returning 0; now returns thousands. *Verified: "TE Connectivity" → 28 candidates.*
+- **Industry filter** matches `smart_tags` first (broad bucket aligned to the dropdown labels) with a loose-token fallback on the granular `industry` field. *Verified: "IT/Software" → 54,127 vs 10 before.*
+- **Has Resume** filter now unions `cv_attached:true` and `has_resume:true` booleans alongside `resume_url/path/latex`. *Verified: 24,591 candidates vs ~0 before.*
+- **Notice period** uses regex substring (case-insensitive) instead of exact equality. *Verified: "immediate" → 1,887 results.*
+- **has_phone / has_email** reject `"hidden"`, `"Not Available"`, `"N/A"` placeholders.
+
+### Batch B — AI Search quality (`services/ai_search.py`, `routes/ai_search.py`)
+- Strip ```json markdown fences from LLM output (root cause of "AI could not parse the search prompt" errors).
+- Drop hallucinated numeric constraints when the prompt has no digits — "experienced Java in Bangalore" no longer extracts `min_experience` from an adjective.
+- `build_mongo_query` for industry now uses `smart_tags` first.
+- Route sorts by `created_at` desc (fresh data first) and auto-relaxes (drops notice / CTC / stability) when strict query returns 0 — sets `relaxed:true` in response.
+
+### Batch C — Suggestions + Semantic fallback
+- `autocomplete_suggestions` now includes the **industry** field (new) and uses substring (not strict `^prefix`) match.
+- `AutocompleteInput.jsx` adds `industry` to TYPE_COLORS.
+- `find_candidates_by_text` (semantic search) **tops up** with a keyword + smart-tag fallback over `candidate_bank` when the vector pool is sparse (only ~1.4% of the 1.23 L bank has embeddings). Results are tagged `match_type: 'vector' | 'keyword'`.
+
+### Verification
+- Backend regression suite at `/app/backend/tests/test_search_fixes.py` → **15/15 PASS**.
+- Frontend Playwright via testing agent: keywords AC, IT/Software filter, Company=Wipro (614 hits), Smart Re-rank (50/200 candidates @ AUC 0.7211) — all PASS.
+- LTR sourcing bundle confirmed active (not graceful-fallback path).
+
+### Files touched
+- `backend/routes/candidates.py` (list_candidates filter section, autocomplete_suggestions)
+- `backend/routes/ai_search.py` (sort + relax)
+- `backend/services/ai_search.py` (json fence strip, sanitiser, industry smart_tag preference)
+- `backend/services/talent_graph_service.py` (`_keyword_fallback_search`, vector match_type tag)
+- `frontend/src/components/shared/AutocompleteInput.jsx`
+- `frontend/src/pages/shared/AdvancedSearchPage.jsx` (unique result keys)
+
+### Pending / Future
+- (P0, blocked) WhatsApp `team_daily_digest_v1` Meta template approval + token rotation.
+- (P1) Run BGE backfill on full candidate_bank (~5 hr GPU job) to push embedding coverage from 1.4% → 100% so semantic search is the primary path and fallback is rare.
+- (P2) Wire cross-encoder reranker (deployed on sidecar) into match scoring.
+- (P2) Drop unused Mongo indexes after 7-day uptime audit.
+- (P3) Email template management; auto-persist BGE sidecar in unified vLLM Docker image.
+
