@@ -121,22 +121,32 @@ async def send_template_message(
     template_name: Optional[str] = None,
     language: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """POST one template message. Returns dict with success/error/message_id."""
+    """POST one template message. Returns dict with success/error/message_id.
+
+    If the active template is Meta's built-in `hello_world` (no body
+    placeholders), we send it WITHOUT the components array so Meta accepts
+    it. Useful for end-to-end pipeline smoke tests before the real Utility
+    template lands its approval.
+    """
     token = _env("WHATSAPP_ACCESS_TOKEN")
-    payload = {
+    tname = template_name or _env("WHATSAPP_TEMPLATE_NAME", DEFAULT_TEMPLATE_NAME)
+    lang  = language or _env("WHATSAPP_TEMPLATE_LANG", DEFAULT_TEMPLATE_LANG)
+    payload: Dict[str, Any] = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
         "to": recipient,
         "type": "template",
         "template": {
-            "name": template_name or _env("WHATSAPP_TEMPLATE_NAME", DEFAULT_TEMPLATE_NAME),
-            "language": {"code": language or _env("WHATSAPP_TEMPLATE_LANG", DEFAULT_TEMPLATE_LANG)},
-            "components": [{
-                "type": "body",
-                "parameters": [{"type": "text", "text": p} for p in params],
-            }],
+            "name": tname,
+            "language": {"code": lang},
         },
     }
+    # Only attach body parameters for templates that actually use them.
+    if tname != "hello_world" and params:
+        payload["template"]["components"] = [{
+            "type": "body",
+            "parameters": [{"type": "text", "text": p} for p in params],
+        }]
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     try:
