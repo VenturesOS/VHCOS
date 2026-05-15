@@ -57,6 +57,17 @@ async def health_check():
     }
 
 
+@health_router.get("/api/health/live")
+async def health_live():
+    """Liveness probe — returns 200 if the process is responding.
+    Designed for nginx upstream health checks / AWS ALB target group.
+    Does NOT touch the DB so it stays green during transient Mongo/Redis hiccups
+    and ONLY goes red when the process itself is dead/stuck (the actual scenario
+    nginx must route around). Phase 55.2 hardening (2026-05-14 post-mortem).
+    """
+    return {"status": "alive"}
+
+
 @health_router.get("/api/health/diagnostics")
 async def health_diagnostics():
     """Production diagnostics — shows masked credentials and config sources."""

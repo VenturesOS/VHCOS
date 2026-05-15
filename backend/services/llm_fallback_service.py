@@ -367,6 +367,12 @@ async def _call_runpod_vllm(system_prompt: str, user_prompt: str, temperature: f
             logger.warning(f"[RunPod] Transient {e.response.status_code} — backoff 5s + retry")
             await asyncio.sleep(5)
             return await _call_runpod_vllm(system_prompt, user_prompt, temperature, retry=False, disable_guided=disable_guided, text_mode=text_mode)
+        # Phase 55.2: Cloudflare proxy timeouts (520–524) mean the pod is up
+        # but the model is hung on inference. Open a 30s soft-degraded window
+        # so captures fall back to Anthropic instead of waiting forever.
+        if e.response.status_code in PROXY_TIMEOUT_CODES:
+            logger.warning(f"[RunPod] Cloudflare {e.response.status_code} — pod hung, entering soft-degraded")
+            mark_runpod_soft_degraded()
         return None
     except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError, httpx.ReadTimeout) as e:
         # Network-layer failures are the #1 reason profiles leak from Qwen to
@@ -377,6 +383,11 @@ async def _call_runpod_vllm(system_prompt: str, user_prompt: str, temperature: f
             logger.info("[RunPod] Network-error backoff 5s + retry")
             await asyncio.sleep(5)
             return await _call_runpod_vllm(system_prompt, user_prompt, temperature, retry=False, disable_guided=disable_guided, text_mode=text_mode)
+        # After retry exhaustion, treat repeated ReadTimeout as a hung pod —
+        # open the soft-degraded window so the fallback chain unblocks.
+        if isinstance(e, httpx.ReadTimeout):
+            logger.warning("[RunPod] ReadTimeout after retry — entering soft-degraded")
+            mark_runpod_soft_degraded()
         return None
     except Exception as e:
         logger.error(f"[RunPod] Error: {e}")
@@ -887,6 +898,25 @@ _RUNPOD_PING_OK_TTL = 60.0    # trust "reachable" for 60s
 _RUNPOD_PING_FAIL_TTL = 10.0  # recheck "unreachable" every 10s
 _RUNPOD_PING_TIMEOUT = 4.0    # seconds — fast fail for pod health check
 
+# Soft-degraded state: when the pod responds to /v1/models (TCP-up) but actual
+# inference repeatedly fails with proxy-timeout errors (520–524) or read
+# timeouts, the model is functionally hung even though the health probe
+# passes. In that window we relax the strict-Qwen gate so captures fall
+# back to Anthropic/Emergent and don't hang in the user UI.
+# Phase 55.2 hardening (2026-05-14 post-mortem).
+_RUNPOD_SOFT_DEGRADED_UNTIL = 0.0
+_RUNPOD_SOFT_DEGRADED_TTL   = 30.0   # 30s window after each proxy/timeout
+PROXY_TIMEOUT_CODES         = (520, 521, 522, 523, 524)
+
+
+def mark_runpod_soft_degraded() -> None:
+    """Open a 30s window in which `is_runpod_reachable()` returns False even
+    if /v1/models is TCP-up. Used when a request hits 524 / ReadTimeout."""
+    global _RUNPOD_SOFT_DEGRADED_UNTIL
+    import time as _t
+    _RUNPOD_SOFT_DEGRADED_UNTIL = _t.time() + _RUNPOD_SOFT_DEGRADED_TTL
+    logger.warning(f"[RunPod] Entering soft-degraded mode for {_RUNPOD_SOFT_DEGRADED_TTL:.0f}s — fallback chain re-enabled")
+
 
 async def is_runpod_reachable() -> bool:
     """Lightweight health probe for the RunPod vLLM pod with TTL cache.
@@ -894,10 +924,16 @@ async def is_runpod_reachable() -> bool:
     Returns True when the pod responds to `/v1/models` with any <500 HTTP
     status within 4s. Any network error (ConnectError, ReadTimeout, DNS
     failure, RemoteProtocolError) or 5xx is treated as unreachable.
+
+    Phase 55.2: while the soft-degraded window is open (set by repeated
+    520–524 / ReadTimeout on actual inference) we return False even if
+    /v1/models would succeed, so that captures fall back instead of hanging.
     """
     import time as _t
 
     now = _t.time()
+    if now < _RUNPOD_SOFT_DEGRADED_UNTIL:
+        return False
     if now < _RUNPOD_PING_STATE["ok_until"]:
         return True
     if now < _RUNPOD_PING_STATE["fail_until"]:
