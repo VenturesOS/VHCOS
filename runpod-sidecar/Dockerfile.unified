@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# VHC Unified GPU Image — vLLM (Qwen14B) + BGE Sidecar in a single container
+# Phase 55.2 — Feb 2026
+#
+# This image eliminates the daily-manual chore of starting the BGE sidecar
+# after a RunPod pod restart. Both services come up automatically:
+#   - vLLM serves Qwen/Qwen2.5-14B-Instruct-AWQ on port 8000   (OpenAI-compat)
+#   - embed_service serves BGE bi/cross encoder on port 8001   (custom API)
+#
+# Build & push (locally or via GH Actions):
+#   docker build -f Dockerfile.unified -t ghcr.io/venturesos/vhc-runpod:unified .
+#   docker push ghcr.io/venturesos/vhc-runpod:unified
+#
+# Deploy on RunPod:
+#   1. Edit Pod → "Container Image" → ghcr.io/venturesos/vhc-runpod:unified
+#   2. Expose ports 8000 + 8001 (HTTP)
+#   3. Volume mount /workspace (optional, for HF cache persistence)
+#   4. Restart pod → both services up within ~60 s
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM vllm/vllm-openai:latest
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/opt/hf_cache \
+    TRANSFORMERS_OFFLINE=0 \
+    VHC_VLLM_MODEL=Qwen/Qwen2.5-14B-Instruct-AWQ \
+    VHC_VLLM_MAX_MODEL_LEN=32768 \
+    VHC_VLLM_PORT=8000 \
+    VHC_SIDECAR_PORT=8001
+
+# ── BGE sidecar Python deps (vLLM base already has CUDA + torch) ─────────────
+RUN pip install --no-cache-dir \
+    "fastapi==0.118.0" \
+    "uvicorn[standard]==0.34.0" \
+    "sentence-transformers==3.0.1"
+
+# ── Pre-bake BGE bi-encoder + cross-encoder so cold-start skips HF download ──
+RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; \
+    SentenceTransformer('BAAI/bge-small-en-v1.5'); \
+    CrossEncoder('BAAI/bge-reranker-base')"
+
+# ── Sidecar app ──
+WORKDIR /opt/vhc
+COPY embed_service.py /opt/vhc/embed_service.py
+COPY supervisord.conf /etc/supervisor/conf.d/vhc.conf
+COPY entrypoint.sh /opt/vhc/entrypoint.sh
+RUN chmod +x /opt/vhc/entrypoint.sh
+
+# Install supervisor (lightweight ~3MB)
+RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 8000 8001
+
+# Override vLLM's default CMD with our supervisord-managed entrypoint
+ENTRYPOINT ["/opt/vhc/entrypoint.sh"]

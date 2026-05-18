@@ -79,15 +79,56 @@ def normalize_phone(phone: str) -> Optional[str]:
 def _names_are_similar(name_a: str, name_b: str) -> bool:
     """
     Check if two names likely refer to the same person.
-    Requires FIRST NAMES to match (first significant word in each name).
+
+    Accepts a match if ANY of:
+      - First significant words are identical (e.g. "Rajat Gupta" == "Rajat G.")
+      - At least one significant token (len ≥ 3) overlaps between both names
+        (handles reversed token order: "G Rajat" vs "Rajat Gupta")
+      - difflib SequenceMatcher ratio ≥ 0.70 on normalised strings
+        (handles minor typos: "Rajut Gupta" vs "Rajat Gupta")
+
+    Tightened with these heuristics in Feb-2026 (Phase 55.1) because the
+    previous strict first-token rule was the root cause of the
+    duplicate-records pileup visible in the Dedup tab — captures with
+    matching email but slightly-different name spellings were creating
+    new records instead of merging.
     """
     if not name_a or not name_b:
         return False
-    words_a = [w.lower() for w in name_a.strip().split() if len(w) > 1]
-    words_b = [w.lower() for w in name_b.strip().split() if len(w) > 1]
+    import re as _re_n
+    from difflib import SequenceMatcher as _SM
+
+    # Strip common honorifics + punctuation, lowercase
+    def _clean(s: str) -> str:
+        s = _re_n.sub(r'\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b', ' ', s.lower())
+        s = _re_n.sub(r'[^a-z0-9\s]', ' ', s)
+        return _re_n.sub(r'\s+', ' ', s).strip()
+
+    a_clean = _clean(name_a)
+    b_clean = _clean(name_b)
+    if not a_clean or not b_clean:
+        return False
+
+    words_a = [w for w in a_clean.split() if len(w) > 1]
+    words_b = [w for w in b_clean.split() if len(w) > 1]
     if not words_a or not words_b:
         return False
-    return words_a[0] == words_b[0]
+
+    # Rule 1 — first significant word match (cheap, common case)
+    if words_a[0] == words_b[0]:
+        return True
+
+    # Rule 2 — any 3+-char token shared (handles reversed order)
+    tokens_a = {w for w in words_a if len(w) >= 3}
+    tokens_b = {w for w in words_b if len(w) >= 3}
+    if tokens_a & tokens_b:
+        return True
+
+    # Rule 3 — fuzzy ratio for typos / transliteration drift
+    if _SM(None, a_clean, b_clean).ratio() >= 0.70:
+        return True
+
+    return False
 
 
 # ── Salary / Notice Parsing ──

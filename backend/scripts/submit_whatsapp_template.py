@@ -1,0 +1,218 @@
+"""
+WhatsApp template submission — `team_daily_digest_v1`
+Phase 55.3 — Feb 2026
+
+Submits (or updates / inspects) the Utility template that the daily digest
+service uses to fan-out the 18:00 IST team performance brief.
+
+Why a script? Meta's UI for template management is slow and bulk-creation
+through their dashboard often loses formatting. This script POSTs the exact
+JSON shape our delivery service expects, so the variable map in
+`whatsapp_cloud_service.py:_digest_to_template_params` stays in sync.
+
+Required env:
+    WHATSAPP_ACCESS_TOKEN              (System User PAT with whatsapp_business_management scope)
+    WHATSAPP_BUSINESS_ACCOUNT_ID       (the WABA id — different from PHONE_NUMBER_ID)
+    WHATSAPP_API_VERSION               (default v25.0)
+    WHATSAPP_TEMPLATE_NAME             (default team_daily_digest_v1)
+    WHATSAPP_TEMPLATE_LANG             (default en)
+
+Usage (on EC2):
+    cd /home/ubuntu/vhc-platform/backend
+    source venv/bin/activate
+
+    # 1. List existing templates (sanity check before re-creating)
+    python scripts/submit_whatsapp_template.py --list
+
+    # 2. Submit the team_daily_digest_v1 template for Meta approval
+    python scripts/submit_whatsapp_template.py --submit
+
+    # 3. Check status after a few minutes
+    python scripts/submit_whatsapp_template.py --status
+
+    # 4. Delete + recreate (only when needed, e.g. body text revision)
+    python scripts/submit_whatsapp_template.py --delete
+    python scripts/submit_whatsapp_template.py --submit
+
+Template content matches the 7-param layout in whatsapp_cloud_service:
+    {{1}} pretty_date          - "Mon, 12 May"
+    {{2}} top_activity_score   - "84.3"
+    {{3}} total_captures_today - "127"
+    {{4}} pipeline_points      - "412"
+    {{5}} avg_quality_pct      - "78"
+    {{6}} top_performer        - "Mukta Kumari (84.3 pts)"
+    {{7}} dashboard_url        - "https://app.ventureshrd.com/..."
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+
+import requests
+
+
+def _bootstrap() -> None:
+    here = os.path.dirname(os.path.abspath(__file__))
+    backend_root = os.path.dirname(here)
+    if backend_root not in sys.path:
+        sys.path.insert(0, backend_root)
+
+
+_bootstrap()
+
+try:
+    # Pull .env so this works in the same shell context as the backend.
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+except ImportError:
+    pass
+
+
+GRAPH = "https://graph.facebook.com"
+
+
+def _env(name: str, default: str = "") -> str:
+    v = os.environ.get(name, default)
+    return (v or "").strip()
+
+
+def _required(name: str) -> str:
+    v = _env(name)
+    if not v:
+        print(f"ERROR: missing required env var: {name}", file=sys.stderr)
+        sys.exit(2)
+    return v
+
+
+def _waba_url() -> str:
+    version = _env("WHATSAPP_API_VERSION", "v25.0")
+    waba_id = _required("WHATSAPP_BUSINESS_ACCOUNT_ID")
+    return f"{GRAPH}/{version}/{waba_id}/message_templates"
+
+
+def _auth_headers() -> dict:
+    token = _required("WHATSAPP_ACCESS_TOKEN")
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Template definition — keep in lockstep with _digest_to_template_params
+# in services/whatsapp_cloud_service.py
+# ─────────────────────────────────────────────────────────────────────────────
+TEMPLATE_BODY = (
+    "*VHC Daily Digest — {{1}}*\n\n"
+    " Team activity score: *{{2}}*\n"
+    " Captures today: *{{3}}*\n"
+    " Pipeline points: *{{4}}*\n"
+    " Avg capture quality: *{{5}}%*\n\n"
+    " Top performer: *{{6}}*\n\n"
+    " Open dashboard: {{7}}"
+)
+
+
+def template_payload(name: str, language: str) -> dict:
+    return {
+        "name": name,
+        "language": language,
+        "category": "UTILITY",
+        "components": [
+            {
+                "type": "BODY",
+                "text": TEMPLATE_BODY,
+                "example": {
+                    "body_text": [[
+                        "Mon, 18 May",
+                        "84.3",
+                        "127",
+                        "412",
+                        "78",
+                        "Mukta Kumari (84.3 pts)",
+                        "https://app.ventureshrd.com/admin/dashboard",
+                    ]],
+                },
+            },
+        ],
+    }
+
+
+def submit() -> int:
+    name = _env("WHATSAPP_TEMPLATE_NAME", "team_daily_digest_v1")
+    lang = _env("WHATSAPP_TEMPLATE_LANG", "en")
+    payload = template_payload(name, lang)
+    print(f"[WA-template] POST {name} (lang={lang}) → Meta WABA")
+    r = requests.post(_waba_url(), json=payload, headers=_auth_headers(), timeout=30)
+    print(f"  HTTP {r.status_code}")
+    body = r.json() if r.content else {}
+    print(json.dumps(body, indent=2))
+    return 0 if r.ok else 1
+
+
+def list_templates() -> int:
+    r = requests.get(_waba_url(), headers=_auth_headers(),
+                     params={"limit": 100}, timeout=20)
+    print(f"  HTTP {r.status_code}")
+    body = r.json() if r.content else {}
+    data = body.get("data") or []
+    if not data:
+        print("(no templates)")
+        return 0 if r.ok else 1
+    print(f"Found {len(data)} template(s):")
+    for t in data:
+        print(f"  - {t.get('name'):<32} {t.get('language'):<6} "
+              f"{t.get('status'):<10} cat={t.get('category')}")
+    return 0 if r.ok else 1
+
+
+def status() -> int:
+    name = _env("WHATSAPP_TEMPLATE_NAME", "team_daily_digest_v1")
+    r = requests.get(_waba_url(), headers=_auth_headers(),
+                     params={"name": name}, timeout=20)
+    body = r.json() if r.content else {}
+    data = body.get("data") or []
+    if not data:
+        print(f"No template named '{name}' found.")
+        return 1
+    for t in data:
+        print(f"name={t.get('name')} lang={t.get('language')} "
+              f"status={t.get('status')} category={t.get('category')}")
+        if t.get("status") in ("REJECTED", "PAUSED"):
+            print(f"   reason: {t.get('reason') or t.get('rejected_reason')}")
+    return 0
+
+
+def delete() -> int:
+    name = _env("WHATSAPP_TEMPLATE_NAME", "team_daily_digest_v1")
+    # Meta requires DELETE on the WABA endpoint with `name` query param
+    version = _env("WHATSAPP_API_VERSION", "v25.0")
+    waba_id = _required("WHATSAPP_BUSINESS_ACCOUNT_ID")
+    url = f"{GRAPH}/{version}/{waba_id}/message_templates"
+    r = requests.delete(url, headers=_auth_headers(),
+                        params={"name": name}, timeout=20)
+    print(f"  HTTP {r.status_code} — deleted '{name}'")
+    print(r.text)
+    return 0 if r.ok else 1
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="WhatsApp template management")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--submit", action="store_true", help="POST the template for Meta approval")
+    g.add_argument("--list", action="store_true", help="List all WABA templates")
+    g.add_argument("--status", action="store_true", help="Show status of the configured template")
+    g.add_argument("--delete", action="store_true", help="Delete the configured template (irreversible)")
+    args = p.parse_args()
+    if args.submit:
+        return submit()
+    if args.list:
+        return list_templates()
+    if args.status:
+        return status()
+    if args.delete:
+        return delete()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

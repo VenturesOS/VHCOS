@@ -492,7 +492,12 @@ async def find_candidates_by_text(
             db, qvec, exclude_id=None, limit=fetch_limit, min_score=min_score, with_text=True
         )
 
-    ranked = _hybrid_rerank(pool, query, limit)
+    # Cross-encoder rerank (precision-boost on top-N) — feature-flagged via
+    # CROSS_ENCODER_ENABLED. Falls back to bi-encoder hybrid rerank when the
+    # sidecar is unreachable or disabled.
+    ranked = _cross_encoder_rerank(pool, query, limit) if pool else None
+    if ranked is None:
+        ranked = _hybrid_rerank(pool, query, limit)
     await _enrich_with_candidate_bank(db, ranked)
     # Tag vector hits so the UI / API consumers can distinguish them from
     # the keyword fallback top-up below.
@@ -673,6 +678,62 @@ def _query_keywords(query: str) -> List[str]:
         seen.add(t)
         out.append(t)
     return out
+
+
+def _cross_encoder_rerank(
+    results: List[Dict[str, Any]],
+    query: str,
+    limit: int,
+) -> Optional[List[Dict[str, Any]]]:
+    """Optional precision pass using the BGE cross-encoder on the RunPod sidecar.
+
+    Activated when env `CROSS_ENCODER_ENABLED=true` (default off, behind a
+    feature flag). Only runs when there are ≥4 candidates and the sidecar
+    is reachable. Falls back to None on any failure so the caller can use
+    the cheaper bi-encoder rerank.
+
+    The cross-encoder is a one-time ~5× precision boost on the *top of the
+    cosine pool* — we limit the input batch to MAX_PAIRS to keep the
+    request bounded (≤200ms even on cold GPU).
+    """
+    MAX_PAIRS = 64  # sidecar hard cap is 128; keep room for safety
+    if os.environ.get("CROSS_ENCODER_ENABLED", "false").lower() not in ("1", "true", "yes"):
+        return None
+    if not results or len(results) < 4:
+        return None
+    try:
+        from services.embed_client import rerank_remote, is_remote_enabled
+        if not is_remote_enabled():
+            return None
+        # Build a compact doc string per candidate — same fields as
+        # _hybrid_rerank haystack but joined with spaces.
+        pool = results[:MAX_PAIRS]
+        docs = []
+        for r in pool:
+            doc = " | ".join(filter(None, [
+                (r.get("candidate_name") or "")[:80],
+                (r.get("current_designation") or "")[:80],
+                (r.get("current_employer") or "")[:80],
+                (r.get("current_location") or "")[:60],
+                (r.get("summary") or r.get("source_text") or "")[:600],
+            ]))
+            docs.append(doc.strip() or (r.get("candidate_name") or "n/a"))
+
+        hits = rerank_remote(query=query[:400], documents=docs, top_k=limit)
+        if not hits:
+            return None
+        # Re-order pool by sidecar score; expose score in result for the UI.
+        idx_map = {h["index"]: float(h["score"]) for h in hits}
+        for i, r in enumerate(pool):
+            r["_rerank_score"] = idx_map.get(i, 0.0)
+            r["match_type"] = "cross_encoder"
+        pool.sort(key=lambda r: r.get("_rerank_score") or 0.0, reverse=True)
+        for r in pool:
+            r.pop("source_text", None)
+        return pool[:limit]
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[TalentGraph] cross-encoder rerank failed: {e!s} — falling back")
+        return None
 
 
 def _hybrid_rerank(
