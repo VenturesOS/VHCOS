@@ -64,7 +64,7 @@ profile capture quality improvements.
 ## Pending / next priorities
 
 ### Immediate (P0/P1)
-1. **(P0)** Run `merge_backlog_duplicates.py --apply` on EC2 to clean the 18 current duplicate groups (auto-merge fix above will prevent recurrence).
+1. ~~**(P0)** Run `merge_backlog_duplicates.py --apply` on EC2~~ ✅ **DONE 2026-05-18** — 19 duplicate groups merged, Dedup tab is empty.
 2. **(P1)** Submit `team_daily_digest_v1` template to Meta via the new script (WABA_ID env var needed in `.env`).
 3. **(P1)** Build & push the unified RunPod image; redeploy pod.
 
