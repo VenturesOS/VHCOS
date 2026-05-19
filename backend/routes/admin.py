@@ -5,7 +5,7 @@ Handles user management and admin-only operations.
 import uuid
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, HTTPException, Depends, Query
 
 # Import configuration
@@ -32,6 +32,27 @@ except ImportError:
     DB_NAME = "vhc_talent_os"
 
 logger = logging.getLogger(__name__)
+
+
+def _archive_email(email: str) -> str:
+    """Build an archived form of an email so the original becomes free for
+    re-use by a brand-new account.
+
+    Example
+    -------
+    >>> _archive_email("hr6@vhc.in")
+    '_deact_20260518T134522_hr6@vhc.in'
+
+    The archived form keeps the domain (so existing analytics that group
+    by domain still work) and is unique per second — sufficient since
+    a single email can only be deactivated once per second.
+    """
+    if not email or "@" not in email:
+        return email or ""
+    local, _, domain = email.partition("@")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    return f"_deact_{ts}_{local}@{domain}"
+
 
 
 # Create router for admin endpoints (Zero Trust applied at router level)
@@ -432,17 +453,32 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_role(["
     # Soft delete - set is_active to False instead of hard delete.
     # SEC-04: bump token_version + purge refresh tokens so the user's
     # extension / browser sessions are invalidated immediately.
+    # Phase 55.4 (May 2026): also archive the email so it becomes
+    # available for re-use by a brand-new account.
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "email": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    archived_email = _archive_email(user.get("email") or "")
     result = await db.users.update_one(
         {"id": user_id},
         {
-            "$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()},
+            "$set": {
+                "is_active": False,
+                "deleted_at": datetime.now(timezone.utc).isoformat(),
+                "email": archived_email,
+                "original_email": user.get("email"),
+            },
             "$inc": {"token_version": 1},
         },
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     await db.refresh_tokens.delete_many({"user_id": user_id})
-    return {"message": "User deactivated successfully"}
+    return {
+        "message": "User deactivated successfully",
+        "archived_email": archived_email,
+        "original_email": user.get("email"),
+    }
 
 
 @admin_router.post("/admin/users", response_model=UserResponse)
@@ -528,29 +564,60 @@ async def admin_reset_user_password(user_id: str, reset_data: AdminPasswordReset
 
 @admin_router.post("/admin/users/{user_id}/toggle-status")
 async def admin_toggle_user_status(user_id: str, current_user: dict = Depends(require_role(["admin"]))):
-    """Admin-only endpoint to activate/deactivate a user"""
+    """Admin-only endpoint to activate/deactivate a user.
+
+    Phase 55.4 (May 2026): when DEACTIVATING, the user's email is archived
+    (renamed to `_deact_<timestamp>_<original>`) so it can be re-used by a
+    brand-new account. When REACTIVATING, the original email is restored
+    iff it's still free; otherwise an HTTP 409 is returned so the admin
+    knows to pick a different one.
+    """
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Cannot deactivate own account
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
-    
+
     new_status = not user.get("is_active", True)
-    update_doc = {
-        "$set": {"is_active": new_status, "updated_at": datetime.now(timezone.utc).isoformat()},
+    update_set: Dict[str, Any] = {
+        "is_active": new_status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    # SEC-04: when DEACTIVATING, bump token_version so existing JWTs are
-    # rejected immediately and purge refresh tokens so the extension /
-    # browser can't keep refreshing under the offboarded user.
+    update_doc: Dict[str, Any] = {"$set": update_set}
+
     if not new_status:
+        # DEACTIVATING — archive the current email
+        archived_email = _archive_email(user.get("email") or "")
+        update_set["email"] = archived_email
+        update_set["original_email"] = user.get("email")
+        # SEC-04: bump token_version so existing JWTs are rejected immediately
         update_doc["$inc"] = {"token_version": 1}
+    else:
+        # REACTIVATING — try to restore original_email if free
+        orig = user.get("original_email")
+        if orig:
+            taken = await db.users.find_one({"email": orig, "id": {"$ne": user_id}}, {"_id": 0, "id": 1})
+            if taken:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Cannot reactivate — original email '{orig}' is now used by another "
+                        f"account. Edit this user's email first, then reactivate."
+                    ),
+                )
+            update_set["email"] = orig
+            update_set["original_email"] = None
+
     await db.users.update_one({"id": user_id}, update_doc)
     if not new_status:
         await db.refresh_tokens.delete_many({"user_id": user_id})
 
-    return {"message": f"User {'activated' if new_status else 'deactivated'} successfully", "is_active": new_status}
+    return {
+        "message": f"User {'activated' if new_status else 'deactivated'} successfully",
+        "is_active": new_status,
+    }
 
 
 @admin_router.get("/admin/employers")
