@@ -230,6 +230,78 @@ async def cmd_reset_password(email: str, new_password: str, apply: bool) -> int:
 # ─────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────
+async def cmd_migrate_email(old_email: str, new_email: str, apply: bool) -> int:
+    """Rename a user's primary email (keeps user_id, role, password, all FK
+    records). Useful when shifting an active recruiter onto a different slot.
+
+    Both emails are normalized. If `new_email` is currently held by ANOTHER
+    user (active or inactive), the command refuses unless that account is
+    deactivated and its email is already archived.
+    """
+    old_email = _normalize(old_email)
+    new_email = _normalize(new_email)
+    if old_email == new_email:
+        print(f"ERROR: old_email and new_email are identical ({old_email})")
+        return 1
+
+    user = await db.users.find_one(
+        {"email": old_email},
+        {"_id": 0, "id": 1, "name": 1, "role": 1, "is_active": 1},
+    )
+    if not user:
+        print(f"ERROR: no user with email {old_email!r}")
+        return 1
+
+    # Block if the destination email is held by anyone else
+    collision = await db.users.find_one(
+        {"email": new_email, "id": {"$ne": user["id"]}},
+        {"_id": 0, "id": 1, "name": 1, "is_active": 1},
+    )
+    if collision:
+        if collision.get("is_active", True):
+            print(
+                f"ERROR: destination {new_email!r} is held by ACTIVE user "
+                f"{collision.get('name')!r}. Deactivate first."
+            )
+        else:
+            print(
+                f"ERROR: destination {new_email!r} is held by INACTIVE user "
+                f"{collision.get('name')!r} (email not archived yet). "
+                f"Run `--archive-deactivated --apply` first."
+            )
+        return 1
+
+    print(
+        f"MIGRATE  {user.get('name')!r} ({user.get('role')})  "
+        f"{old_email}  →  {new_email}   "
+        f"[active={user.get('is_active', True)}]"
+    )
+    if not apply:
+        print("Dry run — re-run with --apply to commit.")
+        return 0
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {
+                "email": new_email,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "$push": {
+                "email_history": {
+                    "from": old_email,
+                    "to": new_email,
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "by": "admin_user_ops_script",
+                }
+            },
+        },
+    )
+    print(f"OK — user {user.get('name')!r} now logs in with {new_email}.")
+    print(f"  (all {user.get('role')} records stay attached via user_id; no FK rewrites needed)")
+    return 0
+
+
 async def main(args: argparse.Namespace) -> int:
     initialize_db()
 
@@ -243,6 +315,9 @@ async def main(args: argparse.Namespace) -> int:
     if args.reset_password:
         email, new_password = args.reset_password
         return await cmd_reset_password(email, new_password, args.apply)
+    if args.migrate_email:
+        old_email, new_email = args.migrate_email
+        return await cmd_migrate_email(old_email, new_email, args.apply)
     print("No command. See --help.")
     return 2
 
@@ -271,6 +346,12 @@ def parse_args() -> argparse.Namespace:
         nargs=2,
         metavar=("EMAIL", "NEW_PASSWORD"),
         help="Reset password and reactivate a user",
+    )
+    g.add_argument(
+        "--migrate-email",
+        nargs=2,
+        metavar=("OLD_EMAIL", "NEW_EMAIL"),
+        help="Rename a user's email (keeps user_id and all FK records)",
     )
     p.add_argument(
         "--role",
