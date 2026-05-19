@@ -620,6 +620,88 @@ async def admin_toggle_user_status(user_id: str, current_user: dict = Depends(re
     }
 
 
+@admin_router.post("/admin/users/{user_id}/migrate-email")
+async def admin_migrate_user_email(
+    user_id: str,
+    payload: dict,
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Rename a user's primary email — keeps user_id, role, password, and
+    all FK records (applications, captures, mandates, etc.) intact.
+
+    Phase 55.4 (May 2026): mirrors the CLI helper in
+    `backend/scripts/admin_user_ops.py:cmd_migrate_email`.
+
+    Request body: `{ "new_email": "new@vhc.in" }`
+
+    Refuses if the destination email is already held by another user.
+    Archived (`_deact_…`) collisions are surfaced with a clear hint so the
+    admin can run the archive-deactivated backfill first.
+    """
+    new_email = normalize_email((payload or {}).get("new_email") or "")
+    if not new_email or "@" not in new_email:
+        raise HTTPException(status_code=400, detail="Invalid new_email")
+
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "email": 1, "name": 1, "role": 1, "is_active": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    old_email = user.get("email") or ""
+    if normalize_email(old_email) == new_email:
+        raise HTTPException(status_code=400, detail="new_email is identical to current email")
+
+    collision = await db.users.find_one(
+        {"email": new_email, "id": {"$ne": user_id}},
+        {"_id": 0, "id": 1, "name": 1, "is_active": 1},
+    )
+    if collision:
+        if collision.get("is_active", True):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Destination '{new_email}' is held by ACTIVE user "
+                    f"'{collision.get('name')}'. Deactivate that user first."
+                ),
+            )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Destination '{new_email}' is held by an inactive user "
+                f"'{collision.get('name')}' whose email hasn't been archived yet. "
+                f"Toggling that user from active→inactive once more will archive it."
+            ),
+        )
+
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "email": new_email,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "$push": {
+                "email_history": {
+                    "from": old_email,
+                    "to": new_email,
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "by": current_user.get("id"),
+                    "by_email": current_user.get("email"),
+                }
+            },
+        },
+    )
+    logger.info(
+        "[USER_MIGRATE_EMAIL] env=%s db=%s id=%s %s -> %s by=%s",
+        ENV_NAME, DB_NAME, user_id, old_email, new_email, current_user.get("email"),
+    )
+    return {
+        "message": f"User '{user.get('name')}' email migrated to {new_email}.",
+        "user_id": user_id,
+        "old_email": old_email,
+        "new_email": new_email,
+    }
+
+
 @admin_router.get("/admin/employers")
 async def get_employers_list(current_user: dict = Depends(require_role(["admin"]))):
     """Get list of all employers for recruiter assignment"""

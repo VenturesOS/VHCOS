@@ -137,6 +137,7 @@ export const userAPI = {
   create: (data) => api.post('/admin/users', data),
   resetPassword: (id, newPassword) => api.post(`/admin/users/${id}/reset-password`, { new_password: newPassword }),
   toggleStatus: (id) => api.post(`/admin/users/${id}/toggle-status`),
+  migrateEmail: (id, newEmail) => api.post(`/admin/users/${id}/migrate-email`, { new_email: newEmail }),
   getEmployers: () => api.get('/admin/employers'),
   assignRecruiter: (recruiterId, employerId) => api.post('/admin/assign-recruiter', null, { params: { recruiter_id: recruiterId, employer_id: employerId } }),
   getEmployerCompanies: (employerId) => api.get(`/employers/${employerId}/companies`),

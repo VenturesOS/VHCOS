@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Edit2, Trash2, Users, UserCircle, Plus, Key, UserCheck, Building2, Link, Shield } from 'lucide-react';
+import { Search, Edit2, Trash2, Users, UserCircle, Plus, Key, UserCheck, Building2, Link, Shield, AtSign } from 'lucide-react';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -31,6 +31,10 @@ export default function UsersPage() {
   const [showAMDialog, setShowAMDialog] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [selectedCompanies, setSelectedCompanies] = useState([]);
+
+  // Phase 55.4 — migrate email dialog
+  const [showMigrateDialog, setShowMigrateDialog] = useState(null);
+  const [migrateNewEmail, setMigrateNewEmail] = useState('');
 
   useEffect(() => {
     loadData();
@@ -127,6 +131,27 @@ export default function UsersPage() {
       setNewPassword('');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to reset password');
+    }
+  };
+
+  const handleMigrateEmail = async () => {
+    const trimmed = (migrateNewEmail || '').trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast.error('Enter a valid new email');
+      return;
+    }
+    if (trimmed === (showMigrateDialog?.email || '').toLowerCase()) {
+      toast.error('New email is identical to current email');
+      return;
+    }
+    try {
+      const res = await userAPI.migrateEmail(showMigrateDialog.id, trimmed);
+      toast.success(res.data?.message || 'Email migrated');
+      setShowMigrateDialog(null);
+      setMigrateNewEmail('');
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to migrate email');
     }
   };
 
@@ -361,6 +386,17 @@ export default function UsersPage() {
                         >
                           <Key className="w-4 h-4 text-amber-600" />
                         </Button>
+                        {user.is_active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setShowMigrateDialog(user); setMigrateNewEmail(''); }}
+                            title="Migrate email (rename, keeps all records)"
+                            data-testid={`migrate-email-${user.id}`}
+                          >
+                            <AtSign className="w-4 h-4 text-cyan-600" />
+                          </Button>
+                        )}
                         {user.role === 'recruiter' && (
                           <>
                             <Button
@@ -580,6 +616,46 @@ export default function UsersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowResetPasswordDialog(null)}>Cancel</Button>
             <Button onClick={handleResetPassword} className="bg-amber-600 hover:bg-amber-700">Reset Password</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Migrate Email Dialog (Phase 55.4) */}
+      <Dialog open={!!showMigrateDialog} onOpenChange={() => setShowMigrateDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading">Migrate Email</DialogTitle>
+            <DialogDescription>
+              Rename <b>{showMigrateDialog?.name}</b>'s login email. All records
+              (mandates, captures, applications, attendance) stay attached — only
+              the email changes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Current email</Label>
+              <Input value={showMigrateDialog?.email || ''} disabled data-testid="migrate-email-current" />
+            </div>
+            <div className="space-y-2">
+              <Label>New email</Label>
+              <Input
+                type="email"
+                value={migrateNewEmail}
+                onChange={(e) => setMigrateNewEmail(e.target.value)}
+                placeholder="e.g. hr20@vhc.in"
+                data-testid="migrate-email-new"
+                autoFocus
+              />
+              <p className="text-xs text-slate-500">
+                The destination email must not be in use by an active account. If
+                it was previously used by a deactivated user, it has already been
+                archived and is free to take.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMigrateDialog(null)} data-testid="migrate-email-cancel">Cancel</Button>
+            <Button onClick={handleMigrateEmail} className="bg-cyan-600 hover:bg-cyan-700" data-testid="migrate-email-submit">Migrate Email</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
