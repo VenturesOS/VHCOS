@@ -102,13 +102,14 @@ def _auth_headers() -> dict:
 # in services/whatsapp_cloud_service.py
 # ─────────────────────────────────────────────────────────────────────────────
 TEMPLATE_BODY = (
-    "*VHC Daily Digest — {{1}}*\n\n"
-    " Team activity score: *{{2}}*\n"
-    " Captures today: *{{3}}*\n"
-    " Pipeline points: *{{4}}*\n"
-    " Avg capture quality: *{{5}}%*\n\n"
-    " Top performer: *{{6}}*\n\n"
-    " Open dashboard: {{7}}"
+    "VHC Daily Digest — {{1}}\n\n"
+    "Team activity score: {{2}}\n"
+    "Captures today: {{3}}\n"
+    "Pipeline points: {{4}}\n"
+    "Avg capture quality: {{5}}%\n\n"
+    "Top performer: {{6}}\n\n"
+    "Open dashboard: {{7}}\n"
+    "— VHC Talent OS"
 )
 
 
