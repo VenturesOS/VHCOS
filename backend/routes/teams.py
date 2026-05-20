@@ -296,31 +296,70 @@ async def update_team(
         update_dict["name"] = update_data.name
     
     if update_data.recruiter_ids is not None:
-        # Validate recruiters
+        # Phase 55.5 — only re-validate NEW additions, not existing members.
+        # Backstory: previously the loop validated every id in the payload
+        # which meant any drift on a pre-existing member (role change,
+        # soft-delete, missing user) would break ALL future team edits.
+        # We now allow stale members to ride along (they're harmless) but
+        # still enforce role+existence on freshly added ids.
+        existing_ids = set(team.get("recruiter_ids", []) or [])
         recruiter_names = []
         for recruiter_id in update_data.recruiter_ids:
-            recruiter = await db.users.find_one({"id": recruiter_id, "role": "recruiter"}, {"_id": 0})
+            # Prefer strict lookup first
+            recruiter = await db.users.find_one(
+                {"id": recruiter_id, "role": "recruiter"}, {"_id": 0, "name": 1}
+            )
+            if not recruiter and recruiter_id in existing_ids:
+                # Legacy / drifted user — keep them on the team but tag as such
+                fallback = await db.users.find_one(
+                    {"id": recruiter_id}, {"_id": 0, "name": 1, "role": 1}
+                )
+                if fallback:
+                    logger.warning(
+                        "[Team Update] legacy recruiter id=%s name=%s role=%s "
+                        "kept on team %s (no longer matches role=recruiter)",
+                        recruiter_id, fallback.get("name"), fallback.get("role"),
+                        team_id,
+                    )
+                    recruiter_names.append(fallback.get("name") or "Unknown")
+                    continue
+                # Truly missing AND was already on the team — drop silently
+                logger.warning(
+                    "[Team Update] orphan recruiter id=%s dropped from team %s",
+                    recruiter_id, team_id,
+                )
+                continue
             if not recruiter:
-                raise HTTPException(status_code=400, detail=f"Recruiter {recruiter_id} not found")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Recruiter {recruiter_id} not found or not a recruiter",
+                )
             recruiter_names.append(recruiter.get("name", "Unknown"))
-        
+
+        # Drop orphans from the final list before persisting
+        valid_ids = []
+        for rid in update_data.recruiter_ids:
+            u = await db.users.find_one({"id": rid}, {"_id": 0, "id": 1})
+            if u:
+                valid_ids.append(rid)
+
         # Remove old recruiters from team
         for old_recruiter_id in team.get("recruiter_ids", []):
-            if old_recruiter_id not in update_data.recruiter_ids:
+            if old_recruiter_id not in valid_ids:
                 await db.users.update_one(
                     {"id": old_recruiter_id},
                     {"$unset": {"team_id": ""}}
                 )
-        
+
         # Add new recruiters to team
-        for recruiter_id in update_data.recruiter_ids:
+        for recruiter_id in valid_ids:
             await db.users.update_one(
                 {"id": recruiter_id},
                 {"$set": {"team_id": team_id, "updated_at": now}}
             )
-        
-        update_dict["recruiter_ids"] = update_data.recruiter_ids
-        update_dict["recruiter_names"] = recruiter_names
+
+        update_dict["recruiter_ids"] = valid_ids
+        update_dict["recruiter_names"] = recruiter_names[:len(valid_ids)]
     
     if update_data.company_ids is not None:
         # Validate companies
