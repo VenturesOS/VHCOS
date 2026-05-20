@@ -251,6 +251,7 @@ export const teamAPI = {
   getById: (id) => api.get(`/teams/${id}`),
   update: (id, data) => api.put(`/teams/${id}`, data),
   delete: (id) => api.delete(`/teams/${id}`),
+  getDuplicateEmployers: () => api.get('/teams/duplicate-employers'),
 };
 
 // Employer Portal APIs (Internal OS Enhancement)

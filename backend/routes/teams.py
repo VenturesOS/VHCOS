@@ -65,11 +65,36 @@ async def create_team(team_data: TeamCreate, current_user: dict = Depends(requir
     - Multiple Companies (client companies the team manages)
     
     AUTO-ATTACH: Companies already assigned to the employer are automatically included.
+
+    Phase 55.5 (May 2026): Hard rule — an employer can lead exactly one
+    active team. Attempts to create a second team for the same employer
+    return HTTP 409 with a hint to either delete the existing team or
+    reuse it. Pre-existing duplicates are surfaced via
+    `GET /api/teams/duplicate-employers`.
     """
     # Validate employer exists and has correct role
     employer = await db.users.find_one({"id": team_data.employer_id, "role": "employer"}, {"_id": 0})
     if not employer:
         raise HTTPException(status_code=404, detail="Employer not found")
+
+    # 1-team-per-employer guardrail
+    existing = await db.teams.find_one(
+        {
+            "employer_id": team_data.employer_id,
+            "$or": [{"status": "active"}, {"status": None}, {"status": {"$exists": False}}],
+        },
+        {"_id": 0, "id": 1, "name": 1},
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Employer '{employer.get('name')}' already leads team "
+                f"'{existing.get('name')}' (id={existing.get('id')}). "
+                f"Each employer can lead only one team — edit the existing team "
+                f"or pick a different employer."
+            ),
+        )
     
     # Validate all recruiters exist and have correct role
     recruiter_names = []
@@ -145,6 +170,55 @@ async def create_team(team_data: TeamCreate, current_user: dict = Depends(requir
     logger.info(f"Team '{team_data.name}' created by {current_user['name']} with {len(merged_company_ids)} companies")
     
     return TeamResponse(**team_doc)
+
+
+@teams_router.get("/teams/duplicate-employers")
+async def get_duplicate_employers(current_user: dict = Depends(require_role(["admin"]))):
+    """Phase 55.5 — list employers who currently lead more than one active
+    team. Surfaces existing duplicates so an admin can clean them up before
+    the create-team 409 guardrail blocks all future create attempts.
+
+    Response shape:
+        {
+          "employers_with_multiple_teams": [
+            {
+              "employer_id": "...",
+              "employer_name": "...",
+              "team_count": 2,
+              "teams": [{ "id": "...", "name": "..." }, ...]
+            }
+          ],
+          "count": 1
+        }
+    """
+    pipe = [
+        {"$match": {"$or": [
+            {"status": "active"},
+            {"status": None},
+            {"status": {"$exists": False}},
+        ]}},
+        {"$group": {
+            "_id": "$employer_id",
+            "team_count": {"$sum": 1},
+            "teams": {"$push": {"id": "$id", "name": "$name"}},
+        }},
+        {"$match": {"team_count": {"$gt": 1}}},
+        {"$sort": {"team_count": -1}},
+    ]
+    rows = await db.teams.aggregate(pipe).to_list(500)
+    out = []
+    for r in rows:
+        emp = await db.users.find_one(
+            {"id": r["_id"]}, {"_id": 0, "name": 1, "email": 1}
+        )
+        out.append({
+            "employer_id": r["_id"],
+            "employer_name": (emp or {}).get("name") or "(unknown)",
+            "employer_email": (emp or {}).get("email"),
+            "team_count": r["team_count"],
+            "teams": r["teams"],
+        })
+    return {"employers_with_multiple_teams": out, "count": len(out)}
 
 
 @teams_router.get("/teams", response_model=List[TeamResponse])

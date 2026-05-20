@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Edit2, Trash2, Users, UserCircle, Plus, Key, UserCheck, Building2, Link, Shield, AtSign } from 'lucide-react';
+import { Search, Edit2, Trash2, Users, UserCircle, Plus, Key, UserCheck, Building2, Shield, AtSign } from 'lucide-react';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -26,8 +26,6 @@ export default function UsersPage() {
   const [createForm, setCreateForm] = useState({ email: '', password: '', name: '', role: 'candidate', phone: '', company_id: '' });
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState(null);
   const [newPassword, setNewPassword] = useState('');
-  const [showAssignDialog, setShowAssignDialog] = useState(null);
-  const [selectedEmployer, setSelectedEmployer] = useState('');
   const [showAMDialog, setShowAMDialog] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [selectedCompanies, setSelectedCompanies] = useState([]);
@@ -155,23 +153,6 @@ export default function UsersPage() {
     }
   };
 
-  const handleAssignRecruiter = async () => {
-    if (!selectedEmployer) {
-      toast.error('Please select an employer');
-      return;
-    }
-    
-    try {
-      await userAPI.assignRecruiter(showAssignDialog.id, selectedEmployer);
-      toast.success('Recruiter assigned to employer');
-      setShowAssignDialog(null);
-      setSelectedEmployer('');
-      loadData();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to assign recruiter');
-    }
-  };
-
   const handleOpenAMDialog = (user) => {
     const existing = (user.assigned_companies || []).map(c => typeof c === 'string' ? c : c.id);
     setSelectedCompanies(existing);
@@ -241,6 +222,20 @@ export default function UsersPage() {
           >
             <Plus className="w-4 h-4 mr-2" /> Create User
           </Button>
+        </div>
+      </div>
+
+      {/* Phase 55.5 — direct admins to the Teams page for recruiter assignment */}
+      <div
+        className="border border-purple-200 bg-purple-50 rounded-lg p-3 text-sm text-purple-900 flex items-center gap-3"
+        data-testid="recruiter-assignment-hint"
+      >
+        <Users className="w-4 h-4 shrink-0" />
+        <div>
+          <b>Assigning a recruiter to an employer / team?</b>
+          {' '}Head over to the <a href="/admin/teams" className="underline font-medium">Teams</a> page —
+          open the team and edit its members. (Account-manager access for recruiters
+          stays on this page via the shield icon.)
         </div>
       </div>
 
@@ -398,26 +393,15 @@ export default function UsersPage() {
                           </Button>
                         )}
                         {user.role === 'recruiter' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setShowAssignDialog(user)}
-                              title="Assign to employer"
-                              data-testid={`assign-${user.id}`}
-                            >
-                              <Link className="w-4 h-4 text-purple-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenAMDialog(user)}
-                              title="Account Manager settings"
-                              data-testid={`am-settings-${user.id}`}
-                            >
-                              <Shield className={`w-4 h-4 ${user.is_account_manager ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            </Button>
-                          </>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenAMDialog(user)}
+                            title="Account Manager settings"
+                            data-testid={`am-settings-${user.id}`}
+                          >
+                            <Shield className={`w-4 h-4 ${user.is_account_manager ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          </Button>
                         )}
                         <Button
                           variant="ghost"
@@ -656,39 +640,6 @@ export default function UsersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowMigrateDialog(null)} data-testid="migrate-email-cancel">Cancel</Button>
             <Button onClick={handleMigrateEmail} className="bg-cyan-600 hover:bg-cyan-700" data-testid="migrate-email-submit">Migrate Email</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Assign Recruiter Dialog */}
-      <Dialog open={!!showAssignDialog} onOpenChange={() => setShowAssignDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-heading">Assign Recruiter to Employer</DialogTitle>
-            <DialogDescription>
-              Link {showAssignDialog?.name} to an employer account
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Select Employer</Label>
-              <Select value={selectedEmployer} onValueChange={setSelectedEmployer}>
-                <SelectTrigger data-testid="assign-employer-select">
-                  <SelectValue placeholder="Choose an employer..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {employers.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAssignDialog(null)}>Cancel</Button>
-            <Button onClick={handleAssignRecruiter} className="bg-purple-600 hover:bg-purple-700">Assign</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

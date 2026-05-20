@@ -19,6 +19,8 @@ export default function TeamsPage() {
   const [recruiters, setRecruiters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Phase 55.5 — surface employers with more than one team
+  const [duplicateEmployers, setDuplicateEmployers] = useState([]);
   
   // Dialog states
   const [showCreate, setShowCreate] = useState(false);
@@ -44,14 +46,16 @@ export default function TeamsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [teamsRes, employersRes, usersRes] = await Promise.all([
+      const [teamsRes, employersRes, usersRes, dupRes] = await Promise.all([
         teamAPI.getAll(),
         userAPI.getEmployers(),
         userAPI.getAll(),
+        teamAPI.getDuplicateEmployers().catch(() => ({ data: { employers_with_multiple_teams: [] } })),
       ]);
       setTeams(teamsRes.data);
       setEmployers(employersRes.data);
       setRecruiters(usersRes.data.filter(u => u.role === 'recruiter'));
+      setDuplicateEmployers(dupRes.data?.employers_with_multiple_teams || []);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -218,7 +222,38 @@ export default function TeamsPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Phase 55.5 — duplicate-employer audit banner */}
+      {duplicateEmployers.length > 0 && (
+        <div
+          className="border border-amber-300 bg-amber-50 rounded-lg p-4"
+          data-testid="duplicate-employers-warning"
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold text-amber-900">
+                {duplicateEmployers.length} employer{duplicateEmployers.length === 1 ? '' : 's'} currently lead{duplicateEmployers.length === 1 ? 's' : ''} more than one team
+              </div>
+              <p className="text-sm text-amber-800 mt-1">
+                The new rule is <b>one team per employer</b>. New attempts to add a
+                second team are blocked. Clean up the duplicates below by merging
+                recruiters/companies into the canonical team, then deleting the spares.
+              </p>
+              <ul className="mt-2 space-y-1 text-sm text-amber-900">
+                {duplicateEmployers.map((d) => (
+                  <li
+                    key={d.employer_id}
+                    data-testid={`duplicate-employer-${d.employer_id}`}
+                  >
+                    <b>{d.employer_name}</b> ({d.employer_email}) — {d.team_count} teams:{' '}
+                    {d.teams.map((t) => t.name).join(', ')}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border-slate-200">
           <CardContent className="p-4 flex items-center gap-3">
