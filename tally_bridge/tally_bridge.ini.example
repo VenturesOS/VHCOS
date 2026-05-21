@@ -1,0 +1,29 @@
+[vhc]
+# Replace with your production VHC URL.
+base_url     = https://ventureshrd.com
+
+# Paste the value of TALLY_BRIDGE_TOKEN from server backend/.env here.
+bridge_token = PASTE_TOKEN_HERE
+
+# How often to poll VHC for new bills (seconds). 300 = every 5 minutes.
+poll_seconds = 300
+
+[tally]
+# Tally's HTTP XML gateway. Default port is 9000. If you changed it
+# under Gateway of Tally → F12 → Advanced Configuration → ODBC/HTTP,
+# update the port below.
+gateway_url = http://127.0.0.1:9000
+
+# MUST exactly match the company name as Tally shows it in the
+# "Company Info" screen. Case-sensitive.
+company     = VENTURE HRD CENTRE PVT LTD
+
+# Per-request timeout to Tally (Sales Voucher imports are usually <2s).
+timeout_sec = 30
+
+[bridge]
+# Log file location. Will be rotated at 2MB, keeping 5 backups.
+log_path    = C:\VHCTallyBridge\bridge.log
+
+# Max bills to fetch per poll. 25 is a sane default.
+batch_size  = 25

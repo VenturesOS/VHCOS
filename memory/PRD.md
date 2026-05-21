@@ -68,14 +68,19 @@ profile capture quality improvements.
 2. ~~**(P1)** Build Bill Generator MVP (PDF + Resend + Qwen LLM body + reminders)~~ ✅ **DONE 2026-05-21** — 11/11 backend tests + frontend smoke passing. See `docs/BILL_GENERATOR_RUNBOOK.md`.
 3. ~~**(P1)** Auto-deploy script to stop the "I pulled but UI is stale" pain~~ ✅ **DONE 2026-02 (current session)** — `scripts/deploy.sh` + `scripts/post-merge.hook`. See `docs/DEPLOY_RUNBOOK.md`.
 4. ~~**(P2)** Auto-draft Bill on candidate `hired`/`joined`~~ ✅ **DONE 2026-02 (current session)** — `services/bill_auto_draft.py`, idempotent via `line_items.application_id`. 20/20 unit tests passing.
-5. **(P1)** Submit `team_daily_digest_v1` template to Meta via the new script (WABA_ID env var needed in `.env`).
-6. **(P1)** Build & push the unified RunPod image; redeploy pod.
+5. ~~**(P2)** Reactivate user `hr8@vhc.in`~~ ✅ **DONE** (confirmed by user).
+6. ~~**(P1)** Tally integration — one-way push VHC bills → Tally Sales Vouchers~~ ✅ **DONE 2026-02 (current session)** — `routes/tally_bridge.py` + `services/tally_xml.py` + Windows `tally_bridge/tally_bridge.py` agent. 24/24 e2e tests passing. See `docs/TALLY_BRIDGE_RUNBOOK.md`.
+7. ⏸ **(P1, HELD)** Submit `team_daily_digest_v1` template to Meta — paused per user direction.
+8. ⏸ **(P1, HELD)** Build & push unified RunPod image — paused per user direction.
 
 ### Near-term (P2)
-7. Drop unused MongoDB indexes (audit after 7-day cluster uptime).
-8. Flip `CROSS_ENCODER_ENABLED=true` in `.env` after smoke-testing reranker latency on prod traffic.
-9. Reactivate user `hr8@vhc.in` (script exists, awaiting user execution).
-10. Public deep-link page for rich WhatsApp daily digest (v1 template `View full digest` link).
+9. Drop unused MongoDB indexes (audit after 7-day cluster uptime).
+10. Flip `CROSS_ENCODER_ENABLED=true` in `.env` after smoke-testing reranker latency on prod traffic.
+11. ⏸ **(P2, HELD)** Public deep-link page for rich WhatsApp daily digest — paused per user direction.
+12. Marketing site deployment (staged for review in `/app/marketing_review/`, pending green-light).
+13. **(P2)** Tally Phase 55.9 — Bulk client-ledger sync (push VHC companies → Tally ledgers automatically).
+14. **(P2)** Tally Phase 55.10 — Pull payment receipts from Tally → auto `mark-paid` on VHC bills.
+15. **(P2)** Admin UI: "Tally Bridge Health" page (pending count, last sync, recent errors).
 
 ### Future (P3)
 11. Email Template Management UI.

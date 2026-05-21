@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-TBQDQB77');</script>
+<!-- End Google Tag Manager -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <!-- Performance Optimization -->
+  <link rel="dns-prefetch" href="//images.unsplash.com">
+  <link rel="preconnect" href="https://images.unsplash.com">
+  
+  <!-- SEO Meta Tags -->
+  <title>About Us - India's Leading Industrial Recruitment Firm | Ventures HRD Centre Pvt Ltd</title>
+  <meta name="description" content="25+ years of industrial recruitment expertise. Learn about Ventures HRD Centre's leadership team, our 6 offices across India, and how we've placed 10,000+ professionals in manufacturing & OEM sectors.">
+  <meta name="keywords" content="about Ventures HRD, industrial recruitment company India, manufacturing hiring firm, executive search company, recruitment agency history, Balbir Singh Yadav">
+  <meta name="author" content="Ventures HRD Centre Pvt Ltd">
+  <link rel="canonical" href="https://ventureshrd.com/about">
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="About Ventures HRD Centre - India's Industrial Recruitment Authority">
+  <meta property="og:description" content="25+ years of industrial recruitment expertise with 6 offices across India.">
+  <meta property="og:url" content="https://ventureshrd.com/about">
+
+  <!-- Schema.org Markup (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    "name": "About Ventures HRD Centre Pvt Ltd",
+    "description": "Learn about India's leading industrial recruitment firm with 25+ years of experience.",
+    "url": "https://ventureshrd.com/about",
+    "mainEntity": {
+      "@type": "Organization",
+      "name": "Ventures HRD Centre Pvt Ltd",
+      "foundingDate": "1999-07-05",
+      "founders": [
+        {"@type": "Person", "name": "Balbir Singh Yadav", "jobTitle": "Founder & CEO"}
+      ],
+      "numberOfEmployees": {"@type": "QuantitativeValue", "minValue": 100, "maxValue": 150},
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "D-12/79,80 Second Floor, Sector-8, Rohini",
+        "addressLocality": "New Delhi",
+        "postalCode": "110085",
+        "addressCountry": "IN"
+      }
+    }
+  }
+  </script>
+
+  <!-- BreadcrumbList Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://ventureshrd.com/"},
+      {"@type": "ListItem", "position": 2, "name": "About Us", "item": "https://ventureshrd.com/about"}
+    ]
+  }
+  </script>
+
+  <link rel="stylesheet" href="/website/style.css">
+
+  <style>
+    /* Slider Styles */
+    .team-slider-container {
+      position: relative;
+      overflow: hidden;
+      padding: 0 60px;
+    }
+    .team-slider-wrapper {
+      overflow: hidden;
+    }
+    .team-slider {
+      display: flex;
+      transition: transform 0.5s ease-in-out;
+    }
+    .team-card {
+      width: 50%;
+      flex-shrink: 0;
+      padding: 0 15px;
+      box-sizing: border-box;
+    }
+    .team-card-inner {
+      background: #f9fafb;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      height: 400px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Responsive: 1 card per view on mobile */
+    @media (max-width: 768px) {
+      .team-card { width: 100%; padding: 0 8px; }
+      .team-card-inner { height: 420px; }
+      .team-slider-container { padding: 0 40px; }
+      .slider-btn { width: 36px; height: 36px; font-size: 20px; }
+      .team-info { padding: 16px; }
+      .team-info h3 { font-size: 18px !important; }
+      .team-info p { font-size: 13px !important; }
+    }
+    .team-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    .team-img.balbir-img {
+      object-position: center 20%;
+    }
+    .team-img.manorama-img {
+      object-position: center 30%;
+    }
+    .team-info {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      z-index: 2;
+    }
+    .team-name-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .linkedin-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: #0077b5;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: background 0.3s ease;
+    }
+    .linkedin-btn:hover {
+      background: #005885;
+    }
+    .linkedin-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: white;
+    }
+    .slider-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #9acd32;
+      border: none;
+      cursor: pointer;
+      font-size: 24px;
+      font-weight: bold;
+      color: #111827;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: all 0.3s ease;
+    }
+    .slider-btn:hover {
+      background: #8bc22a;
+      transform: translateY(-50%) scale(1.05);
+    }
+    .slider-btn.prev { left: 0; }
+    .slider-btn.next { right: 0; }
+    .slider-dots {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 32px;
+    }
+    .slider-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #d1d5db;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .slider-dot.active {
+      background: #9acd32;
+      transform: scale(1.2);
+    }
+    
+    /* Login Dropdown Styles */
+    .login-dropdown { position: relative; }
+    .login-btn { 
+      background: #111827; 
+      color: white; 
+      padding: 10px 20px; 
+      border-radius: 6px; 
+      font-weight: 600; 
+      cursor: pointer; 
+      border: none; 
+      display: flex; 
+      align-items: center; 
+      gap: 8px;
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .login-btn:hover { background: #1f2937; }
+    .dropdown-menu { 
+      display: none; 
+      position: absolute; 
+      top: 100%; 
+      right: 0; 
+      background: white; 
+      border-radius: 8px; 
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+      min-width: 200px; 
+      margin-top: 8px; 
+      overflow: hidden;
+      z-index: 200;
+    }
+    .dropdown-menu.show { display: block; }
+    .dropdown-menu a { 
+      display: block; 
+      padding: 14px 20px; 
+      color: #111827; 
+      text-decoration: none; 
+      font-weight: 500; 
+      border-bottom: 1px solid #f0f0f0; 
+    }
+    .dropdown-menu a:last-child { border-bottom: none; }
+    .dropdown-menu a:hover { background: #f0fdf4; color: #9acd32; }
+    .dropdown-menu .role-icon { margin-right: 10px; }
+
+    /* ===== Mobile Responsive Overrides ===== */
+    @media (max-width: 768px) {
+      .about-hero-section { padding: 60px 16px !important; }
+      .about-hero-section h1 { font-size: 28px !important; }
+      .about-hero-section p { font-size: 16px !important; }
+      .about-story-section { padding: 48px 16px !important; }
+      .about-story-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+      .about-story-grid h2 { font-size: 28px !important; }
+      .about-story-grid p { font-size: 16px !important; }
+      .about-values-section { padding: 48px 16px !important; }
+      .about-values-section > div > h2 { font-size: 28px !important; margin-bottom: 32px !important; }
+      .about-values-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+      .about-values-grid > div { padding: 24px !important; }
+      .about-team-section { padding: 48px 16px !important; }
+      .about-team-section h2 { font-size: 28px !important; }
+      .about-cta-section { padding: 48px 16px !important; }
+      .about-cta-section h2 { font-size: 24px !important; }
+      .about-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
+    }
+    @media (max-width: 480px) {
+      .about-hero-section h1 { font-size: 24px !important; }
+      .about-footer-grid { grid-template-columns: 1fr !important; }
+    }
+    
+    /* Global Switch Styles */
+    .view-switch-container {
+      background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+    .view-switch {
+      display: flex;
+      background: rgba(255,255,255,0.1);
+      border-radius: 30px;
+      padding: 4px;
+    }
+    .view-switch button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 26px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+    .view-switch button.active {
+      background: #9acd32;
+      color: #111827;
+    }
+    .view-switch button:not(.active) {
+      background: transparent;
+      color: white;
+    }
+    .view-switch button:not(.active):hover {
+      background: rgba(255,255,255,0.15);
+    }
+  </style>
+</head>
+<body style="margin:0; font-family:system-ui,-apple-system,sans-serif;">
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TBQDQB77"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
+  <!-- Global View Switch -->
+  <div class="view-switch-container">
+    <div class="view-switch">
+      <button id="btn-employers" class="active" onclick="switchToEmployers()">For Employers</button>
+      <button id="btn-candidates" onclick="switchToCandidates()">For Candidates</button>
+    </div>
+  </div>
+  
+  <header class="header">
+    <a href="/" class="logo-link"><img src="https://customer-assets.emergentagent.com/job_vhc-edit/artifacts/46yye45w_logo.svg" alt="VHC Talent Advisory" class="logo-img"></a>
+    <button class="mobile-menu-toggle" aria-label="Toggle menu">&#9776;</button>
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="/about" class="nav-active" data-role-hide="candidate">About</a>
+      <a href="/services" data-role-hide="candidate">Services</a>
+      <a href="/industries">Industries</a>
+      <a href="/careers" data-role-hide="employer">Career</a>
+      <a href="/contact" data-role-hide="candidate">Contact</a>
+      <a href="/global-hiring" data-role-hide="candidate">Global Hiring</a>
+      <a href="/login?redirect=/candidate/resume-builder" data-role-hide="employer">Resume Builder</a>
+      <div class="login-dropdown">
+        <button class="login-btn" onclick="toggleLoginDropdown()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Login
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="dropdown-menu" id="loginDropdown">
+          <a href="/login?role=employer"><span class="role-icon">🏢</span> Employer Login</a>
+          <a href="/login?role=recruiter"><span class="role-icon">👔</span> Recruiter Login</a>
+          <a href="/login?role=candidate"><span class="role-icon">👤</span> Candidate Login</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <section class="about-hero-section" style="background:linear-gradient(rgba(17,24,39,0.85), rgba(17,24,39,0.85)),url('https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1600&q=80'); background-size:cover; background-position:center; padding:100px 24px; text-align:center; color:white;">
+    <h1 style="font-size:56px; font-weight:800; margin-bottom:16px;">About Ventures HRD Centre Pvt Ltd</h1>
+    <p style="font-size:20px; max-width:800px; margin:0 auto; color:#FFFFFF;">Building exceptional teams through strategic talent solutions for over 25 years</p>
+  </section>
+
+  <section class="about-story-section" style="padding:80px 24px;">
+    <div class="about-story-grid" style="max-width:1280px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:center;">
+      <div class="reveal-left">
+        <h2 style="font-size:42px; font-weight:800; margin-bottom:24px; color:#111827;">Our Story</h2>
+        <p style="font-size:18px; line-height:1.8; color:#4b5563; margin-bottom:20px;">Founded in 1999, Ventures HRD Centre Pvt Ltd has grown from a regional recruitment firm into a leading bi-continental talent partner serving businesses across India and globally.</p>
+        <p style="font-size:18px; line-height:1.8; color:#4b5563; margin-bottom:20px;">Our journey began with a simple yet powerful mission: to connect exceptional talent with organizations that value their potential. Today, we have placed thousands of professionals in leadership and specialist roles across diverse industries.</p>
+        <p style="font-size:18px; line-height:1.8; color:#4b5563;">What sets us apart is our deep understanding of both Eastern and Western business cultures, enabling us to facilitate seamless cross-border talent acquisition and provide strategic advisory services that drive organizational success.</p>
+      </div>
+      <div class="reveal-right">
+        <img loading="lazy" src="https://images.unsplash.com/photo-1600880292089-90a7e086ee0c?auto=format&fit=crop&w=800&q=80" alt="Ventures HRD Centre Pvt Ltd team collaboration" style="width:100%; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,0.15);">
+      </div>
+    </div>
+  </section>
+
+  <section class="about-values-section" style="background:#f9fafb; padding:80px 24px;">
+    <div style="max-width:1280px; margin:0 auto;">
+      <h2 style="font-size:42px; font-weight:800; text-align:center; margin-bottom:60px; color:#111827;">Our Core Values</h2>
+      
+      <div class="about-values-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:40px;">
+        
+        <div style="background:white; padding:40px; border-radius:16px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          <div style="font-size:48px; margin-bottom:20px;">🎯</div>
+          <h3 style="font-size:22px; font-weight:700; margin-bottom:12px; color:#111827;">Excellence</h3>
+          <p style="color:#6b7280; line-height:1.7;">We pursue the highest standards in every engagement, delivering rigorous search processes and quality outcomes that exceed client expectations.</p>
+        </div>
+
+        <div style="background:white; padding:40px; border-radius:16px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          <div style="font-size:48px; margin-bottom:20px;">🤝</div>
+          <h3 style="font-size:22px; font-weight:700; margin-bottom:12px; color:#111827;">Integrity</h3>
+          <p style="color:#6b7280; line-height:1.7;">We operate with absolute discretion and ethical rigor. Trust is fundamental to executive search, and we safeguard client and candidate interests at every stage.</p>
+        </div>
+
+        <div style="background:white; padding:40px; border-radius:16px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          <div style="font-size:48px; margin-bottom:20px;">🌍</div>
+          <h3 style="font-size:22px; font-weight:700; margin-bottom:12px; color:#111827;">Global Perspective</h3>
+          <p style="color:#6b7280; line-height:1.7;">We operate across India and globally, combining international search standards with deep local market understanding.</p>
+        </div>
+
+        <div style="background:white; padding:40px; border-radius:16px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          <div style="font-size:48px; margin-bottom:20px;">🔒</div>
+          <h3 style="font-size:22px; font-weight:700; margin-bottom:12px; color:#111827;">Confidentiality</h3>
+          <p style="color:#6b7280; line-height:1.7;">Every engagement is handled with the highest level of discretion. Sensitive information and candidate discussions are protected rigorously.</p>
+        </div>
+
+        <div style="background:white; padding:40px; border-radius:16px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          <div style="font-size:48px; margin-bottom:20px;">💡</div>
+          <h3 style="font-size:22px; font-weight:700; margin-bottom:12px; color:#111827;">Innovation</h3>
+          <p style="color:#6b7280; line-height:1.7;">We continuously refine our search methodologies by integrating market intelligence, research, and technology for better outcomes.</p>
+        </div>
+
+        <div style="background:white; padding:40px; border-radius:16px; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          <div style="font-size:48px; margin-bottom:20px;">❤️</div>
+          <h3 style="font-size:22px; font-weight:700; margin-bottom:12px; color:#111827;">Partnership</h3>
+          <p style="color:#6b7280; line-height:1.7;">We work as long-term partners, not transactional vendors. Every engagement is approached with ownership and accountability.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="about-team-section" style="padding:80px 24px; background:white;">
+    <div style="max-width:1280px; margin:0 auto;">
+      <h2 style="font-size:42px; font-weight:800; text-align:center; margin-bottom:24px; color:#111827;">Leadership Team</h2>
+      <p style="text-align:center; color:#6b7280; font-size:18px; margin-bottom:60px;">Meet the experienced professionals guiding Ventures HRD Centre</p>
+
+      <div class="team-slider-container">
+        <button class="slider-btn prev" onclick="slideTeam(-1)">‹</button>
+        <button class="slider-btn next" onclick="slideTeam(1)">›</button>
+        
+        <div class="team-slider-wrapper">
+          <div class="team-slider" id="teamSlider">
+            
+            <!-- Card 1 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/auheoau7_Gemini_Generated_Image_odbj1nodbj1nodbj.png" alt="Balbir Singh Yadav" class="team-img balbir-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Balbir Singh Yadav</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">Founder & CEO</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/balbir-s-yadav-61957114/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/3rfqqwr9_Gemini_Generated_Image_tfkbmbtfkbmbtfkb.png" alt="Rohit Yadav" class="team-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Rohit Yadav</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">Chief Operations Officer, India</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/rohit-yadav-2573772b3/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/2i8kyw9e_Gemini_Generated_Image_1mfb0x1mfb0x1mfb.png" alt="Siddharth Rao" class="team-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Siddharth Rao</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">Chief Business Officer</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/siddharth-rao-ventureshrd/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/vt64c0h3_Gemini_Generated_Image_j22h36j22h36j22h.png" alt="Manorma Yadav" class="team-img manorama-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Manorma Yadav</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">Group HR, Talent Advisory</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/manorma-y-04889526/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 5 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/hgsrdqgj_Gemini_Generated_Image_rsfvlkrsfvlkrsfv.png" alt="Ajit Yadav" class="team-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Ajit Yadav</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">Business Head, Industrial Hiring</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/ajit-yadav-837bb72b/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 6 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/8q0cls3b_Gemini_Generated_Image_ok0yupok0yupok0y.png" alt="Maneet Siwach" class="team-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Maneet Siwach</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">Business Head, Corporate & R&D</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/maneetsiwach/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 7 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/wdmm0g8z_Gemini_Generated_Image_7bp7sq7bp7sq7bp7.png" alt="Bikash Das" class="team-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Bikash Das</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">VP Business Head, North India</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/bikashdw/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 8 -->
+            <div class="team-card">
+              <div class="team-card-inner">
+                <img loading="lazy" src="https://customer-assets.emergentagent.com/job_talent-portal-22/artifacts/vn2ux9fq_Gemini_Generated_Image_kfud19kfud19kfud.png" alt="Avinash D" class="team-img">
+                <div class="team-info">
+                  <div class="team-name-row">
+                    <div>
+                      <h3 style="font-size:20px; font-weight:700; margin:0 0 4px 0; color:#111827;">Avinash D</h3>
+                      <p style="color:#9acd32; font-weight:600; margin:0; font-size:14px;">VP Business Head, South India</p>
+                    </div>
+                    <a href="https://www.linkedin.com/in/avinash-d-647a3017b/" target="_blank" class="linkedin-btn" title="Connect on LinkedIn">
+                      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="slider-dots" id="sliderDots"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="about-cta-section" style="background:#111827; padding:80px 24px; text-align:center; color:white;">
+    <div style="max-width:800px; margin:0 auto;">
+      <h2 style="font-size:36px; font-weight:800; margin-bottom:20px; color:#FFFFFF;">Ready to Partner with Us?</h2>
+      <p style="font-size:18px; margin-bottom:32px; color:#d1d5db;">Let's discuss how we can support your talent acquisition and advisory needs.</p>
+      <a href="/contact" style="background:#9acd32; color:#111827; padding:14px 32px; border-radius:8px; font-weight:700; text-decoration:none; display:inline-block; font-size:17px;">Get in Touch</a>
+    </div>
+  </section>
+
+  <footer style="background:#111827; color:white; padding:60px 24px 24px;">
+    <div style="max-width:1280px; margin:0 auto;">
+      <div class="about-footer-grid" style="display:grid; grid-template-columns:repeat(4,1fr); gap:48px; margin-bottom:48px;">
+        
+        <div>
+          <h3 style="font-size:20px; font-weight:800; margin-bottom:16px;">VHC Talent Advisory</h3>
+          <p style="color:#9ca3af; line-height:1.6;">Recruitment expertise that delivers exceptional leadership and specialist talent globally.</p>
+        </div>
+        
+        <div>
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:16px;">Quick Links</h4>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <a href="/about" style="color:#9ca3af; text-decoration:none;">About Us</a>
+            <a href="/services" style="color:#9ca3af; text-decoration:none;">Services</a>
+            <a href="/industries" style="color:#9ca3af; text-decoration:none;">Industries</a>
+            <a href="/careers" style="color:#9ca3af; text-decoration:none;">Careers</a>
+          </div>
+        </div>
+        
+        <div>
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:16px;">Contact Us</h4>
+          <div style="color:#FFFFFF; line-height:1.8;">
+            <p>📧 admin@vhc.in</p>
+            <!-- PHONE_PLACEHOLDER: assign new number here -->
+            <p>📍 New Delhi, India</p>
+          </div>
+        </div>
+        
+        <div>
+          <h4 style="font-size:16px; font-weight:700; margin-bottom:16px;">Follow Us</h4>
+          <div style="display:flex; gap:16px;">
+            <a href="#" style="color:#9ca3af; font-size:24px; text-decoration:none;">🔗</a>
+            <a href="#" style="color:#9ca3af; font-size:24px; text-decoration:none;">🐦</a>
+            <a href="#" style="color:#9ca3af; font-size:24px; text-decoration:none;">📘</a>
+            <a href="#" style="color:#9ca3af; font-size:24px; text-decoration:none;">📸</a>
+          </div>
+        </div>
+        
+      </div>
+      
+      <div style="border-top:1px solid #374151; padding-top:24px; text-align:center; color:#FFFFFF;">
+        <p>© 2026 Ventures HRD Centre Pvt Ltd. All rights reserved. | Privacy Policy | Terms of Service</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const slider = document.getElementById('teamSlider');
+    const dotsContainer = document.getElementById('sliderDots');
+    const totalCards = 8;
+    let cardsPerView = window.innerWidth <= 768 ? 1 : 2;
+    let currentSlide = 0;
+    let isTransitioning = false;
+
+    // Recalculate on resize
+    window.addEventListener('resize', function() {
+      const newCPV = window.innerWidth <= 768 ? 1 : 2;
+      if (newCPV !== cardsPerView) {
+        cardsPerView = newCPV;
+        // Reset to slide 0 on resize to avoid broken state
+        currentSlide = 0;
+        // Rebuild clones
+        rebuildClones();
+        goToSlide(0, true);
+      }
+    });
+
+    function rebuildClones() {
+      // Remove existing clones
+      while (slider.children.length > totalCards) {
+        slider.removeChild(slider.lastChild);
+      }
+      // Clone first cardsPerView cards
+      const originalCards = Array.from(slider.children);
+      originalCards.slice(0, cardsPerView).forEach(function(card) {
+        var clone = card.cloneNode(true);
+        slider.appendChild(clone);
+      });
+    }
+
+    // Clone first cardsPerView cards and append to end for infinite loop
+    var originalCards = Array.from(slider.children);
+    originalCards.slice(0, cardsPerView).forEach(function(card) {
+      var clone = card.cloneNode(true);
+      slider.appendChild(clone);
+    });
+
+    // Create dots
+    function createDots() {
+      for (let i = 0; i < totalCards; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'slider-dot' + (i === 0 ? ' active' : '');
+        dot.onclick = () => goToSlide(i);
+        dotsContainer.appendChild(dot);
+      }
+    }
+
+    function updateDots() {
+      const dotIndex = currentSlide % totalCards;
+      document.querySelectorAll('.slider-dot').forEach((dot, i) => {
+        dot.className = 'slider-dot' + (i === dotIndex ? ' active' : '');
+      });
+    }
+
+    function goToSlide(index, instant) {
+      if (isTransitioning && !instant) return;
+
+      currentSlide = index;
+
+      // Calculate the percentage based on card width (100% on mobile, 50% on desktop)
+      var cardWidth = cardsPerView === 1 ? 100 : 50;
+      var percentage = currentSlide * cardWidth;
+
+      if (instant) {
+        slider.style.transition = 'none';
+        slider.style.transform = 'translateX(-' + percentage + '%)';
+        slider.offsetHeight;
+      } else {
+        slider.style.transition = 'transform 0.5s ease-in-out';
+        slider.style.transform = 'translateX(-' + percentage + '%)';
+      }
+
+      updateDots();
+
+      if (currentSlide === totalCards && !instant) {
+        isTransitioning = true;
+        setTimeout(function() {
+          currentSlide = 0;
+          goToSlide(0, true);
+          setTimeout(function() {
+            isTransitioning = false;
+          }, 50);
+        }, 500);
+      }
+    }
+
+    function slideTeam(direction) {
+      if (isTransitioning) return;
+
+      if (direction > 0) {
+        goToSlide(currentSlide + 1);
+      } else {
+        if (currentSlide === 0) {
+          // Jump to the last real slide instantly, then animate to previous
+          currentSlide = totalCards;
+          goToSlide(totalCards, true);
+          setTimeout(() => {
+            goToSlide(totalCards - 1);
+          }, 50);
+        } else {
+          goToSlide(currentSlide - 1);
+        }
+      }
+    }
+
+    // Initialize
+    createDots();
+
+    // Auto-slide every 5 seconds
+    setInterval(() => {
+      slideTeam(1);
+    }, 5000);
+    
+    // Login Dropdown Logic
+    function toggleLoginDropdown() {
+      const dropdown = document.getElementById('loginDropdown');
+      dropdown.classList.toggle('show');
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.login-dropdown')) {
+        const dropdown = document.getElementById('loginDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      }
+    });
+    
+    // View Switch Logic
+    function switchToEmployers() {
+      localStorage.setItem('vhc-view', 'employers');
+      window.location.href = 'Index.html';
+    }
+    
+    function switchToCandidates() {
+      localStorage.setItem('vhc-view', 'candidates');
+      window.location.href = 'Index.html';
+    }
+    
+    // Check and highlight current view on load
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedView = localStorage.getItem('vhc-view');
+      if (savedView === 'candidates') {
+        document.getElementById('btn-employers').classList.remove('active');
+        document.getElementById('btn-candidates').classList.add('active');
+      }
+    });
+  </script>
+
+<script src="/website/mobile-menu.js"></script>
+<script src="/website/nav-role.js"></script>
+<script src="/website/scroll-animations.js"></script>
+</body>
+</html>

@@ -120,6 +120,7 @@ except Exception as e:
 
 bulk_import_router = _safe_import("routes.bulk_import", "bulk_import_router")
 bills_router = _safe_import("routes.bills", "bills_router")
+tally_router = _safe_import("routes.tally_bridge", "tally_router")
 bug_reports_router = _safe_import("routes.bug_reports", "bug_reports_router")
 try:
     from routes.system_errors import system_errors_router, log_system_error
@@ -236,6 +237,7 @@ _all_routers = [
     candidates_router, applications_router, settings_router, background_jobs_router,
     bulk_import_router, teams_router, referrals_router, commercials_router,
     bills_router,
+    tally_router,
     bug_reports_router, system_errors_router, profile_router, cv_upload_router,
     ai_search_router, extension_router, analytics_router, contact_router,
     blog_router, seo_router, pillar_pages_router, blog_digest_router,
