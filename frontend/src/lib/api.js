@@ -254,6 +254,19 @@ export const teamAPI = {
   getDuplicateEmployers: () => api.get('/teams/duplicate-employers'),
 };
 
+// Bills / Invoices — Phase 55.6
+export const billsAPI = {
+  list: (params = {}) => api.get('/bills', { params }),
+  getById: (id) => api.get(`/bills/${id}`),
+  create: (payload) => api.post('/bills', payload),
+  update: (id, payload) => api.put(`/bills/${id}`, payload),
+  cancel: (id) => api.delete(`/bills/${id}`),
+  pdfUrl: (id) => `${API_BASE}/bills/${id}/pdf`,
+  previewMail: (id) => api.post(`/bills/${id}/preview-mail`),
+  send: (id, payload = {}) => api.post(`/bills/${id}/send`, payload),
+  markPaid: (id) => api.post(`/bills/${id}/mark-paid`),
+};
+
 // Employer Portal APIs (Internal OS Enhancement)
 export const employerPortalAPI = {
   // My Team panel - team members, mandates, pipelines, revenue

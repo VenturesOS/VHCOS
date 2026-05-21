@@ -1,0 +1,126 @@
+"""Bill / Invoice domain models — Phase 55.6 (May 2026)."""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, EmailStr, Field
+
+
+# ────────────────────────────────────────────────────────────
+# Line items + amount computations
+# ────────────────────────────────────────────────────────────
+class BillLineItem(BaseModel):
+    candidate_name: str
+    designation: Optional[str] = None
+    joining_date: str  # ISO yyyy-mm-dd OR dd.mm.yyyy — UI controls format
+    annual_ctc: float
+    commercial_rate_pct: float = 8.33  # per-row override; default common rate
+    line_amount: float  # = annual_ctc * commercial_rate_pct / 100, but stored
+                        # explicitly so manual overrides survive round-trips
+    hsn_sac: str = "998512"  # placement consultancy default
+    application_id: Optional[str] = None  # FK to applications, optional
+
+
+class BillTotals(BaseModel):
+    taxable_value: float
+    gst_kind: str = "IGST"  # "IGST" or "CGST_SGST"
+    igst_pct: float = 18.0
+    cgst_pct: float = 9.0
+    sgst_pct: float = 9.0
+    tax_total: float
+    grand_total: float
+    amount_in_words: str
+    tax_in_words: str
+
+
+# ────────────────────────────────────────────────────────────
+# Persisted bill record
+# ────────────────────────────────────────────────────────────
+class BillRecord(BaseModel):
+    id: str
+    bill_number: str  # VHC/26-27/35
+    bill_date: str    # iso yyyy-mm-dd
+    due_date: Optional[str] = None
+
+    # Sender entity — frozen at creation so changes to the company
+    # settings later don't mutate old bills.
+    sender_legal_name: str
+    sender_address: str
+    sender_gstin: str
+    sender_pan: Optional[str] = None
+    sender_state_code: str  # first 2 chars of GSTIN
+
+    # Client
+    client_company_id: Optional[str] = None
+    client_legal_name: str
+    client_address: str
+    client_gstin: str
+    client_state_code: str
+    client_billing_email: EmailStr
+
+    # Line items + totals
+    line_items: List[BillLineItem]
+    totals: BillTotals
+
+    # Mail config (snapshotted at send time)
+    cc_emails: List[EmailStr] = Field(default_factory=list)
+    bcc_emails: List[EmailStr] = Field(default_factory=list)
+    mail_subject: Optional[str] = None
+    mail_body_html: Optional[str] = None
+    mail_body_plain: Optional[str] = None
+
+    # PDF storage
+    pdf_r2_key: Optional[str] = None  # the canonical PDF
+    pdf_sha256: Optional[str] = None
+
+    # Status / lifecycle
+    status: str = "draft"  # draft | sent | viewed | paid | cancelled
+    sent_at: Optional[str] = None
+    paid_at: Optional[str] = None
+    cancelled_at: Optional[str] = None
+
+    # Reminder schedule + audit
+    reminders_enabled: bool = True
+    reminder_schedule_days: List[int] = Field(default_factory=lambda: [7, 14, 30])
+    reminders_sent: List[dict] = Field(default_factory=list)
+    mail_events: List[dict] = Field(default_factory=list)
+
+    # Audit
+    created_by: str
+    created_by_email: Optional[str] = None
+    created_at: str
+    updated_at: Optional[str] = None
+
+
+# ────────────────────────────────────────────────────────────
+# Request bodies
+# ────────────────────────────────────────────────────────────
+class BillCreate(BaseModel):
+    bill_date: Optional[str] = None  # default = today
+    due_date: Optional[str] = None
+    client_company_id: str
+    line_items: List[BillLineItem]
+    gst_kind: Optional[str] = None  # auto-detected from state codes if None
+    sender_variant: Optional[str] = "VENTURE HRD CENTRE"  # or "VENTURE HRD CENTRE PVT LTD"
+
+
+class BillUpdate(BaseModel):
+    bill_date: Optional[str] = None
+    due_date: Optional[str] = None
+    line_items: Optional[List[BillLineItem]] = None
+    gst_kind: Optional[str] = None
+    sender_variant: Optional[str] = None
+    cc_emails: Optional[List[EmailStr]] = None
+    bcc_emails: Optional[List[EmailStr]] = None
+    mail_subject: Optional[str] = None
+    mail_body_html: Optional[str] = None
+    mail_body_plain: Optional[str] = None
+
+
+class BillSend(BaseModel):
+    extra_cc: List[EmailStr] = Field(default_factory=list)
+    mail_subject: Optional[str] = None
+    mail_body_html: Optional[str] = None
+    mail_body_plain: Optional[str] = None
+    test_mode: bool = False  # if true, only sends to the requester

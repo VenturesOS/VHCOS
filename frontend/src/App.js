@@ -73,6 +73,7 @@ const CompanyProfilePage = React.lazy(() => import("./pages/admin/CompanyProfile
 const CandidateBankTabsPage = React.lazy(() => import("./pages/admin/CandidateBankTabsPage"));
 const NaukriImportTabsPage = React.lazy(() => import("./pages/admin/NaukriImportTabsPage"));
 const TeamsTabsPage = React.lazy(() => import("./pages/admin/TeamsTabsPage"));
+const BillsPage = React.lazy(() => import("./pages/admin/BillsPage"));
 const BlogTabsPage = React.lazy(() => import("./pages/admin/BlogTabsPage"));
 const ActivityTabsPage = React.lazy(() => import("./pages/admin/ActivityTabsPage"));
 const SystemHealthTabsPage = React.lazy(() => import("./pages/admin/SystemHealthTabsPage"));
@@ -193,6 +194,7 @@ function App() {
             <Route path="candidate-bank/data-quality" element={<DataQualityPage />} />
             <Route path="companies" element={<CompaniesPage />} />
             <Route path="teams" element={<TeamsTabsPage />} />
+            <Route path="bills" element={<BillsPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
             <Route path="revenue" element={<RevenueDashboardPage />} />
             <Route path="settings" element={<SettingsTabsPage />} />
