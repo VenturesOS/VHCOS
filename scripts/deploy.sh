@@ -130,12 +130,21 @@ if [[ "$FRONTEND_ONLY" -eq 0 ]]; then
 
   log "systemctl restart $BACKEND_SERVICE"
   sudo systemctl restart "$BACKEND_SERVICE"
-  # Give it a moment, then health-check
-  sleep 3
-  if curl -sf --max-time 8 "$HEALTHCHECK_URL" >/dev/null; then
+  # Healthcheck with retry: gunicorn workers can take 10-15s to come up.
+  # Try up to 12 times over ~30s before giving up.
+  health_ok=0
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    sleep 3
+    if curl -sf --max-time 5 "$HEALTHCHECK_URL" >/dev/null 2>&1; then
+      health_ok=1
+      break
+    fi
+    [[ $i -eq 12 ]] || log "  ...waiting for backend ($i/12)"
+  done
+  if [[ $health_ok -eq 1 ]]; then
     ok "Backend healthy ($HEALTHCHECK_URL)"
   else
-    err "Backend healthcheck FAILED. Check: sudo journalctl -u $BACKEND_SERVICE -n 80"
+    err "Backend healthcheck FAILED after 12 retries. Check: sudo journalctl -u $BACKEND_SERVICE -n 80"
     exit 1
   fi
 fi
