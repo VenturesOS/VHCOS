@@ -16,8 +16,10 @@ class BillLineItem(BaseModel):
     joining_date: str  # ISO yyyy-mm-dd OR dd.mm.yyyy — UI controls format
     annual_ctc: float
     commercial_rate_pct: float = 8.33  # per-row override; default common rate
-    line_amount: float  # = annual_ctc * commercial_rate_pct / 100, but stored
-                        # explicitly so manual overrides survive round-trips
+    line_amount: Optional[float] = None  # = annual_ctc * commercial_rate_pct / 100;
+                                          # if omitted, the route auto-computes it.
+                                          # Stored explicitly so manual overrides
+                                          # survive round-trips.
     hsn_sac: str = "998512"  # placement consultancy default
     application_id: Optional[str] = None  # FK to applications, optional
 

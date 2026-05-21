@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Git post-merge hook: auto-deploy on `git pull`.
+#
+# Install once:
+#   ln -sf ../../scripts/post-merge.hook .git/hooks/post-merge
+#   chmod +x scripts/post-merge.hook
+#
+# Skip the hook for a single pull:
+#   VHC_SKIP_DEPLOY=1 git pull
+
+if [[ "${VHC_SKIP_DEPLOY:-0}" == "1" ]]; then
+  echo "[post-merge] VHC_SKIP_DEPLOY=1 — skipping deploy."
+  exit 0
+fi
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+DEPLOY_SH="$REPO_DIR/scripts/deploy.sh"
+
+if [[ ! -x "$DEPLOY_SH" ]]; then
+  echo "[post-merge] $DEPLOY_SH not found or not executable — skipping."
+  exit 0
+fi
+
+# We're already past `git pull`, so don't pull again.
+exec "$DEPLOY_SH" --skip-pull

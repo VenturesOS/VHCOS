@@ -65,18 +65,22 @@ profile capture quality improvements.
 
 ### Immediate (P0/P1)
 1. ~~**(P0)** Run `merge_backlog_duplicates.py --apply` on EC2~~ ✅ **DONE 2026-05-18** — 19 duplicate groups merged, Dedup tab is empty.
-2. **(P1)** Submit `team_daily_digest_v1` template to Meta via the new script (WABA_ID env var needed in `.env`).
-3. **(P1)** Build & push the unified RunPod image; redeploy pod.
+2. ~~**(P1)** Build Bill Generator MVP (PDF + Resend + Qwen LLM body + reminders)~~ ✅ **DONE 2026-05-21** — 11/11 backend tests + frontend smoke passing. See `docs/BILL_GENERATOR_RUNBOOK.md`.
+3. ~~**(P1)** Auto-deploy script to stop the "I pulled but UI is stale" pain~~ ✅ **DONE 2026-02 (current session)** — `scripts/deploy.sh` + `scripts/post-merge.hook`. See `docs/DEPLOY_RUNBOOK.md`.
+4. ~~**(P2)** Auto-draft Bill on candidate `hired`/`joined`~~ ✅ **DONE 2026-02 (current session)** — `services/bill_auto_draft.py`, idempotent via `line_items.application_id`. 20/20 unit tests passing.
+5. **(P1)** Submit `team_daily_digest_v1` template to Meta via the new script (WABA_ID env var needed in `.env`).
+6. **(P1)** Build & push the unified RunPod image; redeploy pod.
 
 ### Near-term (P2)
-4. Drop unused MongoDB indexes (audit after 7-day cluster uptime).
-5. Flip `CROSS_ENCODER_ENABLED=true` in `.env` after smoke-testing reranker latency on prod traffic.
-6. Reactivate user `hr8@vhc.in` (script exists, awaiting user execution).
+7. Drop unused MongoDB indexes (audit after 7-day cluster uptime).
+8. Flip `CROSS_ENCODER_ENABLED=true` in `.env` after smoke-testing reranker latency on prod traffic.
+9. Reactivate user `hr8@vhc.in` (script exists, awaiting user execution).
+10. Public deep-link page for rich WhatsApp daily digest (v1 template `View full digest` link).
 
 ### Future (P3)
-7. Email Template Management UI.
-8. XGBoost LTR re-ranker (currently using cross-encoder as the precision layer).
-9. k-Means + PCA clustering for candidate discovery in the sourcing tab.
+11. Email Template Management UI.
+12. XGBoost LTR re-ranker (currently using cross-encoder as the precision layer).
+13. k-Means + PCA clustering for candidate discovery in the sourcing tab.
 
 ---
 

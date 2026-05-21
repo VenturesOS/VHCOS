@@ -507,6 +507,17 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
             user_id=current_user.get("id", ""),
             user_name=current_user.get("name", current_user.get("email", "")),
         )
+
+        # Phase 55.7 — auto-draft a bill on `hired` / `joined`. Best-effort;
+        # never blocks the stage change. Idempotent via line_items.application_id.
+        if new_stage in ("hired", "joined"):
+            try:
+                from services.bill_auto_draft import maybe_auto_draft_bill
+                merged_app = {**application, **update_dict, "id": app_id}
+                await maybe_auto_draft_bill(app_id, merged_app, current_user)
+            except Exception as _e:
+                # Never break stage transitions because of billing side-effects.
+                logger.warning("[applications] auto-draft bill failed for %s: %s", app_id, _e)
     
     updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
 
