@@ -116,7 +116,9 @@ if [[ "$FRONTEND_ONLY" -eq 0 ]]; then
       log "pip install -r backend/requirements.txt"
       # shellcheck source=/dev/null
       source "$VENV_DIR/bin/activate"
-      pip install --quiet -r "$BACKEND_DIR/requirements.txt"
+      pip install --quiet \
+        --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
+        -r "$BACKEND_DIR/requirements.txt"
       deactivate
       ok "Python deps up to date."
     else
