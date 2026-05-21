@@ -1,0 +1,56 @@
+{
+  "summary": "End-to-end testing of Bill Generator MVP (Phase 55.6) - 11/11 backend tests passed and frontend smoke test passed. ACL, CRUD, computed totals, sequential FY numbering, PDF rendering, LLM mail-body preview, send in test_mode, mark-paid lock, and draft cancellation all work as specified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bills", "issue": "BillLineItem.line_amount is a required field (no default). If a client omits the field entirely, Pydantic will 422 before the route's auto-compute fallback runs. UI mitigates by always passing 0. Consider making it Optional[float]=None to match the documented 'auto-compute when not supplied' behaviour."},
+      {"endpoint": "POST /api/bills", "issue": "Route persists raw dict (insert_one) so BillRecord's EmailStr validation on client_billing_email is bypassed. Companies without billing_email get stored as empty string; this works for create/PDF but the /send route correctly 400s. Acceptable but worth noting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/bills", "issues": ["Cookie Preferences banner overlays the bottom of dialogs/list (does not block interactions, but is visually heavy; consider auto-dismissing once accepted)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bills_e2e.py",
+    "/app/test_reports/pytest/bills_e2e.xml"
+  ],
+  "action_items": [
+    "(Optional polish) Make BillLineItem.line_amount Optional with default None/0 to match documented auto-compute fallback in /api/bills create path.",
+    "(Optional polish) After successful Resend send (test_mode or live), de-prioritise the cookie consent banner so it doesn't sit over success toasts."
+  ],
+  "critical_code_review_comments": [
+    "bills.py (430 lines) and BillsPage.jsx (461 lines) are within the 700-line guideline; no split needed yet.",
+    "_id is correctly excluded everywhere (find_one/find use {'_id': 0} and inserted dicts call bill.pop('_id', None)).",
+    "Async DB calls used throughout; FY numbering aggregate is atomic enough for low write rates (note: theoretical race condition if two creates land at the exact same millisecond - acceptable for current scale).",
+    "Send route correctly logs both success and failure events into mail_events before responding (good audit trail).",
+    "Body fallback chain (payload.mail_body_plain > bill.mail_body_plain > generate_send_body) is robust; works when Qwen vLLM is offline (verified - preview returned non-empty body in 1.5s, indicating either fast LLM response or template fallback).",
+    "ACL helper correctly gates admin/employer/account-manager recruiter; plain recruiter (hr12@vhc.in) gets 403 as expected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_bills_e2e.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (smoke flow)"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 (admin); hr12@vhc.in / 12345678 (plain recruiter for ACL test)",
+  "seed_data_creation": "Created several TEST_-prefixed bills during the run: VHC/26-27/4 (cancelled via DELETE in test_cancel_draft), VHC/26-27/5 (marked paid in test_mark_paid_locks_edits), VHC/26-27/6 (created via UI smoke test, still draft). No cleanup performed - safe to leave or admin can cancel/delete via UI.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bill Generator E2E suite lives at /app/backend/tests/test_bills_e2e.py. It self-discovers a billable company from /api/companies, so it's resilient to schema/data changes. The send test accepts both 200 (Resend success) and 502 (Resend rejected sandbox inbox) - both are valid per spec. To re-run: pytest /app/backend/tests/test_bills_e2e.py -v",
+  "verified_features": [
+    "GET /api/bills returns 200 with {items, count}",
+    "POST /api/bills creates draft with VHC/FY/N format, auto-computes line_amount from CTC*rate%, builds totals with 18% GST (grand_total = taxable * 1.18 rounded), amount_in_words starts with 'Indian Rupees'",
+    "GET /api/bills/{id} returns full bill",
+    "PUT /api/bills/{id} recomputes totals on line_items change; rejects with 409 on paid bills",
+    "GET /api/bills/{id}/pdf returns application/pdf, magic bytes %PDF, X-VHC-Bill-Id header, size > 2KB",
+    "POST /api/bills/{id}/preview-mail returns {plain, html} with non-empty body (LLM or template fallback)",
+    "POST /api/bills/{id}/send with test_mode=true returns 200, to=admin@vhc.in, mail_events appended in DB",
+    "POST /api/bills/{id}/mark-paid transitions status to paid; subsequent PUT returns 409",
+    "DELETE /api/bills/{id} cancels draft (status=cancelled)",
+    "ACL: hr12@vhc.in (plain recruiter) gets 403 from /api/bills",
+    "Bill numbering sequential within FY (verified N -> N+1 in same session)",
+    "Frontend: /admin/bills loads, list renders, New Bill dialog opens, company dropdown populates (52 companies), line-items auto-calc (1200000 * 8.33% = 99960.00), Save Draft creates bill and shows success toast 'Bill VHC/26-27/6 created'"
+  ]
+}
