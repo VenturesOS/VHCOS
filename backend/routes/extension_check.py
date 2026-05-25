@@ -54,6 +54,73 @@ from config import db
 from services.extension_service import _names_are_similar
 from utils.auth import get_current_user
 
+
+def _strict_name_match(name_a: str, name_b: str) -> bool:
+    """
+    STRICT name match — for the "Already in Database" badge specifically.
+
+    Different from `_names_are_similar` (which is the dedup matcher) — that
+    one is intentionally LOOSE (high recall) so dupes merge. Here we need
+    high PRECISION so we don't badge every "Manish" / "Akash" / "Rajesh" as
+    already-saved when in fact only ONE of the many Akashes is captured.
+
+    A match requires BOTH:
+      • First significant token matches AND
+      • Either (a) at least one OTHER non-trivial token (≥3 chars) is shared,
+              (b) one side has only a single token and the other includes it,
+              (c) overall fuzzy ratio is very high (≥ 0.90)
+
+    So: "Akash Chavan" matches "Akash Chavan" ✓
+        "Akash Dhanraj Chavan" matches "Akash Chavan" ✓ (shared: chavan)
+        "Akash Patil" does NOT match "Akash Chavan" ✗ (only first name shared)
+        "Manish" matches "Manish" ✓ (single-token both sides, equal)
+        "Manish Singh" does NOT match "Manish Kumar" ✗ (different last name)
+    """
+    if not name_a or not name_b:
+        return False
+    import re as _re
+    from difflib import SequenceMatcher as _SM
+
+    def _clean(s: str) -> str:
+        s = _re.sub(r"\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b", " ", s.lower())
+        s = _re.sub(r"[^a-z0-9\s]", " ", s)
+        return _re.sub(r"\s+", " ", s).strip()
+
+    a, b = _clean(name_a), _clean(name_b)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+
+    wa = [w for w in a.split() if len(w) > 1]
+    wb = [w for w in b.split() if len(w) > 1]
+    if not wa or not wb:
+        return False
+
+    # Must share first token (case-insensitive after cleaning)
+    if wa[0] != wb[0]:
+        # Fallback: extremely high fuzzy ratio (catches "Rajut" vs "Rajat" typos)
+        return _SM(None, a, b).ratio() >= 0.92
+
+    # First token matches — now require a SECOND signal.
+    tokens_a = {w for w in wa[1:] if len(w) >= 3}
+    tokens_b = {w for w in wb[1:] if len(w) >= 3}
+
+    # (a) Any non-trivial extra token shared (e.g. shared last name)
+    if tokens_a & tokens_b:
+        return True
+
+    # (b) Single-token name on one side equals single-token name on the other
+    #     (e.g. user lists candidate as just "Akash", DB has just "Akash")
+    if len(wa) == 1 and len(wb) == 1:
+        return True
+
+    # (c) Very high fuzzy ratio over the full names
+    if _SM(None, a, b).ratio() >= 0.90:
+        return True
+
+    return False
+
 logger = logging.getLogger(__name__)
 
 ext_check_router = APIRouter(prefix="/api/extension", tags=["Browser Extension"])
@@ -139,11 +206,35 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
     if not first_tok or len(first_tok) < 2:
         return CheckResult(index=idx, exists=False)
 
-    # Anchor at the start of the name. The `name_1` index makes this a
-    # bounded prefix scan, not a full-collection regex.
-    pattern = re.compile(rf"^{re.escape(first_tok)}", re.IGNORECASE)
+    # Extract other significant tokens from the input name — we'll use them
+    # to narrow the Mongo query so we don't scan past 40 unrelated "AKASH"
+    # docs before reaching "Akash Dhanraj Chavan".
+    import re as _re
+    cleaned = _re.sub(r"\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b", " ", c.name.lower())
+    cleaned = _re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    all_tokens = [t for t in cleaned.split() if len(t) >= 3]
+    other_tokens = [t for t in all_tokens if t != first_tok]
+
+    # Build the query:
+    #   - Always anchor on the first token
+    #   - If we have other ≥3-char tokens (likely a last name), require ANY of
+    #     them to appear in the DB name. This drops the candidate pool from
+    #     thousands of "AKASH" → handful of "Akash ... <lastname>".
+    prefix_pattern = _re.compile(rf"^{_re.escape(first_tok)}", _re.IGNORECASE)
+    query: dict = {"name": prefix_pattern}
+    if other_tokens:
+        query["$and"] = [
+            {"name": prefix_pattern},
+            {"$or": [
+                {"name": _re.compile(rf"\b{_re.escape(t)}", _re.IGNORECASE)}
+                for t in other_tokens[:4]  # cap at 4 to keep regex cheap
+            ]},
+        ]
+        # When using $and, the top-level "name" key is redundant
+        query.pop("name", None)
+
     cursor = db.candidate_bank.find(
-        {"name": pattern},
+        query,
         {
             "_id": 0, "id": 1, "name": 1,
             "current_employer": 1, "designation": 1,
@@ -156,7 +247,7 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
     best_high = False
 
     async for doc in cursor:
-        if not _names_are_similar(c.name, doc.get("name") or ""):
+        if not _strict_name_match(c.name, doc.get("name") or ""):
             continue
         high = _headline_or_loc_hits(c.headline, c.location, doc)
         if best is None or (high and not best_high):
