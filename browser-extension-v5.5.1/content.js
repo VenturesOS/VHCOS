@@ -132,7 +132,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '5.5.0';
+  const VERSION = '5.5.1';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -3405,6 +3405,7 @@
     
     if (unprocessedCards.length === 0) return;
     
+    console.log(`[VHC v${VERSION}] checkExisting: scanning ${unprocessedCards.length} new cards (of ${cards.length} total on page)`);
     // Scrape info from unprocessed cards
     const candidatesToCheck = [];
     const cardMap = []; // maps checked candidate index back to its cardEl
@@ -3473,6 +3474,8 @@
    */
   function findCardElements() {
     const cardSelectors = [
+      '.tuple-card',                  // Naukri Resdex current (Feb 2026)
+      '[class*="tuple-card"]',
       '[class*="candidateCard"]',
       '[class*="candidate-card"]',
       '[class*="resumeCard"]',
@@ -3495,23 +3498,49 @@
    */
   function scrapeSearchCardInfo(cardEl) {
     try {
-      const linkEl = cardEl.querySelector('a[href*="profile"], a[href*="resume"], a[href*="preview"], a[href*="resdex"]');
+      // Naukri Resdex uses .candidate-name first; fall back to other platforms.
+      const linkEl = cardEl.querySelector(
+        'a.candidate-name, a.candidate-profile-summary, ' +
+        'a[href*="preview"], a[href*="profile"], a[href*="resume"], a[href*="resdex"]'
+      );
       const profileUrl = linkEl ? linkEl.href : null;
       if (!profileUrl) return null;
 
+      // Name: prefer the explicit .candidate-name link's inner text
       const nameEl = cardEl.querySelector(
-        '[class*="name"], [class*="candidateName"], h2, h3, [class*="title"]:first-of-type'
+        'a.candidate-name, [class*="candidateName"], [class*="candidate-name"], ' +
+        '[class*="name"], h2, h3, [class*="title"]:first-of-type'
       );
       const name = cleanText(nameEl?.innerText) || 'Unknown';
 
-      const headlineEl = cardEl.querySelector('[class*="headline"], [class*="designation"], [class*="currentTitle"]');
+      // Headline: Naukri Resdex puts the summary in .candidate-profile-summary
+      // (e.g. "R&D Design Engineer with B.Tech currently living in Pune")
+      const headlineEl = cardEl.querySelector(
+        '.candidate-profile-summary, [class*="candidate-headline"], ' +
+        '[class*="headline"], [class*="designation"], [class*="currentTitle"]'
+      );
       const headline = cleanText(headlineEl?.innerText) || null;
 
-      const locEl = cardEl.querySelector('[class*="location"], [class*="loc"], [class*="city"]');
+      // Location: Naukri uses span.location inside meta-data
+      const locEl = cardEl.querySelector(
+        'span.location, [class*="location"], [class*="loc"], [class*="city"]'
+      );
       const location = cleanText(locEl?.innerText) || null;
 
-      const compEl = cardEl.querySelector('[class*="company"], [class*="employer"], [class*="currentCompany"]');
-      const company = cleanText(compEl?.innerText) || null;
+      // Company: Naukri puts current employer inside #currentEmp > .employment-detail
+      // (rendered as button tags with title="Find candidates from <Company>")
+      let company = null;
+      const empEl = cardEl.querySelector(
+        '#currentEmp .employment-detail button[title*="from "], ' +
+        '#currentEmp .employment-detail, ' +
+        '[class*="company"], [class*="employer"], [class*="currentCompany"]'
+      );
+      if (empEl) {
+        // If we got the "Find candidates from XYZ" button, extract just the XYZ
+        const title = empEl.getAttribute('title') || '';
+        const m = title.match(/from\s+(.+)/i);
+        company = cleanText(m ? m[1] : empEl.innerText) || null;
+      }
 
       return { profileUrl, name, headline, location, company };
     } catch (_) {
