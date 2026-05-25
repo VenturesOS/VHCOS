@@ -146,6 +146,9 @@ const ExpenseTrackingPage = React.lazy(() => import("./pages/accounts/ExpenseTra
 const AccountsRevenueDashboard = React.lazy(() => import("./pages/accounts/RevenueDashboardPage"));
 const FinancialReportsPage = React.lazy(() => import("./pages/accounts/FinancialReportsPage"));
 
+// ── Role-aware redirector for extension deep-links ──
+const CandidateBankRedirect = React.lazy(() => import("./pages/CandidateBankRedirect"));
+
 function App() {
   return (
     <HelmetProvider>
@@ -175,6 +178,9 @@ function App() {
           <Route path="/industrial-hiring-insights/:slug" element={<LazyEmployerBlogArticle />} />
           <Route path="/career-insights" element={<PillarPage />} />
           <Route path="/career-insights/:slug" element={<LazyCandidateBlogArticle />} />
+
+          {/* Extension deep-link: role-aware redirect (preserves ?candidateId=) */}
+          <Route path="/candidate-bank" element={<CandidateBankRedirect />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<DashboardLayout allowedRoles={["admin"]} />}>

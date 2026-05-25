@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, Navigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -13,13 +13,24 @@ const LOGO_URL = '/assets/vhc_logo.png';
 export default function Login() {
   const { login, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextParam = searchParams.get('next');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Only honour same-origin paths to avoid open-redirect abuse
+  const safeNext = (() => {
+    if (!nextParam) return null;
+    try {
+      const decoded = decodeURIComponent(nextParam);
+      return decoded.startsWith('/') && !decoded.startsWith('//') ? decoded : null;
+    } catch { return null; }
+  })();
+
   if (isAuthenticated && user) {
-    return <Navigate to={`/${user.role}`} replace />;
+    return <Navigate to={safeNext || `/${user.role}`} replace />;
   }
 
   const handleSubmit = async (e) => {
@@ -33,7 +44,7 @@ export default function Login() {
       if (userData.requires_password_reset) {
         window.location.href = '/reset-password';
       } else {
-        window.location.href = `/${userData.role}`;
+        window.location.href = safeNext || `/${userData.role}`;
       }
     } catch (error) {
       const message = error.response?.data?.detail || 'Login failed. Please try again.';

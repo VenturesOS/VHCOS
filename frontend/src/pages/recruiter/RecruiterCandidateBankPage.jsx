@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { candidateBankAPI, jobAPI } from '../../lib/api';
 import { formatSalaryINR } from '../../lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -234,6 +234,29 @@ export default function RecruiterCandidateBankPage() {
       setActivityHistory([]);
     }
   };
+
+  // ─── Deep-link: open candidate from ?candidateId= URL param (used by Naukri extension badge) ───
+  useEffect(() => {
+    const cid = searchParams.get('candidateId');
+    if (!cid || deepLinkHandledRef.current) return;
+    deepLinkHandledRef.current = true;
+    (async () => {
+      try {
+        const r = await candidateBankAPI.getById(cid);
+        if (r?.data) {
+          await loadCandidateDetails(r.data);
+          const next = new URLSearchParams(searchParams);
+          next.delete('candidateId');
+          setSearchParams(next, { replace: true });
+        } else {
+          toast.error('Candidate not found');
+        }
+      } catch {
+        toast.error('Failed to open candidate');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
 
   const startEditingProfile = () => {

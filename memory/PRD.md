@@ -72,6 +72,7 @@ profile capture quality improvements.
 6. ~~**(P1)** Tally integration — one-way push VHC bills → Tally Sales Vouchers~~ ✅ **DONE 2026-02 (current session)** — `routes/tally_bridge.py` + `services/tally_xml.py` + Windows `tally_bridge/tally_bridge.py` agent. 24/24 e2e tests passing. See `docs/TALLY_BRIDGE_RUNBOOK.md`.
 7. ⏸ **(P1, HELD)** Submit `team_daily_digest_v1` template to Meta — paused per user direction.
 8. ⏸ **(P1, HELD)** Build & push unified RunPod image — paused per user direction.
+9. ~~**(P0)** Chrome Extension v5.5.5 — "Already in Database" badge clickable, opens candidate profile in VHC~~ ✅ **DONE 2026-02-25 (current session)** — Badge rendered as `<a>` anchor with deep-link `https://<frontend>/candidate-bank?candidateId=<id>`. New role-aware `/candidate-bank` redirect route on frontend auto-routes admins/recruiters/employers to their respective bank pages. `?next=` param honoured by Login.jsx. New `background.js` handlers: `getCandidateBankUrl`, `openCandidateProfile`. CRX + ZIP built and served via `/api/extension/update.xml` (sha256 hashed) — Chrome auto-update propagates to all installed recruiters. Tested: logged-out → /login?next=...; admin deep-link → Candidate Profile dialog auto-opens.
 
 ### Near-term (P2)
 9. Drop unused MongoDB indexes (audit after 7-day cluster uptime).
