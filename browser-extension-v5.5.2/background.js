@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '5.5.1';
+const VERSION = '5.5.2';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we

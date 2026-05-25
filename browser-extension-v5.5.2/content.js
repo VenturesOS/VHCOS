@@ -132,7 +132,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '5.5.1';
+  const VERSION = '5.5.2';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -3702,6 +3702,8 @@
             if (node.nodeType === Node.ELEMENT_NODE) {
               if (
                 node.matches && (
+                  node.matches('.tuple-card') ||
+                  node.matches('[class*="tuple-card"]') ||
                   node.matches('[class*="candidateCard"]') ||
                   node.matches('[class*="candidate-card"]') ||
                   node.matches('[class*="resumeCard"]') ||
@@ -3716,7 +3718,7 @@
               
               if (
                 node.querySelector && node.querySelector(
-                  '[class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"], [class*="srp-tuple"], [class*="srpTuple"], .tupleCard'
+                  '.tuple-card, [class*="tuple-card"], [class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"], [class*="srp-tuple"], [class*="srpTuple"], .tupleCard'
                 )
               ) {
                 cardsAdded = true;
@@ -3736,6 +3738,13 @@
     });
     
     cardObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Initial scan — the observer only fires on NEW cards. The 40 cards already
+    // rendered when this function runs would never get checked otherwise.
+    setTimeout(() => {
+      console.log(`[VHC v${VERSION}] Initial badge scan firing on already-rendered cards...`);
+      checkAndMarkExistingProfiles();
+    }, 500);
   }
 
   function showToast(message, type = 'info') {
