@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='nmlmoniipcgpomhhogijpbelmpcoafjk'>
-    <updatecheck codebase='https://api.ventureshrd.com/api/extension/download.crx?v=5.5.0' version='5.5.0' hash_sha256='74c600ea9c8d059d9ff6cd59cda4375d05d8f5b79737ceb2209d0a90c8bb9c51' />
+    <updatecheck codebase='https://api.ventureshrd.com/api/extension/download.crx?v=5.5.3' version='5.5.3' hash_sha256='ead8ee4fa5a0dae86914667433b980a418e80248c916618866090a190dfa9676' />
   </app>
 </gupdate>
