@@ -90,27 +90,53 @@ async def download_naukri_extension():
     """
     Download the VHC Naukri Auto-Capture browser extension.
     Dynamically builds ZIP from source to always serve the latest version.
+    Auto-discovers the highest numbered `browser-extension-vX.Y.Z/` folder
+    next to the legacy `browser-extension/` folder, falling back to the
+    legacy folder if no versioned folder exists.
     """
-    import zipfile, json as json_mod
-    
-    ext_source = ROOT_DIR.parent / "browser-extension"
+    import re as _re
+    import zipfile
+    import json as json_mod
+
+    parent = ROOT_DIR.parent
+    # Find highest versioned folder
+    candidates = []
+    for d in parent.iterdir():
+        if not d.is_dir():
+            continue
+        m = _re.match(r"^browser-extension-v(\d+)\.(\d+)\.(\d+)$", d.name)
+        if m:
+            candidates.append((tuple(int(x) for x in m.groups()), d))
+    if candidates:
+        candidates.sort(reverse=True)
+        ext_source = candidates[0][1]
+    else:
+        ext_source = parent / "browser-extension"
+
     if not ext_source.exists():
         raise HTTPException(status_code=404, detail="Extension source not found")
-    
+
     # Read version from manifest
     manifest_path = ext_source / "manifest.json"
     version = "unknown"
     if manifest_path.exists():
         with open(manifest_path) as f:
             version = json_mod.load(f).get("version", "unknown")
-    
-    # Build ZIP from source
+
+    # Build ZIP from source (skip historical content.vX.Y.Z.js noise)
     zip_path = UPLOAD_DIR / "vhc-naukri-extension.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_path in ext_source.rglob("*"):
-            if file_path.is_file() and not file_path.name.startswith("."):
-                zf.write(file_path, file_path.relative_to(ext_source))
-    
+            if not file_path.is_file():
+                continue
+            name = file_path.name
+            if name.startswith(".") or name == "README.md":
+                continue
+            # Skip the historical content.v3.X.X.js bundles — they confuse Chrome
+            if _re.match(r"^content\.v\d+\.\d+\.\d+\.js$", name):
+                continue
+            zf.write(file_path, file_path.relative_to(ext_source))
+
     response = FileResponse(
         path=zip_path,
         filename=f"vhc-naukri-extension-v{version}.zip",
