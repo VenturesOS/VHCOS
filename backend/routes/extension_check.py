@@ -167,6 +167,9 @@ class CheckResult(BaseModel):
     match_confidence: Optional[str] = None  # "high" | "medium"
     matched_signals: Optional[List[str]] = None  # debug: which signals fired
     match_score: Optional[float] = None  # 0.0–1.0
+    # Server-built deep-link so the extension never has to guess the
+    # frontend URL from a (possibly proxied) backend API host.
+    profile_url: Optional[str] = None
 
 
 class CheckExistingResponse(BaseModel):
@@ -464,14 +467,21 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
 
     captured_at = best_doc.get("captured_at") or best_doc.get("created_at") or None
     confidence = "high" if best_score >= _HIGH_THRESHOLD else "medium"
+    cid = best_doc.get("id")
+    # SITE_URL is the canonical frontend URL (e.g. https://ventureshrd.com).
+    # Used so the extension never has to guess the web URL from a possibly
+    # proxied API host (e.g. a Cloudflare Worker).
+    web_base = (os.environ.get("SITE_URL") or "https://ventureshrd.com").rstrip("/")
+    profile_url = f"{web_base}/candidate-bank?candidateId={cid}" if cid else None
     return CheckResult(
         index=idx,
         exists=True,
-        candidate_id=best_doc.get("id"),
+        candidate_id=cid,
         captured_at=captured_at,
         match_confidence=confidence,
         match_score=round(best_score, 2),
         matched_signals=best_signals,
+        profile_url=profile_url,
     )
 
 
