@@ -122,6 +122,7 @@ bulk_import_router = _safe_import("routes.bulk_import", "bulk_import_router")
 bills_router = _safe_import("routes.bills", "bills_router")
 tally_router = _safe_import("routes.tally_bridge", "tally_router")
 ext_check_router = _safe_import("routes.extension_check", "ext_check_router")
+embed_admin_router = _safe_import("routes.embed_admin", "embed_admin_router")
 bug_reports_router = _safe_import("routes.bug_reports", "bug_reports_router")
 try:
     from routes.system_errors import system_errors_router, log_system_error
@@ -240,6 +241,7 @@ _all_routers = [
     bills_router,
     tally_router,
     ext_check_router,
+    embed_admin_router,
     bug_reports_router, system_errors_router, profile_router, cv_upload_router,
     ai_search_router, extension_router, analytics_router, contact_router,
     blog_router, seo_router, pillar_pages_router, blog_digest_router,

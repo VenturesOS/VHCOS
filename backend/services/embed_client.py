@@ -1,19 +1,42 @@
 """
-EC2-side HTTP client for the RunPod BGE sidecar.
+EC2-side HTTP client for the RunPod BGE sidecar — with circuit breaker.
 
 When the sidecar is unreachable (pod stopped, network blip), we fall
 back to the legacy *local* sentence-transformers code path if available
 — so the system degrades gracefully instead of hard-failing.
 
-Set the env var `BGE_SIDECAR_URL` to enable remote embeddings:
-    BGE_SIDECAR_URL=https://<POD-ID>-8001.proxy.runpod.net
+## Circuit breaker (Phase 55.10 / Feb 2026)
 
-If unset → falls back to local embeddings (current behavior).
+States: CLOSED → OPEN → HALF_OPEN → CLOSED|OPEN
+
+  • CLOSED   = normal. Every call hits the sidecar.
+                Three consecutive failures trip → OPEN.
+  • OPEN     = sidecar known down. All calls fail-fast in <1ms.
+                After `BGE_BREAKER_OPEN_SECS` (default 300s), the next
+                call moves the state to HALF_OPEN.
+  • HALF_OPEN = a single probe call goes through.
+                Success → CLOSED, reset counters.
+                Failure → OPEN, reset cooldown timer.
+
+This means the FIRST request after a RunPod death will be slow (one
+10-second timeout). Every subsequent request for the next 5 minutes
+is instant fallback. After 5 minutes, ONE probe call tests recovery
+— if it fails, slow path skipped again for another 5 min.
+
+## Env vars
+
+  BGE_SIDECAR_URL          — base URL of the sidecar (required to enable)
+  BGE_SIDECAR_TIMEOUT      — per-request timeout in seconds (default 10)
+  BGE_BREAKER_THRESHOLD    — consecutive failures to trip (default 3)
+  BGE_BREAKER_OPEN_SECS    — how long to stay OPEN (default 300)
+
+Set BGE_SIDECAR_URL='' to disable remote entirely and always use local.
 """
 from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from typing import List, Optional
 
@@ -26,41 +49,123 @@ SIDECAR_TIMEOUT_SECS = float(os.environ.get("BGE_SIDECAR_TIMEOUT", "10"))
 EMBED_DIM = 384
 MAX_BATCH_SIZE = 64
 
-# Module-level health flag — set to False after a failed call so subsequent
-# calls in the same minute go straight to local fallback without retrying
-# the network. Reset every minute by `_should_skip_remote()`.
-_REMOTE_FAILED_AT: float = 0.0
-_REMOTE_COOLDOWN_SECS = 60.0
+# ── Circuit breaker config ───────────────────────────────────────────
+_BREAKER_THRESHOLD = int(os.environ.get("BGE_BREAKER_THRESHOLD", "3"))
+_BREAKER_OPEN_SECS = float(os.environ.get("BGE_BREAKER_OPEN_SECS", "300"))
+
+_STATE_CLOSED = "closed"
+_STATE_OPEN = "open"
+_STATE_HALF_OPEN = "half_open"
+
+_lock = threading.Lock()
+_state: str = _STATE_CLOSED
+_consecutive_failures: int = 0
+_opened_at: float = 0.0
+_total_failures: int = 0
+_total_successes: int = 0
+_total_short_circuited: int = 0  # calls that fast-failed in OPEN
+_last_failure_msg: Optional[str] = None
 
 
-def _should_skip_remote() -> bool:
-    """Skip remote call for 60 s after a known failure to avoid hammering
-    a down sidecar."""
-    if _REMOTE_FAILED_AT == 0.0:
+def _transition(new_state: str) -> None:
+    """Must be called with _lock held."""
+    global _state, _opened_at
+    if _state == new_state:
+        return
+    if new_state == _STATE_OPEN:
+        _opened_at = time.time()
+        logger.warning(
+            "[EmbedClient] CIRCUIT OPEN — sidecar deemed down. "
+            "Skipping remote calls for %.0fs.", _BREAKER_OPEN_SECS,
+        )
+    elif new_state == _STATE_HALF_OPEN:
+        logger.info("[EmbedClient] CIRCUIT HALF_OPEN — probing sidecar recovery")
+    elif new_state == _STATE_CLOSED:
+        logger.info("[EmbedClient] CIRCUIT CLOSED — sidecar recovered, resuming normal traffic")
+    _state = new_state
+
+
+def _on_success() -> None:
+    global _consecutive_failures, _total_successes
+    with _lock:
+        _consecutive_failures = 0
+        _total_successes += 1
+        if _state != _STATE_CLOSED:
+            _transition(_STATE_CLOSED)
+
+
+def _on_failure(msg: str) -> None:
+    global _consecutive_failures, _total_failures, _last_failure_msg
+    with _lock:
+        _consecutive_failures += 1
+        _total_failures += 1
+        _last_failure_msg = msg[:200]
+        if _state == _STATE_HALF_OPEN:
+            # Probe failed — go straight back to OPEN
+            _transition(_STATE_OPEN)
+        elif _state == _STATE_CLOSED and _consecutive_failures >= _BREAKER_THRESHOLD:
+            _transition(_STATE_OPEN)
+
+
+def _should_attempt() -> bool:
+    """Return True if we should make a real HTTP call (and reserve a probe
+    slot if applicable). Must be cheap — runs on the hot path."""
+    global _total_short_circuited
+    with _lock:
+        if _state == _STATE_CLOSED:
+            return True
+        if _state == _STATE_OPEN:
+            if time.time() - _opened_at >= _BREAKER_OPEN_SECS:
+                # Cooldown elapsed — promote to HALF_OPEN and let THIS call probe
+                _transition(_STATE_HALF_OPEN)
+                return True
+            _total_short_circuited += 1
+            return False
+        # HALF_OPEN: only one probe in flight at a time. Subsequent concurrent
+        # callers fail-fast until the probe resolves.
+        _total_short_circuited += 1
         return False
-    if time.time() - _REMOTE_FAILED_AT > _REMOTE_COOLDOWN_SECS:
-        return False
-    return True
-
-
-def _mark_remote_failed() -> None:
-    global _REMOTE_FAILED_AT
-    _REMOTE_FAILED_AT = time.time()
-
-
-def _mark_remote_healthy() -> None:
-    global _REMOTE_FAILED_AT
-    _REMOTE_FAILED_AT = 0.0
 
 
 def is_remote_enabled() -> bool:
     return bool(SIDECAR_URL)
 
 
+def breaker_state() -> dict:
+    """Snapshot of breaker state for admin UI / diagnostics."""
+    with _lock:
+        remaining = 0.0
+        if _state == _STATE_OPEN:
+            remaining = max(0.0, _BREAKER_OPEN_SECS - (time.time() - _opened_at))
+        return {
+            "enabled": bool(SIDECAR_URL),
+            "state": _state,
+            "consecutive_failures": _consecutive_failures,
+            "threshold": _BREAKER_THRESHOLD,
+            "open_for_seconds": _BREAKER_OPEN_SECS,
+            "seconds_until_half_open": round(remaining, 1) if remaining else 0,
+            "total_successes": _total_successes,
+            "total_failures": _total_failures,
+            "total_short_circuited": _total_short_circuited,
+            "last_failure_msg": _last_failure_msg,
+        }
+
+
+def reset_breaker() -> None:
+    """Manual reset — for admin "force retry" button or tests."""
+    global _consecutive_failures
+    with _lock:
+        _consecutive_failures = 0
+        _transition(_STATE_CLOSED)
+
+
 def embed_remote(texts: List[str]) -> Optional[List[Optional[List[float]]]]:
     """POST /embed to the sidecar. Returns list of vectors (None for empty inputs)
-    or None if the sidecar is unreachable / disabled. Caller can fall back."""
-    if not SIDECAR_URL or _should_skip_remote() or not texts:
+    or None if the sidecar is unreachable / disabled / circuit-open.
+    Caller falls back to local embedding on None."""
+    if not SIDECAR_URL or not texts:
+        return None
+    if not _should_attempt():
         return None
 
     # Chunk large batches
@@ -80,30 +185,22 @@ def embed_remote(texts: List[str]) -> Optional[List[Optional[List[float]]]]:
             timeout=SIDECAR_TIMEOUT_SECS,
         )
         if r.status_code == 503:
-            # Model not loaded yet on the sidecar — treat as a soft fail.
             logger.warning("[EmbedClient] sidecar 503 — model not warm yet")
-            _mark_remote_failed()
+            _on_failure("HTTP 503 — model not warm")
             return None
         r.raise_for_status()
         data = r.json()
-        _mark_remote_healthy()
+        _on_success()
         return data.get("embeddings")
     except (requests.RequestException, ValueError) as e:
-        logger.warning(f"[EmbedClient] sidecar call failed: {e!s} — falling back")
-        _mark_remote_failed()
+        # Only log the first 2 failures in detail; once breaker opens, the
+        # subsequent _should_attempt() short-circuits make this path silent.
+        with _lock:
+            cur_failures = _consecutive_failures
+        if cur_failures < _BREAKER_THRESHOLD:
+            logger.warning("[EmbedClient] sidecar call failed: %s — falling back", str(e))
+        _on_failure(str(e))
         return None
-
-
-def health_check() -> dict:
-    """Cheap probe to surface in admin status pages."""
-    if not SIDECAR_URL:
-        return {"enabled": False, "reason": "BGE_SIDECAR_URL unset"}
-    try:
-        r = requests.get(f"{SIDECAR_URL}/health", timeout=5)
-        r.raise_for_status()
-        return {"enabled": True, "ok": True, **r.json()}
-    except Exception as e:
-        return {"enabled": True, "ok": False, "error": str(e)}
 
 
 def rerank_remote(query: str, documents: List[str], top_k: Optional[int] = None) -> Optional[List[dict]]:
@@ -112,7 +209,9 @@ def rerank_remote(query: str, documents: List[str], top_k: Optional[int] = None)
 
     Caller can fall back to bi-encoder cosine ordering on None.
     """
-    if not SIDECAR_URL or _should_skip_remote() or not documents or not query:
+    if not SIDECAR_URL or not documents or not query:
+        return None
+    if not _should_attempt():
         return None
     try:
         r = requests.post(
@@ -122,12 +221,52 @@ def rerank_remote(query: str, documents: List[str], top_k: Optional[int] = None)
         )
         if r.status_code == 503:
             logger.warning("[EmbedClient] rerank 503 — model not warm yet")
-            _mark_remote_failed()
+            _on_failure("HTTP 503 — model not warm (rerank)")
             return None
         r.raise_for_status()
-        _mark_remote_healthy()
+        _on_success()
         return r.json().get("results")
     except (requests.RequestException, ValueError) as e:
-        logger.warning(f"[EmbedClient] rerank call failed: {e!s}")
-        _mark_remote_failed()
+        with _lock:
+            cur_failures = _consecutive_failures
+        if cur_failures < _BREAKER_THRESHOLD:
+            logger.warning("[EmbedClient] rerank call failed: %s", str(e))
+        _on_failure(str(e))
         return None
+
+
+def health_check() -> dict:
+    """Cheap probe to surface in admin status pages.
+    Does NOT go through the breaker — admins want raw state."""
+    if not SIDECAR_URL:
+        return {"enabled": False, "reason": "BGE_SIDECAR_URL unset"}
+    try:
+        r = requests.get(f"{SIDECAR_URL}/health", timeout=5)
+        r.raise_for_status()
+        return {
+            "enabled": True,
+            "ok": True,
+            "breaker": breaker_state(),
+            **r.json(),
+        }
+    except Exception as e:
+        return {
+            "enabled": True,
+            "ok": False,
+            "error": str(e),
+            "breaker": breaker_state(),
+        }
+
+
+# ── Backwards-compat shims (other modules may have imported these) ───
+def _should_skip_remote() -> bool:
+    """Legacy alias for callers from the old basic-cooldown era."""
+    return not _should_attempt()
+
+
+def _mark_remote_failed() -> None:
+    _on_failure("manual mark_remote_failed")
+
+
+def _mark_remote_healthy() -> None:
+    _on_success()
