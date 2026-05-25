@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VHC Talent OS - Multi-Platform Capture",
-  "version": "5.5.3",
+  "version": "5.5.4",
   "description": "Capture candidate profiles from Naukri, LinkedIn, and Foundit to VHC Talent OS \u2014 AI extraction, offline queue, auto job-shortlisting",
   "update_url": "https://api.ventureshrd.com/api/extension/update.xml",
   "permissions": [

@@ -132,7 +132,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '5.5.3';
+  const VERSION = '5.5.4';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -3420,7 +3420,14 @@
           name: info.name,
           headline: info.headline || '',
           location: info.location || '',
-          profileUrl: info.profileUrl
+          profileUrl: info.profileUrl,
+          // Multi-signal corroboration fields (v5.5.4+)
+          current_employer: info.current_employer || null,
+          designation: info.designation || null,
+          experience_years: info.experience_years || null,
+          annual_ctc: info.annual_ctc || null,
+          skills: info.skills || null,
+          education: info.education || null,
         });
         cardMap.push({ cardEl: card, info });
       }
@@ -3495,10 +3502,12 @@
 
   /**
    * Scrapes profile card info to prepare search check.
+   * Extracts every visible signal from the Naukri tuple-card so the
+   * backend can multi-signal verify identity (name alone is not enough).
    */
   function scrapeSearchCardInfo(cardEl) {
     try {
-      // Naukri Resdex uses .candidate-name first; fall back to other platforms.
+      // ── Profile URL + name ──
       const linkEl = cardEl.querySelector(
         'a.candidate-name, a.candidate-profile-summary, ' +
         'a[href*="preview"], a[href*="profile"], a[href*="resume"], a[href*="resdex"]'
@@ -3506,43 +3515,107 @@
       const profileUrl = linkEl ? linkEl.href : null;
       if (!profileUrl) return null;
 
-      // Name: prefer the explicit .candidate-name link's inner text
       const nameEl = cardEl.querySelector(
         'a.candidate-name, [class*="candidateName"], [class*="candidate-name"], ' +
         '[class*="name"], h2, h3, [class*="title"]:first-of-type'
       );
       const name = cleanText(nameEl?.innerText) || 'Unknown';
 
-      // Headline: Naukri Resdex puts the summary in .candidate-profile-summary
-      // (e.g. "R&D Design Engineer with B.Tech currently living in Pune")
+      // ── Headline (Naukri's "candidate-profile-summary" e.g. "R&D Engineer with B.Tech in Pune") ──
       const headlineEl = cardEl.querySelector(
         '.candidate-profile-summary, [class*="candidate-headline"], ' +
         '[class*="headline"], [class*="designation"], [class*="currentTitle"]'
       );
       const headline = cleanText(headlineEl?.innerText) || null;
 
-      // Location: Naukri uses span.location inside meta-data
+      // ── Location ──
       const locEl = cardEl.querySelector(
         'span.location, [class*="location"], [class*="loc"], [class*="city"]'
       );
       const location = cleanText(locEl?.innerText) || null;
 
-      // Company: Naukri puts current employer inside #currentEmp > .employment-detail
-      // (rendered as button tags with title="Find candidates from <Company>")
-      let company = null;
-      const empEl = cardEl.querySelector(
-        '#currentEmp .employment-detail button[title*="from "], ' +
-        '#currentEmp .employment-detail, ' +
-        '[class*="company"], [class*="employer"], [class*="currentCompany"]'
-      );
-      if (empEl) {
-        // If we got the "Find candidates from XYZ" button, extract just the XYZ
-        const title = empEl.getAttribute('title') || '';
-        const m = title.match(/from\s+(.+)/i);
-        company = cleanText(m ? m[1] : empEl.innerText) || null;
+      // ── Current employer ──
+      // Naukri renders this inside #currentEmp > .employment-detail
+      // as `<button title="Find candidates from <Company>">`.
+      let current_employer = null;
+      let designation = null;
+      const empWrap = cardEl.querySelector('#currentEmp, [class*="currentEmp"]');
+      if (empWrap) {
+        // Designation button has title="Find candidates who are currently <Designation>"
+        const desigBtn = empWrap.querySelector('button[title*="currently "]');
+        if (desigBtn) {
+          const m = desigBtn.getAttribute('title').match(/currently\s+(.+)/i);
+          if (m) designation = cleanText(m[1]);
+        }
+        // Company button has title="Find candidates from <Company>"
+        const compBtn = empWrap.querySelector('button[title*="from "]');
+        if (compBtn) {
+          const m = compBtn.getAttribute('title').match(/from\s+(.+)/i);
+          if (m) current_employer = cleanText(m[1]);
+        }
+        if (!current_employer) {
+          // Fallback: parse "<Designation> at <Company>" from inner text
+          const txt = cleanText(empWrap.innerText || '');
+          const m = txt.match(/^(.+?)\s+at\s+(.+?)(?:\s|$)/i);
+          if (m) {
+            if (!designation) designation = m[1];
+            current_employer = m[2];
+          }
+        }
       }
 
-      return { profileUrl, name, headline, location, company };
+      // ── Experience (parse "2y 7m" from meta-data title="Experience") ──
+      let experience_years = null;
+      const expEl = cardEl.querySelector('[title="Experience"] + span, .meta-data span[title*="y "]');
+      const expText = cleanText(expEl?.innerText || cardEl.querySelector('.meta-data span[title*="y "]')?.getAttribute('title') || '');
+      if (expText) {
+        const ym = expText.match(/(\d+)\s*y(?:ears?)?(?:\s*(\d+)\s*m(?:onths?)?)?/i);
+        if (ym) {
+          const yrs = parseInt(ym[1], 10);
+          const mos = ym[2] ? parseInt(ym[2], 10) : 0;
+          experience_years = +(yrs + mos / 12).toFixed(2);
+        }
+      }
+
+      // ── Annual CTC (parse "₹ 4.20 Lacs" from meta-data title="Annual salary") ──
+      let annual_ctc = null;
+      const ctcEl = cardEl.querySelector('[title="Annual salary"] + span, .meta-data span[title*="Lacs"], .meta-data span[title*="₹"]');
+      const ctcText = cleanText(ctcEl?.getAttribute?.('title') || ctcEl?.innerText || '');
+      if (ctcText) {
+        // "₹ 4.20 Lacs" → 420000;  "₹ 12.5 Lacs" → 1250000
+        const m = ctcText.match(/([\d.]+)\s*lacs?/i);
+        if (m) annual_ctc = Math.round(parseFloat(m[1]) * 100000);
+        else {
+          const m2 = ctcText.match(/([\d.]+)\s*cr/i);
+          if (m2) annual_ctc = Math.round(parseFloat(m2[1]) * 10000000);
+        }
+      }
+
+      // ── Skills (key-skills section: each .cand-skill button) ──
+      let skills = null;
+      const skillBtns = cardEl.querySelectorAll('.key-skills .cand-skill button, .candidate-skills [class*="skill"] button');
+      if (skillBtns.length) {
+        skills = Array.from(skillBtns)
+          .map(b => cleanText(b.innerText || b.getAttribute('title') || ''))
+          .map(s => s.replace(/^find candidates with keyword\s+/i, '').trim())
+          .filter(s => s && s.length < 50)
+          .slice(0, 15);
+        if (!skills.length) skills = null;
+      }
+
+      // ── Education ("B.Tech / B.E. Dr Babasaheb Ambedkar... 2023") ──
+      let education = null;
+      const eduEl = cardEl.querySelector('#education, [id*="education"], .education');
+      if (eduEl) {
+        education = cleanText(eduEl.getAttribute('title') || eduEl.innerText) || null;
+      }
+
+      return {
+        profileUrl, name, headline, location,
+        current_employer, designation,
+        experience_years, annual_ctc,
+        skills, education,
+      };
     } catch (_) {
       return null;
     }

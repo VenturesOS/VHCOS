@@ -143,6 +143,16 @@ class CandidateIn(BaseModel):
     name: str
     headline: Optional[str] = None
     location: Optional[str] = None
+    # Corroborating signals (any subset — extension sends what's visible
+    # on the Naukri/LinkedIn card). The badge now REQUIRES name + at
+    # least one strong signal match to fire.
+    current_employer: Optional[str] = None
+    designation: Optional[str] = None
+    experience_years: Optional[float] = None  # e.g. 2.07 from "2y 7m"
+    annual_ctc: Optional[float] = None        # in INR (₹ 4.20 Lacs → 420000)
+    skills: Optional[List[str]] = None
+    education: Optional[str] = None
+    notice_period: Optional[str] = None
 
 
 class CheckExistingRequest(BaseModel):
@@ -155,6 +165,8 @@ class CheckResult(BaseModel):
     candidate_id: Optional[str] = None
     captured_at: Optional[str] = None
     match_confidence: Optional[str] = None  # "high" | "medium"
+    matched_signals: Optional[List[str]] = None  # debug: which signals fired
+    match_score: Optional[float] = None  # 0.0–1.0
 
 
 class CheckExistingResponse(BaseModel):
@@ -172,12 +184,199 @@ def _first_significant_token(name: str) -> str:
     return tokens[0] if tokens else ""
 
 
+# ── Multi-signal scoring ─────────────────────────────────────────────
+# Each signal contributes a weight when it matches. Threshold to badge
+# is 1.0 — name match alone (weight 0.5) is NOT enough; needs at least
+# one corroborating signal worth ≥0.5.
+_SIGNAL_WEIGHTS = {
+    "name": 0.5,        # baseline — required, but alone is insufficient
+    "employer": 0.6,    # strong: same company is a near-certain co-signal
+    "designation": 0.4,
+    "ctc": 0.5,         # within ±20%
+    "experience": 0.4,  # within ±1 year
+    "skills": 0.5,      # ≥30% overlap on listed skills
+    "education": 0.4,
+    "location": 0.25,   # weak (Pune has many Akashes)
+    "headline_employer": 0.4,  # employer mentioned in headline (when not parsed)
+}
+
+# Threshold (out of 1.6 max) to declare a match. name (0.5) + any one
+# of employer/ctc/skills (≥ 0.5) clears 1.0. Two weak signals (e.g.
+# designation 0.4 + location 0.25) won't, which is the desired behavior.
+_BADGE_THRESHOLD = 1.0
+_HIGH_THRESHOLD = 1.3
+
+
+def _norm_str(s: Optional[str]) -> str:
+    if not s:
+        return ""
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s]", " ", s.lower())).strip()
+
+
+def _employer_matches(in_emp: Optional[str], db_emp: Optional[str]) -> bool:
+    a, b = _norm_str(in_emp), _norm_str(db_emp)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    # Strip common corp suffixes
+    for suffix in (" pvt ltd", " private limited", " ltd", " limited", " inc",
+                   " corp", " corporation", " llp", " india"):
+        a = a.replace(suffix, "").strip()
+        b = b.replace(suffix, "").strip()
+    if a == b:
+        return True
+    # One being a substring of the other (≥4 chars)
+    if len(a) >= 4 and len(b) >= 4 and (a in b or b in a):
+        return True
+    return False
+
+
+def _designation_matches(in_d: Optional[str], db_d: Optional[str]) -> bool:
+    a, b = _norm_str(in_d), _norm_str(db_d)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    # Token overlap ≥ 1 non-trivial word
+    ta = {w for w in a.split() if len(w) >= 4}
+    tb = {w for w in b.split() if len(w) >= 4}
+    return bool(ta & tb)
+
+
+def _ctc_matches(in_ctc: Optional[float], db_ctc: Optional[float]) -> bool:
+    """CTC within ±20% (handles imprecise Naukri rounding like 4.2 → 420000)."""
+    if not in_ctc or not db_ctc:
+        return False
+    try:
+        a, b = float(in_ctc), float(db_ctc)
+    except (TypeError, ValueError):
+        return False
+    if a <= 0 or b <= 0:
+        return False
+    smaller, larger = min(a, b), max(a, b)
+    return (larger - smaller) / larger <= 0.20
+
+
+def _experience_matches(in_exp: Optional[float], db_exp: Optional[float]) -> bool:
+    """Within ±1 year."""
+    if in_exp is None or db_exp is None:
+        return False
+    try:
+        return abs(float(in_exp) - float(db_exp)) <= 1.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _skills_overlap(in_skills: Optional[List[str]], db_skills) -> bool:
+    """≥30% of the input skills appear in the DB candidate's skill set."""
+    if not in_skills:
+        return False
+    # DB may store skills as list of strings, or list of dicts {name: ...},
+    # or a single comma-separated string. Normalise all to a set.
+    db_set: set[str] = set()
+    if isinstance(db_skills, list):
+        for s in db_skills:
+            if isinstance(s, str):
+                db_set.add(_norm_str(s))
+            elif isinstance(s, dict):
+                db_set.add(_norm_str(s.get("name") or s.get("skill") or ""))
+    elif isinstance(db_skills, str):
+        for s in db_skills.split(","):
+            db_set.add(_norm_str(s))
+    db_set.discard("")
+    if not db_set:
+        return False
+    in_set = {_norm_str(s) for s in in_skills if s}
+    in_set.discard("")
+    if not in_set:
+        return False
+    hits = sum(1 for s in in_set if any(s in d or d in s for d in db_set))
+    return hits / max(len(in_set), 1) >= 0.30
+
+
+def _education_matches(in_edu: Optional[str], db_edu) -> bool:
+    a = _norm_str(in_edu)
+    if not a:
+        return False
+    # DB may be string, list of strings, or list of dicts
+    db_str = ""
+    if isinstance(db_edu, list):
+        parts = []
+        for e in db_edu:
+            if isinstance(e, str):
+                parts.append(e)
+            elif isinstance(e, dict):
+                parts.extend([
+                    str(e.get("institute", "")),
+                    str(e.get("university", "")),
+                    str(e.get("degree", "")),
+                ])
+        db_str = _norm_str(" ".join(parts))
+    elif isinstance(db_edu, str):
+        db_str = _norm_str(db_edu)
+    if not db_str:
+        return False
+    # Any 6+-char token from input education appearing in DB
+    for tok in re.findall(r"[a-z]{6,}", a):
+        if tok in db_str:
+            return True
+    return False
+
+
+def _location_matches(in_loc: Optional[str], db_loc: Optional[str]) -> bool:
+    a, b = _norm_str(in_loc), _norm_str(db_loc)
+    if not a or not b:
+        return False
+    return a == b or a in b or b in a
+
+
+def _headline_mentions_employer(headline: Optional[str], db_emp: Optional[str]) -> bool:
+    h, e = _norm_str(headline), _norm_str(db_emp)
+    if not h or not e or len(e) < 4:
+        return False
+    return e in h
+
+
+def _score_match(c: CandidateIn, doc: dict) -> tuple[float, List[str]]:
+    """Compute a 0–~1.6 match score + list of signals that fired."""
+    signals: List[str] = ["name"]
+    score = _SIGNAL_WEIGHTS["name"]
+
+    if _employer_matches(c.current_employer, doc.get("current_employer")):
+        score += _SIGNAL_WEIGHTS["employer"]; signals.append("employer")
+    elif _headline_mentions_employer(c.headline, doc.get("current_employer")):
+        # Weaker — headline cross-reference when employer field wasn't parsed
+        score += _SIGNAL_WEIGHTS["headline_employer"]; signals.append("headline_employer")
+
+    if _designation_matches(c.designation, doc.get("designation")):
+        score += _SIGNAL_WEIGHTS["designation"]; signals.append("designation")
+
+    if _ctc_matches(c.annual_ctc, doc.get("annual_ctc") or doc.get("current_ctc")):
+        score += _SIGNAL_WEIGHTS["ctc"]; signals.append("ctc")
+
+    if _experience_matches(c.experience_years, doc.get("experience_years")
+                            or doc.get("total_experience")):
+        score += _SIGNAL_WEIGHTS["experience"]; signals.append("experience")
+
+    if _skills_overlap(c.skills, doc.get("skills")):
+        score += _SIGNAL_WEIGHTS["skills"]; signals.append("skills")
+
+    if _education_matches(c.education, doc.get("education")):
+        score += _SIGNAL_WEIGHTS["education"]; signals.append("education")
+
+    if _location_matches(c.location, doc.get("location")):
+        score += _SIGNAL_WEIGHTS["location"]; signals.append("location")
+
+    return score, signals
+
+
 def _headline_or_loc_hits(
     headline: Optional[str],
     in_location: Optional[str],
     bank_doc: dict,
 ) -> bool:
-    """Cross-check candidate metadata vs DB record to bump confidence to high."""
+    """Legacy helper — kept for backwards compat with any other callers."""
     if not headline and not in_location:
         return False
     hay = " ".join([
@@ -186,41 +385,32 @@ def _headline_or_loc_hits(
     ])
     for k in ("current_employer", "designation", "location", "headline"):
         v = (bank_doc.get(k) or "")
-        if not v:
+        if not v or len(str(v)) < 3:
             continue
-        v_low = v.lower().strip()
-        if len(v_low) < 3:
-            continue
-        # Either side mentions the other → win
-        if v_low in hay:
+        if str(v).lower().strip() in hay:
             return True
-        # Or any 4+-char token from DB shows up in the input
-        for tok in re.findall(r"[a-z]{4,}", v_low):
-            if tok in hay:
-                return True
     return False
 
 
 async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
-    """Find best matching candidate_bank doc for one input candidate."""
+    """Find best matching candidate_bank doc for one input candidate.
+
+    Returns `exists=True` ONLY when name match + at least one strong
+    corroborating signal (employer / ctc / skills / etc.) push the
+    composite score above the badge threshold."""
     first_tok = _first_significant_token(c.name)
     if not first_tok or len(first_tok) < 2:
         return CheckResult(index=idx, exists=False)
 
-    # Extract other significant tokens from the input name — we'll use them
-    # to narrow the Mongo query so we don't scan past 40 unrelated "AKASH"
-    # docs before reaching "Akash Dhanraj Chavan".
+    # Narrow the Mongo pool by requiring at least one non-first-name token
+    # from the input to appear in the DB name. Drops candidate pool from
+    # thousands of "AKASH" → handful of "Akash ... <lastname>".
     import re as _re
     cleaned = _re.sub(r"\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b", " ", c.name.lower())
     cleaned = _re.sub(r"[^a-z0-9\s]", " ", cleaned)
     all_tokens = [t for t in cleaned.split() if len(t) >= 3]
     other_tokens = [t for t in all_tokens if t != first_tok]
 
-    # Build the query:
-    #   - Always anchor on the first token
-    #   - If we have other ≥3-char tokens (likely a last name), require ANY of
-    #     them to appear in the DB name. This drops the candidate pool from
-    #     thousands of "AKASH" → handful of "Akash ... <lastname>".
     prefix_pattern = _re.compile(rf"^{_re.escape(first_tok)}", _re.IGNORECASE)
     query: dict = {"name": prefix_pattern}
     if other_tokens:
@@ -228,10 +418,9 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
             {"name": prefix_pattern},
             {"$or": [
                 {"name": _re.compile(rf"\b{_re.escape(t)}", _re.IGNORECASE)}
-                for t in other_tokens[:4]  # cap at 4 to keep regex cheap
+                for t in other_tokens[:4]
             ]},
         ]
-        # When using $and, the top-level "name" key is redundant
         query.pop("name", None)
 
     cursor = db.candidate_bank.find(
@@ -240,37 +429,49 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
             "_id": 0, "id": 1, "name": 1,
             "current_employer": 1, "designation": 1,
             "location": 1, "headline": 1,
+            "experience_years": 1, "total_experience": 1,
+            "annual_ctc": 1, "current_ctc": 1,
+            "skills": 1, "education": 1,
             "created_at": 1, "captured_at": 1,
         },
     ).limit(40)
 
-    best: Optional[dict] = None
-    best_high = False
+    # Score every name-matching doc, pick the highest scorer
+    best_doc: Optional[dict] = None
+    best_score: float = 0.0
+    best_signals: List[str] = []
 
     async for doc in cursor:
         if not _strict_name_match(c.name, doc.get("name") or ""):
             continue
-        high = _headline_or_loc_hits(c.headline, c.location, doc)
-        if best is None or (high and not best_high):
-            best = doc
-            best_high = high
-            if best_high:
-                break  # high-confidence early exit
+        score, signals = _score_match(c, doc)
+        if score > best_score:
+            best_score = score
+            best_signals = signals
+            best_doc = doc
+            if score >= _HIGH_THRESHOLD:
+                break  # excellent match — stop scanning
 
-    if not best:
-        return CheckResult(index=idx, exists=False)
+    # Below badge threshold → no false positive. NAME-only matches are
+    # treated as misses by design (too many shared first+last names).
+    if best_doc is None or best_score < _BADGE_THRESHOLD:
+        return CheckResult(
+            index=idx,
+            exists=False,
+            match_score=round(best_score, 2) if best_doc else None,
+            matched_signals=best_signals if best_doc else None,
+        )
 
-    captured_at = (
-        best.get("captured_at")
-        or best.get("created_at")
-        or None
-    )
+    captured_at = best_doc.get("captured_at") or best_doc.get("created_at") or None
+    confidence = "high" if best_score >= _HIGH_THRESHOLD else "medium"
     return CheckResult(
         index=idx,
         exists=True,
-        candidate_id=best.get("id"),
+        candidate_id=best_doc.get("id"),
         captured_at=captured_at,
-        match_confidence="high" if best_high else "medium",
+        match_confidence=confidence,
+        match_score=round(best_score, 2),
+        matched_signals=best_signals,
     )
 
 
