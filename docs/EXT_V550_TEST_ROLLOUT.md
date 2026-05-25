@@ -1,9 +1,9 @@
-# Extension v5.4.1 — Admin-Only Test Rollout
+# Extension v5.5.0 — Admin-Only Test Rollout
 
 **Phase 55.9 / Feb 2026** — testing the new "Already in Database" feature
 on `admin@vhc.in` ONLY before public rollout.
 
-## What changed in v5.4.1
+## What changed in v5.5.0
 
 **Bug fixes** (you'll get these even without doing anything special):
 - Background tab profile captures now work reliably
@@ -32,28 +32,28 @@ on `admin@vhc.in` ONLY before public rollout.
 
 ### One-time install
 
-1. Download the v5.4.1 zip from server:
+1. Download the v5.5.0 zip from server:
    ```
-   https://ventureshrd.com/api/extension/download.crx?v=5.4.1
+   https://ventureshrd.com/api/extension/download.crx?v=5.5.0
    ```
    *…wait, that's the CRX endpoint. We're not publishing a CRX yet.
    Use this admin-only direct path instead:*
    
    On the EC2 box, copy the zip out to the admin's machine:
    ```bash
-   scp ubuntu@<EC2-IP>:/home/ubuntu/vhc-platform/backend/static/extensions/vhc-naukri-extension-v5.4.1.zip ~/Desktop/
+   scp ubuntu@<EC2-IP>:/home/ubuntu/vhc-platform/backend/static/extensions/vhc-naukri-extension-v5.5.0.zip ~/Desktop/
    ```
    Or grab it directly from the dev folder:
-   `/app/browser-extension-v5.4.1/` (skip the `.zip` and load the folder).
+   `/app/browser-extension-v5.5.0/` (skip the `.zip` and load the folder).
 
-2. Unzip the file → you get a folder `vhc-naukri-extension-v5.4.1/`.
+2. Unzip the file → you get a folder `vhc-naukri-extension-v5.5.0/`.
 
 3. **Chrome**:
    - Go to `chrome://extensions/`
    - Top-right: toggle **Developer mode** ON
    - **Remove** the existing "VHC Talent OS" extension first (this prevents conflicts)
    - Click **Load unpacked** → select the unzipped folder
-   - Verify it loads as **v5.4.1**
+   - Verify it loads as **v5.5.0**
 
 4. Click the extension icon → log in with **admin@vhc.in / VhcAdmin@2024**
 
@@ -65,7 +65,7 @@ on `admin@vhc.in` ONLY before public rollout.
 | A2 | Open a profile on Slow 3G (DevTools → Network → Slow 3G). | Capture still succeeds within 15s. |
 | A3 | Open a profile in background tab, then close the tab before capture finishes. | No console errors. |
 | A4 | Click a profile normally (foreground tab). | Existing capture behavior unchanged. |
-| A5 | Open browser console — look for `[VHC v5.4.1]` lines. | Should see: "background tab", "Score 2/4" or "3/4", "DOM quietness wait", "Strategy 2 SUCCESS". |
+| A5 | Open browser console — look for `[VHC v5.5.0]` lines. | Should see: "background tab", "Score 2/4" or "3/4", "DOM quietness wait", "Strategy 2 SUCCESS". |
 
 ### Testing Part B — "Already in Database" feature (THE NEW THING)
 
@@ -119,7 +119,7 @@ cd /home/ubuntu/vhc-platform
 # 1. Open the allowlist
 sed -i 's/^EXTENSION_CHECK_EXISTING_ALLOWLIST=.*/EXTENSION_CHECK_EXISTING_ALLOWLIST=*/' backend/.env
 
-# 2. Bump update.xml to point at a signed CRX of v5.4.1
+# 2. Bump update.xml to point at a signed CRX of v5.5.0
 #    (CRX build is a separate step — let me know when you're ready and
 #     I'll guide through signing + publishing. Until then, recruiters stay
 #     on v5.3.0 via the existing CRX.)
