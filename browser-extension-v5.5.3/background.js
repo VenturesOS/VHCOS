@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '5.5.2';
+const VERSION = '5.5.3';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we
@@ -374,7 +374,7 @@ async function checkExistingCandidates(candidates) {
         });
         if (retryResponse.ok) {
           const apiData = await retryResponse.json();
-          return mergeCheckResults(localResults, apiData.results);
+          return { results: apiData.results || [] };
         }
       }
       console.warn(`[VHC BG v${VERSION}] checkExisting: API Auth failed, using local fallback.`);
@@ -387,7 +387,11 @@ async function checkExistingCandidates(candidates) {
     }
     
     const apiData = await response.json();
-    return mergeCheckResults(localResults, apiData.results);
+    // API succeeded — trust it exclusively. The local fuzzy matcher uses
+    // substring-against-browser-cache which is too loose for the badge
+    // (causes false positives on common first names). Local history is
+    // ONLY used as the offline fallback when the API call fails.
+    return { results: apiData.results || [] };
   } catch (err) {
     console.warn(`[VHC BG v${VERSION}] checkExisting API call failed:`, err.message, "— falling back to local history.");
     return { results: localResults };

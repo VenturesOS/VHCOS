@@ -59,22 +59,28 @@ def _strict_name_match(name_a: str, name_b: str) -> bool:
     """
     STRICT name match — for the "Already in Database" badge specifically.
 
-    Different from `_names_are_similar` (which is the dedup matcher) — that
-    one is intentionally LOOSE (high recall) so dupes merge. Here we need
-    high PRECISION so we don't badge every "Manish" / "Akash" / "Rajesh" as
-    already-saved when in fact only ONE of the many Akashes is captured.
+    Different from `_names_are_similar` (which is the dedup matcher — loose
+    by design for recall). Here we need PRECISION: don't badge every
+    "Manish" or "Akash" as already-saved when only ONE of them is captured.
 
-    A match requires BOTH:
-      • First significant token matches AND
-      • Either (a) at least one OTHER non-trivial token (≥3 chars) is shared,
-              (b) one side has only a single token and the other includes it,
-              (c) overall fuzzy ratio is very high (≥ 0.90)
+    Rule (multi-token names — the common case):
+      Require BOTH first AND last meaningful (≥3 char) tokens to match.
+      Middle tokens are ignored entirely.
 
-    So: "Akash Chavan" matches "Akash Chavan" ✓
-        "Akash Dhanraj Chavan" matches "Akash Chavan" ✓ (shared: chavan)
-        "Akash Patil" does NOT match "Akash Chavan" ✗ (only first name shared)
-        "Manish" matches "Manish" ✓ (single-token both sides, equal)
-        "Manish Singh" does NOT match "Manish Kumar" ✗ (different last name)
+      Examples:
+        "Akash Chavan"          ↔ "Akash Dhanraj Chavan"  ✓  (first+last match)
+        "Manish Kumar Sehgal"   ↔ "Manish Sehgal"         ✓  (first+last match)
+        "Manish Kumar Sehgal"   ↔ "Manish Kumar"          ✗  ("kumar" != "sehgal")
+        "Manish Singh"          ↔ "Manish Kumar Singh"    ✓  (first+last match)
+        "Akash Patil"           ↔ "Akash Chavan"          ✗  (different last name)
+        "Rajesh Nayak"          ↔ "Rajesh More"           ✗
+
+    Rule (single-token names — uncommon):
+      Single-token name matches only single-token name with identical token,
+      or a multi-token name where that token equals the first OR last token.
+
+    Rule (typos / transliteration):
+      Very high fuzzy ratio (≥ 0.92) — handles "Rajut" vs "Rajat" etc.
     """
     if not name_a or not name_b:
         return False
@@ -92,34 +98,29 @@ def _strict_name_match(name_a: str, name_b: str) -> bool:
     if a == b:
         return True
 
-    wa = [w for w in a.split() if len(w) > 1]
-    wb = [w for w in b.split() if len(w) > 1]
-    if not wa or not wb:
-        return False
+    # Significant tokens (≥3 chars, drops noise like "K" or "M")
+    sig_a = [w for w in a.split() if len(w) >= 3]
+    sig_b = [w for w in b.split() if len(w) >= 3]
+    if not sig_a or not sig_b:
+        # Fall back to all-token list for very short names
+        sig_a = [w for w in a.split() if len(w) > 1]
+        sig_b = [w for w in b.split() if len(w) > 1]
+        if not sig_a or not sig_b:
+            return False
 
-    # Must share first token (case-insensitive after cleaning)
-    if wa[0] != wb[0]:
-        # Fallback: extremely high fuzzy ratio (catches "Rajut" vs "Rajat" typos)
+    # MULTI-token both sides: require first AND last to match
+    if len(sig_a) >= 2 and len(sig_b) >= 2:
+        if sig_a[0] == sig_b[0] and sig_a[-1] == sig_b[-1]:
+            return True
+        # Fuzzy as a last resort (catches "Rajut Gupta" vs "Rajat Gupta")
         return _SM(None, a, b).ratio() >= 0.92
 
-    # First token matches — now require a SECOND signal.
-    tokens_a = {w for w in wa[1:] if len(w) >= 3}
-    tokens_b = {w for w in wb[1:] if len(w) >= 3}
-
-    # (a) Any non-trivial extra token shared (e.g. shared last name)
-    if tokens_a & tokens_b:
-        return True
-
-    # (b) Single-token name on one side equals single-token name on the other
-    #     (e.g. user lists candidate as just "Akash", DB has just "Akash")
-    if len(wa) == 1 and len(wb) == 1:
-        return True
-
-    # (c) Very high fuzzy ratio over the full names
-    if _SM(None, a, b).ratio() >= 0.90:
-        return True
-
-    return False
+    # SINGLE-token on one or both sides
+    if len(sig_a) == 1 and len(sig_b) == 1:
+        return sig_a[0] == sig_b[0]
+    # Single vs multi: the single token must equal the first OR last of the multi
+    single, multi = (sig_a, sig_b) if len(sig_a) == 1 else (sig_b, sig_a)
+    return single[0] == multi[0] or single[0] == multi[-1]
 
 logger = logging.getLogger(__name__)
 
