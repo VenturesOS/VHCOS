@@ -25,8 +25,26 @@ on `admin@vhc.in` ONLY before public rollout.
 | Allowlist gating | ✅ Live (`EXTENSION_CHECK_EXISTING_ALLOWLIST=admin@vhc.in`) |
 | Fuzzy name match (uses existing `_names_are_similar`) | ✅ Live |
 | Headline → employer high-confidence boost | ✅ Live |
-| `update.xml` auto-update version | 🚫 STILL on v5.3.0 (intentional — no public push) |
+| Signed CRX v5.5.0 (ID `nmlmoniipcgpomhhogijpbelmpcoafjk`) | ✅ Built |
+| `update.xml` (dev preview) | ✅ Updated to v5.5.0 |
+| `update.xml` (production `api.ventureshrd.com`) | 🚧 Will update on next git pull |
 | E2E backend tests | ✅ 18/18 passing |
+
+## ⚠️ Critical migration note — existing v5.3.0 installs
+
+The v5.3.0 CRX that recruiters currently have installed has its
+`update_url` baked in pointing to `claude-extraction.preview.emergentagent.com`
+**which is DEAD** (returns 404). This means **Chrome cannot auto-update
+them from v5.3.0 → v5.5.0**.
+
+Once on v5.5.0, future auto-updates **will** work because the new
+manifest points at `https://api.ventureshrd.com/api/extension/update.xml`.
+
+**One-time migration strategy:**
+- Admin tests v5.5.0 via "Load Unpacked" (steps below)
+- When green-lit, push out a one-time email to recruiters with the
+  install link + 60-second instructions to re-install
+- After that, every future bump auto-flows via Chrome's update channel
 
 ## How admin will test (Chrome on the test machine)
 
