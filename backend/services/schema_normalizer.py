@@ -141,6 +141,12 @@ def normalize_candidate(parsed: Dict) -> Dict:
     """
     out = dict(parsed)
 
+    # ── name_lower (indexed for extension /check-existing perf) ─────────────
+    # See routes/extension_check.py + scripts/backfill_name_lower.py
+    _nm = out.get("name")
+    if isinstance(_nm, str) and _nm:
+        out["name_lower"] = _nm.lower()
+
     # ── skills ──────────────────────────────────────────────────────────────
     canonical_skills = _merge_string_lists(
         out.get("key_skills"), out.get("skills")

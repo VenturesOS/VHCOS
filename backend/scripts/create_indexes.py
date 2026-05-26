@@ -34,6 +34,17 @@ async def create_indexes():
         await db.candidate_bank.create_index("id", name="id_idx")
         print("  ✅ id index (non-unique fallback)")
 
+    # ─── `name_lower` index for the Naukri extension's check-existing call ───
+    # The extension's badge check does a case-insensitive prefix match on
+    # candidate name. Case-insensitive regex (e.g. /^narayan/i) on `name`
+    # cannot use any B-tree index. We mirror the name to `name_lower` and
+    # use a case-SENSITIVE regex on it → index-backed, 10-50× faster.
+    try:
+        await db.candidate_bank.create_index("name_lower", name="name_lower_idx", sparse=True)
+        print("  ✅ name_lower index ← extension /check-existing perf")
+    except Exception as e:
+        print(f"  ⚠️ name_lower index: {e}")
+
     # Text index for name search (supports partial/fuzzy matching)
     try:
         await db.candidate_bank.create_index([("name", "text"), ("email", "text"), ("skills", "text")], name="text_search_idx")

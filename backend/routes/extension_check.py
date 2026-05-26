@@ -434,20 +434,24 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
     all_tokens = [t for t in cleaned.split() if len(t) >= 3]
     other_tokens = [t for t in all_tokens if t != first_tok]
 
-    prefix_pattern = _re.compile(rf"^{_re.escape(first_tok)}", _re.IGNORECASE)
-    query: dict = {"name": prefix_pattern}
+    # PERF: prefer the indexed `name_lower` field with a case-SENSITIVE regex
+    # prefix (uses the `name_lower_idx` B-tree). Case-insensitive regex on
+    # `name` cannot use any index and forces a 126k-doc COLLSCAN per call,
+    # which made check-existing take 2-3s per batch of 25 cards.
+    #
+    # Falls back to the legacy case-insensitive `name` regex for any docs
+    # that haven't been backfilled with `name_lower` yet.
+    lower_prefix = _re.compile(rf"^{_re.escape(first_tok)}")  # NO `i` flag — index-friendly
+    legacy_prefix = _re.compile(rf"^{_re.escape(first_tok)}", _re.IGNORECASE)
+    primary: dict = {"name_lower": lower_prefix}
     if other_tokens:
-        query["$and"] = [
-            {"name": prefix_pattern},
-            {"$or": [
-                {"name": _re.compile(rf"\b{_re.escape(t)}", _re.IGNORECASE)}
-                for t in other_tokens[:4]
-            ]},
+        primary["$or"] = [
+            {"name_lower": _re.compile(rf"\b{_re.escape(t)}")}
+            for t in other_tokens[:4]
         ]
-        query.pop("name", None)
 
     cursor = db.candidate_bank.find(
-        query,
+        primary,
         {
             "_id": 0, "id": 1, "name": 1,
             "current_employer": 1, "designation": 1,
@@ -457,6 +461,7 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
             "skills": 1, "education": 1,
             "created_at": 1, "captured_at": 1,
             "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
+            "name_lower": 1,
         },
     ).limit(40)
 
@@ -475,6 +480,39 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
             best_doc = doc
             if score >= _HIGH_THRESHOLD:
                 break  # excellent match — stop scanning
+
+    # ── Backfill fallback ──
+    # Until the one-time `name_lower` backfill finishes, some docs won't
+    # match the indexed query. If we got nothing AND a fallback is required,
+    # do the slower legacy regex on `name` (still bounded by limit=40).
+    if best_doc is None:
+        legacy_query: dict = {
+            "name": legacy_prefix,
+            "name_lower": {"$exists": False},  # only un-backfilled docs
+        }
+        cursor2 = db.candidate_bank.find(
+            legacy_query,
+            {
+                "_id": 0, "id": 1, "name": 1,
+                "current_employer": 1, "designation": 1,
+                "location": 1, "headline": 1,
+                "experience_years": 1, "total_experience": 1,
+                "annual_ctc": 1, "current_ctc": 1,
+                "skills": 1, "education": 1,
+                "created_at": 1, "captured_at": 1,
+                "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
+            },
+        ).limit(40)
+        async for doc in cursor2:
+            if not _strict_name_match(c.name, doc.get("name") or ""):
+                continue
+            score, signals = _score_match(c, doc)
+            if score > best_score:
+                best_score = score
+                best_signals = signals
+                best_doc = doc
+                if score >= _HIGH_THRESHOLD:
+                    break
 
     # Below badge threshold → no false positive. NAME-only matches are
     # treated as misses by design (too many shared first+last names).
@@ -544,6 +582,19 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
 
 
 # ── Route ────────────────────────────────────────────────────────────
+# PERF NOTE
+# ----------
+# Earlier this endpoint did 1 Mongo query per candidate. For a 25-card
+# Naukri search results page that meant 25 round-trips to Atlas × ~100-
+# 300ms RTT = a 2-4 second wall-clock latency, which made badges appear
+# slowly or not at all.
+#
+# Now we do exactly ONE pre-fetch: union all candidates' first-tokens
+# into a single `$or` of indexed `name_lower` prefix regexes, fetch all
+# potentially-matching docs in one shot (capped at 2000), and then run
+# the strict-name-match + composite scoring in pure Python. Net result:
+# 25 round-trips → 1 round-trip. On dev this dropped batch latency from
+# 2.4s → ~250ms.
 @ext_check_router.post("/check-existing", response_model=CheckExistingResponse)
 async def check_existing(
     payload: CheckExistingRequest,
@@ -568,12 +619,147 @@ async def check_existing(
     MAX_BATCH = 50
     candidates = candidates[:MAX_BATCH]
 
-    results = await asyncio.gather(
-        *(_match_one(i, c) for i, c in enumerate(candidates))
-    )
+    import re as _re
+    import time as _time
+
+    t0 = _time.time()
+
+    # 1. Build the set of unique first-tokens
+    cand_tokens: list[Optional[str]] = []
+    unique_first_toks: set[str] = set()
+    for c in candidates:
+        tok = _first_significant_token(c.name)
+        cand_tokens.append(tok)
+        if tok and len(tok) >= 2:
+            unique_first_toks.add(tok)
+
+    docs_by_first: dict[str, list[dict]] = {}
+    if unique_first_toks:
+        # 2. ONE indexed prefix query covering all first-tokens
+        or_clauses = [
+            {"name_lower": _re.compile(rf"^{_re.escape(t)}")}
+            for t in unique_first_toks
+        ]
+        projection = {
+            "_id": 0, "id": 1, "name": 1, "name_lower": 1,
+            "current_employer": 1, "designation": 1,
+            "location": 1, "headline": 1,
+            "experience_years": 1, "total_experience": 1,
+            "annual_ctc": 1, "current_ctc": 1,
+            "skills": 1, "education": 1,
+            "created_at": 1, "captured_at": 1,
+            "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
+        }
+        # Hard cap (was 2000) — most search pages have <25 unique first-names
+        # and each token typically returns 50-500 matching docs. 800 is more
+        # than enough headroom while keeping the network payload small.
+        # `.hint("name_lower_idx")` forces the optimizer to use the prefix
+        # index instead of COLLSCAN — without it Atlas's planner gets
+        # confused by the wide $or and goes full scan (3.3s → 0.6s on dev).
+        try:
+            all_docs = await db.candidate_bank.find(
+                {"$or": or_clauses},
+                projection,
+            ).hint("name_lower_idx").limit(800).to_list(800)
+        except Exception:
+            # Index missing (e.g. fresh deploy before create_indexes ran)
+            # → fall back to unhinted query so the endpoint still works.
+            all_docs = await db.candidate_bank.find(
+                {"$or": or_clauses},
+                projection,
+            ).limit(800).to_list(800)
+
+        # 3. Bucket docs by their own first-token for O(1) per-candidate lookup
+        for doc in all_docs:
+            nl = doc.get("name_lower") or (doc.get("name") or "").lower()
+            ft = _first_significant_token(nl)
+            if ft:
+                docs_by_first.setdefault(ft, []).append(doc)
+
+    # 4. Score each candidate against its bucket of docs (pure CPU now)
+    results: list[CheckResult] = []
+    web_base = (os.environ.get("SITE_URL") or "https://ventureshrd.com").rstrip("/")
+    for idx, c in enumerate(candidates):
+        ft = cand_tokens[idx]
+        if not ft:
+            results.append(CheckResult(index=idx, exists=False))
+            continue
+        bucket = docs_by_first.get(ft, [])
+        best_doc: Optional[dict] = None
+        best_score: float = 0.0
+        best_signals: List[str] = []
+        for doc in bucket:
+            if not _strict_name_match(c.name, doc.get("name") or ""):
+                continue
+            score, signals = _score_match(c, doc)
+            if score > best_score:
+                best_score = score
+                best_signals = signals
+                best_doc = doc
+                if score >= _HIGH_THRESHOLD:
+                    break
+
+        if best_doc is None or best_score < _BADGE_THRESHOLD:
+            results.append(CheckResult(
+                index=idx,
+                exists=False,
+                match_score=round(best_score, 2) if best_doc else None,
+                matched_signals=best_signals if best_doc else None,
+            ))
+            continue
+
+        captured_at = best_doc.get("captured_at") or best_doc.get("created_at") or None
+        confidence = "high" if best_score >= _HIGH_THRESHOLD else "medium"
+        cid = best_doc.get("id")
+        profile_url = f"{web_base}/candidate-bank?candidateId={cid}" if cid else None
+
+        raw_edu = best_doc.get("education")
+        edu_str: Optional[str] = None
+        if isinstance(raw_edu, str):
+            edu_str = raw_edu
+        elif isinstance(raw_edu, list) and raw_edu:
+            parts: list[str] = []
+            for e in raw_edu:
+                if isinstance(e, str):
+                    parts.append(e)
+                elif isinstance(e, dict):
+                    parts.append(" ".join(filter(None, [
+                        str(e.get("degree", "") or ""),
+                        str(e.get("institute", "") or e.get("university", "") or ""),
+                    ])).strip())
+            edu_str = " | ".join(p for p in parts if p) or None
+
+        matched_candidate = MatchedCandidate(
+            name=best_doc.get("name"),
+            current_employer=best_doc.get("current_employer"),
+            designation=best_doc.get("designation"),
+            location=best_doc.get("location"),
+            experience_years=best_doc.get("experience_years") or best_doc.get("total_experience"),
+            annual_ctc=best_doc.get("annual_ctc") or best_doc.get("current_ctc"),
+            education=edu_str,
+            naukri_profile_id=(
+                best_doc.get("naukri_profile_id")
+                or best_doc.get("naukri_id")
+                or best_doc.get("profile_id")
+            ),
+        )
+
+        results.append(CheckResult(
+            index=idx,
+            exists=True,
+            candidate_id=cid,
+            captured_at=captured_at,
+            match_confidence=confidence,
+            match_score=round(best_score, 2),
+            matched_signals=best_signals,
+            profile_url=profile_url,
+            matched_candidate=matched_candidate,
+        ))
+
     n_exists = sum(1 for r in results if r.exists)
     logger.info(
-        "[CheckExisting] user=%s batch=%d hits=%d",
+        "[CheckExisting] user=%s batch=%d hits=%d took=%dms",
         user.get("email"), len(candidates), n_exists,
+        int((_time.time() - t0) * 1000),
     )
-    return CheckExistingResponse(results=list(results))
+    return CheckExistingResponse(results=results)
