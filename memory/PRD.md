@@ -72,7 +72,19 @@ profile capture quality improvements.
 6. ~~**(P1)** Tally integration — one-way push VHC bills → Tally Sales Vouchers~~ ✅ **DONE 2026-02 (current session)** — `routes/tally_bridge.py` + `services/tally_xml.py` + Windows `tally_bridge/tally_bridge.py` agent. 24/24 e2e tests passing. See `docs/TALLY_BRIDGE_RUNBOOK.md`.
 7. ⏸ **(P1, HELD)** Submit `team_daily_digest_v1` template to Meta — paused per user direction.
 8. ⏸ **(P1, HELD)** Build & push unified RunPod image — paused per user direction.
-9. ~~**(P0)** Chrome Extension v5.5.5/v5.5.6 — "Already in Database" badge clickable, opens candidate profile in VHC~~ ✅ **DONE 2026-02-25 (current session)** — Badge rendered as `<a>` anchor with deep-link URL. v5.5.5: link derived client-side from `apiUrl`. **v5.5.6 (fix):** backend now returns `profile_url` directly in `check-existing` response, derived from `SITE_URL` env var — eliminates client-side guessing (broken for proxied API hosts like Cloudflare Workers). Frontend has new role-aware `/candidate-bank` redirect route (preserves `?candidateId=`). `?next=` param honoured by Login.jsx. CRX + ZIP built and served via `/api/extension/update.xml` (sha256 hashed).
+9. ~~**(P0)** Chrome Extension v5.5.5 → v5.5.8 evolution — "Already in Database" badge clickable + matching accuracy~~ ✅ **DONE 2026-02-25/26 (current session)**
+   - v5.5.5/6: badge → `<a>` anchor with `profile_url` from backend (`SITE_URL`-derived).
+   - v5.5.7: backend returns `matched_candidate` (full DB fields) so client can cross-check before badging.
+   - v5.5.8 (rebalanced): server score gate at 1.0 with no "strong signal required" hard rule (was too strict). Client switched from score-based to **conflict-based** post-validation (only rejects on employer mismatch or experience >3y apart). Naukri ID mismatch no longer disqualifies (Naukri rotates IDs every few hours per user feedback).
+10. ~~**(P0)** Backend perf — deep-link badge → profile dialog was multi-second slow~~ ✅ **DONE 2026-02-26 (current session)**
+    - Missing `candidate_bank.id_idx` index (UUID lookups were COLLSCANs on 126k docs) — added, single biggest win.
+    - Added `audit_logs.entity_id + created_at` compound index.
+    - `get_candidate` no longer awaits `log_activity` write (true fire-and-forget via `asyncio.create_task`).
+    - Frontend: skip heavy list fetch when deep-link `?candidateId=` present; parallelized 4 detail calls; removed redundant `getById`.
+    - Result: P99 dropped from ~2-5s → 115-547ms (5-10x improvement).
+11. ~~**(P0)** `ChunkErrorBoundary` to recover from stale-bundle crashes~~ ✅ **DONE 2026-02-26 (current session)** — `components/ChunkErrorBoundary.jsx`. Catches `ChunkLoadError`, `SyntaxError: Unexpected token '<'`, `ReferenceError` from stale bundles; auto-reloads page once (30s guard). Eliminated the 162 `searchParams is not defined` errors flagged in the 2026-05-26 maintenance report.
+12. ~~**(P0)** RunPod BGE sidecar restored + autonomy~~ ✅ **DONE 2026-02-26 (current session)** — Fixed `sidecar_keeper.sh` to invoke `python3 -m uvicorn embed_service:app --host 0.0.0.0 --port 8001` (the script has no `__main__` block, so old `python3 embed_service.py` exited immediately). Added cron `*/10 * * * *` to auto-monitor + restart. Pod proxy URL updated to `https://ccl2pccemzrjsw-8001.proxy.runpod.net`.
+13. ~~**(P0)** Atlas password rotation reconciliation~~ ✅ **DONE 2026-02-26 (current session)** — `vhc_app_user` password had been rotated in Atlas but never propagated to `backend/.env`. Backend was running on cached connections; would have died on next pool reconnect. New password installed in `.env` via URL-encoded sed, ping verified, indexes created successfully.
 
 ### Near-term (P2)
 9. Drop unused MongoDB indexes (audit after 7-day cluster uptime).
