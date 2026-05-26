@@ -7,6 +7,7 @@ import { Toaster } from "./components/ui/sonner";
 import GoogleAnalytics from "./components/GoogleAnalytics";
 import { BatchUploadProvider } from "./contexts/BatchUploadContext";
 import { BatchUploadWidget } from "./components/shared/BatchUploadWidget";
+import { ChunkErrorBoundary } from "./components/ChunkErrorBoundary";
 
 // ── Loading fallback ──
 const PageLoader = () => (
@@ -151,6 +152,7 @@ const CandidateBankRedirect = React.lazy(() => import("./pages/CandidateBankRedi
 
 function App() {
   return (
+    <ChunkErrorBoundary>
     <HelmetProvider>
     <AuthProvider>
       <BrowserRouter>
@@ -337,6 +339,7 @@ function App() {
       <Toaster position="top-right" richColors />
     </AuthProvider>
     </HelmetProvider>
+    </ChunkErrorBoundary>
   );
 }
 

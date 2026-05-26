@@ -56,13 +56,20 @@ fi
 echo "Sidecar UNHEALTHY (http=$http_code). Attempting remote restart via SSH alias '$SSH_HOST_ALIAS'..."
 
 # ── Remote start ──────────────────────────────────────────────────────────────
-# Kill any stale embed_service.py first, then start fresh in nohup background.
+# Kill any stale sidecar process first, then start fresh in nohup background.
+# Note: embed_service.py has no `if __name__ == "__main__"` / uvicorn.run()
+# at the bottom — it just defines the FastAPI app — so we MUST invoke uvicorn
+# explicitly. setsid + nohup ensures the process stays alive after SSH closes.
 REMOTE_CMD=$(cat <<'EOSH'
 set -e
 cd /workspace
+pkill -f "uvicorn.*embed_service" 2>/dev/null || true
 pkill -f embed_service.py 2>/dev/null || true
-sleep 2
-nohup python3 embed_service.py >>/workspace/sidecar.log 2>&1 &
+sleep 3
+setsid nohup python3 -u -m uvicorn embed_service:app \
+  --host 0.0.0.0 --port 8001 \
+  >> /workspace/sidecar.log 2>&1 < /dev/null &
+disown
 echo "Started: PID $!"
 EOSH
 )
