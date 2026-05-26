@@ -20,6 +20,20 @@ async def create_indexes():
     # ============ CANDIDATE_BANK INDEXES ============
     print("\n📊 Creating candidate_bank indexes...")
     
+    # ─── PRIMARY: unique `id` (UUID) lookup index ───
+    # Every `db.candidate_bank.find_one({"id": ...})` and `update_one({"id": ...})`
+    # call across the codebase hits this. Without it Mongo does a COLLSCAN on
+    # 100K+ docs per lookup — that's why the deep-link badge → profile dialog
+    # was painfully slow. Single biggest performance fix on this collection.
+    try:
+        await db.candidate_bank.create_index("id", name="id_idx", unique=True)
+        print("  ✅ id (UUID) unique index ← primary key lookups")
+    except Exception as e:
+        # Falls back to non-unique if duplicates exist (one-time data cleanup needed)
+        print(f"  ⚠️ id unique index failed ({e}); creating non-unique fallback")
+        await db.candidate_bank.create_index("id", name="id_idx")
+        print("  ✅ id index (non-unique fallback)")
+
     # Text index for name search (supports partial/fuzzy matching)
     try:
         await db.candidate_bank.create_index([("name", "text"), ("email", "text"), ("skills", "text")], name="text_search_idx")
@@ -66,6 +80,17 @@ async def create_indexes():
     # Created_at index (sorting by recent)
     await db.candidate_bank.create_index([("created_at", -1)], name="created_at_idx")
     print("  ✅ Created at index (descending)")
+
+    # ============ AUDIT_LOGS INDEXES ============
+    # The /candidate-bank/{id}/audit-log and /history endpoints query
+    # `audit_logs.entity_id`. Without an index this scales as O(N) on the
+    # audit collection (which grows by 1 row per profile view).
+    print("\n📊 Creating audit_logs indexes...")
+    try:
+        await db.audit_logs.create_index([("entity_id", 1), ("created_at", -1)], name="entity_id_created_at_idx")
+        print("  ✅ entity_id + created_at compound index")
+    except Exception as e:
+        print(f"  ⚠️ audit_logs index: {e}")
     
     # ============ JOBS INDEXES ============
     print("\n📊 Creating jobs indexes...")

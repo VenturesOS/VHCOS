@@ -2656,17 +2656,20 @@ async def get_candidate(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
-    
-    # Log profile view activity (fire-and-forget)
+
+    # Log profile view activity TRULY fire-and-forget — do not block the
+    # response on a Mongo write. The 'await' here used to add ~50–200ms per
+    # profile open on Atlas, especially during pool reconnects.
     from services.activity_log_service import log_activity, ACTION_VIEWED
-    await log_activity(
+    import asyncio
+    asyncio.create_task(log_activity(
         candidate_id=candidate_id, action=ACTION_VIEWED,
         description="Profile viewed",
         performed_by=current_user.get("id"), performed_by_name=current_user.get("name"),
         performed_by_role=current_user.get("role"),
         candidate_name=doc.get("name"),
-    )
-    
+    ))
+
     return doc
 
 
