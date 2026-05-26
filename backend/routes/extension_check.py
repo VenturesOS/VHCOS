@@ -159,6 +159,18 @@ class CheckExistingRequest(BaseModel):
     candidates: List[CandidateIn] = Field(default_factory=list)
 
 
+class MatchedCandidate(BaseModel):
+    """Subset of the matched DB candidate's fields — returned so the extension can do a final cross-check before badging."""
+    name: Optional[str] = None
+    current_employer: Optional[str] = None
+    designation: Optional[str] = None
+    location: Optional[str] = None
+    experience_years: Optional[float] = None
+    annual_ctc: Optional[float] = None
+    education: Optional[str] = None
+    naukri_profile_id: Optional[str] = None
+
+
 class CheckResult(BaseModel):
     index: int
     exists: bool
@@ -170,6 +182,8 @@ class CheckResult(BaseModel):
     # Server-built deep-link so the extension never has to guess the
     # frontend URL from a (possibly proxied) backend API host.
     profile_url: Optional[str] = None
+    # Echoed DB fields so the extension can cross-check before badging
+    matched_candidate: Optional[MatchedCandidate] = None
 
 
 class CheckExistingResponse(BaseModel):
@@ -208,6 +222,12 @@ _SIGNAL_WEIGHTS = {
 # designation 0.4 + location 0.25) won't, which is the desired behavior.
 _BADGE_THRESHOLD = 1.0
 _HIGH_THRESHOLD = 1.3
+
+# Strong signals that, together with name, are sufficient to declare a
+# match. At least ONE strong signal must fire — name + designation +
+# location alone is too weak (designation/location are very common
+# co-occurrences for shared first+last name candidates).
+_STRONG_SIGNALS = {"employer", "headline_employer", "ctc", "skills"}
 
 
 def _norm_str(s: Optional[str]) -> str:
@@ -436,6 +456,7 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
             "annual_ctc": 1, "current_ctc": 1,
             "skills": 1, "education": 1,
             "created_at": 1, "captured_at": 1,
+            "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
         },
     ).limit(40)
 
@@ -457,7 +478,10 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
 
     # Below badge threshold → no false positive. NAME-only matches are
     # treated as misses by design (too many shared first+last names).
-    if best_doc is None or best_score < _BADGE_THRESHOLD:
+    # Also require at least ONE strong signal (employer / ctc / skills);
+    # name + designation + location alone is too weak.
+    has_strong = any(s in _STRONG_SIGNALS for s in best_signals)
+    if best_doc is None or best_score < _BADGE_THRESHOLD or not has_strong:
         return CheckResult(
             index=idx,
             exists=False,
@@ -473,6 +497,38 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
     # proxied API host (e.g. a Cloudflare Worker).
     web_base = (os.environ.get("SITE_URL") or "https://ventureshrd.com").rstrip("/")
     profile_url = f"{web_base}/candidate-bank?candidateId={cid}" if cid else None
+
+    # Normalise education to a single string for the extension's cross-check
+    raw_edu = best_doc.get("education")
+    edu_str: Optional[str] = None
+    if isinstance(raw_edu, str):
+        edu_str = raw_edu
+    elif isinstance(raw_edu, list) and raw_edu:
+        parts: list[str] = []
+        for e in raw_edu:
+            if isinstance(e, str):
+                parts.append(e)
+            elif isinstance(e, dict):
+                parts.append(" ".join(filter(None, [
+                    str(e.get("degree", "") or ""),
+                    str(e.get("institute", "") or e.get("university", "") or ""),
+                ])).strip())
+        edu_str = " | ".join(p for p in parts if p) or None
+
+    matched_candidate = MatchedCandidate(
+        name=best_doc.get("name"),
+        current_employer=best_doc.get("current_employer"),
+        designation=best_doc.get("designation"),
+        location=best_doc.get("location"),
+        experience_years=best_doc.get("experience_years") or best_doc.get("total_experience"),
+        annual_ctc=best_doc.get("annual_ctc") or best_doc.get("current_ctc"),
+        education=edu_str,
+        naukri_profile_id=(
+            best_doc.get("naukri_profile_id")
+            or best_doc.get("naukri_id")
+            or best_doc.get("profile_id")
+        ),
+    )
     return CheckResult(
         index=idx,
         exists=True,
@@ -482,6 +538,7 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
         match_score=round(best_score, 2),
         matched_signals=best_signals,
         profile_url=profile_url,
+        matched_candidate=matched_candidate,
     )
 
 
