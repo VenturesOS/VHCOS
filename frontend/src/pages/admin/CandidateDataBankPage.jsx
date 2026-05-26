@@ -70,8 +70,13 @@ export default function CandidateDataBankPage() {
     notice_period: '', current_employer: '', designation: '', industry: '',
   });
 
-  // Reset and fresh-load when filters change
+  // Reset and fresh-load when filters change.
+  // SKIP the heavy list fetch when the page was opened via a deep-link
+  // (?candidateId=X from the Naukri extension) — the user came to see ONE
+  // candidate, not browse the list. The list will lazy-load after the
+  // detail dialog is closed (we strip the param then).
   useEffect(() => {
+    if (searchParams.get('candidateId')) return;
     setCandidates([]);
     setNextCursor(null);
     loadCandidates({ fresh: true });
@@ -126,25 +131,33 @@ export default function CandidateDataBankPage() {
   };
 
   // ─── Deep-link: open candidate from ?candidateId= URL param ───
+  // Fast path: fire all 4 calls in parallel (no double getById), open the
+  // dialog as soon as the primary fetch returns so user sees the profile
+  // immediately while audit/resume/history fill in the side tabs.
   useEffect(() => {
     const cid = searchParams.get('candidateId');
     if (!cid || deepLinkHandledRef.current) return;
     deepLinkHandledRef.current = true;
     (async () => {
-      try {
-        const r = await candidateBankAPI.getById(cid);
-        if (r?.data) {
-          await loadCandidateDetails(r.data);
-          // Strip query param so reloads don't re-trigger
-          const next = new URLSearchParams(searchParams);
-          next.delete('candidateId');
-          setSearchParams(next, { replace: true });
-        } else {
-          toast.error('Candidate not found');
-        }
-      } catch {
-        toast.error('Failed to open candidate');
+      const [byIdR, auditR, resumeR, historyR] = await Promise.allSettled([
+        candidateBankAPI.getById(cid),
+        candidateBankAPI.getAuditLog(cid),
+        candidateBankAPI.getResumeHistory(cid),
+        candidateBankAPI.getHistory(cid),
+      ]);
+      const candidate = byIdR.status === 'fulfilled' ? byIdR.value?.data : null;
+      if (!candidate) {
+        toast.error('Candidate not found');
+        return;
       }
+      setSelectedCandidate(candidate);
+      setAuditLog(auditR.status === 'fulfilled' ? (auditR.value?.data || []) : []);
+      setResumeHistory(resumeR.status === 'fulfilled' ? (resumeR.value?.data || []) : []);
+      setActivityHistory(historyR.status === 'fulfilled' ? (historyR.value?.data || []) : []);
+      // Strip query param so reloads don't re-trigger
+      const next = new URLSearchParams(searchParams);
+      next.delete('candidateId');
+      setSearchParams(next, { replace: true });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);

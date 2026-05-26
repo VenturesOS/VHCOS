@@ -85,8 +85,10 @@ export default function RecruiterCandidateBankPage() {
   }, [getApiParams, setCurrentPage]);
 
   useEffect(() => {
+    // Skip the heavy list fetch when opened via extension deep-link
+    if (searchParams.get('candidateId')) return;
     loadCandidates();
-  }, [loadCandidates]);
+  }, [loadCandidates, searchParams]);
 
   const loadJobs = async () => {
     try {
