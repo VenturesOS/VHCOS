@@ -18,6 +18,8 @@ import { DuplicateManager } from '../../components/candidate-bank/DuplicateManag
 
 export default function RecruiterCandidateBankPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkHandledRef = useRef(false);
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCandidate, setSelectedCandidate] = useState(null);

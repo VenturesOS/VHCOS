@@ -29,7 +29,13 @@ function isChunkError(err) {
     msg.includes('loading chunk') ||
     msg.includes("unexpected token '<'") ||
     msg.includes('failed to fetch dynamically imported') ||
-    msg.includes('importing a module script failed')
+    msg.includes('importing a module script failed') ||
+    // ReferenceErrors with variable names that don't exist anywhere are
+    // almost always stale-bundle artifacts (a renamed variable in a freshly
+    // deployed chunk → the old chunk in the user's browser still uses the
+    // old name). Auto-reload once; if the issue is real code, the guard
+    // window prevents a reload loop.
+    (name === 'ReferenceError' && msg.includes('is not defined'))
   );
 }
 
