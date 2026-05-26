@@ -478,10 +478,11 @@ async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
 
     # Below badge threshold → no false positive. NAME-only matches are
     # treated as misses by design (too many shared first+last names).
-    # Also require at least ONE strong signal (employer / ctc / skills);
-    # name + designation + location alone is too weak.
-    has_strong = any(s in _STRONG_SIGNALS for s in best_signals)
-    if best_doc is None or best_score < _BADGE_THRESHOLD or not has_strong:
+    # NOTE: We do NOT require a specific "strong" signal here — name +
+    # designation + location + experience together is enough corroboration
+    # for the threshold (1.0+). The extension does a final per-card
+    # cross-check using `matched_candidate` to catch employer conflicts.
+    if best_doc is None or best_score < _BADGE_THRESHOLD:
         return CheckResult(
             index=idx,
             exists=False,
