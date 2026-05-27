@@ -374,35 +374,117 @@ async def version_stats(
     db=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Admin-only: who's on which version, last-seen timestamps."""
+    """Admin-only: who's on which version, last-seen timestamps.
+
+    Joins against the live `users` collection so the page reflects
+    *current* team membership — new hires show up even before their first
+    extension ping, deactivated accounts disappear, and email migrations
+    are resolved by `user_id` (the join key, not email).
+
+    Reported `last_seen` is the most recent checkin for that user_id OR
+    for any historical email aliased to them in `user_email_history`.
+    """
     if (current_user.get("role") or "").lower() != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
 
-    # Rows
-    users = await db.extension_checkins.find({}, {"_id": 0}).sort("last_seen", -1).to_list(500)
+    # 1. Pull all ACTIVE users who should plausibly use the extension
+    #    (admins + recruiters; employers don't sit on Naukri).
+    #    Exclude soft-deleted accounts whose emails were renamed during
+    #    the May 19 cleanup (prefix `_deact_<timestamp>_`).
+    user_filter = {
+        "role": {"$in": ["admin", "recruiter"]},
+        "active": {"$ne": False},
+        "email": {"$not": {"$regex": "^_deact_"}},
+    }
+    users = await db.users.find(
+        user_filter,
+        {"_id": 0, "id": 1, "email": 1, "name": 1, "role": 1,
+         "former_emails": 1, "created_at": 1},
+    ).to_list(1000)
+    user_map = {u["id"]: u for u in users}
 
-    # Bucket by version
-    buckets = {}
+    # 2. Pull every checkin, but resolve by user_id (stable across email
+    #    changes). If user_id is missing on legacy rows, fall back to email.
+    checkins = await db.extension_checkins.find(
+        {}, {"_id": 0}
+    ).sort("last_seen", -1).to_list(5000)
+
+    # Build a lookup: email-or-uid → latest checkin
+    by_user: dict = {}
+    for c in checkins:
+        uid = c.get("user_id")
+        if uid and uid in user_map:
+            # First (most recent due to sort) wins
+            by_user.setdefault(uid, c)
+        else:
+            email = (c.get("user_email") or "").lower()
+            # Try to resolve email → current user_id (handles renames)
+            for u in users:
+                if (u.get("email") or "").lower() == email:
+                    by_user.setdefault(u["id"], c)
+                    break
+                # Match against history of former emails
+                if email in [(e or "").lower() for e in (u.get("former_emails") or [])]:
+                    by_user.setdefault(u["id"], c)
+                    break
+
+    # 3. Compose the final user list — every active recruiter/admin, with
+    #    their checkin if any
     stale_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    rows: list = []
+    buckets: dict = {}
     stale = 0
+    never_used = 0
     for u in users:
-        v = u.get("version") or "unknown"
-        buckets[v] = buckets.get(v, 0) + 1
-        if (u.get("last_seen") or "") < stale_cutoff:
+        c = by_user.get(u["id"])
+        version = (c or {}).get("version") or "—"
+        install_type = (c or {}).get("install_type") or "—"
+        last_seen = (c or {}).get("last_seen")
+        first_seen = (c or {}).get("first_seen")
+        if last_seen is None:
+            never_used += 1
+        elif last_seen < stale_cutoff:
             stale += 1
+        buckets[version] = buckets.get(version, 0) + 1
+        rows.append({
+            "user_id": u["id"],
+            "user_email": u.get("email"),
+            "user_name": u.get("name"),
+            "user_role": u.get("role"),
+            "version": version,
+            "install_type": install_type,
+            "last_seen": last_seen,
+            "first_seen": first_seen,
+        })
 
-    # Latest
+    # 4. Sort: recent users first, then never-used users by name
+    rows.sort(key=lambda r: (r["last_seen"] is None, -(0 if r["last_seen"] is None else 1) , r["last_seen"] or "", (r["user_name"] or "").lower()))
+    # Simpler: actually-used first (recent → old), then never-used alphabetically
+    rows.sort(key=lambda r: (
+        0 if r["last_seen"] else 1,
+        -(int(r["last_seen"].replace(":", "").replace("-", "").replace("T", "").replace(".", "")[:14])
+          if r["last_seen"] else 0),
+        (r["user_name"] or "").lower(),
+    ))
+
+    # 5. Latest packaged version
     manifest_path = _locate_manifest()
     latest_version = None
     if manifest_path and manifest_path.exists():
         import json
-        try: latest_version = json.loads(manifest_path.read_text()).get("version")
-        except: pass
+        try:
+            latest_version = json.loads(manifest_path.read_text()).get("version")
+        except Exception:
+            pass
 
     return {
-        "total_recruiters": len(users),
+        "total_recruiters": len(rows),
         "latest_version": latest_version,
-        "by_version": [{"version": k, "count": v} for k, v in sorted(buckets.items(), key=lambda x: -x[1])],
+        "by_version": [
+            {"version": k, "count": v}
+            for k, v in sorted(buckets.items(), key=lambda x: -x[1])
+        ],
         "stale_over_7d": stale,
-        "users": users,
+        "never_used": never_used,
+        "users": rows,
     }

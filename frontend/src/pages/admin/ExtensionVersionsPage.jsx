@@ -218,8 +218,9 @@ export default function ExtensionVersionsPage() {
                 </thead>
                 <tbody>
                   {stats.users.map((u) => {
-                    const isLatest = u.version === stats.latest_version;
-                    const stale = daysSince(u.last_seen) > 7;
+                    const neverUsed = !u.last_seen;
+                    const isLatest = !neverUsed && u.version === stats.latest_version;
+                    const stale = !neverUsed && daysSince(u.last_seen) > 7;
                     return (
                       <tr key={u.user_id} className="border-b">
                         <td className="p-2">
@@ -228,13 +229,19 @@ export default function ExtensionVersionsPage() {
                         </td>
                         <td className="p-2"><Badge variant="outline" className="text-[10px]">{u.user_role}</Badge></td>
                         <td className="p-2">
-                          <Badge className={`text-[10px] ${isLatest ? 'bg-green-100 text-green-800 border-green-300' : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
-                            v{u.version}
-                          </Badge>
+                          {neverUsed ? (
+                            <Badge className="text-[10px] bg-slate-100 text-slate-500 border-slate-300">
+                              Not installed
+                            </Badge>
+                          ) : (
+                            <Badge className={`text-[10px] ${isLatest ? 'bg-green-100 text-green-800 border-green-300' : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
+                              v{u.version}
+                            </Badge>
+                          )}
                         </td>
-                        <td className="p-2 text-slate-600">{u.install_type}</td>
-                        <td className={`p-2 ${stale ? 'text-red-600 font-medium' : 'text-slate-600'}`}>
-                          {fmtTime(u.last_seen)}
+                        <td className="p-2 text-slate-600">{neverUsed ? '—' : u.install_type}</td>
+                        <td className={`p-2 ${neverUsed ? 'text-slate-400 italic' : (stale ? 'text-red-600 font-medium' : 'text-slate-600')}`}>
+                          {neverUsed ? 'Never used the extension' : fmtTime(u.last_seen)}
                         </td>
                       </tr>
                     );
