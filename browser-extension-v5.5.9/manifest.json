@@ -1,0 +1,116 @@
+{
+  "manifest_version": 3,
+  "name": "VHC Talent OS - Multi-Platform Capture",
+  "version": "5.5.9",
+  "description": "Capture candidate profiles from Naukri, LinkedIn, and Foundit to VHC Talent OS \u2014 AI extraction, offline queue, auto job-shortlisting",
+  "update_url": "https://api.ventureshrd.com/api/extension/update.xml",
+  "permissions": [
+    "alarms",
+    "contextMenus",
+    "notifications",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.naukri.com/*",
+    "https://naukri.com/*",
+    "https://*.naukri.com/*",
+    "https://www.linkedin.com/*",
+    "https://linkedin.com/*",
+    "https://www.foundit.in/*",
+    "https://foundit.in/*",
+    "https://*.foundit.in/*",
+    "https://www.foundit.sg/*",
+    "https://*.foundit.sg/*",
+    "https://www.foundit.my/*",
+    "https://*.foundit.my/*",
+    "https://www.monster.com/*",
+    "https://*.monster.com/*",
+    "https://*.emergentagent.com/*",
+    "https://*.vhc.in/*",
+    "https://*.ventureshrd.com/*",
+    "https://*.emergent.host/*",
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.naukri.com/*",
+        "https://naukri.com/*",
+        "https://*.naukri.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    },
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://linkedin.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.foundit.in/*",
+        "https://foundit.in/*",
+        "https://*.foundit.in/*",
+        "https://www.foundit.sg/*",
+        "https://*.foundit.sg/*",
+        "https://www.foundit.my/*",
+        "https://www.monster.com/*",
+        "https://*.monster.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*"
+      ],
+      "matches": [
+        "https://*.naukri.com/*",
+        "https://*.linkedin.com/*",
+        "https://*.foundit.in/*"
+      ]
+    }
+  ]
+}
