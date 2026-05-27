@@ -12,6 +12,8 @@ import json as json_module
 import asyncio
 import threading
 import hashlib
+import gc
+import ctypes
 
 import base64
 import re as re_module
@@ -944,6 +946,36 @@ def _fire_and_forget(coro):
     threading.Thread(target=_run, daemon=True).start()
 
 
+# ── Memory pressure release helper (Phase 55.4, 2026-02-27) ──────────────
+# Each background enrichment thread allocates ~100–150 MB of transient
+# Python objects (Anthropic JSON responses, regex match buffers, BSON
+# dicts, BGE embedding tensors, smart-tags numpy arrays). When the daemon
+# thread exits, Python's cyclic GC doesn't run immediately and glibc keeps
+# the memory in secondary arenas that MALLOC_TRIM_THRESHOLD_ cannot reach
+# (those arenas are pinned alive by long-lived ThreadPoolExecutor workers).
+# Calling gc.collect() + malloc_trim(0) explicitly at the end of each
+# enrichment forces both Python and glibc to release the memory back to
+# the kernel. Confirmed via py-spy dump (worker 43584, 3.7 GB RSS) on
+# 2026-02-27 — VmData = 4.4 GB despite max-requests=25 worker recycling.
+try:
+    _LIBC = ctypes.CDLL("libc.so.6")
+    _LIBC.malloc_trim.argtypes = [ctypes.c_int]
+    _LIBC.malloc_trim.restype = ctypes.c_int
+except Exception:
+    _LIBC = None
+
+
+def _release_memory():
+    """Force Python GC + glibc arena release. Called after every background enrichment."""
+    try:
+        gc.collect()
+        if _LIBC is not None:
+            _LIBC.malloc_trim(0)
+    except Exception:
+        # Never let cleanup raise — would mask the real enrichment outcome.
+        pass
+
+
 # ── Concurrency cap for embedding generation (OOM protection) ──────────────
 # Prevents > N simultaneous BGE encodes per gunicorn worker. The encode is
 # CPU-bound and the model itself is ~250 MB resident; without this, a flood
@@ -1315,6 +1347,13 @@ async def _background_full_groq_enrich(
             sync_client.close()
         except Exception:
             pass
+
+    finally:
+        # Phase 55.4 (2026-02-27): Force Python GC + glibc arena release.
+        # Without this each enrichment leaks ~100-150 MB into secondary
+        # arenas that MALLOC_TRIM_THRESHOLD_ cannot reclaim. Confirmed via
+        # py-spy + /proc/$pid/status (VmData=4.4 GB on a single worker).
+        _release_memory()
 
 
 def _score_extraction_quality(ai_result: dict) -> float:
