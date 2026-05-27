@@ -85,6 +85,8 @@ profile capture quality improvements.
 11. ~~**(P0)** `ChunkErrorBoundary` to recover from stale-bundle crashes~~ ✅ **DONE 2026-02-26 (current session)** — `components/ChunkErrorBoundary.jsx`. Catches `ChunkLoadError`, `SyntaxError: Unexpected token '<'`, `ReferenceError` from stale bundles; auto-reloads page once (30s guard). Eliminated the 162 `searchParams is not defined` errors flagged in the 2026-05-26 maintenance report.
 12. ~~**(P0)** RunPod BGE sidecar restored + autonomy~~ ✅ **DONE 2026-02-26 (current session)** — Fixed `sidecar_keeper.sh` to invoke `python3 -m uvicorn embed_service:app --host 0.0.0.0 --port 8001` (the script has no `__main__` block, so old `python3 embed_service.py` exited immediately). Added cron `*/10 * * * *` to auto-monitor + restart. Pod proxy URL updated to `https://ccl2pccemzrjsw-8001.proxy.runpod.net`.
 13. ~~**(P0)** Atlas password rotation reconciliation~~ ✅ **DONE 2026-02-26 (current session)** — `vhc_app_user` password had been rotated in Atlas but never propagated to `backend/.env`. Backend was running on cached connections; would have died on next pool reconnect. New password installed in `.env` via URL-encoded sed, ping verified, indexes created successfully.
+14. ~~**(P0)** Gunicorn memory leak mitigation~~ ✅ **DONE 2026-02-27 (current session)** — Workers were bloating to 3.2GB+ within 1h41m, hitting cgroup MemoryHigh=5G and forcing 240K swap. Root cause traced to `_fire_and_forget` in `routes/extension.py` spawning unbounded `threading.Thread` per capture, each with own asyncio event loop + AsyncIOMotorClient + MongoClient — ~30-40MB glibc retention per capture. **Mitigation applied:** lowered `--max-requests` from 100 → 25 in `/etc/systemd/system/vhc-backend.service.d/override.conf`. After kill + restart: worker RSS 3.2GB→913MB, available RAM 1.7GB→5.2GB. `py-spy` installed for future flamegraph diagnosis.
+15. ~~**(P1)** Extension auto-capture on Naukri preview UI~~ ✅ **RESOLVED 2026-02-27** — User confirmed auto-capture is working on current Naukri UI. Extension v5.5.9 (overlay-fix package in `/app/backend/static/extensions/`) is no longer needed; can be discarded or kept on the shelf.
 
 ### Near-term (P2)
 9. Drop unused MongoDB indexes (audit after 7-day cluster uptime).
@@ -99,6 +101,15 @@ profile capture quality improvements.
 11. Email Template Management UI.
 12. XGBoost LTR re-ranker (currently using cross-encoder as the precision layer).
 13. k-Means + PCA clustering for candidate discovery in the sourcing tab.
+
+### Held / awaiting decision
+- **Track 2 — Gunicorn memory leak root-cause fix** (held by user 2026-02-27, monitoring Track 1 mitigation first):
+  - Replace `_fire_and_forget(threading.Thread)` in `routes/extension.py` with module-level `ThreadPoolExecutor(max_workers=4)`.
+  - Cache `MongoClient` + `AsyncIOMotorClient` at module level (eliminate per-capture SSL/socket churn).
+  - Add explicit `gc.collect()` at end of `_background_full_groq_enrich`.
+  - Use single shared asyncio event loop per worker (background thread) instead of new loop per capture.
+  - Expected outcome: per-capture leak drops from ~30-40MB → ~2-3MB; workers stay flat at ~900MB indefinitely; can raise `--max-requests` back to 500+.
+  - Trigger: re-evaluate if worker RSS climbs >2GB despite `max-requests=25`, OR after user observes Track 1 for a few days.
 
 ---
 
