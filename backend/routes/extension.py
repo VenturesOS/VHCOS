@@ -976,6 +976,25 @@ def _release_memory():
         pass
 
 
+async def _force_memory_release_after_response():
+    """FastAPI dependency that triggers `_release_memory()` AFTER the
+    response is fully sent. Applied to high-allocation endpoints like
+    /api/extension/capture so the foreground hot path (regex parsing,
+    Pydantic model construction, sanitization, LaTeX regen, BSON
+    serialization — up to ~250-300 MB per call) returns its memory to
+    the kernel instead of accumulating in glibc arenas.
+
+    Confirmed necessary on 2026-02-28: Step 1 patch (background-only
+    cleanup) reduced leak from 100 MB/min to 30 MB/min but worker 1007
+    still bloated to 3.2 GB over 3h29m — proving the foreground request
+    handler was the larger leak source.
+    """
+    try:
+        yield
+    finally:
+        _release_memory()
+
+
 # ── Concurrency cap for embedding generation (OOM protection) ──────────────
 # Prevents > N simultaneous BGE encodes per gunicorn worker. The encode is
 # CPU-bound and the model itself is ~250 MB resident; without this, a flood
@@ -1900,7 +1919,8 @@ async def capture_raw_fallback(
 @extension_router.post("/capture", response_model=CaptureResponse)
 async def capture_profile(
     profile: CompleteNaukriProfileInput,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _mem: None = Depends(_force_memory_release_after_response),
 ):
     """
     Capture and save/update a COMPLETE Naukri profile.
