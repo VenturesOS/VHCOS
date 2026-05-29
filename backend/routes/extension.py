@@ -1212,10 +1212,10 @@ async def _background_full_groq_enrich(
     if use_local_llm:
         logger.warning(f"[BG-Local-LLM] 🧪 ADMIN TEST: Using local Gemma 4 for {candidate_name}")
     else:
-        logger.info(f"[BG-Haiku] ⚡ Starting Claude Haiku 4.5 enrichment for {candidate_name}")
+        logger.info(f"[BG-LLM] ⚡ Starting extraction for {candidate_name} (chain: RunPod Qwen → Emergent Haiku)")
     
     try:
-        # Route to Haiku (PRIMARY) - Groq removed
+        # Chain: Layer 1 = RunPod Qwen 14B (primary, self-hosted), Layer 2 = Emergent Haiku 4.5 (fallback)
         from services.llm_fallback_service import extract_full_profile_fallback
         extraction_result = await extract_full_profile_fallback(raw_text=raw_text, candidate_name=candidate_name)
         source_label = extraction_result.get("source", extraction_result.get("_extraction_source", "unknown"))
@@ -1224,7 +1224,7 @@ async def _background_full_groq_enrich(
             if use_local_llm:
                 logger.warning(f"[BG-Local-LLM] ✅ Local Gemma 4 extraction succeeded for {candidate_name}")
             else:
-                logger.info(f"[BG-Haiku] ✅ Claude Haiku extraction succeeded for {candidate_name}")
+                logger.info(f"[BG-LLM] ✅ extraction succeeded for {candidate_name} (served by: {source_label})")
             
             # CRITICAL FIX: Pass recruiter phone/email to _apply_bg_enrichment
             _apply_bg_enrichment(
@@ -1321,12 +1321,12 @@ async def _background_full_groq_enrich(
             if use_local_llm:
                 logger.warning(f"[BG-Local-LLM] 🎯 COMPLETE: '{candidate_name}' enriched via Local Gemma 4")
             else:
-                logger.warning(f"[BG-Haiku] 🎯 COMPLETE: '{candidate_name}' fully enriched via Claude Haiku 4.5")
+                logger.warning(f"[BG-LLM] 🎯 COMPLETE: '{candidate_name}' fully enriched (source={source_label})")
         else:
             if use_local_llm:
                 logger.error(f"[BG-Local-LLM] ❌ Local LLM failed for {candidate_name}: {extraction_result.get('error')}")
             else:
-                logger.warning(f"[BG-Full-Groq] ❌ Groq failed for {candidate_name}: {extraction_result.get('error')}")
+                logger.warning(f"[BG-LLM] ❌ extraction failed for {candidate_name}: {extraction_result.get('error')} (source={source_label})")
             
             # Update status to failed
             from config import mongodb_uri as _mongo_uri, db_name as _db_name
