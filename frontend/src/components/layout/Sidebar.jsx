@@ -54,6 +54,7 @@ const navItems = {
     { icon: ClipboardList, label: 'Pipeline', path: '/admin/pipeline' },
     { icon: FileText, label: 'Submission Tracker', path: '/admin/submission-tracker' },
     { icon: BarChart3, label: 'Analytics', path: '/admin/analytics' },
+    { icon: TrendingUp, label: 'Analytics Hub', path: '/admin/analytics-hub' },
     { icon: IndianRupee, label: 'Salary Benchmark', path: '/admin/salary-benchmark' },
     { icon: IndianRupee, label: 'Revenue', path: '/admin/revenue' },
     { icon: Sparkles, label: 'Find Candidates', path: '/admin/find-candidates' },

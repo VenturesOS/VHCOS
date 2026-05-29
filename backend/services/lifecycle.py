@@ -201,6 +201,11 @@ async def run_deferred_init(app):
         await db.security_events.create_index("timestamp")
         await db.security_events.create_index("event_type")
         await db.security_events.create_index("severity")
+        # Phase 56: analytics page-view tracking
+        await db.analytics_pageviews.create_index("ts")
+        await db.analytics_pageviews.create_index("user_id")
+        await db.analytics_pageviews.create_index("route")
+        await db.analytics_pageviews.create_index([("ts", -1), ("event_type", 1)])
         from services.maintenance_bot import start_bot
         start_bot()
         logging.info("Maintenance bot started")

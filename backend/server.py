@@ -133,6 +133,7 @@ except Exception as e:
 
 extension_router = _safe_import("routes.extension", "extension_router")
 profile_router = _safe_import("routes.profile", "profile_router")
+analytics_pageviews_router = _safe_import("routes.analytics_pageviews", "analytics_pageviews_router")
 cv_upload_router = _safe_import("routes.cv_upload", "cv_upload_router")
 ai_search_router = _safe_import("routes.ai_search", "ai_search_router")
 sourcing_router = _safe_import("routes.sourcing_search", "sourcing_router")
@@ -259,6 +260,7 @@ _all_routers = [
     daily_digest_router,
     whatsapp_webhook_router,
     sourcing_router,
+    analytics_pageviews_router,
 ]
 
 for _r in _all_routers:

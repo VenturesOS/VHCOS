@@ -5,6 +5,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "./lib/auth";
 import { Toaster } from "./components/ui/sonner";
 import GoogleAnalytics from "./components/GoogleAnalytics";
+import VHCAnalytics from "./components/VHCAnalytics";
 import { BatchUploadProvider } from "./contexts/BatchUploadContext";
 import { BatchUploadWidget } from "./components/shared/BatchUploadWidget";
 import { ChunkErrorBoundary } from "./components/ChunkErrorBoundary";
@@ -61,6 +62,7 @@ const DataQualityPage = React.lazy(() => import("./pages/admin/DataQualityPage")
 const AdminPipelinePage = React.lazy(() => import("./pages/admin/AdminPipelinePage"));
 const BatchUploadPage = React.lazy(() => import("./pages/admin/BatchUploadPage"));
 const AdminAnalyticsPage = React.lazy(() => import("./pages/admin/AdminAnalyticsPage"));
+const AnalyticsHubPage = React.lazy(() => import("./pages/admin/AnalyticsHubPage"));
 const DigestEmailPage = React.lazy(() => import("./pages/admin/DigestEmailPage"));
 const DailyDigestPage = React.lazy(() => import("./pages/admin/DailyDigestPage"));
 const RevenueDashboardPage = React.lazy(() => import("./pages/admin/RevenueDashboardPage"));
@@ -158,6 +160,7 @@ function App() {
       <BrowserRouter>
       <BatchUploadProvider>
         <GoogleAnalytics />
+        <VHCAnalytics />
         <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public Routes (No Auth Required) */}
@@ -188,6 +191,7 @@ function App() {
           <Route path="/admin" element={<DashboardLayout allowedRoles={["admin"]} />}>
             <Route index element={<AdminDashboard />} />
             <Route path="analytics" element={<AdminAnalyticsPage />} />
+            <Route path="analytics-hub" element={<AnalyticsHubPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />
