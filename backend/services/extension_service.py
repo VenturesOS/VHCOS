@@ -109,8 +109,26 @@ def _names_are_similar(name_a: str, name_b: str) -> bool:
     if not a_clean or not b_clean:
         return False
 
+    # FIX (Phase 56.1, Feb 2026) — Naukri occasionally renders names with
+    # whitespace between every letter (e.g. "A J I T H" instead of "AJITH").
+    # The naive token filter below strips all the 1-char tokens, leaving an
+    # empty list and a false-negative match. When >=50% of the cleaned
+    # tokens are single characters, try comparing the de-spaced form too.
+    def _despace_if_letter_split(s: str) -> str:
+        toks = s.split()
+        if len(toks) >= 3 and sum(1 for t in toks if len(t) == 1) / len(toks) >= 0.5:
+            return "".join(toks)
+        return s
+    a_despaced = _despace_if_letter_split(a_clean)
+    b_despaced = _despace_if_letter_split(b_clean)
+
     words_a = [w for w in a_clean.split() if len(w) > 1]
     words_b = [w for w in b_clean.split() if len(w) > 1]
+    # Fall back to the de-spaced form when token filter empties one side
+    if not words_a and a_despaced:
+        words_a = [a_despaced]
+    if not words_b and b_despaced:
+        words_b = [b_despaced]
     if not words_a or not words_b:
         return False
 
@@ -127,6 +145,11 @@ def _names_are_similar(name_a: str, name_b: str) -> bool:
     # Rule 3 — fuzzy ratio for typos / transliteration drift
     if _SM(None, a_clean, b_clean).ratio() >= 0.70:
         return True
+    # Rule 3b — same fuzzy ratio against de-spaced forms (catches
+    # "A J I T H" → "ajith" against "Ajith Kumar" → "ajithkumar")
+    if a_despaced != a_clean or b_despaced != b_clean:
+        if _SM(None, a_despaced, b_despaced).ratio() >= 0.70:
+            return True
 
     return False
 

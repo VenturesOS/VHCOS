@@ -2311,7 +2311,34 @@ async def capture_profile(
         )
         if existing:
             logger.warning(f"[Extension] Dedup: name+source match for '{profile.name}' -> updating {existing.get('id','?')[:12]}")
-    
+
+    # ═══ DOUBLE-MATCH EARLY EXIT (Phase 56.1, Feb 2026) ═══
+    # If both email AND phone independently match the SAME existing record,
+    # it's almost certainly the same person — merge unconditionally regardless
+    # of name variation ("A J I T H" vs "Ajith Kumar", "Yash" vs "Yash Vardhan",
+    # nickname changes, etc). This catches a class of duplicates the
+    # name-gated lookups below would miss when `_names_are_similar` is
+    # tripped by spacing / format quirks in the incoming name.
+    if not existing and profile.email and profile.phone:
+        import re as _re_dm
+        phone_normalized_dm = normalize_phone(profile.phone)
+        if phone_normalized_dm and len(phone_normalized_dm) >= 10:
+            # Case-insensitive email match + phone_normalized match in a single query
+            double_candidate = await db.candidate_bank.find_one(
+                {
+                    "email": _re_dm.compile(f"^{_re_dm.escape(profile.email)}$", _re_dm.IGNORECASE),
+                    "phone_normalized": phone_normalized_dm,
+                },
+                {"_id": 0},
+            )
+            if double_candidate:
+                existing = double_candidate
+                logger.warning(
+                    f"[Extension] Dedup: DOUBLE-MATCH (email+phone) for '{profile.name}' "
+                    f"-> updating '{existing.get('name')}' ({existing.get('id','?')[:12]}). "
+                    f"Bypassed name-similarity check."
+                )
+
     # If not found, try email — but ONLY if the name is similar
     if not existing and profile.email:
         email_candidate = await db.candidate_bank.find_one(

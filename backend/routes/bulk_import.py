@@ -756,10 +756,24 @@ async def save_bulk_import(
             
             # Check for existing candidate (cross-source deduplication)
             existing = None
+            # Case-insensitive email match — older records may have stored
+            # email in mixed case, defeating the strict `.lower()` lookup.
             if email:
-                existing = await db.candidate_bank.find_one({"email": email.lower()}, {"_id": 0})
+                import re as _re_em
+                existing = await db.candidate_bank.find_one(
+                    {"email": _re_em.compile(f"^{_re_em.escape(email)}$", _re_em.IGNORECASE)},
+                    {"_id": 0},
+                )
             if not existing and phone:
-                existing = await db.candidate_bank.find_one({"phone_normalized": phone}, {"_id": 0})
+                # Match on phone_normalized OR raw phone — legacy records may
+                # have phone populated but phone_normalized null/empty.
+                existing = await db.candidate_bank.find_one(
+                    {"$or": [
+                        {"phone_normalized": phone},
+                        {"phone": phone},
+                    ]},
+                    {"_id": 0},
+                )
             # Fallback: Naukri profile URL match (only real URLs, skip "View profile" etc.)
             if not existing and mode == "excel":
                 naukri_url = (candidate_data.get('naukri_data') or {}).get('candidate_profile')
