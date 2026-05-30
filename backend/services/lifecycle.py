@@ -112,6 +112,7 @@ async def run_deferred_init(app):
         await _safe_index(db.candidate_bank, [("created_at", -1)])
         await _safe_index(db.candidate_bank, [("mandate_id", 1)])
         await _safe_index(db.candidate_bank, "naukri_id")
+        await _safe_index(db.candidate_bank, "naukri_profile_id")
 
         # users — 82 queries
         await _safe_index(db.users, "email", unique=True)
