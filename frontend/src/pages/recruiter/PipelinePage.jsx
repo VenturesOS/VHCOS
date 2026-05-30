@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { applicationAPI, jobAPI } from '../../lib/api';
+import { trackEvent } from '../../hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
@@ -96,6 +97,11 @@ export default function PipelinePage() {
 
     try {
       await applicationAPI.update(draggableId, { stage: newStage });
+      trackEvent('stage_changed', {
+        application_id: draggableId,
+        new_stage: newStage,
+        method: 'drag_drop',
+      });
       setApplications((prev) =>
         prev.map((app) => (app.id === draggableId ? { ...app, stage: newStage } : app))
       );
@@ -121,6 +127,11 @@ export default function PipelinePage() {
     e?.stopPropagation?.();
     try {
       await applicationAPI.update(appId, { stage: newStage });
+      trackEvent('stage_changed', {
+        application_id: appId,
+        new_stage: newStage,
+        method: 'quick_move',
+      });
       setApplications((prev) =>
         prev.map((app) => (app.id === appId ? { ...app, stage: newStage } : app))
       );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { jobAPI, applicationAPI } from '../../lib/api';
+import { trackEvent } from '../../hooks/useAnalytics';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -55,6 +56,12 @@ export default function BrowseJobsPage() {
       await applicationAPI.create({
         job_id: selectedJob.id,
         cover_letter: coverLetter,
+      });
+      trackEvent('application_submitted', {
+        job_id: selectedJob.id,
+        job_title: selectedJob.title || null,
+        has_cover_letter: !!coverLetter?.trim(),
+        source: 'browse_jobs',
       });
       toast.success('Application submitted!');
       setSelectedJob(null);

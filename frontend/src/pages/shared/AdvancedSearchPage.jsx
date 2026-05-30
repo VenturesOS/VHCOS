@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../lib/auth';
 import { useNavigate } from 'react-router-dom';
 import { candidateBankAPI, jobAPI, matchingAPI, sourcingAPI } from '../../lib/api';
+import { trackEvent } from '../../hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -80,6 +81,12 @@ export default function AdvancedSearchPage() {
     setLoading(true);
     setResults([]);
     setRerankMeta(null);
+    trackEvent('search_performed', {
+      smart_rerank: !!smartRerank,
+      has_keywords: !!filters.keywords?.trim(),
+      has_skills: !!filters.skills,
+      has_location: !!filters.location,
+    });
     try {
       // Phase 54 ML path: when Smart Re-rank is ON and the user provided
       // keywords, semantic search beats keyword regex on candidate_bank.

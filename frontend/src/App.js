@@ -63,6 +63,7 @@ const AdminPipelinePage = React.lazy(() => import("./pages/admin/AdminPipelinePa
 const BatchUploadPage = React.lazy(() => import("./pages/admin/BatchUploadPage"));
 const AdminAnalyticsPage = React.lazy(() => import("./pages/admin/AdminAnalyticsPage"));
 const AnalyticsHubPage = React.lazy(() => import("./pages/admin/AnalyticsHubPage"));
+const ClustersPage = React.lazy(() => import("./pages/admin/ClustersPage"));
 const DigestEmailPage = React.lazy(() => import("./pages/admin/DigestEmailPage"));
 const DailyDigestPage = React.lazy(() => import("./pages/admin/DailyDigestPage"));
 const RevenueDashboardPage = React.lazy(() => import("./pages/admin/RevenueDashboardPage"));
@@ -192,6 +193,7 @@ function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="analytics" element={<AdminAnalyticsPage />} />
             <Route path="analytics-hub" element={<AnalyticsHubPage />} />
+            <Route path="clusters" element={<ClustersPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />

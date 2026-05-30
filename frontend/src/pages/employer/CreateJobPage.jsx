@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jobAPI, matchingAPI, employerPortalAPI } from '../../lib/api';
+import { trackEvent } from '../../hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -276,6 +277,12 @@ export default function CreateJobPage() {
         experience_max: formData.experience_max ? parseInt(formData.experience_max) : null,
       };
       await jobAPI.create(payload);
+      trackEvent('mandate_created', {
+        title: formData.title || null,
+        company: formData.company_name || formData.company_id || null,
+        source: 'employer_create_job',
+        experience_max: payload.experience_max,
+      });
       toast.success('Job posted successfully!');
       navigate(-1);
     } catch (error) {

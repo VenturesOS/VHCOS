@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { jobAPI, accountManagerAPI } from '../../lib/api';
+import { trackEvent } from '../../hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -65,6 +66,11 @@ export default function AMCreateJobPage() {
         positions: Number(form.positions) || 1,
       };
       await jobAPI.create(payload);
+      trackEvent('mandate_created', {
+        title: form.title || null,
+        company_id: companyId,
+        source: 'am_create_job',
+      });
       toast.success('Job created successfully');
       navigate(`${basePath}/account-manager/company/${companyId}`);
     } catch (error) {
