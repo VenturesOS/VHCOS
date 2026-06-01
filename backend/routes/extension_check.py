@@ -434,6 +434,214 @@ def _score_match(c: CandidateIn, doc: dict) -> tuple[float, List[str]]:
     return score, signals
 
 
+# ──────────────────────────────────────────────────────────────────────
+# V2 SCORING (Phase 56.2, Feb 2026) — dark-launched to admin only via
+# EXTENSION_CHECK_V2_USERS env var. Same response shape, smarter recall.
+#
+# Why V2:
+#   The original (V1) requires score ≥ 1.0 AND at least one "strong"
+#   signal. On a Naukri search results page, most cards only expose
+#   name + headline + location → V1 scores them at 0.75 → no badge.
+#   Recall ends up at ~10-15% (1-2 out of 15 known-in-DB candidates).
+#
+# What V2 changes (backend-only, no extension update needed):
+#   1. Loose name match — handles "Yash" ↔ "Yash Vardhan" (V1 strict
+#      requires both first+last token match).
+#   2. Smarter headline parsing — extracts designation/location/employer
+#      from the card's headline string (e.g. "ML Engineer at TCS - Pune").
+#   3. Rebalanced weights — location bumped 0.25 → 0.30 (it's at 99.7%
+#      DB coverage, deserves more weight than V1's "weak" rating).
+#   4. Threshold lowered 1.0 → 0.85 BUT a "≥1 corroborator beyond name"
+#      gate is enforced, so name alone never badges.
+#   5. Explicit-conflict rejection — even when score passes, reject if
+#      card.employer clearly contradicts DB employer (e.g. card says
+#      "Infosys" but DB says "TCS"), or experience diff > 5 years.
+#   6. Stable Naukri ID match = always HIGH, ignores everything else.
+#
+# Expected recall lift: ~15% → ~85-100% with negligible precision loss.
+# ──────────────────────────────────────────────────────────────────────
+
+_V2_SIGNAL_WEIGHTS = {
+    "name": 0.5,
+    "employer": 0.6,
+    "designation": 0.4,
+    "ctc": 0.5,
+    "experience": 0.4,
+    "skills": 0.5,
+    "education": 0.4,
+    "location": 0.30,                  # was 0.25
+    "headline_employer": 0.4,
+    "headline_designation": 0.30,      # NEW — DB designation appears in card headline
+    "headline_location": 0.15,         # NEW — DB location appears in card headline
+}
+_V2_BADGE_THRESHOLD = 0.85
+_V2_HIGH_THRESHOLD = 1.20
+
+
+def _loose_name_match_v2(name_a: str, name_b: str) -> bool:
+    """V2 name matcher — looser than `_strict_name_match` for the
+    SINGLE-token side cases (Naukri sometimes shows just "Yash" vs
+    "Yash Vardhan" in DB), but STRICTER than the auto-merge matcher
+    for both-multi-token cases (don't badge "Akash Sharma" as
+    "Akash Gundekar" — different surnames = different people unless
+    fuzzy ratio is close).
+
+    Decision tree:
+      - Identical (after normalisation) → True
+      - De-spaced equality ("A J I T H" ↔ "ajith") → True
+      - Both sides multi-token (≥2 sig words):
+          * first AND last sig token match → True
+          * fuzzy ratio on full strings ≥ 0.80 → True (typo tolerance)
+          * else → False (precision wins over recall)
+      - Single-token side(s):
+          * first-token equality OR token-in-multi (first/last) → True
+          * fuzzy ratio ≥ 0.80 → True
+          * else → False
+    """
+    if not name_a or not name_b:
+        return False
+    import re as _re
+    from difflib import SequenceMatcher as _SM
+
+    def _clean(s: str) -> str:
+        s = _re.sub(r"\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b", " ", s.lower())
+        s = _re.sub(r"[^a-z0-9\s]", " ", s)
+        return _re.sub(r"\s+", " ", s).strip()
+
+    a_clean, b_clean = _clean(name_a), _clean(name_b)
+    if not a_clean or not b_clean:
+        return False
+    if a_clean == b_clean:
+        return True
+
+    # De-spaced form (covers "A J I T H" → "ajith")
+    def _despace_if_letter_split(s: str) -> str:
+        toks = s.split()
+        if len(toks) >= 3 and sum(1 for t in toks if len(t) == 1) / len(toks) >= 0.5:
+            return "".join(toks)
+        return s
+    a_desp, b_desp = _despace_if_letter_split(a_clean), _despace_if_letter_split(b_clean)
+    if a_desp == b_desp:
+        return True
+
+    # Significant tokens (≥3 chars)
+    sig_a = [w for w in a_clean.split() if len(w) >= 3]
+    sig_b = [w for w in b_clean.split() if len(w) >= 3]
+    if not sig_a:
+        sig_a = [w for w in a_clean.split() if len(w) > 1] or ([a_desp] if a_desp else [])
+    if not sig_b:
+        sig_b = [w for w in b_clean.split() if len(w) > 1] or ([b_desp] if b_desp else [])
+    if not sig_a or not sig_b:
+        return False
+
+    # Both multi-token: require first+last OR fuzzy. NOT first-only
+    # (precision guard against "Akash Sharma" ↔ "Akash Gundekar").
+    if len(sig_a) >= 2 and len(sig_b) >= 2:
+        if sig_a[0] == sig_b[0] and sig_a[-1] == sig_b[-1]:
+            return True
+        return _SM(None, a_clean, b_clean).ratio() >= 0.80
+
+    # One side single-token: first-token match OR token-in-multi (first/last)
+    if len(sig_a) == 1 and len(sig_b) == 1:
+        return sig_a[0] == sig_b[0] or _SM(None, sig_a[0], sig_b[0]).ratio() >= 0.85
+    single, multi = (sig_a, sig_b) if len(sig_a) == 1 else (sig_b, sig_a)
+    if single[0] == multi[0] or single[0] == multi[-1]:
+        return True
+    return _SM(None, a_clean, b_clean).ratio() >= 0.80
+
+
+def _headline_contains(headline: Optional[str], needle: Optional[str], min_len: int = 4) -> bool:
+    """Check if a normalised needle (e.g. DB designation/location) appears
+    in the card's headline string. Used for the V2 headline_* signals."""
+    if not headline or not needle:
+        return False
+    h = _norm_str(headline)
+    n = _norm_str(needle)
+    if not h or not n or len(n) < min_len:
+        return False
+    # Whole-word presence to avoid spurious substring matches
+    return bool(re.search(rf"\b{re.escape(n)}\b", h))
+
+
+def _has_explicit_conflict_v2(c: CandidateIn, doc: dict) -> Optional[str]:
+    """Return a string reason if card+DB explicitly contradict, else None.
+    Only checks fields where BOTH sides have a meaningful value — absence
+    is never a conflict (DB might just be incomplete)."""
+    # Employer conflict
+    ce, de = _norm_str(c.current_employer), _norm_str(doc.get("current_employer"))
+    if ce and de and len(ce) > 2 and len(de) > 2:
+        # Strip corp suffixes for comparison
+        for sfx in (" pvt ltd", " private limited", " ltd", " limited", " inc",
+                    " corp", " corporation", " llp", " india"):
+            ce = ce.replace(sfx, "").strip()
+            de = de.replace(sfx, "").strip()
+        if ce != de and ce not in de and de not in ce:
+            return f"employer conflict ({c.current_employer!r} vs {doc.get('current_employer')!r})"
+    # Experience > 5 years apart (allow some noise — Naukri rounding)
+    if c.experience_years is not None and doc.get("experience_years") is not None:
+        try:
+            if abs(float(c.experience_years) - float(doc["experience_years"])) > 5.0:
+                return f"experience conflict ({c.experience_years}y vs {doc['experience_years']}y)"
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _score_match_v2(c: CandidateIn, doc: dict) -> tuple[float, List[str]]:
+    """V2 scoring — includes V1 signals + headline cross-checks + rebalanced
+    location weight. Score range 0 - ~2.0."""
+    signals: List[str] = ["name"]
+    score = _V2_SIGNAL_WEIGHTS["name"]
+
+    # Direct employer (best) or headline-extracted (fallback)
+    if _employer_matches(c.current_employer, doc.get("current_employer")):
+        score += _V2_SIGNAL_WEIGHTS["employer"]; signals.append("employer")
+    elif _headline_mentions_employer(c.headline, doc.get("current_employer")):
+        score += _V2_SIGNAL_WEIGHTS["headline_employer"]; signals.append("headline_employer")
+
+    # Direct designation
+    if _designation_matches(c.designation, doc.get("designation")):
+        score += _V2_SIGNAL_WEIGHTS["designation"]; signals.append("designation")
+    # NEW: headline-extracted designation (e.g. "ML Engineer at TCS - Pune")
+    elif _headline_contains(c.headline, doc.get("designation"), min_len=4):
+        score += _V2_SIGNAL_WEIGHTS["headline_designation"]; signals.append("headline_designation")
+
+    if _ctc_matches(c.annual_ctc, doc.get("annual_ctc") or doc.get("current_ctc")):
+        score += _V2_SIGNAL_WEIGHTS["ctc"]; signals.append("ctc")
+
+    if _experience_matches(c.experience_years,
+                           doc.get("experience_years") or doc.get("total_experience")):
+        score += _V2_SIGNAL_WEIGHTS["experience"]; signals.append("experience")
+
+    if _skills_overlap(c.skills, doc.get("skills")):
+        score += _V2_SIGNAL_WEIGHTS["skills"]; signals.append("skills")
+
+    if _education_matches(c.education, doc.get("education")):
+        score += _V2_SIGNAL_WEIGHTS["education"]; signals.append("education")
+
+    # Direct location
+    if _location_matches(c.location, doc.get("location")):
+        score += _V2_SIGNAL_WEIGHTS["location"]; signals.append("location")
+    # NEW: DB location keyword in card headline ("...- Pune")
+    elif _headline_contains(c.headline, doc.get("location"), min_len=3):
+        score += _V2_SIGNAL_WEIGHTS["headline_location"]; signals.append("headline_location")
+
+    return score, signals
+
+
+def _is_v2_user(user: dict) -> bool:
+    """Gate for the dark-launched V2 scoring path. Set env
+    EXTENSION_CHECK_V2_USERS=admin@vhc.in,alice@vhc.in (or `*` for all).
+    Default: empty → no one gets V2 (everyone uses V1)."""
+    raw = (os.environ.get("EXTENSION_CHECK_V2_USERS") or "").strip()
+    if not raw:
+        return False
+    if raw == "*":
+        return True
+    allowed = {e.strip().lower() for e in raw.split(",") if e.strip()}
+    return (user.get("email") or "").strip().lower() in allowed
+
+
 def _headline_or_loc_hits(
     headline: Optional[str],
     in_location: Optional[str],
@@ -649,15 +857,17 @@ def _build_match_result(
     best_score: float,
     best_signals: List[str],
     web_base: str,
+    high_threshold: float = _HIGH_THRESHOLD,
 ) -> CheckResult:
     """Shape a CheckResult from a matched candidate_bank doc.
 
     Used by both the fast (`naukri_id` $in) and fuzzy (name-prefix scan)
     paths so the response shape stays identical regardless of how the
-    match was found.
+    match was found. `high_threshold` parameter lets V1 and V2 callers
+    use their own confidence-tier boundaries (V1=1.3, V2=1.20).
     """
     captured_at = best_doc.get("captured_at") or best_doc.get("created_at") or None
-    confidence = "high" if best_score >= _HIGH_THRESHOLD else "medium"
+    confidence = "high" if best_score >= high_threshold else "medium"
     cid = best_doc.get("id")
     profile_url = f"{web_base}/candidate-bank?candidateId={cid}" if cid else None
 
@@ -735,6 +945,13 @@ async def check_existing(
     t0 = _time.time()
     web_base = (os.environ.get("SITE_URL") or "https://ventureshrd.com").rstrip("/")
 
+    # V2 dark-launch (Phase 56.2) — admin-only smarter recall path
+    use_v2 = _is_v2_user(user)
+    name_match_fn = _loose_name_match_v2 if use_v2 else _strict_name_match
+    score_fn = _score_match_v2 if use_v2 else _score_match
+    badge_thr = _V2_BADGE_THRESHOLD if use_v2 else _BADGE_THRESHOLD
+    high_thr = _V2_HIGH_THRESHOLD if use_v2 else _HIGH_THRESHOLD
+
     # Pre-allocate results list — fast-path fills some indices, fuzzy fills the rest.
     results_by_idx: dict[int, CheckResult] = {}
 
@@ -785,11 +1002,11 @@ async def check_existing(
                     continue  # already resolved (first-write-wins)
                 # Stable Naukri ID match = definitive — score it for
                 # completeness but always badge as 'high' confidence.
-                score, signals = _score_match(candidates[idx], doc)
+                score, signals = score_fn(candidates[idx], doc)
                 signals = (signals or []) + ["naukri_id"]
                 results_by_idx[idx] = _build_match_result(
-                    idx, candidates[idx], doc, max(score, _HIGH_THRESHOLD),
-                    signals, web_base,
+                    idx, candidates[idx], doc, max(score, high_thr),
+                    signals, web_base, high_threshold=high_thr,
                 )
 
     # ── FUZZY PATH: name-prefix scan for everything not resolved above ──
@@ -870,17 +1087,30 @@ async def check_existing(
         best_score: float = 0.0
         best_signals: List[str] = []
         for doc in bucket:
-            if not _strict_name_match(c.name, doc.get("name") or ""):
+            if not name_match_fn(c.name, doc.get("name") or ""):
                 continue
-            score, signals = _score_match(c, doc)
+            # V2: reject docs with explicit field-level conflicts (employer
+            # mismatch, experience > 5y apart) BEFORE scoring. Cheaper than
+            # scoring then rejecting; also keeps the precision floor intact.
+            if use_v2:
+                conflict = _has_explicit_conflict_v2(c, doc)
+                if conflict:
+                    continue
+            score, signals = score_fn(c, doc)
             if score > best_score:
                 best_score = score
                 best_signals = signals
                 best_doc = doc
-                if score >= _HIGH_THRESHOLD:
+                if score >= high_thr:
                     break
 
-        if best_doc is None or best_score < _BADGE_THRESHOLD:
+        # V2 guard: at least one corroborating signal beyond `name` must
+        # fire. Prevents the lower threshold (0.85) from badging on name
+        # alone (which never happens at 1.0 V1 threshold because
+        # `name` weight is only 0.5).
+        v2_has_corroborator = use_v2 and best_signals and len(best_signals) >= 2
+
+        if best_doc is None or best_score < badge_thr or (use_v2 and not v2_has_corroborator):
             results_by_idx[idx] = CheckResult(
                 index=idx,
                 exists=False,
@@ -891,6 +1121,7 @@ async def check_existing(
 
         results_by_idx[idx] = _build_match_result(
             idx, c, best_doc, best_score, best_signals, web_base,
+            high_threshold=high_thr,
         )
 
     # Re-emit results in input order
@@ -899,7 +1130,8 @@ async def check_existing(
     n_exists = sum(1 for r in results if r.exists)
     n_fast = sum(1 for r in results if r.exists and r.matched_signals and "naukri_id" in r.matched_signals)
     logger.info(
-        "[CheckExisting] user=%s batch=%d hits=%d (fast=%d) cache_hits=%d/%d took=%dms",
+        "[CheckExisting%s] user=%s batch=%d hits=%d (fast=%d) cache_hits=%d/%d took=%dms",
+        "-V2" if use_v2 else "",
         user.get("email"), len(candidates), n_exists, n_fast,
         len(cache_hits), len(unique_first_toks),
         int((_time.time() - t0) * 1000),
