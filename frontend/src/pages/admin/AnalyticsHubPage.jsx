@@ -387,6 +387,43 @@ export default function AnalyticsHubPage() {
               Each user click / shortlist / contact / add-to-pipeline becomes a labeled triplet.
               When the bar fills, the XGBoost ranker can be trained. Data accumulates automatically — no manual labeling.
             </div>
+
+            {/* Leaderboard — top contributors to LTR training data */}
+            {ltr.by_user?.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-slate-100" data-testid="ltr-leaderboard">
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3" /> Top contributors ({ltr.by_user.length})
+                </div>
+                <div className="space-y-1">
+                  {ltr.by_user.map((u, i) => {
+                    const pct = ltr.n_actions ? Math.round((u.n_actions / ltr.n_actions) * 100) : 0;
+                    const initials = (u.email || "?").split("@")[0].slice(0, 2).toUpperCase();
+                    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
+                    return (
+                      <div
+                        key={u.email}
+                        className="flex items-center gap-3 py-1.5 border-b border-slate-50 last:border-0"
+                        data-testid={`ltr-leader-${i}`}
+                      >
+                        <div className="w-6 text-center text-xs text-slate-500">
+                          {medal || `#${i + 1}`}
+                        </div>
+                        <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-semibold">
+                          {initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-slate-800 truncate">{u.email || "(unknown)"}</div>
+                          <div className="text-[10px] text-slate-400">
+                            {u.role || "—"} · {pct}% of actions
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-xs">{u.n_actions.toLocaleString()}</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

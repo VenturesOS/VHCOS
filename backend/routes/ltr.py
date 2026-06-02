@@ -104,6 +104,20 @@ async def ltr_stats(
                 {"$match": {"$expr": {"$gt": [{"$size": "$actions"}, 0]}}},
                 {"$count": "n"},
             ],
+            # Top contributors — recruiters generating the most actions
+            # (which are what convert into labeled triplets).
+            "by_user": [
+                {"$unwind": "$actions"},
+                {"$group": {
+                    "_id": {
+                        "email": "$user_email",
+                        "role": "$user_role",
+                    },
+                    "n_actions": {"$sum": 1},
+                }},
+                {"$sort": {"n_actions": -1}},
+                {"$limit": 10},
+            ],
         }},
     ]
     agg = await db.search_sessions.aggregate(pipeline).to_list(1)
@@ -111,7 +125,7 @@ async def ltr_stats(
         return {
             "days": days,
             "n_sessions": 0, "n_impressions": 0, "n_actions": 0,
-            "by_source": [], "by_action": [],
+            "by_source": [], "by_action": [], "by_user": [],
             "sessions_with_actions": 0,
             "ready_for_training": False,
             "progress_pct": 0,
@@ -121,6 +135,16 @@ async def ltr_stats(
     n_imp = totals.get("n_impressions", 0)
     n_act = totals.get("n_actions", 0)
     n_sess_with_act = (a["sessions_with_actions"] or [{}])[0].get("n", 0)
+    # Flatten by_user — Mongo returns nested _id, frontend needs a clean list
+    by_user_raw = a.get("by_user") or []
+    by_user = [
+        {
+            "email": (row.get("_id") or {}).get("email", ""),
+            "role": (row.get("_id") or {}).get("role"),
+            "n_actions": row.get("n_actions", 0),
+        }
+        for row in by_user_raw
+    ]
     # Heuristic — "positive triplet" ≈ a sessions_with_actions * avg actions
     # Rough lower bound on training-eligible positives.
     triplet_estimate = n_act
@@ -132,6 +156,7 @@ async def ltr_stats(
         "n_actions": n_act,
         "by_source": a.get("by_source") or [],
         "by_action": a.get("by_action") or [],
+        "by_user": by_user,
         "sessions_with_actions": n_sess_with_act,
         "triplet_estimate": triplet_estimate,
         "ready_for_training": triplet_estimate >= 5000,
