@@ -2632,3 +2632,6 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Test credentials (DO NOT DEPLOY)
+memory/test_credentials.md
