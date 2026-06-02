@@ -22,6 +22,20 @@ export default function SemanticSearchPanel({ onSelectCandidate, onViewFullProfi
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null); // null = idle, [] = no matches
   const [loading, setLoading] = useState(false);
+  // LTR Phase 1 — session id from /talent-graph/search response, round-
+  // tripped to /ltr/action when the user interacts with a result. Fire-
+  // and-forget so it never blocks the UX.
+  const [ltrSessionId, setLtrSessionId] = useState(null);
+
+  const logLtrAction = (candidateId, action, rank) => {
+    if (!ltrSessionId || !candidateId) return;
+    api.post('/ltr/action', {
+      session_id: ltrSessionId,
+      candidate_id: candidateId,
+      action,
+      rank,
+    }).catch(() => {});  // never block UX
+  };
 
   const runSearch = async () => {
     const q = (query || '').trim();
@@ -37,11 +51,13 @@ export default function SemanticSearchPanel({ onSelectCandidate, onViewFullProfi
         min_score: 0.4,
       });
       setResults(res.data?.matches || []);
+      setLtrSessionId(res.data?.ltr_session_id || null);
     } catch (err) {
       const status = err?.response?.status;
       if (status === 404) toast.error('Talent Graph not yet indexed. Run backfill first.');
       else toast.error(err?.response?.data?.detail || 'Semantic search failed');
       setResults([]);
+      setLtrSessionId(null);
     } finally {
       setLoading(false);
     }
@@ -115,7 +131,7 @@ export default function SemanticSearchPanel({ onSelectCandidate, onViewFullProfi
                   Top {results.length} matches — ranked by cosine similarity
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {results.map((r) => {
+                  {results.map((r, idx) => {
                     const pct = Math.round((r.score || 0) * 100);
                     return (
                       <div
@@ -168,7 +184,10 @@ export default function SemanticSearchPanel({ onSelectCandidate, onViewFullProfi
                             size="sm"
                             variant="outline"
                             className="flex-1 h-7 text-[11px] gap-1"
-                            onClick={() => onSelectCandidate?.(r)}
+                            onClick={() => {
+                              logLtrAction(r.candidate_id, 'click_profile', idx);
+                              onSelectCandidate?.(r);
+                            }}
                             data-testid={`semantic-result-quickview-${r.candidate_id}`}
                           >
                             <Eye className="w-3 h-3" /> Quick view
@@ -176,7 +195,10 @@ export default function SemanticSearchPanel({ onSelectCandidate, onViewFullProfi
                           <Button
                             size="sm"
                             className="flex-1 h-7 text-[11px] gap-1 bg-[#7CB342] hover:bg-[#689F38]"
-                            onClick={() => onViewFullProfile?.(r.candidate_id)}
+                            onClick={() => {
+                              logLtrAction(r.candidate_id, 'click_profile', idx);
+                              onViewFullProfile?.(r.candidate_id);
+                            }}
                             data-testid={`semantic-result-fullprofile-${r.candidate_id}`}
                           >
                             <ExternalLink className="w-3 h-3" /> Full profile
