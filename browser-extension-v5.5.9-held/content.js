@@ -184,6 +184,13 @@
       if (oldToast) oldToast.remove();
       isCapturing = false; // Reset in case previous capture was mid-flight
 
+      // Skip Naukri pages we explicitly do NOT want to operate on
+      // (e.g. /v3/simcv — "Recruiters also viewed" / similar-CV suggestion view)
+      if (PLATFORM === 'naukri' && isExcludedNaukriPage()) {
+        console.log(`[VHC v${VERSION}] Excluded Naukri page (${window.location.pathname}) — extension will not run here`);
+        return;
+      }
+
       // Re-trigger auto-capture if navigated to a profile page
       if (isProfilePage() && !isCapturing) {
         getSettings().then(settings => {
@@ -1916,6 +1923,19 @@
 
   // ===================== CAPTURE FLOW =====================
 
+  // ===================== EXCLUDED NAUKRI PAGES =====================
+  // Naukri's `/v3/simcv` ("Recruiters also viewed" / similar-CV) overlay
+  // mounts the focal candidate's top card *plus* a list of 195+ suggested
+  // profiles. Running auto-capture or bulk-capture here causes the extension
+  // to grab the wrong person (it scrapes the focal top card while the
+  // recruiter is actually browsing the suggestion cards below). Skip it.
+  function isExcludedNaukriPage() {
+    if (PLATFORM !== 'naukri') return false;
+    const pathname = window.location.pathname;
+    if (pathname.includes('/v3/simcv')) return true;
+    return false;
+  }
+
   // ===================== SEARCH/LIST PAGE DETECTION =====================
 
   function isSearchPage() {
@@ -1923,6 +1943,7 @@
     const search   = window.location.search;
 
     if (PLATFORM === 'naukri') {
+      if (isExcludedNaukriPage()) return false;
       if (pathname.includes('/v3/search') || pathname.includes('/resdex')) return true;
       if (search.includes('searchId') || search.includes('srcPage')) return true;
       if (document.querySelector('[class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"]')) return true;
@@ -2125,6 +2146,7 @@
     const search = window.location.search;
 
     if (PLATFORM === 'naukri') {
+      if (isExcludedNaukriPage()) return false;
       if (pathname.includes('/v3/preview') && search.includes('tabKey=profile')) return true;
       if (/viewResume|view-resume|cvPreview/i.test(pathname)) return true;
       return false;
@@ -3921,6 +3943,15 @@
     if (!settings.enabled) return;
     const auth = await getAuthToken();
     if (!auth) { console.log(`[VHC v${VERSION}] Not authenticated`); return; }
+
+    // Skip Naukri pages we explicitly do NOT want to operate on
+    // (e.g. /v3/simcv — "Recruiters also viewed" / similar-CV suggestion view).
+    // The page mounts a focal candidate top card alongside a list of 195+
+    // suggested profiles, which causes the extension to grab the wrong person.
+    if (PLATFORM === 'naukri' && isExcludedNaukriPage()) {
+      console.log(`[VHC v${VERSION}] Excluded Naukri page (${window.location.pathname}) — extension idle (no auto-capture, no bulk button)`);
+      return;
+    }
 
     if (PLATFORM !== 'naukri') {
       // LinkedIn and Foundit: just show floating button + auto-capture on profile pages
