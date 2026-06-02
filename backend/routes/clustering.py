@@ -114,3 +114,100 @@ async def clustering_status(
         "cluster_count": cluster_count,
         "embeddings_tagged": embedded_count,
     }
+
+
+# ── Find more candidates like this (Phase 56.4, June 2026) ───────────
+# Given a seed candidate, return the N most similar candidates by:
+#   1. Look up the seed's `cluster_id` from `candidate_embeddings`
+#   2. Pull all other members of that cluster (capped at 500 for speed)
+#   3. Rank them by cosine similarity of their embedding to the seed's
+#   4. Return the top N with key fields for display
+
+def _cosine(a: List[float], b: List[float]) -> float:
+    """Tiny pure-Python cosine. Vectors are already L2-normalised by the
+    BGE sidecar (normalize_embeddings=True), so this is just dot product."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    return sum(x * y for x, y in zip(a, b))
+
+
+@clustering_router.get("/similar/{candidate_id}")
+async def similar_candidates(
+    candidate_id: str,
+    limit: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(require_role(["admin", "account_manager", "recruiter"])),
+):
+    """Return the top-N candidates most similar to the given seed candidate.
+    Uses the cluster as a fast pre-filter (skip 99% of the DB), then ranks
+    cluster members by cosine of their BGE embedding to the seed's.
+
+    If the seed has no embedding or cluster yet → returns empty.
+    """
+    # 1. Get seed embedding + cluster_id
+    seed = await db.candidate_embeddings.find_one(
+        {"candidate_id": candidate_id},
+        {"_id": 0, "embedding": 1, "cluster_id": 1},
+    )
+    if not seed or not seed.get("embedding") or seed.get("cluster_id") is None:
+        return {"seed_id": candidate_id, "similar": [], "reason": "no embedding or cluster"}
+
+    seed_vec: List[float] = seed["embedding"]
+    cluster_id = seed["cluster_id"]
+
+    # 2. Pull cluster members (cap at 500 — bigger clusters get random sample)
+    cluster_size = await db.candidate_embeddings.count_documents({"cluster_id": cluster_id})
+    if cluster_size > 500:
+        # Random subset — sample stage in aggregation
+        pipeline: List[Dict[str, Any]] = [
+            {"$match": {"cluster_id": cluster_id, "candidate_id": {"$ne": candidate_id}}},
+            {"$sample": {"size": 500}},
+            {"$project": {"_id": 0, "candidate_id": 1, "embedding": 1}},
+        ]
+        members = await db.candidate_embeddings.aggregate(pipeline).to_list(500)
+    else:
+        cursor = db.candidate_embeddings.find(
+            {"cluster_id": cluster_id, "candidate_id": {"$ne": candidate_id}},
+            {"_id": 0, "candidate_id": 1, "embedding": 1},
+        )
+        members = await cursor.to_list(500)
+
+    # 3. Score by cosine similarity
+    scored: List[tuple[str, float]] = []
+    for m in members:
+        emb = m.get("embedding")
+        if not emb:
+            continue
+        scored.append((m["candidate_id"], _cosine(seed_vec, emb)))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    top_ids = [cid for cid, _ in scored[:limit]]
+    if not top_ids:
+        return {"seed_id": candidate_id, "similar": []}
+
+    # 4. Fetch display fields for the top-N
+    cands_cursor = db.candidate_bank.find(
+        {"id": {"$in": top_ids}},
+        {
+            "_id": 0, "id": 1, "name": 1, "designation": 1, "current_designation": 1,
+            "current_employer": 1, "current_location": 1, "location": 1,
+            "total_experience": 1, "experience_years": 1, "annual_ctc": 1,
+            "skills": 1,
+        },
+    )
+    cand_by_id = {c["id"]: c async for c in cands_cursor}
+
+    # Stitch in same order as scored list, attach similarity score
+    similar: List[Dict[str, Any]] = []
+    for cid, score in scored[:limit]:
+        c = cand_by_id.get(cid)
+        if not c:
+            continue
+        c["similarity"] = round(float(score), 4)
+        similar.append(c)
+
+    return {
+        "seed_id": candidate_id,
+        "cluster_id": cluster_id,
+        "cluster_size": cluster_size,
+        "scanned": len(members),
+        "similar": similar,
+    }

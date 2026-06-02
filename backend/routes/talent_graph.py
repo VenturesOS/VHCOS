@@ -75,7 +75,27 @@ async def semantic_search(
     results = await find_candidates_by_text(
         db, payload.query, limit=payload.limit, min_score=payload.min_score or 0.40
     )
-    return {"query": payload.query, "matches": results, "count": len(results)}
+    # ── LTR Phase 1 telemetry (fire-and-forget) ───────────────────────
+    # Capture the slate so future actions on these results (click /
+    # shortlist / contact) can be tied back to (query, rank) labels.
+    session_id = None
+    try:
+        from services.ltr_telemetry import log_slate
+        session_id = await log_slate(
+            user=user,
+            source="talent_graph_search",
+            query=payload.query,
+            slate=results,
+            query_meta={"limit": payload.limit, "min_score": payload.min_score},
+        )
+    except Exception:
+        pass  # telemetry must never break search
+    return {
+        "query": payload.query,
+        "matches": results,
+        "count": len(results),
+        "ltr_session_id": session_id,  # frontend round-trips this with actions
+    }
 
 
 @router.get("/match-job/{job_id}")

@@ -9,7 +9,7 @@ import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from 'sonner';
-import { Download, Edit2, Save, X, FileText, RefreshCw } from 'lucide-react';
+import { Download, Edit2, Save, X, FileText, RefreshCw, Sparkles } from 'lucide-react';
 
 import CandidateActivityTimeline from './CandidateActivityTimeline';
 import ProfileTab from './profile-tabs/ProfileTab';
@@ -17,6 +17,7 @@ import ExperienceTab from './profile-tabs/ExperienceTab';
 import EducationTab from './profile-tabs/EducationTab';
 import ActivityTab from './profile-tabs/ActivityTab';
 import AuditLogTab from './profile-tabs/AuditLogTab';
+import SimilarCandidatesModal from './SimilarCandidatesModal';
 
 const INITIAL_FORM = {
   name: '', email: '', phone: '', location: '', experience_years: '',
@@ -45,6 +46,7 @@ export default function CandidateProfileDialog({
   const [auditLog, setAuditLog] = useState([]);
   const [activityHistory, setActivityHistory] = useState(null);
   const [editForm, setEditForm] = useState(INITIAL_FORM);
+  const [similarOpen, setSimilarOpen] = useState(false);
 
   const loadCandidateDetails = async (cand) => {
     if (!cand?.id) return;
@@ -143,6 +145,9 @@ export default function CandidateProfileDialog({
               )}
               {showEditButton && !isEditing && (
                 <>
+                  <Button variant="outline" size="sm" onClick={() => setSimilarOpen(true)} className="text-purple-700 border-purple-300 hover:bg-purple-50" data-testid="find-similar-btn" title="Find candidates similar to this profile">
+                    <Sparkles className="w-4 h-4 mr-1" /> Find similar
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleReEnrich} disabled={reEnriching} data-testid="re-enrich-btn" title="Re-run AI extraction">
                     <RefreshCw className={`w-4 h-4 mr-1 ${reEnriching ? 'animate-spin' : ''}`} /> {reEnriching ? 'Enriching...' : 'AI Re-enrich'}
                   </Button>
@@ -195,6 +200,12 @@ export default function CandidateProfileDialog({
           </TabsContent>
         </Tabs>
       </DialogContent>
+      <SimilarCandidatesModal
+        open={similarOpen}
+        onOpenChange={setSimilarOpen}
+        seedId={candidate?.id}
+        seedName={candidate?.name}
+      />
     </Dialog>
   );
 }

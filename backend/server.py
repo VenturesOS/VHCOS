@@ -124,6 +124,8 @@ tally_router = _safe_import("routes.tally_bridge", "tally_router")
 ext_check_router = _safe_import("routes.extension_check", "ext_check_router")
 badge_audit_router = _safe_import("routes.badge_audit", "router")
 ext_feedback_router = _safe_import("routes.badge_audit", "ext_feedback_router")
+ltr_router = _safe_import("routes.ltr", "ltr_router")
+ltr_admin_router = _safe_import("routes.ltr", "ltr_admin_router")
 embed_admin_router = _safe_import("routes.embed_admin", "embed_admin_router")
 bug_reports_router = _safe_import("routes.bug_reports", "bug_reports_router")
 try:
@@ -267,6 +269,8 @@ _all_routers = [
     clustering_router,
     badge_audit_router,
     ext_feedback_router,
+    ltr_router,
+    ltr_admin_router,
 ]
 
 for _r in _all_routers:

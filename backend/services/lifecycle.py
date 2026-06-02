@@ -120,6 +120,12 @@ async def run_deferred_init(app):
         await _safe_index(db.badge_audit, [("user_email", 1), ("ts", -1)])
         await _safe_index(db.badge_audit, "expires_at", expireAfterSeconds=0)
 
+        # search_sessions — Phase 56.5 LTR telemetry (180-day TTL)
+        await _safe_index(db.search_sessions, "id", unique=True)
+        await _safe_index(db.search_sessions, [("ts", -1)])
+        await _safe_index(db.search_sessions, [("user_email", 1), ("ts", -1)])
+        await _safe_index(db.search_sessions, "expires_at", expireAfterSeconds=0)
+
         # users — 82 queries
         await _safe_index(db.users, "email", unique=True)
         await _safe_index(db.users, "id", unique=True)
