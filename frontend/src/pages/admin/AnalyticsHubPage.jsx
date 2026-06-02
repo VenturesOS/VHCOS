@@ -22,7 +22,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell,
 } from "recharts";
-import { Eye, Users, MousePointerClick, Globe, TrendingUp, Activity, Loader2 } from "lucide-react";
+import { Eye, Users, MousePointerClick, Globe, TrendingUp, Activity, Loader2, Brain, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 const envUrl = process.env.REACT_APP_BACKEND_URL;
@@ -73,6 +73,17 @@ export default function AnalyticsHubPage() {
       .then((d) => { if (!cancel) setData(d); })
       .catch((e) => toast.error(`Failed to load: ${e.message}`))
       .finally(() => { if (!cancel) setLoading(false); });
+    return () => { cancel = true; };
+  }, [days]);
+
+  // LTR Phase 1 telemetry — separate endpoint, separate state so it
+  // doesn't gate the main dashboard on this auxiliary call.
+  const [ltr, setLtr] = useState(null);
+  useEffect(() => {
+    let cancel = false;
+    fetchJSON(`/admin/ltr/stats?days=${days}`)
+      .then((d) => { if (!cancel) setLtr(d); })
+      .catch(() => {});  // soft fail — flywheel is nice-to-have
     return () => { cancel = true; };
   }, [days]);
 
@@ -295,6 +306,90 @@ export default function AnalyticsHubPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── LTR Data Flywheel (Phase 56.5) ───────────────────────────── */}
+      {/* Visualises progress toward the 5,000 labeled-triplet threshold
+          needed before XGBoost LTR Phase 2 training can begin.
+          Data: GET /api/admin/ltr/stats?days=N
+          Soft-fails — section just doesn't render if endpoint errors. */}
+      {ltr && (
+        <Card className="border-slate-200" data-testid="ltr-flywheel-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Brain className="w-4 h-4 text-purple-600" /> Data Flywheel — LTR Training Readiness
+              {ltr.ready_for_training && (
+                <Badge className="bg-green-100 text-green-700 text-[10px] ml-2">
+                  <CheckCircle2 className="w-3 h-3 mr-0.5" /> Ready to train
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="bg-slate-50 rounded-lg p-3" data-testid="ltr-stat-sessions">
+                <div className="text-xs text-slate-500">Search sessions</div>
+                <div className="text-2xl font-semibold text-slate-900">{ltr.n_sessions.toLocaleString()}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{ltr.n_impressions.toLocaleString()} impressions</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3" data-testid="ltr-stat-actions">
+                <div className="text-xs text-slate-500">User actions</div>
+                <div className="text-2xl font-semibold text-slate-900">{ltr.n_actions.toLocaleString()}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{ltr.sessions_with_actions} sessions with action</div>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-3" data-testid="ltr-stat-progress">
+                <div className="text-xs text-purple-700">Triplet progress</div>
+                <div className="text-2xl font-semibold text-purple-900">
+                  {ltr.triplet_estimate.toLocaleString()} / {ltr.target_triplets.toLocaleString()}
+                </div>
+                <div className="w-full bg-purple-100 rounded-full h-1.5 mt-2">
+                  <div
+                    className="bg-purple-600 h-1.5 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, ltr.progress_pct)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1.5">By source</div>
+                {ltr.by_source?.length ? (
+                  <div className="space-y-1.5">
+                    {ltr.by_source.map((s) => (
+                      <div key={s._id} className="flex items-center justify-between text-sm py-1 border-b border-slate-100 last:border-0">
+                        <span className="text-slate-700 font-mono text-xs">{s._id}</span>
+                        <Badge variant="secondary" className="text-xs">{s.n.toLocaleString()}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400 py-3 text-center">No sessions yet — run a Talent Graph search to seed</div>
+                )}
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1.5">By action</div>
+                {ltr.by_action?.length ? (
+                  <div className="space-y-1.5">
+                    {ltr.by_action.map((s) => (
+                      <div key={s._id} className="flex items-center justify-between text-sm py-1 border-b border-slate-100 last:border-0">
+                        <span className="text-slate-700 capitalize">{s._id.replace(/_/g, " ")}</span>
+                        <Badge variant="secondary" className="text-xs">{s.n.toLocaleString()}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400 py-3 text-center">No actions logged yet</div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500">
+              Each user click / shortlist / contact / add-to-pipeline becomes a labeled triplet.
+              When the bar fills, the XGBoost ranker can be trained. Data accumulates automatically — no manual labeling.
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
