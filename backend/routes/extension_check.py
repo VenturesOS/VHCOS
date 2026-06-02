@@ -197,6 +197,9 @@ class CandidateIn(BaseModel):
 
 class CheckExistingRequest(BaseModel):
     candidates: List[CandidateIn] = Field(default_factory=list)
+    # Optional — the current Naukri/LinkedIn URL the extension is scanning.
+    # Used only for the audit log (helps admin reproduce the search).
+    page_url: Optional[str] = None
 
 
 class MatchedCandidate(BaseModel):
@@ -228,6 +231,10 @@ class CheckResult(BaseModel):
 
 class CheckExistingResponse(BaseModel):
     results: List[CheckResult]
+    # ID into `badge_audit` for this batch — extension v5.5.10+ uses this
+    # in /api/extension/audit/feedback to report which results it actually
+    # rendered. Null when no audit was written (audit is opt-in).
+    audit_id: Optional[str] = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -954,6 +961,9 @@ async def check_existing(
 
     # Pre-allocate results list — fast-path fills some indices, fuzzy fills the rest.
     results_by_idx: dict[int, CheckResult] = {}
+    # Audit tracking — populated by both fast-path and fuzzy-path branches
+    best_doc_by_idx: dict[int, Optional[dict]] = {}
+    conflicts_by_idx: dict[int, Optional[str]] = {}
 
     # ── FAST PATH: stable Naukri Resdex ID ($in indexed lookup) ──
     # Naukri search cards expose a stable `data-target-id` Resdex ID that
@@ -1008,6 +1018,7 @@ async def check_existing(
                     idx, candidates[idx], doc, max(score, high_thr),
                     signals, web_base, high_threshold=high_thr,
                 )
+                best_doc_by_idx[idx] = doc  # audit trail
 
     # ── FUZZY PATH: name-prefix scan for everything not resolved above ──
     # Collect first-tokens only for unresolved candidates.
@@ -1074,6 +1085,9 @@ async def check_existing(
             docs_by_first[tok] = bucket
             _cache_put(tok, bucket)
 
+    # Track per-index best_doc + conflict reason for the audit log.
+    # (Declared earlier alongside results_by_idx.)
+
     # Score each unresolved candidate against its bucket of docs
     for idx, c in enumerate(candidates):
         if idx in results_by_idx:
@@ -1086,6 +1100,7 @@ async def check_existing(
         best_doc: Optional[dict] = None
         best_score: float = 0.0
         best_signals: List[str] = []
+        last_conflict: Optional[str] = None
         for doc in bucket:
             if not name_match_fn(c.name, doc.get("name") or ""):
                 continue
@@ -1095,6 +1110,7 @@ async def check_existing(
             if use_v2:
                 conflict = _has_explicit_conflict_v2(c, doc)
                 if conflict:
+                    last_conflict = conflict  # remember last rejection reason for audit
                     continue
             score, signals = score_fn(c, doc)
             if score > best_score:
@@ -1103,6 +1119,9 @@ async def check_existing(
                 best_doc = doc
                 if score >= high_thr:
                     break
+
+        best_doc_by_idx[idx] = best_doc
+        conflicts_by_idx[idx] = last_conflict if best_doc is None else None
 
         # V2 guard: at least one corroborating signal beyond `name` must
         # fire. Prevents the lower threshold (0.85) from badging on name
@@ -1127,6 +1146,7 @@ async def check_existing(
     # Re-emit results in input order
     results: list[CheckResult] = [results_by_idx[i] for i in range(len(candidates))]
 
+    took_ms = int((_time.time() - t0) * 1000)
     n_exists = sum(1 for r in results if r.exists)
     n_fast = sum(1 for r in results if r.exists and r.matched_signals and "naukri_id" in r.matched_signals)
     logger.info(
@@ -1134,6 +1154,32 @@ async def check_existing(
         "-V2" if use_v2 else "",
         user.get("email"), len(candidates), n_exists, n_fast,
         len(cache_hits), len(unique_first_toks),
-        int((_time.time() - t0) * 1000),
+        took_ms,
     )
-    return CheckExistingResponse(results=results)
+
+    # ─── Phase 56.3 audit log (fire-and-forget) ────────────────────────
+    # Same allowlist as V2 — keeps storage bounded while validation is
+    # under active iteration. To audit everyone, set
+    # EXTENSION_CHECK_V2_USERS=* OR add a dedicated allowlist later.
+    audit_id: Optional[str] = None
+    if use_v2:
+        try:
+            import asyncio as _asyncio
+            from routes.badge_audit import write_audit_doc
+            # Synchronous so we get the audit_id back into the response
+            # (extension uses it to call /audit/feedback later). The
+            # write itself is ~5ms — well within tolerance.
+            audit_id = await write_audit_doc(
+                user=user,
+                used_v2=use_v2,
+                candidates_in=candidates,
+                results_out=results,
+                docs_by_idx=best_doc_by_idx,
+                conflicts_by_idx=conflicts_by_idx,
+                page_url=getattr(payload, "page_url", None),
+                took_ms=took_ms,
+            )
+        except Exception as _e:
+            logger.warning(f"[CheckExisting] audit write failed: {_e}")
+
+    return CheckExistingResponse(results=results, audit_id=audit_id)

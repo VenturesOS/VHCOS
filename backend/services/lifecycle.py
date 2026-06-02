@@ -114,6 +114,12 @@ async def run_deferred_init(app):
         await _safe_index(db.candidate_bank, "naukri_id")
         await _safe_index(db.candidate_bank, "naukri_profile_id")
 
+        # badge_audit — Phase 56.3 (rolling 30-day TTL via `expires_at`)
+        await _safe_index(db.badge_audit, "id", unique=True)
+        await _safe_index(db.badge_audit, [("ts", -1)])
+        await _safe_index(db.badge_audit, [("user_email", 1), ("ts", -1)])
+        await _safe_index(db.badge_audit, "expires_at", expireAfterSeconds=0)
+
         # users — 82 queries
         await _safe_index(db.users, "email", unique=True)
         await _safe_index(db.users, "id", unique=True)
