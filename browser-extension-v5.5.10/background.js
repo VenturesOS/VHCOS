@@ -538,10 +538,29 @@ async function checkExistingCandidates(candidates) {
     }
     
     const apiData = await response.json();
+    // v5.5.10 — defensive debug: surface the API → client picture so we can
+    // diagnose missing-badge bugs without diving into the Network tab.
+    const apiHitCount = (apiData.results || []).filter(r => r && r.exists).length;
+    console.log(`[VHC BG v${VERSION}] checkExisting: API returned ${apiHitCount} hits / ${candidates.length} candidates (audit_id=${apiData.audit_id || 'none'})`);
+    // Show first 3 hits with their signals so we can see V2 working
+    (apiData.results || []).filter(r => r && r.exists).slice(0, 3).forEach(r => {
+      const c = candidates[r.index] || {};
+      console.log(
+        `[VHC BG v${VERSION}]   • API hit: idx=${r.index} card="${c.name}" → ` +
+        `db="${(r.matched_candidate || {}).name || '?'}" ` +
+        `score=${r.match_score} signals=${JSON.stringify(r.matched_signals)} conf=${r.match_confidence}`
+      );
+    });
+
     // Post-validate: the API may match by name alone, causing false positives
     // on common names (e.g. two different "Shubham Rawat"). We cross-check each
     // API match against local history using multi-signal composite scoring.
-    return { results: postValidateApiResults(candidates, apiData.results || [], storage) };
+    const finalResults = postValidateApiResults(candidates, apiData.results || [], storage);
+    const finalHitCount = finalResults.filter(r => r && r.exists).length;
+    if (finalHitCount < apiHitCount) {
+      console.warn(`[VHC BG v${VERSION}] checkExisting: post-validation dropped ${apiHitCount - finalHitCount} hits (API ${apiHitCount} → client ${finalHitCount})`);
+    }
+    return { results: finalResults };
   } catch (err) {
     console.warn(`[VHC BG v${VERSION}] checkExisting API call failed:`, err.message, "— falling back to local history.");
     return { results: localResults };
