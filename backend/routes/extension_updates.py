@@ -166,6 +166,28 @@ async def extension_download_webstore_zip(user=Depends(get_current_user)):
     )
 
 
+@router.get("/download-zip", include_in_schema=False)
+async def extension_download_versioned_zip(
+    v: str = Query(..., description="Extension version to download, e.g. 5.5.10"),
+    user=Depends(get_current_user),
+):
+    """Serve a specific versioned dev-mode (unpacked-ready) ZIP. Admin-only —
+    used to side-load pre-release builds (e.g. v5.5.10) onto the admin's
+    Chrome via `chrome://extensions → Load unpacked` without touching the
+    team's auto-update channel."""
+    role = (user.get("role") or "").lower() if user else ""
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    # Allow only well-formed semver-ish identifiers — no path traversal
+    import re as _re
+    if not _re.match(r"^[0-9A-Za-z._-]+$", v):
+        raise HTTPException(status_code=400, detail="Invalid version string")
+    path = EXTENSIONS_DIR / f"vhc-naukri-extension-v{v}.zip"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"v{v} zip not found")
+    return FileResponse(path, media_type="application/zip", filename=path.name)
+
+
 @router.get("/install-policy.reg", include_in_schema=False)
 async def extension_install_policy_reg():
     """Windows Registry file that whitelists this extension for force-install.

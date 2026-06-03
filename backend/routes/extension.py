@@ -2,7 +2,7 @@
 Browser Extension API Routes - Extended Version
 Handles complete Naukri profile capture with ALL fields
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import uuid
@@ -2713,6 +2713,110 @@ async def capture_profile(
             candidate_id=candidate_id,
             message=f"{profile.name} added to VHC Talent OS"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ASYNC CAPTURE  —  v5.5.10 (gated rollout)
+#
+# Problem the sync /capture endpoint hit:
+#   • Chrome MV3 kills the service worker after ~30s of an awaited fetch.
+#   • Cloudflare times out the request at 100s.
+#   • Atlas primary failover sometimes adds 20-60s to a single capture.
+#   • Net effect: orphaned "Processing" UI states and 502 errors.
+#
+# Fix:
+#   • POST /capture/async returns 202 + job_id IMMEDIATELY.
+#   • The same capture_profile() logic runs as a FastAPI BackgroundTask.
+#   • The extension polls GET /capture/status/{job_id} every 3s.
+#   • When status == completed, the extension reads the full CaptureResponse
+#     from the job document and processes it exactly like the old sync flow.
+#
+# Gating:
+#   • EXTENSION_ASYNC_USERS env var = comma-separated emails allowed to use it.
+#   • The endpoint itself does NOT gate (the extension build is gated instead
+#     — only admin@vhc.in is loading v5.5.10 unpacked while we test).
+#   • Old extension versions (v5.5.8) keep using /capture and are unaffected.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+async def _run_capture_job(job_id: str, profile: CompleteNaukriProfileInput, current_user: dict):
+    """Background task: run the full capture_profile() flow and persist result."""
+    def _now_iso():
+        return datetime.now(timezone.utc).isoformat()
+    try:
+        await db.extension_capture_jobs.update_one(
+            {"_id": job_id},
+            {"$set": {"status": "processing", "updated_at": _now_iso()}}
+        )
+        # Call the existing sync handler directly. _mem=None disables the
+        # post-response GC hook (which is fine — gc + jemalloc clean up later).
+        result = await capture_profile(profile, current_user, _mem=None)
+        result_dict = result.model_dump() if hasattr(result, "model_dump") else result.dict()
+        await db.extension_capture_jobs.update_one(
+            {"_id": job_id},
+            {"$set": {
+                "status": "completed",
+                "completed_at": _now_iso(),
+                "updated_at": _now_iso(),
+                "result": result_dict,
+            }}
+        )
+    except Exception as e:
+        logger.exception(f"[capture-async] job_id={job_id} failed")
+        await db.extension_capture_jobs.update_one(
+            {"_id": job_id},
+            {"$set": {
+                "status": "failed",
+                "completed_at": _now_iso(),
+                "updated_at": _now_iso(),
+                "error": str(e)[:500],
+            }}
+        )
+
+
+@extension_router.post("/capture/async", status_code=202)
+async def capture_profile_async(
+    profile: CompleteNaukriProfileInput,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Asynchronous capture: returns 202 + job_id immediately, processes in
+    background. Extension polls GET /capture/status/{job_id} to retrieve result.
+
+    Backward-compat: the existing POST /capture (sync) endpoint is untouched.
+    """
+    job_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.extension_capture_jobs.insert_one({
+        "_id": job_id,
+        "status": "pending",
+        "user_id": current_user.get("id", ""),
+        "user_email": current_user.get("email", ""),
+        "candidate_name": (profile.name or "")[:200],
+        "naukri_profile_id": profile.naukri_profile_id,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    })
+    background_tasks.add_task(_run_capture_job, job_id, profile, current_user)
+    logger.info(f"[capture-async] queued job_id={job_id} for {profile.name} (user={current_user.get('email')})")
+    return {"job_id": job_id, "status": "pending"}
+
+
+@extension_router.get("/capture/status/{job_id}")
+async def capture_status(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Poll endpoint — returns the current state of an async capture job."""
+    job = await db.extension_capture_jobs.find_one(
+        {"_id": job_id, "user_id": current_user.get("id", "")}
+    )
+    if not job:
+        raise HTTPException(status_code=404, detail="Capture job not found")
+    # _id is the job_id (UUID string) — expose as job_id, drop _id for the client
+    job["job_id"] = job.pop("_id")
+    return job
 
 
 @extension_router.get("/stats")
