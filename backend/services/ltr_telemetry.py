@@ -141,3 +141,88 @@ async def log_action(
     except Exception as e:
         logger.warning(f"[LTR-Telemetry] log_action failed: {e}")
         return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# auto_log_action  —  Server-side LTR capture (no frontend wiring needed)
+#
+# Why this exists:
+#   The frontend only round-trips `ltr_session_id` from the SemanticSearchPanel,
+#   so the only action ever logged was `click_profile`. Real high-signal
+#   actions (shortlist, contact, reject, hire) happen in the recruiter's
+#   pipeline / applicants pages, none of which know about the session id.
+#
+#   Instead of wiring 8+ frontend files, we attach actions server-side:
+#   when a candidate's stage advances, look up the most recent search_session
+#   by this user (within the last hour) — if it exists, that's the search
+#   that led to this action. If the candidate is in that session's slate,
+#   record the rank too (which is what makes it a labeled training triplet).
+#
+# Pure side-effect, fire-and-forget, never blocks or raises.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Look back 1h — long enough to capture multi-step recruiter workflows
+# (search → open profile → discuss → return → shortlist), short enough
+# that we don't falsely attribute a Wednesday shortlist to last Monday's
+# search.
+_AUTO_LOG_LOOKBACK_HOURS = 1
+
+
+async def auto_log_action(
+    *,
+    user: Optional[dict],
+    candidate_id: str,
+    action: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Attach an action to the user's most recent recent search_session
+    automatically — no session_id required at the call site.
+
+    Returns True if a session was found and the action was appended,
+    False otherwise (silently — telemetry must never break the real flow).
+    """
+    if not user or not user.get("id") or not candidate_id or not action:
+        return False
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=_AUTO_LOG_LOOKBACK_HOURS)
+        # Find the most recent session by this user in the lookback window
+        sess = await db.search_sessions.find_one(
+            {"user_id": user["id"], "ts": {"$gte": cutoff}},
+            sort=[("ts", -1)],
+            projection={"_id": 0, "id": 1, "slate.candidate_id": 1, "slate.rank": 1},
+        )
+        if not sess:
+            return False
+        # If the candidate appears in this session's slate, record its rank —
+        # that's what turns the action into a labeled training triplet.
+        rank: Optional[int] = None
+        for row in (sess.get("slate") or []):
+            if row.get("candidate_id") == candidate_id:
+                rank = row.get("rank")
+                break
+        return await log_action(
+            session_id=sess["id"],
+            candidate_id=candidate_id,
+            action=action,
+            rank=rank,
+            extra=extra,
+        )
+    except Exception as e:
+        logger.warning(f"[LTR-Telemetry] auto_log_action failed: {e}")
+        return False
+
+
+# Mapping from pipeline stage transitions → LTR action labels.
+# Used by routes/applications.py when a candidate's stage changes.
+# Stages not in this map are skipped (no LTR signal).
+STAGE_TO_LTR_ACTION: Dict[str, str] = {
+    "shortlisted": "shortlist",
+    "submitted_to_client": "contact",
+    "interview": "contact",
+    "offered": "hire",        # offer == strong positive signal
+    "hired": "hire",
+    "joined": "hire",
+    "rejected": "reject",
+    "employer_rejected": "reject",
+    "dropped": "reject",
+}

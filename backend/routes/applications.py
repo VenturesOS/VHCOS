@@ -508,6 +508,23 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
             user_name=current_user.get("name", current_user.get("email", "")),
         )
 
+        # LTR auto-capture — server-side, fire-and-forget. Translates the
+        # stage transition into a labeled action against the user's most
+        # recent search_session (within the last hour). If no recent session
+        # exists, this silently no-ops. See services/ltr_telemetry.py.
+        try:
+            from services.ltr_telemetry import STAGE_TO_LTR_ACTION, auto_log_action
+            ltr_action = STAGE_TO_LTR_ACTION.get(new_stage)
+            if ltr_action:
+                asyncio.create_task(auto_log_action(
+                    user=current_user,
+                    candidate_id=application.get("candidate_id", ""),
+                    action=ltr_action,
+                    extra={"app_id": app_id, "stage": new_stage, "source": "pipeline_stage_change"},
+                ))
+        except Exception as _e:
+            logger.debug(f"[applications] LTR auto-log skipped: {_e}")
+
         # Phase 55.7 — auto-draft a bill on `hired` / `joined`. Best-effort;
         # never blocks the stage change. Idempotent via line_items.application_id.
         if new_stage in ("hired", "joined"):
@@ -1816,6 +1833,18 @@ async def shortlist_candidate_from_screening(
         candidate_name=candidate.get("name"),
         details={"job_id": req.job_id, "application_id": app_id, "source": "ai_screening"},
     )
+
+    # LTR auto-capture — explicit shortlist is the strongest positive signal.
+    try:
+        from services.ltr_telemetry import auto_log_action
+        asyncio.create_task(auto_log_action(
+            user=current_user,
+            candidate_id=req.candidate_id,
+            action="shortlist",
+            extra={"app_id": app_id, "job_id": req.job_id, "source": "matching_shortlist"},
+        ))
+    except Exception as _e:
+        logger.debug(f"[applications] LTR auto-log skipped on shortlist: {_e}")
 
     return {
         "message": "Candidate shortlisted successfully",
