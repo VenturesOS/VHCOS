@@ -5,17 +5,19 @@ Endpoints to browse candidate clusters produced by scripts/cluster_candidates.py
 
   GET  /api/clustering/clusters                          → all clusters with size + label + samples
   GET  /api/clustering/clusters/{cluster_id}/candidates  → candidates in one cluster (paginated)
-  POST /api/clustering/run                               → admin: trigger re-clustering (async)
+  POST /api/clustering/run                               → admin: trigger re-clustering (async, isolated subprocess)
 
 The heavy ML work happens in scripts/cluster_candidates.py — this module only
 serves the cached results.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
+import os
+import subprocess
+import sys
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
@@ -69,14 +71,59 @@ async def cluster_candidates(
 
 
 def _run_clustering_blocking(k: int, pca_dim: int):
-    """Wrapper that runs the async clusterer in its own event loop.
-    Lives in a background task so the request thread returns immediately."""
-    from scripts.cluster_candidates import cluster_candidates as _do_cluster
+    """Run the heavy clustering job in a fully isolated child process.
+
+    Why subprocess instead of `asyncio.run(cluster_candidates(...))` inside
+    FastAPI BackgroundTasks?
+
+    `scripts/cluster_candidates.py` uses numpy + scikit-learn (PCA, MiniBatchKMeans)
+    which allocate large arrays via PyMalloc / the system allocator. When that
+    runs inside the Gunicorn worker, the freed memory often doesn't return to
+    the OS — even after `gc.collect()` and `malloc_trim()`. Each run bloats
+    the worker by 200–500 MB; over a week of scheduled runs the worker hits
+    its 5 GB cap, triggers `--max-requests` recycling mid-request, and we
+    end up with 502s / WORKER TIMEOUTs (the recurring OOM seen in the handoff).
+
+    A child process owns its own heap. When it exits, the OS reclaims
+    everything. The parent Gunicorn worker stays flat at its baseline.
+    """
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cmd = [
+        sys.executable, "-m", "scripts.cluster_candidates",
+        "--k", str(k),
+        "--pca-dim", str(pca_dim),
+    ]
+    logger.warning(
+        f"[Clustering] Spawning isolated subprocess: {' '.join(cmd)} "
+        f"(cwd={backend_dir})"
+    )
     try:
-        result = asyncio.run(_do_cluster(k=k, pca_dim=pca_dim))
-        logger.warning(f"[Clustering] Re-cluster done: {result}")
+        proc = subprocess.run(
+            cmd,
+            cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            timeout=30 * 60,  # 30 min hard cap — clustering 130k embeddings ~3-4 min
+            env=os.environ.copy(),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        logger.error("[Clustering] Subprocess exceeded 30-minute timeout — killed")
+        return
     except Exception as e:
-        logger.exception(f"[Clustering] Re-cluster failed: {e}")
+        logger.exception(f"[Clustering] Failed to launch subprocess: {e}")
+        return
+
+    if proc.returncode == 0:
+        # The script's last stdout line is the printed result dict
+        stdout = (proc.stdout or "").strip()
+        last_line = stdout.splitlines()[-1] if stdout else ""
+        logger.warning(f"[Clustering] Subprocess done (rc=0). Summary: {last_line[:500]}")
+    else:
+        logger.error(
+            f"[Clustering] Subprocess failed (rc={proc.returncode}). "
+            f"stderr (last 500 chars): {(proc.stderr or '')[-500:]}"
+        )
 
 
 @clustering_router.post("/run")
