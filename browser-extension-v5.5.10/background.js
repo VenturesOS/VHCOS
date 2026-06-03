@@ -594,10 +594,28 @@ function postValidateApiResults(candidates, apiResults, localHistory) {
       }
     }
 
-    // ── PRIMARY: Server-returned matched_candidate cross-check (v5.5.7+) ──
-    // The /api/extension/check-existing endpoint now echoes the DB candidate's
-    // key fields. Run the same composite scorer used for local history so we
-    // catch false positives without depending on stale local history at all.
+    // ── TRUST V2 BACKEND ──
+    // The V2 scorer (Phase 56.4+) already does multi-signal composite scoring
+    // server-side and only emits `matched_signals` when ≥2 strong signals
+    // corroborate the name match. Running the OLD client-side computeMatchScore
+    // on top of V2 was double-scoring and rejecting valid matches (it was
+    // designed to filter false positives from the loose V1 backend).
+    //
+    // Signature of a V2 response: `matched_signals` is a populated array AND
+    // the backend's `match_score` is a positive number. In that case the
+    // backend has already done the verification — skip client post-validation.
+    const isV2Response =
+      Array.isArray(result.matched_signals) &&
+      result.matched_signals.length > 0 &&
+      typeof result.match_score === 'number';
+    if (isV2Response) {
+      // Map V2 confidence directly — server already chose high/medium/low.
+      return result;
+    }
+
+    // ── PRIMARY (V1 fallback): Server-returned matched_candidate cross-check ──
+    // The /api/extension/check-existing V1 endpoint matches loosely on name.
+    // Run the composite scorer locally to drop the obvious false positives.
     if (result.matched_candidate) {
       const mc = result.matched_candidate;
       // Map server fields → the shape expected by computeMatchScore
