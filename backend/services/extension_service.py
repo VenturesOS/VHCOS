@@ -696,6 +696,7 @@ def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: 
     return {
         "id": candidate_id,
         "name": profile.name,
+        "name_lower": (profile.name or "").strip().lower(),
         "first_name": profile.first_name,
         "middle_name": profile.middle_name,
         "last_name": profile.last_name,
@@ -884,6 +885,7 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
 
     field_mapping = {
         "name": profile.name,
+        "name_lower": (profile.name or "").strip().lower() if profile.name else None,
         "first_name": profile.first_name,
         "middle_name": profile.middle_name,
         "last_name": profile.last_name,
