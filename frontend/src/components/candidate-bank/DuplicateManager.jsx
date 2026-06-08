@@ -87,6 +87,9 @@ export function DuplicateManager() {
   const [merging, setMerging] = useState(null);
   const [confirmMerge, setConfirmMerge] = useState(null);
   const [activeTab, setActiveTab] = useState('email');
+  const [mergingAll, setMergingAll] = useState(false);
+  const [confirmMergeAll, setConfirmMergeAll] = useState(false);
+  const [lastBulkResult, setLastBulkResult] = useState(null);
 
   const loadDuplicates = async () => {
     setLoading(true);
@@ -113,6 +116,21 @@ export function DuplicateManager() {
     } finally {
       setMerging(null);
       setConfirmMerge(null);
+    }
+  };
+
+  const handleMergeAll = async () => {
+    setMergingAll(true);
+    setConfirmMergeAll(false);
+    try {
+      const res = await candidateBankAPI.mergeAllDuplicates();
+      setLastBulkResult(res.data);
+      toast.success(res.data.message || 'Bulk merge complete');
+      loadDuplicates();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Bulk merge failed');
+    } finally {
+      setMergingAll(false);
     }
   };
 
@@ -143,10 +161,51 @@ export function DuplicateManager() {
             <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{phoneGroups.length} by phone</span>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={loadDuplicates} disabled={loading} data-testid="refresh-duplicates">
-          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {totalGroups > 0 && (
+            <Button
+              size="sm"
+              onClick={() => setConfirmMergeAll(true)}
+              disabled={loading || mergingAll || !!merging}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              data-testid="merge-all-duplicates-btn"
+            >
+              {mergingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Merge className="w-3.5 h-3.5 mr-1.5" />}
+              Auto-merge All ({totalGroups})
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={loadDuplicates} disabled={loading || mergingAll} data-testid="refresh-duplicates">
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {/* Bulk result banner */}
+      {lastBulkResult && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm" data-testid="bulk-merge-result">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-medium text-amber-900">Last bulk merge run</p>
+              <p className="text-amber-800">{lastBulkResult.message}</p>
+              <div className="flex flex-wrap gap-3 text-xs text-amber-700 pt-1">
+                <span>Groups: {lastBulkResult.total_groups}</span>
+                <span>Merged: {lastBulkResult.groups_merged}</span>
+                <span>Candidates removed: {lastBulkResult.total_candidates_merged}</span>
+                <span>Skipped: {lastBulkResult.groups_skipped}</span>
+                {lastBulkResult.groups_failed > 0 && <span className="text-red-700">Failed: {lastBulkResult.groups_failed}</span>}
+                {lastBulkResult.total_donors_flagged > 0 && <span>Flagged: {lastBulkResult.total_donors_flagged}</span>}
+              </div>
+            </div>
+            <button
+              onClick={() => setLastBulkResult(null)}
+              className="text-amber-600 hover:text-amber-800 text-xs"
+              data-testid="dismiss-bulk-result"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {totalGroups === 0 ? (
         <Card className="border-slate-200">
@@ -226,6 +285,52 @@ export function DuplicateManager() {
             >
               {merging ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Merge className="w-4 h-4 mr-1.5" />}
               Merge {confirmMerge?.ids?.length || 0} Candidates
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Merge All dialog */}
+      <Dialog open={confirmMergeAll} onOpenChange={(open) => !mergingAll && setConfirmMergeAll(open)}>
+        <DialogContent className="max-w-md" data-testid="confirm-merge-all-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Auto-merge ALL duplicates?
+            </DialogTitle>
+            <DialogDescription>
+              This will run the merge logic on every duplicate group ({totalGroups} groups,
+              {' '}{emailGroups.length} by email + {phoneGroups.length} by phone).
+              Each group only merges if donors pass the 2-of-3 safety gate (name + email + phone).
+              Weak matches stay flagged for manual review. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+            <p className="font-medium mb-1">Safety guards in place:</p>
+            <ul className="list-disc list-inside text-xs space-y-0.5">
+              <li>Donors needing ≥2 of (name, email, phone) match the master</li>
+              <li>The most recent + complete record is kept as master</li>
+              <li>All associated applications are re-pointed to the master</li>
+              <li>Groups that overlap (same person in both email + phone) merge once</li>
+            </ul>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmMergeAll(false)}
+              disabled={mergingAll}
+              data-testid="cancel-merge-all"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMergeAll}
+              disabled={mergingAll}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              data-testid="confirm-merge-all-btn"
+            >
+              {mergingAll ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Merge className="w-4 h-4 mr-1.5" />}
+              Yes, merge all {totalGroups} groups
             </Button>
           </DialogFooter>
         </DialogContent>

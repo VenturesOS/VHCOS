@@ -644,6 +644,7 @@ export const candidateBankAPI = {
   delete: (id) => api.delete(`/candidate-bank/${id}`),
   findAllDuplicates: () => api.get('/candidate-bank/find-all-duplicates'),
   mergeDuplicates: (candidateIds) => api.post('/candidate-bank/merge-duplicates', { candidate_ids: candidateIds }),
+  mergeAllDuplicates: () => api.post('/candidate-bank/merge-all-duplicates'),
   // Data Quality
   dataQualityStats: () => api.get('/candidate-bank/data-quality/stats'),
   dataQualityTeamStats: () => api.get('/candidate-bank/data-quality/team-stats'),

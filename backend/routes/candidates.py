@@ -2383,27 +2383,22 @@ async def find_all_duplicates(
     }
 
 
-@router.post("/merge-duplicates")
-async def merge_duplicates(
-    payload: dict,
-    db=Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """
-    Merge a group of duplicate candidates into one master record.
+async def _merge_candidate_group(db, candidate_ids: list, user_email: str) -> dict:
+    """Merge a single group of duplicate candidate IDs into one master record.
 
     SEC-05 (Feb 2026): every donor must match the master on at least
-    2 of (name_similar, email_exact, phone_normalized_exact). This
-    prevents bulk-merging two different people who happen to share a
-    phone or email (e.g. spouse sharing a number).
-    Donors that fail the gate are returned in `skipped` for manual review.
+    2 of (name_similar, email_exact, phone_normalized_exact). Donors
+    that fail the gate are returned in `skipped` for manual review.
+
+    Returns a dict with master_id, merged_count, merged_ids, skipped, message.
+    Raises ValueError if fewer than 2 candidates resolved from DB.
     """
+    from datetime import datetime, timezone
     from services.extension_service import _names_are_similar
     from services.candidate_merge import normalize_phone
 
-    candidate_ids = payload.get("candidate_ids", [])
     if len(candidate_ids) < 2:
-        raise HTTPException(status_code=400, detail="Need at least 2 candidate IDs to merge")
+        raise ValueError("Need at least 2 candidate IDs to merge")
 
     docs = []
     for cid in candidate_ids:
@@ -2412,7 +2407,7 @@ async def merge_duplicates(
             docs.append(doc)
 
     if len(docs) < 2:
-        raise HTTPException(status_code=404, detail="Could not find enough candidates to merge")
+        raise ValueError("Could not find enough candidates to merge")
 
     def completeness_score(d):
         score = 0
@@ -2490,13 +2485,12 @@ async def merge_duplicates(
                 if new_skills:
                     master[key] = master_val + ", " + ", ".join(new_skills)
 
-    from datetime import datetime, timezone
     master["updated_at"] = datetime.now(timezone.utc).isoformat()
     master["merge_history"] = master.get("merge_history", [])
     master["merge_history"].append({
         "merged_ids": [d["id"] for d in actual_donors],
         "merged_at": datetime.now(timezone.utc).isoformat(),
-        "merged_by": current_user.get("email", "unknown"),
+        "merged_by": user_email or "unknown",
         "skipped": skipped or None,
     })
 
@@ -2519,6 +2513,137 @@ async def merge_duplicates(
         "message": f"Merged {len(actual_donors) + 1} candidates into {master.get('name', master_id)}"
                    + (f"; {len(skipped)} donor(s) skipped (low match score)" if skipped else ""),
     }
+
+
+@router.post("/merge-duplicates")
+async def merge_duplicates(
+    payload: dict,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Merge a group of duplicate candidates into one master record."""
+    candidate_ids = payload.get("candidate_ids", [])
+    try:
+        return await _merge_candidate_group(db, candidate_ids, current_user.get("email", "unknown"))
+    except ValueError as e:
+        msg = str(e)
+        status_code = 400 if "at least 2" in msg else 404
+        raise HTTPException(status_code=status_code, detail=msg)
+
+
+@router.post("/merge-all-duplicates")
+async def merge_all_duplicates(
+    db=Depends(get_db),
+    current_user=Depends(require_role(["admin"])),
+):
+    """Bulk-merge every duplicate group (admin-only).
+
+    Iterates the same email+phone duplicate groups returned by
+    `/find-all-duplicates` and calls the per-group merge helper.
+    Honors the 2-of-3 (name/email/phone) safety gate per group, so
+    weak matches stay flagged for manual review.
+
+    Tracks already-merged candidate IDs across iterations so phone+email
+    groups that share members don't double-process. Bounded to the
+    aggregation cap (50 email + 50 phone = 100 groups max per call).
+    """
+    user_email = current_user.get("email", "unknown")
+
+    # Step 1: find duplicate keys (email + phone), same logic as find-all-duplicates
+    email_keys_pipeline = [
+        {"$match": {"email": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": {"$toLower": "$email"}, "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 50},
+    ]
+    email_keys = await db.candidate_bank.aggregate(email_keys_pipeline).to_list(50)
+
+    phone_keys_pipeline = [
+        {"$match": {"phone_normalized": {"$exists": True, "$nin": [None, "", "0000000000"], "$regex": "^[0-9]{10}$"}}},
+        {"$group": {"_id": "$phone_normalized", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 50},
+    ]
+    phone_keys = await db.candidate_bank.aggregate(phone_keys_pipeline).to_list(50)
+
+    # Step 2: build a list of (group_key, query, type) to process
+    groups_to_process = []
+    for ek in email_keys:
+        groups_to_process.append({
+            "key": ek["_id"],
+            "type": "email",
+            "query": {"email": {"$regex": f"^{ek['_id']}$", "$options": "i"}},
+        })
+    for pk in phone_keys:
+        groups_to_process.append({
+            "key": pk["_id"],
+            "type": "phone",
+            "query": {"phone_normalized": pk["_id"]},
+        })
+
+    already_merged_or_master = set()
+    summary = {
+        "total_groups": len(groups_to_process),
+        "groups_merged": 0,
+        "groups_skipped": 0,
+        "groups_failed": 0,
+        "total_candidates_merged": 0,
+        "total_donors_flagged": 0,
+        "results": [],
+        "errors": [],
+    }
+
+    for grp in groups_to_process:
+        try:
+            # Re-fetch current members of this group (some may have been merged
+            # away by a previous iteration if they overlap email+phone groups).
+            members = await db.candidate_bank.find(
+                grp["query"], {"_id": 0, "id": 1, "name": 1}
+            ).to_list(20)
+            candidate_ids = [m["id"] for m in members if m.get("id") and m["id"] not in already_merged_or_master]
+
+            if len(candidate_ids) < 2:
+                summary["groups_skipped"] += 1
+                continue
+
+            result = await _merge_candidate_group(db, candidate_ids, user_email)
+            merged_count = result.get("merged_count", 0)
+            skipped_count = len(result.get("skipped", []))
+
+            if merged_count > 0:
+                summary["groups_merged"] += 1
+                summary["total_candidates_merged"] += merged_count
+                already_merged_or_master.update(result.get("merged_ids", []))
+                already_merged_or_master.add(result["master_id"])
+            else:
+                summary["groups_skipped"] += 1
+
+            summary["total_donors_flagged"] += skipped_count
+            summary["results"].append({
+                "group_key": grp["key"],
+                "group_type": grp["type"],
+                "master_id": result.get("master_id"),
+                "merged_count": merged_count,
+                "skipped_count": skipped_count,
+            })
+        except Exception as e:
+            summary["groups_failed"] += 1
+            summary["errors"].append({
+                "group_key": grp["key"],
+                "group_type": grp["type"],
+                "error": str(e),
+            })
+
+    summary["message"] = (
+        f"Processed {summary['total_groups']} groups: "
+        f"{summary['groups_merged']} merged ({summary['total_candidates_merged']} candidates), "
+        f"{summary['groups_skipped']} skipped, "
+        f"{summary['groups_failed']} failed, "
+        f"{summary['total_donors_flagged']} donor(s) flagged for manual review."
+    )
+    return summary
 
 
 
