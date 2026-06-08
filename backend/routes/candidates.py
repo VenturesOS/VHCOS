@@ -2608,7 +2608,14 @@ async def merge_all_duplicates(
                 summary["groups_skipped"] += 1
                 continue
 
-            result = await _merge_candidate_group(db, candidate_ids, user_email)
+            try:
+                result = await _merge_candidate_group(db, candidate_ids, user_email)
+            except ValueError:
+                # Group's members were absorbed by an earlier overlapping group
+                # (e.g., same person in both an email group and a phone group).
+                summary["groups_skipped"] += 1
+                continue
+
             merged_count = result.get("merged_count", 0)
             skipped_count = len(result.get("skipped", []))
 
