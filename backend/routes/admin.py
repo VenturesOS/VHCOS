@@ -835,6 +835,9 @@ async def get_admin_pipeline(
     job_id: Optional[str] = None,
     include_filters: bool = True,   # Phase 54.12 — skip if frontend already has them
     per_stage_limit: int = 100,     # Phase 54.16 — cap per-stage rows (kanban perf)
+    window: Optional[str] = None,       # v5.5.10 — week/month/quarter/year/all/custom
+    window_from: Optional[str] = None,
+    window_to: Optional[str] = None,
     current_user: dict = Depends(require_role(["admin"]))
 ):
     """
@@ -866,12 +869,13 @@ async def get_admin_pipeline(
     from services.cache import cache
 
     _cache_key = (
-        f"admin:pipeline:v3:"
+        f"admin:pipeline:v4:"
         f"emp={employer_id or 'all'}|"
         f"rec={recruiter_id or 'all'}|"
         f"team={team_id or 'all'}|"
         f"job={job_id or 'all'}|"
         f"psl={per_stage_limit}|"
+        f"win={window or 'all'}|{window_from or ''}|{window_to or ''}|"
         f"filters={'1' if include_filters else '0'}"
     )
     _cached = cache.get(_cache_key)
@@ -952,6 +956,11 @@ async def get_admin_pipeline(
     psl = max(10, min(per_stage_limit, 500))  # clamp to sensible range
     pipeline_display = pipeline_display_filter()
 
+    # v5.5.10 — pipeline timeline window. Reuses the same helper as the
+    # recruiter pipeline so admin counts tie with what recruiters see.
+    from routes.applications import _build_pipeline_window_filter
+    win_filter = _build_pipeline_window_filter(window, window_from, window_to)
+
     LEGACY_STAGE_MAP = {
         "applied": "sourced",
         "employer_approved": "shortlisted",
@@ -963,11 +972,11 @@ async def get_admin_pipeline(
     applications: list = []
     if job_ids:
         # (1) Accurate stage counts across ALL apps (no per-stage cap)
+        base_match: list = [{"job_id": {"$in": job_ids}}, pipeline_display]
+        if win_filter:
+            base_match.append(win_filter)
         async for row in db.applications.aggregate([
-            {"$match": {"$and": [
-                {"job_id": {"$in": job_ids}},
-                pipeline_display,
-            ]}},
+            {"$match": {"$and": base_match}},
             {"$group": {"_id": "$stage", "count": {"$sum": 1}}},
         ]):
             raw = row["_id"] or "sourced"
@@ -980,12 +989,15 @@ async def get_admin_pipeline(
         import asyncio as _aio
 
         async def _fetch_stage(stage_name: str):
+            stage_match: list = [
+                {"job_id": {"$in": job_ids}},
+                {"stage": stage_name},
+                pipeline_display,
+            ]
+            if win_filter:
+                stage_match.append(win_filter)
             cursor = db.applications.find(
-                {"$and": [
-                    {"job_id": {"$in": job_ids}},
-                    {"stage": stage_name},
-                    pipeline_display,
-                ]},
+                {"$and": stage_match},
                 {"_id": 0},
             ).sort("created_at", -1).limit(psl)
             return await cursor.to_list(psl)

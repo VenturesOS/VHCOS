@@ -11,7 +11,8 @@ import { DeleteDialog, OfferDialog, HiredDialog, JoinDialog } from '../../compon
 import { 
   LayoutGrid, Users, CheckCircle, Clock, Award, UserCheck, 
   XCircle, Pause, Filter, Building2, Send,
-  Briefcase, FileText, Trash2, AlertCircle, IndianRupee, Lock, ArrowRight
+  Briefcase, FileText, Trash2, AlertCircle, IndianRupee, Lock, ArrowRight,
+  CalendarClock
 } from 'lucide-react';
 
 // Stage configuration — simplified (no approval gate)
@@ -42,6 +43,9 @@ export default function AdminPipelinePage() {
   const [selectedEmployer, setSelectedEmployer] = useState('all');
   const [selectedRecruiter, setSelectedRecruiter] = useState('all');
   const [selectedJob, setSelectedJob] = useState(searchParams.get('job_id') || 'all');
+  // Pipeline timeline filter (v5.5.10) — shows only stage MOVEMENTS in window.
+  // Default 'all' preserves the old global view.
+  const [pipelineWindow, setPipelineWindow] = useState(searchParams.get('window') || 'all');
 
   // Deep-link: if URL contains ?job_id=X, keep it in sync with state.
   useEffect(() => {
@@ -58,6 +62,19 @@ export default function AdminPipelinePage() {
       }
     } else if (searchParams.get('job_id') !== v) {
       searchParams.set('job_id', v);
+      setSearchParams(searchParams, { replace: true });
+    }
+  };
+
+  const updateWindow = (v) => {
+    setPipelineWindow(v);
+    if (!v || v === 'all') {
+      if (searchParams.get('window')) {
+        searchParams.delete('window');
+        setSearchParams(searchParams, { replace: true });
+      }
+    } else if (searchParams.get('window') !== v) {
+      searchParams.set('window', v);
       setSearchParams(searchParams, { replace: true });
     }
   };
@@ -82,6 +99,7 @@ export default function AdminPipelinePage() {
       if (selectedEmployer !== 'all') params.employer_id = selectedEmployer;
       if (selectedRecruiter !== 'all') params.recruiter_id = selectedRecruiter;
       if (selectedJob !== 'all') params.job_id = selectedJob;
+      if (pipelineWindow && pipelineWindow !== 'all') params.window = pipelineWindow;
 
       const res = await adminAPI.getPipeline(params);
       setPipelineData(res.data.pipeline);
@@ -92,7 +110,7 @@ export default function AdminPipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedEmployer, selectedRecruiter, selectedJob]);
+  }, [selectedEmployer, selectedRecruiter, selectedJob, pipelineWindow]);
 
   // Load filters once on mount + whenever employer cascade changes
   useEffect(() => {
@@ -107,6 +125,7 @@ export default function AdminPipelinePage() {
     setSelectedEmployer('all');
     setSelectedRecruiter('all');
     updateSelectedJob('all');
+    updateWindow('all');
   };
 
   // Phase 52 cascade: when employer changes, reset recruiter + job because
@@ -302,7 +321,7 @@ export default function AdminPipelinePage() {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-500" />
             <span className="font-medium text-slate-700">Filters</span>
-            {(selectedEmployer !== 'all' || selectedRecruiter !== 'all' || selectedJob !== 'all') && (
+            {(selectedEmployer !== 'all' || selectedRecruiter !== 'all' || selectedJob !== 'all' || pipelineWindow !== 'all') && (
               <button 
                 onClick={clearFilters}
                 className="ml-auto text-sm text-[#7CB342] hover:underline"
@@ -313,7 +332,7 @@ export default function AdminPipelinePage() {
           </div>
         </CardHeader>
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
               <label className="text-sm text-slate-500 flex items-center gap-1">
                 <Building2 className="w-3 h-3" /> Employer
@@ -365,6 +384,24 @@ export default function AdminPipelinePage() {
                       {job.company_name ? `${job.company_name} · ${job.title}` : job.title}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* v5.5.10 — Activity window: filters to applications whose stage CHANGED in window. */}
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500 flex items-center gap-1">
+                <CalendarClock className="w-3 h-3" /> Activity window
+              </label>
+              <Select value={pipelineWindow} onValueChange={updateWindow}>
+                <SelectTrigger data-testid="filter-window">
+                  <SelectValue placeholder="All Time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" data-testid="window-opt-all">All Time</SelectItem>
+                  <SelectItem value="week" data-testid="window-opt-week">This Week</SelectItem>
+                  <SelectItem value="month" data-testid="window-opt-month">This Month</SelectItem>
+                  <SelectItem value="quarter" data-testid="window-opt-quarter">This Quarter</SelectItem>
+                  <SelectItem value="year" data-testid="window-opt-year">This Year</SelectItem>
                 </SelectContent>
               </Select>
             </div>
