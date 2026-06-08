@@ -34,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 
 # ─── Constants ────────────────────────────────────────────────────────────
-MODEL_DIR = Path(os.environ.get("LTR_MODEL_DIR", "/app/backend/data/ltr_models"))
+# Model dir defaults to <backend>/data/ltr_models — resolved relative to
+# this file so it works on any deploy path (preview /app, AWS /home/ubuntu/...).
+_DEFAULT_MODEL_DIR = Path(__file__).resolve().parent.parent / "data" / "ltr_models"
+MODEL_DIR = Path(os.environ.get("LTR_MODEL_DIR") or _DEFAULT_MODEL_DIR)
 DEFAULT_MODEL_FILENAME = os.environ.get("LTR_MODEL_FILENAME", "ltr_xgb_v1.json")
 DEFAULT_META_FILENAME = os.environ.get("LTR_META_FILENAME", "ltr_xgb_v1.meta.json")
 

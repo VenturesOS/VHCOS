@@ -71,7 +71,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 # ─── Constants ────────────────────────────────────────────────────────────
 MIN_TRIPLETS_DEFAULT = 1500   # below this we refuse to train
 TEST_SPLIT = 0.20             # group-aware split
-MODEL_DIR = Path("/app/backend/data/ltr_models")
+# Resolve relative to this file so the script works on any deploy path
+# (preview /app, AWS /home/ubuntu/...).
+MODEL_DIR = Path(__file__).resolve().parent.parent / "data" / "ltr_models"
 
 ACTION_TO_LABEL: Dict[str, int] = {
     # 0 = no action (negative impression). Computed implicitly per slate.
