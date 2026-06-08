@@ -2506,6 +2506,10 @@ async def capture_profile(
             name=profile.name,
             email=profile.email,
             phone=profile.phone,
+            current_employer=getattr(profile, "current_employer", None) or getattr(profile, "current_company", None),
+            designation=getattr(profile, "designation", None) or getattr(profile, "current_designation", None),
+            location=getattr(profile, "location", None) or getattr(profile, "current_location", None),
+            experience_years=getattr(profile, "experience_years", None),
         )
 
         if merge_target:

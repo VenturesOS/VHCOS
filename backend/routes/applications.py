@@ -7,10 +7,10 @@ import uuid
 import logging
 import re
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Request, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 import aiofiles
@@ -282,15 +282,133 @@ async def create_application(app_data: ApplicationCreate, current_user: dict = D
     return ApplicationResponse(**app_doc)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Pipeline Timeline Filter — "show only movements in window"
+# ─────────────────────────────────────────────────────────────────────────────
+_WINDOW_DAYS = {"week": 7, "month": 30, "quarter": 90, "year": 365}
+
+
+def _build_pipeline_window_filter(window: Optional[str],
+                                  window_from: Optional[str],
+                                  window_to: Optional[str]) -> Optional[dict]:
+    """Translate a window selection into a Mongo filter that keeps applications
+    whose stage_history has at least one transition inside the window.
+
+    Returns None for 'all' / unset → no filter applied.
+    """
+    if not window or window == "all":
+        return None
+
+    now = datetime.now(timezone.utc)
+
+    if window == "custom":
+        try:
+            start = datetime.fromisoformat(window_from) if window_from else (now - timedelta(days=30))
+            end   = datetime.fromisoformat(window_to)   if window_to   else now
+        except ValueError:
+            # bad input → fall back to "month"
+            start = now - timedelta(days=30)
+            end = now
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        # Make end inclusive: extend to 23:59:59 if it's a date-only input
+        if end.hour == 0 and end.minute == 0 and end.second == 0:
+            end = end + timedelta(days=1) - timedelta(microseconds=1)
+    else:
+        days = _WINDOW_DAYS.get(window, 30)
+        start = now - timedelta(days=days)
+        end   = now
+
+    start_iso = start.isoformat()
+    end_iso   = end.isoformat()
+
+    # stage_history is an array of {stage, moved_by, moved_by_name, timestamp}.
+    # An $elemMatch ensures BOTH bounds apply to the SAME entry, not different ones.
+    # We also accept `updated_at` as a fallback because some older application
+    # rows were created before stage_history was populated on insert.
+    return {
+        "$or": [
+            {"stage_history": {"$elemMatch": {"timestamp": {"$gte": start_iso, "$lte": end_iso}}}},
+            {"$and": [
+                {"updated_at": {"$gte": start_iso, "$lte": end_iso}},
+                {"$or": [
+                    {"stage_history": {"$exists": False}},
+                    {"stage_history": {"$size": 0}},
+                ]},
+            ]},
+        ],
+    }
+
+
+@applications_router.get("/applications/pipeline-stats")
+async def get_pipeline_stage_stats(
+    job_id: Optional[str] = None,
+    window: Optional[str] = Query(None, description="week/month/quarter/year/all/custom"),
+    window_from: Optional[str] = None,
+    window_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Stage-count widgets for the pipeline page. Counts honor the same
+    timeline window as the main /applications list so the numbers tie."""
+    base_query: Dict[str, Any] = {}
+    if current_user["role"] == "candidate":
+        base_query["candidate_id"] = current_user["id"]
+    elif current_user["role"] == "employer":
+        jobs = await db.jobs.find({"posted_by": current_user["id"]}, {"id": 1, "_id": 0}).to_list(1000)
+        base_query["job_id"] = {"$in": [j["id"] for j in jobs]}
+    if job_id:
+        base_query["job_id"] = job_id
+
+    win_filter = _build_pipeline_window_filter(window, window_from, window_to)
+    if win_filter:
+        base_query = {"$and": [base_query, win_filter]} if base_query else win_filter
+
+    # Apply the standard pipeline display filter (hide extension clutter)
+    from services.pipeline_events import pipeline_display_filter
+    base_query = {"$and": [base_query, pipeline_display_filter()]} if base_query else pipeline_display_filter()
+
+    pipeline = [
+        {"$match": base_query},
+        {"$group": {"_id": "$stage", "n": {"$sum": 1}}},
+    ]
+    rows = await db.applications.aggregate(pipeline).to_list(50)
+    counts = {r["_id"]: r["n"] for r in rows if r.get("_id")}
+    total = sum(counts.values())
+    return {
+        "window": window or "all",
+        "window_from": window_from,
+        "window_to": window_to,
+        "total": total,
+        "by_stage": counts,
+    }
+
+
 @applications_router.get("/applications", response_model=List[ApplicationResponse])
 async def get_applications(
     job_id: Optional[str] = None,
     stage: Optional[str] = None,
     page: int = 1,
     limit: int = 200,
+    window: Optional[str] = Query(
+        None,
+        description="Activity window for pipeline movement: 'week' (7d), 'month' (30d), 'quarter' (90d), 'year' (365d), 'all', or 'custom'. With 'custom', supply window_from/window_to as ISO dates.",
+    ),
+    window_from: Optional[str] = Query(None, description="ISO date (YYYY-MM-DD) — start of custom window"),
+    window_to: Optional[str]   = Query(None, description="ISO date (YYYY-MM-DD) — end of custom window"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get applications with role-based filtering and pagination."""
+    """Get applications with role-based filtering and pagination.
+
+    Pipeline timeline filter (v5.5.10+):
+      Pass `window` to restrict results to applications whose stage CHANGED
+      inside the window. This mirrors what a recruiter expects from "This Week"
+      etc — actual recent movement, not just stale records that happen to live
+      in the system. Uses `stage_history.timestamp` (every transition is
+      appended there). The same window powers the stage-count widgets on the
+      pipeline page so the numbers tie.
+    """
     try:
         query = {}
         
@@ -305,6 +423,11 @@ async def get_applications(
             query["job_id"] = job_id
         if stage:
             query["stage"] = stage
+
+        # ── Pipeline timeline window: filter to applications that MOVED in the window ──
+        win_filter = _build_pipeline_window_filter(window, window_from, window_to)
+        if win_filter:
+            query = {"$and": [query, win_filter]} if query else win_filter
 
         # Apply pipeline display filter (hide extension clutter + stale rejections)
         # Only when no explicit stage filter is set (preserve exact-stage queries).

@@ -66,9 +66,26 @@ def filter_recruiter_contacts(email: str, phone: str, recruiter_email: str, recr
     return cleaned_email, cleaned_phone
 
 
-async def find_merge_candidate(name: str, email: str, phone: str, exclude_id: str = None) -> dict:
+async def find_merge_candidate(name: str, email: str, phone: str, exclude_id: str = None,
+                                current_employer: str = None, designation: str = None,
+                                location: str = None, experience_years=None) -> dict:
     """
-    Search for an existing candidate that matches 2/3 of (name, email, phone).
+    Search for an existing candidate that matches the incoming profile.
+
+    Two-track scorer (v5.5.10+):
+
+    Track A — Contact-corroborated (legacy behavior preserved):
+      Hit ≥ 2 of (name, email, phone). Used when email/phone are populated.
+
+    Track B — Signal-corroborated (NEW — for masked-contact Naukri captures):
+      Name must match (fuzzy ≥ 0.75) AND ≥ 2 corroborating signals from:
+        • same employer (normalized fuzzy)
+        • same designation (normalized fuzzy)
+        • same location (case-insensitive prefix)
+        • experience_years within ±1
+      This catches masked captures without merging two unrelated "Ramesh Kumar"
+      profiles just because both are engineers.
+
     Returns the best match or None.
     """
     if not name:
@@ -98,60 +115,97 @@ async def find_merge_candidate(name: str, email: str, phone: str, exclude_id: st
                 if not any(c[1].get("id") == phone_match.get("id") for c in candidates):
                     candidates.append(("phone", phone_match))
 
-    # Search by name (fuzzy)
-    if not candidates:
-        # Only search by name if we have email or phone to cross-validate
-        if email or phone:
-            name_norm = normalize_name(name)
-            if len(name_norm) >= 3:
-                # Search with regex for partial name match
-                name_parts = name_norm.split()
-                if len(name_parts) >= 2:
-                    # Use first and last name for search
-                    name_regex = re.compile(
-                        f".*{re.escape(name_parts[0])}.*{re.escape(name_parts[-1])}.*",
-                        re.IGNORECASE
-                    )
-                    cursor = db.candidate_bank.find(
-                        {"name": name_regex},
-                        {"_id": 0}
-                    ).limit(10)
-                    async for doc in cursor:
-                        if exclude_id and doc.get("id") == exclude_id:
-                            continue
-                        candidates.append(("name", doc))
+    # Search by name (fuzzy). FIX: previously gated on `email or phone`, which
+    # silently skipped name search for masked Naukri captures (the common case
+    # now). The exact-contact paths above are still authoritative when they hit;
+    # this only adds candidates when they didn't.
+    name_norm = normalize_name(name)
+    if len(name_norm) >= 3:
+        name_parts = name_norm.split()
+        if len(name_parts) >= 2:
+            name_regex = re.compile(
+                f".*{re.escape(name_parts[0])}.*{re.escape(name_parts[-1])}.*",
+                re.IGNORECASE
+            )
+            cursor = db.candidate_bank.find(
+                {"name": name_regex},
+                {"_id": 0}
+            ).limit(10)
+            async for doc in cursor:
+                if exclude_id and doc.get("id") == exclude_id:
+                    continue
+                # Don't double-add records the email/phone path already returned
+                if any(c[1].get("id") == doc.get("id") for c in candidates):
+                    continue
+                candidates.append(("name", doc))
 
-    # Score each candidate: how many of the 3 identifiers match?
+    # ── Score each candidate ──
+    # Track A: name + email + phone (legacy, threshold ≥ 2)
+    # Track B: name + ≥2 of (employer, designation, location, experience)
+    # The candidate is accepted if EITHER track scores ≥ threshold.
     best_match = None
-    best_score = 0
+    best_track_a = 0
+    best_track_b = 0
 
-    for source, candidate in candidates:
-        score = 0
+    def _norm_str(s):
+        return re.sub(r"[^a-z0-9 ]+", "", (s or "").lower()).strip()
 
-        # Check name similarity
+    def _fuzzy_eq(a, b, threshold=0.75):
+        a, b = _norm_str(a), _norm_str(b)
+        if not a or not b:
+            return False
+        return SequenceMatcher(None, a, b).ratio() >= threshold
+
+    for _source, candidate in candidates:
+        # Track A scoring (3-identifier)
+        track_a = 0
         if names_similar(name, candidate.get("name", "")):
-            score += 1
-
-        # Check email match
-        if email and candidate.get("email"):
-            if email.lower().strip() == candidate["email"].lower().strip():
-                score += 1
-
-        # Check phone match
+            track_a += 1
+        if email and candidate.get("email") and email.lower().strip() == candidate["email"].lower().strip():
+            track_a += 1
         if phone and candidate.get("phone"):
             if normalize_phone(phone) == normalize_phone(candidate["phone"]):
-                score += 1
+                track_a += 1
             elif candidate.get("phone_normalized") and normalize_phone(phone) == candidate["phone_normalized"]:
-                score += 1
+                track_a += 1
 
-        if score >= 2 and score > best_score:
-            best_score = score
-            best_match = candidate
+        # Track B scoring (multi-signal corroboration — gated on name match)
+        track_b = 0
+        name_match = names_similar(name, candidate.get("name", ""))
+        if name_match:
+            if current_employer and _fuzzy_eq(current_employer, candidate.get("current_employer")):
+                track_b += 1
+            if designation and _fuzzy_eq(designation, candidate.get("designation") or candidate.get("current_designation")):
+                track_b += 1
+            if location:
+                cl = _norm_str(location)
+                dbl = _norm_str(candidate.get("location") or candidate.get("current_location"))
+                if cl and dbl and (cl == dbl or cl in dbl or dbl in cl):
+                    track_b += 1
+            if experience_years is not None and candidate.get("experience_years") is not None:
+                try:
+                    if abs(float(experience_years) - float(candidate["experience_years"])) <= 1.0:
+                        track_b += 1
+                except (TypeError, ValueError):
+                    pass
+
+        # Accept if either track passes its threshold
+        # Track A: ≥ 2 of (name, email, phone)
+        # Track B: name + ≥ 2 corroborating signals
+        passes = (track_a >= 2) or (name_match and track_b >= 2)
+        if passes:
+            # Prefer the stronger evidence (track A > track B if tied)
+            score = max(track_a, track_b + (1 if name_match else 0))
+            if score > max(best_track_a, best_track_b):
+                best_track_a = track_a
+                best_track_b = track_b
+                best_match = candidate
 
     if best_match:
         logger.warning(
             f"[AutoMerge] Found match: '{name}' → '{best_match.get('name')}' "
-            f"(id={best_match.get('id', '?')[:12]}, score={best_score}/3)"
+            f"(id={best_match.get('id', '?')[:12]}, track_a={best_track_a}/3, "
+            f"track_b={best_track_b}/4)"
         )
 
     return best_match
