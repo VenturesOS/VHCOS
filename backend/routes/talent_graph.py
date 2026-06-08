@@ -73,8 +73,11 @@ async def semantic_search(
         raise HTTPException(403, "Talent Graph requires recruiter/admin role")
 
     results = await find_candidates_by_text(
-        db, payload.query, limit=payload.limit, min_score=payload.min_score or 0.40
+        db, payload.query, limit=payload.limit, min_score=payload.min_score or 0.40,
+        routing_key=f"{user.get('id') or ''}|{payload.query}",
     )
+    # Detect which rerank arm actually ran (set per-row by the service)
+    rerank_source = (results[0].get("match_type") if results else None) or "unknown"
     # ── LTR Phase 1 telemetry (fire-and-forget) ───────────────────────
     # Capture the slate so future actions on these results (click /
     # shortlist / contact) can be tied back to (query, rank) labels.
@@ -86,7 +89,11 @@ async def semantic_search(
             source="talent_graph_search",
             query=payload.query,
             slate=results,
-            query_meta={"limit": payload.limit, "min_score": payload.min_score},
+            query_meta={
+                "limit": payload.limit,
+                "min_score": payload.min_score,
+                "rerank_source": rerank_source,
+            },
         )
     except Exception:
         pass  # telemetry must never break search
@@ -95,6 +102,7 @@ async def semantic_search(
         "matches": results,
         "count": len(results),
         "ltr_session_id": session_id,  # frontend round-trips this with actions
+        "rerank_source": rerank_source,
     }
 
 

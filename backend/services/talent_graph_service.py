@@ -432,6 +432,7 @@ async def find_candidates_by_text(
     query: str,
     limit: int = 20,
     min_score: float = 0.40,
+    routing_key: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Free-form semantic search ('ML engineer with fintech in Bangalore').
 
@@ -440,6 +441,13 @@ async def find_candidates_by_text(
     (location, industry, role tokens) rank above those that only match
     semantically. The displayed `score` remains pure cosine so scores stay
     comparable across queries.
+
+    A/B (Phase 56.8, Jun 2026): when `routing_key` lands in the LTR
+    bucket (env `LTR_AB_PCT`, default 10%), the rerank step uses the
+    offline-trained XGBoost ranker. All other traffic continues on the
+    cross-encoder (or hybrid fallback) path. Caller can inspect
+    `results[0]["match_type"]` to know which arm ran ("ltr_xgboost",
+    "cross_encoder", or "vector"/"hybrid" depending on fallback).
 
     FIX (Phase 55, 2026-02): only ~1.4% of `candidate_bank` has embeddings
     indexed, so a pure vector search misses ~98% of the talent pool. When the
@@ -492,12 +500,29 @@ async def find_candidates_by_text(
             db, qvec, exclude_id=None, limit=fetch_limit, min_score=min_score, with_text=True
         )
 
-    # Cross-encoder rerank (precision-boost on top-N) — feature-flagged via
-    # CROSS_ENCODER_ENABLED. Falls back to bi-encoder hybrid rerank when the
-    # sidecar is unreachable or disabled.
-    ranked = _cross_encoder_rerank(pool, query, limit) if pool else None
+    # ── A/B rerank ──────────────────────────────────────────────────
+    # LTR arm (Phase 56.8): 10% of traffic (env LTR_AB_PCT) routes
+    # through the XGBoost ranker. The arm is decided deterministically
+    # from `routing_key` (typically user_id+query) so a recruiter
+    # retrying the same query lands in the same arm — keeps NDCG
+    # measurable across repeats.
+    from services import ltr_service
+    arm_ltr = ltr_service.should_use_ltr_arm(routing_key or query)
+
+    ranked = None
+    if arm_ltr and pool:
+        # LTR needs candidate_bank fields (skills/cluster_id/updated_at)
+        # that the slim vector projection doesn't include — fetch only
+        # for the A/B-selected arm to keep cross-encoder traffic untouched.
+        await _load_ltr_features(db, pool)
+        ranked = ltr_service.rerank(pool, query, limit)
     if ranked is None:
-        ranked = _hybrid_rerank(pool, query, limit)
+        # Default arm: cross-encoder (precision-boost) → hybrid fallback.
+        # CROSS_ENCODER_ENABLED env-gated; falls back to bi-encoder hybrid
+        # rerank when the sidecar is unreachable or disabled.
+        ranked = _cross_encoder_rerank(pool, query, limit) if pool else None
+        if ranked is None:
+            ranked = _hybrid_rerank(pool, query, limit)
     await _enrich_with_candidate_bank(db, ranked)
     # Tag vector hits so the UI / API consumers can distinguish them from
     # the keyword fallback top-up below.
@@ -653,6 +678,36 @@ async def _enrich_with_candidate_bank(db, results: List[Dict[str, Any]]) -> None
             or c.get("experience_years")
             or c.get("total_experience_years")
         )
+
+
+async def _load_ltr_features(db, results: List[Dict[str, Any]]) -> None:
+    """Fetch the candidate fields the LTR ranker needs (skills, cluster_id,
+    updated_at) onto each result in-place. Runs only on the A/B-selected
+    arm so we don't pay this DB cost for cross-encoder / hybrid traffic.
+
+    Only fetches for results that don't already carry the LTR fields,
+    making this safe to call after a previous rerank.
+    """
+    if not results:
+        return
+    need_ids = [
+        r["candidate_id"] for r in results
+        if r.get("candidate_id") and "skills" not in r
+    ]
+    if not need_ids:
+        return
+    cursor = db.candidate_bank.find(
+        {"id": {"$in": need_ids}},
+        {"_id": 0, "id": 1, "skills": 1, "cluster_id": 1, "updated_at": 1, "created_at": 1},
+    )
+    by_id = {d["id"]: d async for d in cursor}
+    for r in results:
+        c = by_id.get(r.get("candidate_id"))
+        if not c:
+            continue
+        r["skills"] = c.get("skills")
+        r["cluster_id"] = c.get("cluster_id")
+        r["updated_at"] = c.get("updated_at") or c.get("created_at")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -149,6 +149,13 @@ async def ltr_stats(
     # Rough lower bound on training-eligible positives.
     triplet_estimate = n_act
     progress = min(100, int(100 * triplet_estimate / 5000))
+    # LTR model status (Phase 56.8) — exposes whether the A/B arm is live
+    try:
+        from services import ltr_service
+        ltr_status = ltr_service.status()
+        ltr_status["ab_pct"] = ltr_service.get_ab_pct()
+    except Exception as e:
+        ltr_status = {"available": False, "load_error": str(e), "ab_pct": 0}
     return {
         "days": days,
         "n_sessions": totals.get("n_sessions", 0),
@@ -162,4 +169,5 @@ async def ltr_stats(
         "ready_for_training": triplet_estimate >= 5000,
         "progress_pct": progress,
         "target_triplets": 5000,
+        "ltr_model": ltr_status,
     }
