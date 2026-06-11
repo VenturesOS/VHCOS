@@ -45,12 +45,15 @@ EXTENSIONS_DIR = _resolve_extensions_dir()
 def _locate_manifest() -> Optional[Path]:
     """Find the browser-extension manifest across dev + prod layouts.
 
-    Prefers the highest-versioned `browser-extension-vX.Y.Z/manifest.json`
-    folder over the legacy `browser-extension/` folder so the Admin →
-    Extension Versions page (and the `/api/extension/latest-version` API)
-    always report the genuinely latest release.
+    Compares ALL candidates by their manifest version — legacy versioned
+    `browser-extension-vX.Y.Z/` folders AND the canonical
+    `browser-extension/` build folder — and returns the highest. (v6.0.0
+    fix: the old logic preferred versioned folders unconditionally, so
+    the canonical folder's 6.0.0 lost to a stale v5.5.10 folder and the
+    Admin → Extension Versions page reported the wrong latest release.)
     """
     import re as _re
+    import json as _json
     env_override = os.environ.get("BROWSER_EXTENSION_DIR")
     if env_override:
         p = Path(env_override) / "manifest.json"
@@ -60,9 +63,16 @@ def _locate_manifest() -> Optional[Path]:
     backend_dir = Path(__file__).resolve().parent.parent  # /.../backend
     project_root = backend_dir.parent                      # /.../vhc-platform or /app
 
-    # 1. Prefer the highest-numbered versioned folder, if any
-    search_roots = [project_root, Path("/app"), backend_dir.parent]
-    versioned: list[tuple[tuple[int, ...], Path]] = []
+    candidates: list[tuple[tuple[int, ...], Path]] = []
+
+    def _manifest_version(manifest: Path) -> Optional[tuple[int, ...]]:
+        try:
+            v = _json.loads(manifest.read_text()).get("version", "")
+            return tuple(int(x) for x in v.split("."))
+        except (OSError, ValueError, _json.JSONDecodeError):
+            return None
+
+    search_roots = {project_root, Path("/app"), backend_dir.parent}
     for root in search_roots:
         if not root.exists():
             continue
@@ -70,26 +80,19 @@ def _locate_manifest() -> Optional[Path]:
             for d in root.iterdir():
                 if not d.is_dir():
                     continue
-                m = _re.match(r"^browser-extension-v(\d+)\.(\d+)\.(\d+)$", d.name)
-                if m:
+                if d.name == "browser-extension" or _re.match(
+                    r"^browser-extension-v(\d+)\.(\d+)\.(\d+)$", d.name
+                ):
                     manifest = d / "manifest.json"
                     if manifest.exists():
-                        versioned.append((tuple(int(x) for x in m.groups()), manifest))
+                        ver = _manifest_version(manifest)
+                        if ver:
+                            candidates.append((ver, manifest))
         except OSError:
             continue
-    if versioned:
-        versioned.sort(reverse=True)
-        return versioned[0][1]
-
-    # 2. Fall back to the legacy unversioned folder
-    candidates = [
-        Path("/app/browser-extension/manifest.json"),
-        project_root / "browser-extension" / "manifest.json",
-        backend_dir.parent / "browser-extension" / "manifest.json",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
+    if candidates:
+        candidates.sort(reverse=True)
+        return candidates[0][1]
     return None
 
 
