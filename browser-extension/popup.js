@@ -18,6 +18,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLogin();
   }
 
+  // ── Update-available banner ────────────────────────────────────────────────
+  // Compares this build's manifest version against the backend's latest
+  // (/api/extension/version, public). CRX installs: "Update now" triggers
+  // chrome.runtime.requestUpdateCheck() so Chrome pulls update.xml
+  // immediately instead of waiting for its ~5h cycle. Unpacked installs
+  // can't self-update — banner explains how to get the new build.
+  checkForExtensionUpdate().catch(() => {});
+
   // ── Detect page type & show/hide bulk button + active job banner ──────────
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -685,6 +693,68 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   function hideCaptureStatus() {
     document.getElementById('captureStatus').className = 'capture-result';
+  }
+
+  // ── Update-available banner (v6.0.0) ───────────────────────────────────────
+  async function checkForExtensionUpdate() {
+    const localVersion = chrome.runtime.getManifest().version;
+    const { vhc_api_url } = await chrome.storage.sync.get(['vhc_api_url']);
+    const apiUrl = (vhc_api_url || 'https://ventureshrd.com').replace(/\/$/, '');
+
+    let latest;
+    try {
+      const res = await fetch(`${apiUrl}/api/extension/version`, { method: 'GET' });
+      if (!res.ok) return;
+      latest = (await res.json()).version;
+    } catch (_) { return; }
+
+    if (!latest || !isNewerVersion(latest, localVersion)) return;
+
+    const banner = document.getElementById('updateBanner');
+    const msg = document.getElementById('updateBannerMsg');
+    const btn = document.getElementById('updateBannerBtn');
+    const isCrxInstall = !!chrome.runtime.getManifest().update_url &&
+                         !chrome.runtime.id.startsWith('temp');
+
+    msg.textContent = `Version ${latest} is available (you're on v${localVersion}).`;
+    banner.style.display = 'flex';
+
+    btn.addEventListener('click', () => {
+      if (isCrxInstall && chrome.runtime.requestUpdateCheck) {
+        btn.disabled = true;
+        btn.textContent = 'Checking…';
+        chrome.runtime.requestUpdateCheck((status) => {
+          if (status === 'update_available') {
+            msg.textContent = `Downloading v${latest}… Chrome will install it automatically (the extension restarts itself).`;
+            btn.style.display = 'none';
+            // Reload applies a downloaded update immediately
+            setTimeout(() => chrome.runtime.reload(), 4000);
+          } else if (status === 'no_update') {
+            msg.textContent = `Chrome hasn't published v${latest} to your browser yet — it auto-installs within a few hours. Nothing else to do.`;
+            btn.style.display = 'none';
+          } else { // throttled
+            msg.textContent = 'Chrome is rate-limiting update checks — it will auto-update within a few hours.';
+            btn.style.display = 'none';
+          }
+        });
+      } else {
+        // Unpacked dev install — cannot self-update
+        msg.textContent = `You're on an unpacked dev build. Download v${latest} from the VHC admin panel and re-load it.`;
+        btn.style.display = 'none';
+      }
+    });
+  }
+
+  // "6.0.0" vs "5.5.10" → true (numeric per-segment compare, not string)
+  function isNewerVersion(remote, local) {
+    const r = String(remote).split('.').map(Number);
+    const l = String(local).split('.').map(Number);
+    for (let i = 0; i < Math.max(r.length, l.length); i++) {
+      const a = r[i] || 0, b = l[i] || 0;
+      if (a > b) return true;
+      if (a < b) return false;
+    }
+    return false;
   }
 
 });

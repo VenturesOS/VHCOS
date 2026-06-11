@@ -132,7 +132,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '5.4.1';
+  const VERSION = '5.5.10';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -171,12 +171,25 @@
       lastPageUrl = window.location.href;
       lastCapturedUrl = null; // Allow re-capture on new page
 
+      // Disconnect infinite scroll observer from previous page
+      if (cardObserver) {
+        cardObserver.disconnect();
+        cardObserver = null;
+      }
+
       // Clean up any lingering UI from previous page capture
       const oldBar = document.getElementById('vhc-progress-bar');
       if (oldBar) oldBar.remove();
       const oldToast = document.getElementById('vhc-toast');
       if (oldToast) oldToast.remove();
       isCapturing = false; // Reset in case previous capture was mid-flight
+
+      // Skip Naukri pages we explicitly do NOT want to operate on
+      // (e.g. /v3/simcv — "Recruiters also viewed" / similar-CV suggestion view)
+      if (PLATFORM === 'naukri' && isExcludedNaukriPage()) {
+        console.log(`[VHC v${VERSION}] Excluded Naukri page (${window.location.pathname}) — extension will not run here`);
+        return;
+      }
 
       // Re-trigger auto-capture if navigated to a profile page
       if (isProfilePage() && !isCapturing) {
@@ -194,6 +207,12 @@
           if (auth) {
             console.log(`[VHC v${VERSION}] Navigated to search page, showing bulk capture button`);
             setTimeout(() => addBulkCaptureButton(), 1500);
+            
+            // Also run checkAndMarkExistingProfiles on navigation to search results
+            setTimeout(() => {
+              checkAndMarkExistingProfiles();
+              observeNewCards();
+            }, 1000);
           }
         });
       }
@@ -211,6 +230,12 @@
   // ===================== UTILITY =====================
   function cleanText(t) { return t ? t.replace(/\s+/g, ' ').trim() : null; }
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function escapeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
   // ===================== FLOATING PROGRESS BAR (shown on page for both manual & auto capture) =====================
   
@@ -330,12 +355,14 @@
    * Returns: { ready: boolean, candidateName: string|null, reason: string }
    */
   async function waitForCandidateProfile() {
-    const MAX_WAIT_MS = 8000; // Max wait for candidate profile to load
+    const isBackground = document.hidden;
+    const MAX_WAIT_MS = isBackground ? 15000 : 8000; // Max wait for candidate profile to load (increased to 15s for bg tabs)
     const CHECK_INTERVAL_MS = 500;
+    const requiredScore = isBackground ? 2 : 3; // Lower threshold to 2 for background tabs
     const startTime = Date.now();
     let lastLog = '';
 
-    console.log(`[VHC v${VERSION}] Waiting for candidate profile to load...`);
+    console.log(`[VHC v${VERSION}] Waiting for candidate profile to load... (${isBackground ? 'background tab' : 'foreground tab'}, max ${MAX_WAIT_MS}ms, threshold ${requiredScore}/4)`);
 
     while (Date.now() - startTime < MAX_WAIT_MS) {
       // Check 1: Page title should contain a candidate name (not just "Naukri Resdex")
@@ -374,13 +401,13 @@
         lastLog = checkStatus;
       }
 
-      // Ready if at least 3 of 4 conditions are met
+      // Ready if at least requiredScore conditions are met
       const readyScore = [titleHasName, hasSubstantialContent, hasProfileMarkers, hasContactSection].filter(Boolean).length;
       
-      if (readyScore >= 3) {
+      if (readyScore >= requiredScore) {
         const candidateName = extractNameFromTitle();
-        console.log(`[VHC v${VERSION}] ✅ Candidate profile READY: "${candidateName || 'Unknown'}" (score: ${readyScore}/4)`);
-        return { ready: true, candidateName, reason: `Score ${readyScore}/4` };
+        console.log(`[VHC v${VERSION}] ✅ Candidate profile READY: "${candidateName || 'Unknown'}" (score: ${readyScore}/${requiredScore})`);
+        return { ready: true, candidateName, reason: `Score ${readyScore}/${requiredScore}` };
       }
 
       // Wait before next check
@@ -1006,16 +1033,34 @@
           }
         } catch (e) {}
 
-        // Wait a moment for iframe scripts to relay data, then ask background
-        await new Promise(r => setTimeout(r, 800));
+        // Wait a moment for iframe scripts to relay data, then ask background.
+        // Background tabs suffer from severe throttling, so we need a retry loop with longer wait intervals.
+        const isBackground = document.hidden;
+        const maxAttempts = isBackground ? 3 : 1;
+        const initialDelay = isBackground ? 1500 : 800;
+        const retryDelay = 1500;
+        
+        await new Promise(r => setTimeout(r, initialDelay));
 
-        const bgData = await new Promise((resolve) => {
-          if (!chrome?.runtime?.id) return resolve(null);
-          chrome.runtime.sendMessage({ action: 'getCvIframeData' }, (response) => {
-            if (chrome.runtime.lastError) return resolve(null);
-            resolve(response);
+        let bgData = null;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          if (attempt > 0) {
+            console.log(`[VHC v${VERSION}] Strategy 2: Retrying CV iframe data retrieval, attempt ${attempt + 1}/${maxAttempts}...`);
+            await new Promise(r => setTimeout(r, retryDelay));
+          }
+
+          bgData = await new Promise((resolve) => {
+            if (!chrome?.runtime?.id) return resolve(null);
+            chrome.runtime.sendMessage({ action: 'getCvIframeData' }, (response) => {
+              if (chrome.runtime.lastError) return resolve(null);
+              resolve(response);
+            });
           });
-        });
+
+          if (bgData?.data?.text && bgData.data.text.length > 50) {
+            break; // Found it!
+          }
+        }
 
         if (bgData?.data?.text && bgData.data.text.length > 50) {
           result.text = bgData.data.text.substring(0, 15000);
@@ -1878,6 +1923,19 @@
 
   // ===================== CAPTURE FLOW =====================
 
+  // ===================== EXCLUDED NAUKRI PAGES =====================
+  // Naukri's `/v3/simcv` ("Recruiters also viewed" / similar-CV) overlay
+  // mounts the focal candidate's top card *plus* a list of 195+ suggested
+  // profiles. Running auto-capture or bulk-capture here causes the extension
+  // to grab the wrong person (it scrapes the focal top card while the
+  // recruiter is actually browsing the suggestion cards below). Skip it.
+  function isExcludedNaukriPage() {
+    if (PLATFORM !== 'naukri') return false;
+    const pathname = window.location.pathname;
+    if (pathname.includes('/v3/simcv')) return true;
+    return false;
+  }
+
   // ===================== SEARCH/LIST PAGE DETECTION =====================
 
   function isSearchPage() {
@@ -1885,6 +1943,7 @@
     const search   = window.location.search;
 
     if (PLATFORM === 'naukri') {
+      if (isExcludedNaukriPage()) return false;
       if (pathname.includes('/v3/search') || pathname.includes('/resdex')) return true;
       if (search.includes('searchId') || search.includes('srcPage')) return true;
       if (document.querySelector('[class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"]')) return true;
@@ -2087,6 +2146,7 @@
     const search = window.location.search;
 
     if (PLATFORM === 'naukri') {
+      if (isExcludedNaukriPage()) return false;
       if (pathname.includes('/v3/preview') && search.includes('tabKey=profile')) return true;
       if (/viewResume|view-resume|cvPreview/i.test(pathname)) return true;
       return false;
@@ -2106,10 +2166,45 @@
   }
 
   async function scrollToLoadContent() {
-    console.log(`[VHC v${VERSION}] Smart scroll: trigger lazy-load without slow smooth scrolling...`);
+    const isBackground = document.hidden;
+    console.log(`[VHC v${VERSION}] Smart scroll: trigger lazy-load (${isBackground ? 'background tab: bypass physical scrolling' : 'foreground tab: run instant jumps'})`);
 
     const MAX_SCROLL_TIME = 5000; // hard cap: never scroll for more than 5s total
     const startTime = Date.now();
+
+    if (isBackground) {
+      // In background tabs, window.scrollTo is throttled or ignored by browser layout engines.
+      // Simply wait for DOM quietness using a MutationObserver.
+      await new Promise((resolve) => {
+        let quietTimer = null;
+        const QUIET_PERIOD = 600; // slightly longer quiet period for background tab hydration
+        const maxTimer = setTimeout(() => {
+          observer.disconnect();
+          clearTimeout(quietTimer);
+          resolve();
+        }, MAX_SCROLL_TIME);
+
+        const observer = new MutationObserver(() => {
+          clearTimeout(quietTimer);
+          quietTimer = setTimeout(() => {
+            observer.disconnect();
+            clearTimeout(maxTimer);
+            resolve();
+          }, QUIET_PERIOD);
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        quietTimer = setTimeout(() => {
+          observer.disconnect();
+          clearTimeout(maxTimer);
+          resolve();
+        }, QUIET_PERIOD);
+      });
+      
+      console.log(`[VHC v${VERSION}] Background DOM quietness wait complete in ${Date.now() - startTime}ms`);
+      return;
+    }
 
     // Strategy 1: Jump to bottom instantly — triggers all lazy-load observers at once
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
@@ -2120,7 +2215,11 @@
       let quietTimer = null;
       const QUIET_PERIOD = 400; // content settled if no new DOM nodes for 400ms
       const remaining = MAX_SCROLL_TIME - (Date.now() - startTime);
-      const maxTimer = setTimeout(resolve, Math.max(remaining, 500));
+      const maxTimer = setTimeout(() => {
+        observer.disconnect();
+        clearTimeout(quietTimer);
+        resolve();
+      }, Math.max(remaining, 500));
 
       const observer = new MutationObserver(() => {
         clearTimeout(quietTimer);
@@ -3064,36 +3163,48 @@
   }
 
   // ===================== MESSAGE LISTENER =====================
-  if (isExtensionValid()) {
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === 'manualCapture') {
-        // When the service worker forces a capture (background-tab / context-menu
-        // flow), a stalled auto-capture in this hidden tab must not block us.
-        // Chrome throttles timers in unfocused tabs, so autoCapture can hang on
-        // setTimeouts. Override isCapturing + lastCapturedUrl for forced runs.
-        if (request._forced) {
-          isCapturing = false;
-          lastCapturedUrl = null;
+  try {
+    if (isExtensionValid()) {
+      chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        try {
+          if (request.action === 'manualCapture') {
+            // When the service worker forces a capture (background-tab / context-menu
+            // flow), a stalled auto-capture in this hidden tab must not block us.
+            // Chrome throttles timers in unfocused tabs, so autoCapture can hang on
+            // timeouts. Override isCapturing + lastCapturedUrl for forced runs.
+            if (request._forced) {
+              isCapturing = false;
+              lastCapturedUrl = null;
+            }
+            manualCapture().then(sendResponse).catch(e => sendResponse({ success: false, error: e.message }));
+            return true;
+          }
+          if (request.action === 'bulkCapture')   {
+            bulkCapture().then(sendResponse).catch(e => sendResponse({ success: false, error: e.message }));
+            return true;
+          }
+          if (request.action === 'getPageInfo')   {
+            sendResponse({
+              url: window.location.href,
+              isProfilePage: isProfilePage(),
+              isSearchPage: isSearchPage(),
+              platform: PLATFORM,
+            });
+            return true;
+          }
+          if (request.action === 'showEvaluation') {
+            showEvaluationBanner(request.data);
+            sendResponse({ success: true });
+            return true;
+          }
+        } catch (e) {
+          console.warn(`[VHC v${VERSION}] Error in onMessage handler:`, e.message);
+          sendResponse({ success: false, error: e.message });
         }
-        manualCapture().then(sendResponse);
-        return true;
-      }
-      if (request.action === 'bulkCapture')   { bulkCapture().then(sendResponse); return true; }
-      if (request.action === 'getPageInfo')   {
-        sendResponse({
-          url: window.location.href,
-          isProfilePage: isProfilePage(),
-          isSearchPage: isSearchPage(),
-          platform: PLATFORM,
-        });
-        return true;
-      }
-      if (request.action === 'showEvaluation') {
-        showEvaluationBanner(request.data);
-        sendResponse({ success: true });
-        return true;
-      }
-    });
+      });
+    }
+  } catch (err) {
+    console.error(`[VHC v${VERSION}] Failed to register message listener:`, err.message);
   }
 
   // ===================== UI =====================
@@ -3298,6 +3409,502 @@
     }, 15000);
   }
 
+  // Set to keep track of cards we've already processed (badge added or checked)
+  // to avoid infinite loops or double badging.
+  const processedCards = new WeakSet();
+  let cardObserver = null;
+
+  /**
+   * Main orchestrator for "Already in Database" indicator on search results.
+   * Scrapes all visible cards, checks local history cache + backend API, and marks matched cards.
+   */
+  async function checkAndMarkExistingProfiles() {
+    if (!isExtensionValid()) return;
+    
+    // Find all cards on the page
+    const cards = findCardElements();
+    const unprocessedCards = cards.filter(card => !processedCards.has(card));
+    
+    if (unprocessedCards.length === 0) return;
+    
+    console.log(`[VHC v${VERSION}] checkExisting: scanning ${unprocessedCards.length} new cards (of ${cards.length} total on page)`);
+    // Scrape info from unprocessed cards
+    const candidatesToCheck = [];
+    const cardMap = []; // maps checked candidate index back to its cardEl
+    
+    for (const card of unprocessedCards) {
+      // Mark it as processed so we don't try checking it again in concurrent runs
+      processedCards.add(card);
+      
+      const info = scrapeSearchCardInfo(card);
+      if (info) {
+        candidatesToCheck.push({
+          name: info.name,
+          naukri_id: info.naukri_id || null,
+          headline: info.headline || '',
+          location: info.location || '',
+          profileUrl: info.profileUrl,
+          // Multi-signal corroboration fields (v5.5.4+)
+          current_employer: info.current_employer || null,
+          designation: info.designation || null,
+          experience_years: info.experience_years || null,
+          annual_ctc: info.annual_ctc || null,
+          skills: info.skills || null,
+          education: info.education || null,
+        });
+        cardMap.push({ cardEl: card, info });
+      }
+    }
+    
+    if (candidatesToCheck.length === 0) return;
+    
+    console.log(`[VHC v${VERSION}] Checking ${candidatesToCheck.length} candidates against existing database...`);
+    
+    try {
+      // Send message to background script to check if they exist
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          action: 'checkExisting',
+          candidates: candidatesToCheck
+        }, (res) => {
+          if (chrome.runtime.lastError) {
+            console.warn(`[VHC v${VERSION}] checkExisting message error:`, chrome.runtime.lastError.message);
+            resolve(null);
+          } else {
+            resolve(res);
+          }
+        });
+      });
+      
+      if (response && Array.isArray(response.results)) {
+        for (const res of response.results) {
+          const match = cardMap[res.index];
+          if (match && res.exists) {
+            console.log(`[VHC v${VERSION}] Found existing candidate: "${match.info.name}"`);
+            markCardAsExisting(match.cardEl, {
+              ...match.info,
+              candidate_id: res.candidate_id,
+              captured_at: res.captured_at,
+              match_confidence: res.match_confidence,
+              // Server-built deep-link — preferred over any client-side guess
+              profile_url: res.profile_url,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Remove cards from processedCards so they can be retried on next check
+      for (const { cardEl } of cardMap) {
+        processedCards.delete(cardEl);
+      }
+      console.warn(`[VHC v${VERSION}] Error checking existing profiles:`, err.message);
+    }
+  }
+
+  /**
+   * Helper to find candidate card elements on search results page.
+   */
+  function findCardElements() {
+    const cardSelectors = [
+      '.tuple-card',                  // Naukri Resdex current (Feb 2026)
+      '[class*="tuple-card"]',
+      '[class*="candidateCard"]',
+      '[class*="candidate-card"]',
+      '[class*="resumeCard"]',
+      '[class*="srp-tuple"]',
+      '[class*="srpTuple"]',
+      '[data-target-id]',
+      '.tupleCard',
+    ];
+
+    let cards = [];
+    for (const sel of cardSelectors) {
+      cards = Array.from(document.querySelectorAll(sel));
+      if (cards.length > 0) break;
+    }
+    return cards;
+  }
+
+  /**
+   * Scrapes profile card info to prepare search check.
+   * Extracts every visible signal from the Naukri tuple-card so the
+   * backend can multi-signal verify identity (name alone is not enough).
+   */
+  function scrapeSearchCardInfo(cardEl) {
+    try {
+      // ── Profile URL + name ──
+      const linkEl = cardEl.querySelector(
+        'a.candidate-name, a.candidate-profile-summary, ' +
+        'a[href*="preview"], a[href*="profile"], a[href*="resume"], a[href*="resdex"]'
+      );
+      const profileUrl = linkEl ? linkEl.href : null;
+      if (!profileUrl) return null;
+
+      // ── Extract stable Naukri candidate/profile ID ──
+      let naukri_id = null;
+      // 1. data-attributes on the card element itself
+      naukri_id = cardEl.dataset.targetId || cardEl.dataset.candidateId
+                || cardEl.dataset.profileId || cardEl.getAttribute('data-candidate-id')
+                || cardEl.getAttribute('data-profile-id');
+      // 2. From any checkbox or hidden input inside the card
+      if (!naukri_id) {
+        const checkbox = cardEl.querySelector('input[type="checkbox"][name*="candidateId"], input[type="checkbox"][name*="profileId"], input[type="checkbox"][value]');
+        if (checkbox && checkbox.value && /^[a-zA-Z0-9_-]+$/.test(checkbox.value)) {
+          naukri_id = checkbox.value;
+        }
+      }
+      // 3. From the profile URL query params (candidateId, profileId, pid, sid)
+      if (!naukri_id && profileUrl) {
+        naukri_id = extractIdFromUrl(profileUrl);
+      }
+
+      const nameEl = cardEl.querySelector(
+        'a.candidate-name, [class*="candidateName"], [class*="candidate-name"], ' +
+        '[class*="name"], h2, h3, [class*="title"]:first-of-type'
+      );
+      const name = cleanText(nameEl?.innerText) || 'Unknown';
+
+      // ── Headline (Naukri's "candidate-profile-summary" e.g. "R&D Engineer with B.Tech in Pune") ──
+      const headlineEl = cardEl.querySelector(
+        '.candidate-profile-summary, [class*="candidate-headline"], ' +
+        '[class*="headline"], [class*="designation"], [class*="currentTitle"]'
+      );
+      const headline = cleanText(headlineEl?.innerText) || null;
+
+      // ── Location ──
+      const locEl = cardEl.querySelector(
+        'span.location, [class*="location"], [class*="loc"], [class*="city"]'
+      );
+      const location = cleanText(locEl?.innerText) || null;
+
+      // ── Current employer ──
+      // Naukri renders this inside #currentEmp > .employment-detail
+      // as `<button title="Find candidates from <Company>">`.
+      let current_employer = null;
+      let designation = null;
+      const empWrap = cardEl.querySelector('#currentEmp, [class*="currentEmp"]');
+      if (empWrap) {
+        // Designation button has title="Find candidates who are currently <Designation>"
+        const desigBtn = empWrap.querySelector('button[title*="currently "]');
+        if (desigBtn) {
+          const m = desigBtn.getAttribute('title').match(/currently\s+(.+)/i);
+          if (m) designation = cleanText(m[1]);
+        }
+        // Company button has title="Find candidates from <Company>"
+        const compBtn = empWrap.querySelector('button[title*="from "]');
+        if (compBtn) {
+          const m = compBtn.getAttribute('title').match(/from\s+(.+)/i);
+          if (m) current_employer = cleanText(m[1]);
+        }
+        if (!current_employer) {
+          // Fallback: parse "<Designation> at <Company>" from inner text
+          const txt = cleanText(empWrap.innerText || '');
+          const m = txt.match(/^(.+?)\s+at\s+(.+?)(?:\s|$)/i);
+          if (m) {
+            if (!designation) designation = m[1];
+            current_employer = m[2];
+          }
+        }
+      }
+
+      // ── Experience (parse "2y 7m" from meta-data title="Experience") ──
+      let experience_years = null;
+      const expEl = cardEl.querySelector('[title="Experience"] + span, .meta-data span[title*="y "]');
+      const expText = cleanText(expEl?.innerText || cardEl.querySelector('.meta-data span[title*="y "]')?.getAttribute('title') || '');
+      if (expText) {
+        const ym = expText.match(/(\d+)\s*y(?:ears?)?(?:\s*(\d+)\s*m(?:onths?)?)?/i);
+        if (ym) {
+          const yrs = parseInt(ym[1], 10);
+          const mos = ym[2] ? parseInt(ym[2], 10) : 0;
+          experience_years = +(yrs + mos / 12).toFixed(2);
+        }
+      }
+
+      // ── Annual CTC (parse "₹ 4.20 Lacs" from meta-data title="Annual salary") ──
+      let annual_ctc = null;
+      const ctcEl = cardEl.querySelector('[title="Annual salary"] + span, .meta-data span[title*="Lacs"], .meta-data span[title*="₹"]');
+      const ctcText = cleanText(ctcEl?.getAttribute?.('title') || ctcEl?.innerText || '');
+      if (ctcText) {
+        // "₹ 4.20 Lacs" → 420000;  "₹ 12.5 Lacs" → 1250000
+        const m = ctcText.match(/([\d.]+)\s*lacs?/i);
+        if (m) annual_ctc = Math.round(parseFloat(m[1]) * 100000);
+        else {
+          const m2 = ctcText.match(/([\d.]+)\s*cr/i);
+          if (m2) annual_ctc = Math.round(parseFloat(m2[1]) * 10000000);
+        }
+      }
+
+      // ── Skills (key-skills section: each .cand-skill button) ──
+      let skills = null;
+      const skillBtns = cardEl.querySelectorAll('.key-skills .cand-skill button, .candidate-skills [class*="skill"] button');
+      if (skillBtns.length) {
+        skills = Array.from(skillBtns)
+          .map(b => cleanText(b.innerText || b.getAttribute('title') || ''))
+          .map(s => s.replace(/^find candidates with keyword\s+/i, '').trim())
+          .filter(s => s && s.length < 50)
+          .slice(0, 15);
+        if (!skills.length) skills = null;
+      }
+
+      // ── Education ("B.Tech / B.E. Dr Babasaheb Ambedkar... 2023") ──
+      let education = null;
+      const eduEl = cardEl.querySelector('#education, [id*="education"], .education');
+      if (eduEl) {
+        education = cleanText(eduEl.getAttribute('title') || eduEl.innerText) || null;
+      }
+
+      return {
+        profileUrl, naukri_id, name, headline, location,
+        current_employer, designation,
+        experience_years, annual_ctc,
+        skills, education,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Add green badge, dim card, and inject confirmation interceptor.
+   */
+  function markCardAsExisting(cardEl, info) {
+    if (!cardEl) return;
+    
+    // 1. Add dimming class
+    cardEl.classList.add('vhc-dimmed-card');
+    
+    // 2. Create and inject "Already in Database" badge
+    const nameEl = cardEl.querySelector(
+      '[class*="name"], [class*="candidateName"], h2, h3, [class*="title"]:first-of-type'
+    );
+    
+    if (nameEl && !cardEl.querySelector('.vhc-existing-badge')) {
+      // Render badge as an anchor so it's directly clickable + middle-click + ctrl-click work
+      const badge = document.createElement('a');
+      badge.className = 'vhc-existing-badge';
+
+      const confidence = info.match_confidence || 'high';
+      if (confidence === 'high') {
+        badge.innerText = 'ALREADY IN DATABASE';
+        badge.classList.add('vhc-confidence-high');
+      } else {
+        badge.innerText = 'LIKELY IN DATABASE';
+        badge.classList.add('vhc-confidence-medium');
+      }
+      badge.title = `${confidence === 'high' ? 'Definite' : 'Likely'} match — Saved on ${info.captured_at ? new Date(info.captured_at).toLocaleDateString() : 'unknown date'} — click to open in VHC`;
+      badge.target = '_blank';
+      badge.rel = 'noopener noreferrer';
+      badge.dataset.vhcCandidateId = info.candidate_id || '';
+
+      // Prefer the server-provided deep-link (avoids guessing the frontend
+      // URL from a proxied API host). Fall back to background-derived URL.
+      if (info.profile_url) {
+        badge.href = info.profile_url;
+      } else {
+        badge.href = '#';
+        if (info.candidate_id) {
+          chrome.runtime.sendMessage(
+            { action: 'getCandidateBankUrl', candidate_id: info.candidate_id },
+            (res) => {
+              if (chrome.runtime.lastError) return;
+              if (res && res.url) badge.href = res.url;
+            }
+          );
+        }
+      }
+
+      // Hard-stop propagation so the row's parent click handlers don't fire
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Fallback: if href is still "#" (rare race), open via message
+        if (badge.getAttribute('href') === '#' && info.candidate_id) {
+          e.preventDefault();
+          chrome.runtime.sendMessage({
+            action: 'openCandidateProfile',
+            candidate_id: info.candidate_id,
+          });
+        }
+      });
+
+      // Insert badge after the name element
+      if (nameEl.nextSibling) {
+        nameEl.parentNode.insertBefore(badge, nameEl.nextSibling);
+      } else {
+        nameEl.parentNode.appendChild(badge);
+      }
+    }
+    
+    // 3. Inject click interceptor on all profile link elements inside this card
+    injectClickInterceptor(cardEl, info);
+  }
+
+  /**
+   * Intercepts clicks on candidate cards to ask confirmation before viewing a duplicate.
+   */
+  function injectClickInterceptor(cardEl, info) {
+    const links = cardEl.querySelectorAll('a[href*="profile"], a[href*="resume"], a[href*="preview"], a[href*="resdex"]');
+    
+    for (const link of links) {
+      if (link.dataset.vhcIntercepted) continue;
+      link.dataset.vhcIntercepted = 'true';
+      
+      link.addEventListener('click', (e) => {
+        // Stop default browser behavior immediately
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Show our confirmation dialog
+        showExistingConfirmDialog(info, () => {
+          // User clicked "Yes" (Open anyway) -> proceed to navigate
+          const target = link.getAttribute('target') || '_self';
+          const href = link.href;
+          
+          if (e.ctrlKey || e.metaKey || target === '_blank') {
+            window.open(href, '_blank');
+          } else {
+            window.location.href = href;
+          }
+        });
+      }, true); // Use capture phase to intercept before Naukri's own handlers
+
+      // Also intercept middle-click (opens in new tab)
+      link.addEventListener('auxclick', (e) => {
+        if (e.button === 1) { // Middle click
+          e.preventDefault();
+          e.stopPropagation();
+          showExistingConfirmDialog(info, () => {
+            window.open(link.href, '_blank');
+          });
+        }
+      }, true);
+    }
+  }
+
+  /**
+   * Renders a premium, glassmorphic modal confirmation dialog.
+   */
+  function showExistingConfirmDialog(info, onConfirm) {
+    const existingModal = document.getElementById('vhc-confirm-modal-root');
+    if (existingModal) existingModal.remove();
+
+    const modalRoot = document.createElement('div');
+    modalRoot.id = 'vhc-confirm-modal-root';
+    
+    const dateStr = info.captured_at 
+      ? new Date(info.captured_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      : 'recently';
+
+    modalRoot.innerHTML = `
+      <div class="vhc-modal-overlay">
+        <div class="vhc-modal-container">
+          <div class="vhc-modal-header">
+            <div class="vhc-modal-icon-container">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="vhc-modal-icon"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <h3>Profile Already Saved</h3>
+          </div>
+          <div class="vhc-modal-body">
+            <p><strong>${escapeHTML(info.name)}</strong> was already captured in your VHC database on <strong>${escapeHTML(dateStr)}</strong>.</p>
+            <p class="vhc-modal-desc">Opening this profile again might count against your limited Naukri views. Are you sure you want to view it?</p>
+          </div>
+          <div class="vhc-modal-footer">
+            <button id="vhc-modal-btn-cancel" class="vhc-btn vhc-btn-secondary">No, Skip Profile</button>
+            <button id="vhc-modal-btn-confirm" class="vhc-btn vhc-btn-primary">Yes, Open Anyway</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modalRoot);
+    
+    setTimeout(() => {
+      const overlay = modalRoot.querySelector('.vhc-modal-overlay');
+      if (overlay) overlay.classList.add('vhc-modal-visible');
+    }, 10);
+
+    const closeModal = () => {
+      const overlay = modalRoot.querySelector('.vhc-modal-overlay');
+      if (overlay) overlay.classList.remove('vhc-modal-visible');
+      setTimeout(() => modalRoot.remove(), 300);
+    };
+
+    modalRoot.querySelector('#vhc-modal-btn-cancel').addEventListener('click', () => {
+      closeModal();
+    });
+
+    modalRoot.querySelector('#vhc-modal-btn-confirm').addEventListener('click', () => {
+      closeModal();
+      onConfirm();
+    });
+
+    modalRoot.querySelector('.vhc-modal-overlay').addEventListener('click', (e) => {
+      if (e.target.classList.contains('vhc-modal-overlay')) {
+        closeModal();
+      }
+    });
+  }
+
+  /**
+   * Sets up MutationObserver to catch infinite scroll lazy card loads.
+   */
+  function observeNewCards() {
+    if (cardObserver) return;
+    
+    console.log(`[VHC v${VERSION}] Setting up MutationObserver for new candidate cards...`);
+    
+    cardObserver = new MutationObserver((mutations) => {
+      let cardsAdded = false;
+      for (const mutation of mutations) {
+        if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              if (
+                node.matches && (
+                  node.matches('.tuple-card') ||
+                  node.matches('[class*="tuple-card"]') ||
+                  node.matches('[class*="candidateCard"]') ||
+                  node.matches('[class*="candidate-card"]') ||
+                  node.matches('[class*="resumeCard"]') ||
+                  node.matches('[class*="srp-tuple"]') ||
+                  node.matches('[class*="srpTuple"]') ||
+                  node.matches('.tupleCard')
+                )
+              ) {
+                cardsAdded = true;
+                break;
+              }
+              
+              if (
+                node.querySelector && node.querySelector(
+                  '.tuple-card, [class*="tuple-card"], [class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"], [class*="srp-tuple"], [class*="srpTuple"], .tupleCard'
+                )
+              ) {
+                cardsAdded = true;
+                break;
+              }
+            }
+          }
+        }
+        if (cardsAdded) break;
+      }
+      
+      if (cardsAdded) {
+        setTimeout(() => {
+          checkAndMarkExistingProfiles();
+        }, 300);
+      }
+    });
+    
+    cardObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Initial scan — the observer only fires on NEW cards. The 40 cards already
+    // rendered when this function runs would never get checked otherwise.
+    setTimeout(() => {
+      console.log(`[VHC v${VERSION}] Initial badge scan firing on already-rendered cards...`);
+      checkAndMarkExistingProfiles();
+    }, 500);
+  }
+
   function showToast(message, type = 'info') {
     const existing = document.getElementById('vhc-toast');
     if (existing) existing.remove();
@@ -3337,6 +3944,15 @@
     const auth = await getAuthToken();
     if (!auth) { console.log(`[VHC v${VERSION}] Not authenticated`); return; }
 
+    // Skip Naukri pages we explicitly do NOT want to operate on
+    // (e.g. /v3/simcv — "Recruiters also viewed" / similar-CV suggestion view).
+    // The page mounts a focal candidate top card alongside a list of 195+
+    // suggested profiles, which causes the extension to grab the wrong person.
+    if (PLATFORM === 'naukri' && isExcludedNaukriPage()) {
+      console.log(`[VHC v${VERSION}] Excluded Naukri page (${window.location.pathname}) — extension idle (no auto-capture, no bulk button)`);
+      return;
+    }
+
     if (PLATFORM !== 'naukri') {
       // LinkedIn and Foundit: just show floating button + auto-capture on profile pages
       if (isProfilePage() && settings.autoCapture) {
@@ -3347,15 +3963,39 @@
     }
 
     // Naukri-specific: search page bulk button + profile page auto-capture
-    if (isSearchPage()) {
-      console.log(`[VHC v${VERSION}] Search/list page detected — bulk capture ready`);
-      addBulkCaptureButton();
+    //
+    // ORDER MATTERS — Naukri's new ResDex preview overlay leaves the
+    // underlying search-results DOM mounted behind the open profile, so
+    // `isSearchPage()` returns true *even when a profile preview is open*.
+    // We must check `isProfilePage()` first; only fall back to the search
+    // branch if no profile is currently in view.
+    if (isProfilePage()) {
+      console.log(`[VHC v${VERSION}] Profile preview detected on Naukri — scheduling auto-capture`);
+      if (document.readyState !== 'complete') await new Promise(r => window.addEventListener('load', r));
+      if (settings.autoCapture) {
+        setTimeout(() => autoCapture(), CONFIG.CAPTURE_DELAY);
+      }
+      // Also keep the bulk badge logic alive on the same page (results
+      // are still rendered behind the preview overlay)
+      if (isSearchPage()) {
+        addBulkCaptureButton();
+        checkAndMarkExistingProfiles();
+        observeNewCards();
+      }
       return;
     }
 
-    if (!isProfilePage()) { console.log(`[VHC v${VERSION}] Not a profile page`); return; }
-    if (document.readyState !== 'complete') await new Promise(r => window.addEventListener('load', r));
-    setTimeout(() => autoCapture(), CONFIG.CAPTURE_DELAY);
+    if (isSearchPage()) {
+      console.log(`[VHC v${VERSION}] Search/list page detected — bulk capture ready`);
+      addBulkCaptureButton();
+
+      // RUN CHECK AND MARK EXISTING PROFILES ON SEARCH PAGES
+      checkAndMarkExistingProfiles();
+      observeNewCards();
+      return;
+    }
+
+    console.log(`[VHC v${VERSION}] Not a profile page`);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

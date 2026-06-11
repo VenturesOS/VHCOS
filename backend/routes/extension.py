@@ -76,10 +76,11 @@ async def get_extension_version():
         "download_url": "/api/download/naukri-extension",
         "update_available": True,
         "changelog": [
-            "CV iframe cross-origin fix: 3-strategy extraction (direct, relay, fetch)",
-            "Full work history, education, personal details now captured",
-            "all_frames content script for Naukri subdomains",
-            "Background service worker CV data relay",
+            "v6.0.0: Async capture — no more stuck 'Processing' (job polling survives slow servers)",
+            "v6.0.0: 'Already in Database' badge accuracy overhaul (server-side V2 scoring trusted)",
+            "v6.0.0: Badge recall fix — candidates in the bank now badge reliably on search pages",
+            "v6.0.0: Update-available banner in popup with one-click update",
+            "v6.0.0: /v3/simcv page exclusion + ResDex preview-overlay capture fix",
         ],
     }
 

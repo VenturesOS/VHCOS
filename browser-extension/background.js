@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '5.4.1';
+const VERSION = '6.0.0';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we
@@ -40,7 +40,70 @@ const CONFIG = {
   SYNC_ALARM_MINUTES: 1,
   SESSION_PING_MINUTES: 10,    // ping /api/auth/me to keep token alive
   MAX_HISTORY_ITEMS: 200,      // max capture history records stored
+  // ─── Async capture polling (v5.5.10) ───
+  ASYNC_POLL_INTERVAL_MS: 3000,   // poll every 3 s
+  ASYNC_POLL_MAX_ATTEMPTS: 60,    // give up after ~3 min (60 × 3 s)
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ASYNC CAPTURE — v5.5.10
+//
+//  Posts the profile to /api/extension/capture/async (returns 202 + job_id
+//  immediately), then polls /api/extension/capture/status/{job_id} until the
+//  job finishes. This avoids the Chrome MV3 30 s service-worker timeout and
+//  Cloudflare's 100 s edge timeout that the old sync /capture endpoint hit
+//  on slow Atlas/RunPod calls.
+//
+//  Caller-side contract is IDENTICAL to the old sync call:
+//    - Resolves with the same CaptureResponse shape ({success, action,
+//      candidate_id, message}).
+//    - Rejects on auth failure, network error, or job failure / timeout.
+//    - On HTTP 401, returns the original Response so the caller can run its
+//      token-refresh + requeue logic (preserves prior behaviour).
+// ═══════════════════════════════════════════════════════════════════════════════
+async function postCaptureAsync(auth, payload) {
+  // 1. Submit
+  const submit = await fetch(`${auth.apiUrl}/api/extension/capture/async`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${auth.token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (submit.status === 401) return { _httpResponse: submit };  // bubble up auth failure
+  if (!submit.ok) {
+    const txt = await submit.text();
+    throw new Error(`capture/async HTTP ${submit.status}: ${txt.substring(0, 160)}`);
+  }
+  const { job_id } = await submit.json();
+  if (!job_id) throw new Error('capture/async did not return a job_id');
+
+  // 2. Poll until completed or failed
+  for (let attempt = 1; attempt <= CONFIG.ASYNC_POLL_MAX_ATTEMPTS; attempt++) {
+    await new Promise(r => setTimeout(r, CONFIG.ASYNC_POLL_INTERVAL_MS));
+
+    const poll = await fetch(`${auth.apiUrl}/api/extension/capture/status/${job_id}`, {
+      headers: { 'Authorization': `Bearer ${auth.token}` },
+    });
+    if (poll.status === 401) return { _httpResponse: poll };
+    if (poll.status === 404) {
+      // Job evicted (shouldn't happen mid-poll) — surface a clear error
+      throw new Error(`capture/async job ${job_id} disappeared (404)`);
+    }
+    if (!poll.ok) {
+      // Transient — keep polling
+      console.warn(`[VHC BG v${VERSION}] capture/status HTTP ${poll.status}, retrying (attempt ${attempt})`);
+      continue;
+    }
+    const job = await poll.json();
+    if (job.status === 'completed') return { _result: job.result };
+    if (job.status === 'failed')    throw new Error(`capture job ${job_id} failed: ${job.error || 'unknown error'}`);
+    // pending / processing → continue polling
+  }
+  throw new Error(`capture/async job ${job_id} timed out after ${CONFIG.ASYNC_POLL_MAX_ATTEMPTS * CONFIG.ASYNC_POLL_INTERVAL_MS / 1000}s`);
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let isDraining = false;          // prevent concurrent drain loops
@@ -142,18 +205,618 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Detects Naukri profile pages. Mirrors content.js::isProfilePage for Naukri.
+ * Detects candidate profile pages for Naukri, LinkedIn, and Foundit.
  */
-function isNaukriProfileUrl(url) {
+function isProfileUrl(url) {
   if (!url) return false;
   try {
     const u = new URL(url);
-    if (!u.hostname.includes('naukri.com')) return false;
-    if (u.pathname.includes('/v3/preview') && u.search.includes('tabKey=profile')) return true;
-    if (/viewResume|view-resume|cvPreview/i.test(u.pathname)) return true;
+    const host = u.hostname;
+    const pathname = u.pathname;
+    const search = u.search;
+    
+    // Naukri
+    if (host.includes('naukri.com')) {
+      if (pathname.includes('/v3/preview') && search.includes('tabKey=profile')) return true;
+      if (/viewResume|view-resume|cvPreview/i.test(pathname)) return true;
+      return false;
+    }
+    // LinkedIn
+    if (host.includes('linkedin.com')) {
+      return /^\/in\/[^/]+\/?$/.test(pathname);
+    }
+    // Foundit
+    if (host.includes('foundit.in') || host.includes('foundit.sg') || host.includes('foundit.my') || host.includes('monster.com')) {
+      return /\/(profile|resume|cv)\/[^/]+/.test(pathname);
+    }
   } catch (_) {}
   return false;
 }
+
+/**
+ * Normalizes candidate profile URLs to generate a stable, consistent dedup key.
+ */
+function normalizeProfileUrl(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    const host = u.hostname;
+    
+    if (host.includes('naukri.com')) {
+      const candidateId = u.searchParams.get('candidateId') || u.searchParams.get('profileId') || u.searchParams.get('pid');
+      if (candidateId) {
+        return `naukri::id::${candidateId}`;
+      }
+      const sid = u.searchParams.get('sid');
+      if (sid) {
+        return `naukri::sid::${sid}`;
+      }
+      const pathMatch = u.pathname.match(/\/(?:resume|profile|cv|preview)\/([a-zA-Z0-9_-]+)/i);
+      if (pathMatch) return `naukri::path::${pathMatch[1]}`;
+      
+      return `naukri::raw::${u.origin}${u.pathname}`;
+    }
+    
+    if (host.includes('linkedin.com')) {
+      const m = u.pathname.match(/^\/in\/([^/]+)/);
+      if (m) return `linkedin::in::${m[1].toLowerCase()}`;
+      return `linkedin::raw::${u.origin}${u.pathname}`;
+    }
+    
+    if (host.includes('foundit.in') || host.includes('foundit.sg') || host.includes('foundit.my') || host.includes('monster.com')) {
+      const m = u.pathname.match(/\/(profile|resume|cv)\/([^/]+)/);
+      if (m) return `foundit::id::${m[2].toLowerCase()}`;
+      return `foundit::raw::${u.origin}${u.pathname}`;
+    }
+    
+    return u.href;
+  } catch (_) {
+    return url;
+  }
+}
+
+/**
+ * Computes a composite match score (0–100) between a search-card candidate
+ * and a capture-history entry. Uses weighted signals so common names alone
+ * can never trigger the badge — at least one corroborating signal is required.
+ *
+ * Score weights:
+ *   Naukri ID   → 100 (definitive, short-circuits)
+ *   Name        → 30
+ *   Employer    → 25
+ *   Designation → 15
+ *   Location    → 10
+ *   Education   → 10
+ *   Experience  → 10
+ *   -------------------
+ *   Max         = 100
+ */
+function computeMatchScore(card, hist) {
+  // ── Signal 0: Naukri ID match (100% definitive) ──
+  const cardNaukriId = card.naukri_id || null;
+  const histNaukriId = hist.profileId || hist.naukri_profile_id || null;
+  if (cardNaukriId && histNaukriId) {
+    if (cardNaukriId === histNaukriId) return 100;
+    // Different IDs = definitely different people
+    return 0;
+  }
+
+  let score = 0;
+
+  // ── Signal 1: Name match (weight: 30) ──
+  const cleanName = (n) => (n || '').toLowerCase()
+    .replace(/\b(mr|ms|mrs|dr|shri|smt|prof)\.?\s+/gi, '')
+    .replace(/[^a-z\s]/g, '').trim();
+
+  const cardName = cleanName(card.name);
+  const histName = cleanName(hist.name);
+
+  if (cardName && histName) {
+    if (cardName === histName) {
+      score += 30;
+    } else {
+      // Jaccard similarity on name tokens (handles reordering, middle-name presence)
+      const cardTokens = new Set(cardName.split(/\s+/).filter(t => t.length > 1));
+      const histTokens = new Set(histName.split(/\s+/).filter(t => t.length > 1));
+      const intersection = [...cardTokens].filter(t => histTokens.has(t));
+      const union = new Set([...cardTokens, ...histTokens]);
+      if (union.size > 0) {
+        const jaccard = intersection.length / union.size;
+        score += Math.round(jaccard * 30);
+      }
+    }
+  }
+
+  // ── Signal 2: Current Employer (weight: 25) ──
+  if (card.current_employer && hist.current_employer) {
+    const ce1 = (card.current_employer || '').toLowerCase()
+      .replace(/\b(pvt|ltd|llp|inc|corp|limited|private|co|company)\b/g, '').trim();
+    const ce2 = (hist.current_employer || '').toLowerCase()
+      .replace(/\b(pvt|ltd|llp|inc|corp|limited|private|co|company)\b/g, '').trim();
+    if (ce1 && ce2) {
+      if (ce1 === ce2) score += 25;
+      else if (ce1.includes(ce2) || ce2.includes(ce1)) score += 20;
+    }
+  }
+
+  // ── Signal 3: Designation / Role (weight: 15) ──
+  if (card.designation && hist.designation) {
+    const d1 = (card.designation || '').toLowerCase().trim();
+    const d2 = (hist.designation || '').toLowerCase().trim();
+    if (d1 && d2) {
+      if (d1 === d2) score += 15;
+      else if (d1.includes(d2) || d2.includes(d1)) score += 10;
+    }
+  }
+
+  // ── Signal 4: Location (weight: 10) ──
+  if (card.location && hist.location) {
+    const l1 = (card.location || '').toLowerCase().split(',')[0].trim();
+    const l2 = (hist.location || '').toLowerCase().split(',')[0].trim();
+    if (l1 && l2 && (l1 === l2 || l1.includes(l2) || l2.includes(l1))) {
+      score += 10;
+    }
+  }
+
+  // ── Signal 5: Education (weight: 10) ──
+  if (card.education && hist.education) {
+    const e1 = (card.education || '').toLowerCase();
+    const e2 = (hist.education || '').toLowerCase();
+    if (e1 && e2) {
+      if (e1 === e2) score += 10;
+      else if (e1.includes(e2) || e2.includes(e1)) score += 7;
+    }
+  }
+
+  // ── Signal 6: Experience within 1 year (weight: 10) ──
+  if (card.experience_years != null && hist.experience_years != null) {
+    const diff = Math.abs(card.experience_years - hist.experience_years);
+    if (diff <= 0.5) score += 10;
+    else if (diff <= 1.5) score += 5;
+  }
+
+  return score;
+}
+
+/**
+ * Match-score threshold: a candidate must score at least this to be badged.
+ * 70 = name (30) + employer (25) + designation (15)  — safe minimum.
+ */
+const MATCH_THRESHOLD = 70;
+
+/**
+ * Checks a list of candidates against the local captureHistory using
+ * multi-signal composite scoring. Replaces the old name-only fuzzy match.
+ */
+function checkLocalHistory(candidates, history) {
+  const results = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const cand = candidates[i];
+    let bestMatch = null;
+    let bestScore = 0;
+    let matchType = 'none';
+
+    // Normalize input URL if present
+    const normUrl = cand.profileUrl ? normalizeProfileUrl(cand.profileUrl) : null;
+
+    for (const hist of history) {
+      if (hist.action === 'failed') continue;
+
+      // 1. Match by normalized URL (definitive)
+      if (normUrl && hist.profileUrl) {
+        const histNormUrl = normalizeProfileUrl(hist.profileUrl);
+        if (normUrl === histNormUrl) {
+          bestMatch = hist;
+          bestScore = 100;
+          matchType = 'url';
+          break;
+        }
+      }
+
+      // 2. Multi-signal composite scoring
+      const score = computeMatchScore(cand, hist);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = hist;
+        matchType = score === 100 ? 'naukri_id' : 'composite';
+      }
+    }
+
+    // Only mark as existing if score meets threshold
+    if (bestMatch && bestScore >= MATCH_THRESHOLD) {
+      const confidence = bestScore >= 85 ? 'high'
+                       : bestScore >= MATCH_THRESHOLD ? 'medium'
+                       : 'low';
+      results.push({
+        index: i,
+        exists: true,
+        candidate_id: bestMatch.candidate_id,
+        captured_at: bestMatch.timestamp,
+        match_confidence: confidence,
+        match_score: bestScore,
+      });
+    } else {
+      results.push({ index: i, exists: false });
+    }
+  }
+  return results;
+}
+
+/**
+ * Merges local match results with backend check-existing API results.
+ */
+function mergeCheckResults(localResults, apiResults) {
+  const merged = [];
+  const apiMap = new Map();
+  if (Array.isArray(apiResults)) {
+    for (const r of apiResults) {
+      if (r && typeof r.index === 'number') apiMap.set(r.index, r);
+    }
+  }
+  
+  for (let i = 0; i < localResults.length; i++) {
+    const local = localResults[i];
+    const api = apiMap.get(i) || null;
+    
+    if (api && api.exists) {
+      merged.push({
+        index: i,
+        exists: true,
+        candidate_id: api.candidate_id || local.candidate_id,
+        captured_at: api.captured_at || local.captured_at,
+        match_confidence: api.match_confidence || local.match_confidence || 'high'
+      });
+    } else if (local.exists) {
+      merged.push(local);
+    } else {
+      merged.push({
+        index: i,
+        exists: false
+      });
+    }
+  }
+  return { results: merged };
+}
+
+/**
+ * High-level orchestrator to check if candidates already exist in the database.
+ * Calls local history matching and backend API, falling back gracefully to local on failures.
+ */
+async function checkExistingCandidates(candidates) {
+  if (!candidates || candidates.length === 0) return { results: [] };
+  const auth = await getAuth();
+  
+  // 1. Read local history
+  const storage = await new Promise(resolve => {
+    chrome.storage.local.get(['captureHistory'], (r) => resolve(r.captureHistory || []));
+  });
+  
+  const localResults = checkLocalHistory(candidates, storage);
+  
+  // If not authenticated, return local results
+  if (!auth) {
+    console.log(`[VHC BG v${VERSION}] checkExisting: No auth. Returning local results.`);
+    return { results: localResults };
+  }
+  
+  try {
+    console.log(`[VHC BG v${VERSION}] checkExisting: Sending batch of ${candidates.length} to API...`);
+    
+    const response = await fetch(`${auth.apiUrl}/api/extension/check-existing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${auth.token}`
+      },
+      body: JSON.stringify({ candidates })
+    });
+    
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken(auth.apiUrl);
+      if (refreshed) {
+        const newAuth = await getAuth();
+        const retryResponse = await fetch(`${newAuth.apiUrl}/api/extension/check-existing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${newAuth.token}`
+          },
+          body: JSON.stringify({ candidates })
+        });
+        if (retryResponse.ok) {
+          const apiData = await retryResponse.json();
+          return { results: postValidateApiResults(candidates, apiData.results || [], storage) };
+        }
+      }
+      console.warn(`[VHC BG v${VERSION}] checkExisting: API Auth failed, using local fallback.`);
+      return { results: localResults };
+    }
+    
+    if (!response.ok) {
+      console.warn(`[VHC BG v${VERSION}] checkExisting: API returned HTTP ${response.status}, using local fallback.`);
+      return { results: localResults };
+    }
+    
+    const apiData = await response.json();
+    // v5.5.10 — defensive debug: surface the API → client picture so we can
+    // diagnose missing-badge bugs without diving into the Network tab.
+    const apiHitCount = (apiData.results || []).filter(r => r && r.exists).length;
+    console.log(`[VHC BG v${VERSION}] checkExisting: API returned ${apiHitCount} hits / ${candidates.length} candidates (audit_id=${apiData.audit_id || 'none'})`);
+    // Show first 3 hits with their signals so we can see V2 working
+    (apiData.results || []).filter(r => r && r.exists).slice(0, 3).forEach(r => {
+      const c = candidates[r.index] || {};
+      console.log(
+        `[VHC BG v${VERSION}]   • API hit: idx=${r.index} card="${c.name}" → ` +
+        `db="${(r.matched_candidate || {}).name || '?'}" ` +
+        `score=${r.match_score} signals=${JSON.stringify(r.matched_signals)} conf=${r.match_confidence}`
+      );
+    });
+
+    // Post-validate: the API may match by name alone, causing false positives
+    // on common names (e.g. two different "Shubham Rawat"). We cross-check each
+    // API match against local history using multi-signal composite scoring.
+    const finalResults = postValidateApiResults(candidates, apiData.results || [], storage);
+    const finalHitCount = finalResults.filter(r => r && r.exists).length;
+    if (finalHitCount < apiHitCount) {
+      console.warn(`[VHC BG v${VERSION}] checkExisting: post-validation dropped ${apiHitCount - finalHitCount} hits (API ${apiHitCount} → client ${finalHitCount})`);
+    }
+    return { results: finalResults };
+  } catch (err) {
+    console.warn(`[VHC BG v${VERSION}] checkExisting API call failed:`, err.message, "— falling back to local history.");
+    return { results: localResults };
+  }
+}
+
+/**
+ * Post-validates API "exists" results against card data + local history.
+ *
+ * The API may match candidates by name alone, which produces false positives
+ * for common Indian names (Rahul Sharma, Shubham Rawat, Amit Kumar etc.).
+ * This function cross-checks each API match:
+ *
+ * 1. If API matched by URL/profile-ID → trust (definitive)
+ * 2. If we find the matched candidate_id in local history with multi-signal
+ *    fields → run computeMatchScore; reject if below threshold
+ * 3. If local history has no multi-signal data, check for obvious conflicts
+ *    between card fields and whatever the API returned
+ * 4. If we can't validate at all → downgrade to 'medium' confidence
+ */
+function postValidateApiResults(candidates, apiResults, localHistory) {
+  if (!Array.isArray(apiResults)) return [];
+
+  // Helper: extract Naukri candidateId from a URL (same logic as content.js extractIdFromUrl)
+  function extractNaukriId(url) {
+    if (!url) return null;
+    const m = url.match(/[?&](?:candidateId|profileId|pid)=([^&]+)/i);
+    return m ? m[1] : null;
+  }
+
+  return apiResults.map(result => {
+    // Non-matches pass through unchanged
+    if (!result || !result.exists) return result;
+
+    const card = candidates[result.index];
+    if (!card) return result;
+
+    // ── Trust definitive matches (URL or Naukri profile ID) ──
+    const matchType = (result.matched_by || result.match_type || '').toLowerCase();
+    if (matchType === 'url' || matchType === 'profile_id' || matchType === 'naukri_id') {
+      return { ...result, match_confidence: 'high' };
+    }
+
+    // ── Also trust if the API returned a profile_url that matches the card URL ──
+    if (result.profile_url && card.profileUrl) {
+      const apiNormUrl  = normalizeProfileUrl(result.profile_url);
+      const cardNormUrl = normalizeProfileUrl(card.profileUrl);
+      if (apiNormUrl && cardNormUrl && apiNormUrl === cardNormUrl) {
+        return { ...result, match_confidence: 'high' };
+      }
+    }
+
+    // ── TRUST V2 BACKEND ──
+    // The V2 scorer (Phase 56.4+) already does multi-signal composite scoring
+    // server-side and only emits `matched_signals` when ≥2 strong signals
+    // corroborate the name match. Running the OLD client-side computeMatchScore
+    // on top of V2 was double-scoring and rejecting valid matches (it was
+    // designed to filter false positives from the loose V1 backend).
+    //
+    // Signature of a V2 response: `matched_signals` is a populated array AND
+    // the backend's `match_score` is a positive number. In that case the
+    // backend has already done the verification — skip client post-validation.
+    const isV2Response =
+      Array.isArray(result.matched_signals) &&
+      result.matched_signals.length > 0 &&
+      typeof result.match_score === 'number';
+    if (isV2Response) {
+      // Map V2 confidence directly — server already chose high/medium/low.
+      return result;
+    }
+
+    // ── PRIMARY (V1 fallback): Server-returned matched_candidate cross-check ──
+    // The /api/extension/check-existing V1 endpoint matches loosely on name.
+    // Run the composite scorer locally to drop the obvious false positives.
+    if (result.matched_candidate) {
+      const mc = result.matched_candidate;
+      // Map server fields → the shape expected by computeMatchScore
+      const histEntry = {
+        name: mc.name,
+        current_employer: mc.current_employer,
+        designation: mc.designation,
+        location: mc.location,
+        experience_years: mc.experience_years,
+        education: mc.education,
+        profileId: mc.naukri_profile_id,
+        naukri_profile_id: mc.naukri_profile_id,
+      };
+
+      // 1. Definitive Naukri ID match short-circuits in computeMatchScore (=100)
+      // 2. Otherwise compute composite — same threshold as local-history path
+      const score = computeMatchScore(card, histEntry);
+      if (score < MATCH_THRESHOLD) {
+        console.log(
+          `[VHC BG v${VERSION}] Post-validation REJECTED (server cross-check): ` +
+          `card="${card.name}" (${card.current_employer || '?'} / ${card.designation || '?'}) ` +
+          `≠ db="${mc.name}" (${mc.current_employer || '?'} / ${mc.designation || '?'}) ` +
+          `→ score ${score} < ${MATCH_THRESHOLD}`
+        );
+        return { index: result.index, exists: false };
+      }
+      // Confirmed via server — preserve any deep-link / metadata from the API
+      return {
+        ...result,
+        match_confidence: score >= 85 ? 'high' : 'medium',
+        match_score: score,
+      };
+    }
+
+    // ── Try to find matched candidate in local history by candidate_id ──
+    const resultCandId = result.candidate_id != null ? String(result.candidate_id) : null;
+    let histEntry = null;
+
+    if (resultCandId) {
+      histEntry = localHistory.find(h =>
+        h.candidate_id != null &&
+        String(h.candidate_id) === resultCandId &&
+        h.action !== 'failed'
+      );
+    }
+
+    // Fallback: try matching by profileUrl in history
+    if (!histEntry && result.profile_url) {
+      const apiNorm = normalizeProfileUrl(result.profile_url);
+      if (apiNorm) {
+        histEntry = localHistory.find(h =>
+          h.profileUrl &&
+          normalizeProfileUrl(h.profileUrl) === apiNorm &&
+          h.action !== 'failed'
+        );
+      }
+    }
+
+    if (histEntry) {
+      // Check if history entry has multi-signal fields (captured after v5.5.6 changes)
+      const hasMultiSignal = !!(histEntry.current_employer || histEntry.designation || histEntry.location);
+
+      if (hasMultiSignal) {
+        // Full multi-signal validation — reliable
+        const score = computeMatchScore(card, histEntry);
+        if (score < MATCH_THRESHOLD) {
+          console.log(
+            `[VHC BG v${VERSION}] Post-validation REJECTED: card="${card.name}" ` +
+            `(${card.current_employer || '?'} / ${card.designation || '?'}) ` +
+            `≠ history="${histEntry.name}" ` +
+            `(${histEntry.current_employer || '?'} / ${histEntry.designation || '?'}) ` +
+            `→ score ${score} < ${MATCH_THRESHOLD}`
+          );
+          return { index: result.index, exists: false };
+        }
+        return {
+          ...result,
+          match_confidence: score >= 85 ? 'high' : 'medium',
+          match_score: score,
+        };
+      }
+
+      // ── Old history entry (no multi-signal fields) ──
+      // Compare Naukri profile IDs — these are definitive even without multi-signal data
+      const cardNaukriId = card.naukri_id || extractNaukriId(card.profileUrl);
+      const histNaukriId = histEntry.profileId || null;
+
+      if (cardNaukriId && histNaukriId) {
+        if (String(cardNaukriId) === String(histNaukriId)) {
+          // Same Naukri ID → definitely same person
+          console.log(
+            `[VHC BG v${VERSION}] Post-validation CONFIRMED (Naukri ID match): ` +
+            `card="${card.name}" id=${cardNaukriId}`
+          );
+          return { ...result, match_confidence: 'high' };
+        } else {
+          // Different Naukri IDs → definitely different people
+          console.log(
+            `[VHC BG v${VERSION}] Post-validation REJECTED (different Naukri IDs): ` +
+            `card="${card.name}" cardId=${cardNaukriId} vs histId=${histNaukriId}`
+          );
+          return { index: result.index, exists: false };
+        }
+      }
+
+      // Can't compare IDs — trust API for this old entry
+      return { ...result, match_confidence: result.match_confidence || 'high' };
+    }
+
+    // ── No local history — check card fields vs API response for conflicts ──
+    const apiEmployer  = (result.current_employer || result.company || '').toLowerCase().trim();
+    const cardEmployer = (card.current_employer || '').toLowerCase().trim();
+
+    if (apiEmployer && cardEmployer && apiEmployer.length > 2 && cardEmployer.length > 2) {
+      const empClean = (s) => s.replace(/\b(pvt|ltd|llp|inc|corp|limited|private|co|company)\b/g, '').trim();
+      const ae = empClean(apiEmployer);
+      const ce = empClean(cardEmployer);
+      if (ae && ce && !ae.includes(ce) && !ce.includes(ae)) {
+        console.log(
+          `[VHC BG v${VERSION}] Post-validation REJECTED (employer conflict): card="${card.name}" ` +
+          `employer="${cardEmployer}" vs API="${apiEmployer}"`
+        );
+        return { index: result.index, exists: false };
+      }
+    }
+
+    // No evidence of conflict — trust API with medium confidence
+    return {
+      ...result,
+      match_confidence: 'medium',
+    };
+  });
+}
+
+/**
+ * Smart polling loop to check if a tab is ready and fully rendered.
+ */
+async function waitForTabReady(tabId) {
+  const MAX_POLLS = 15;
+  const POLL_INTERVAL = 500;
+  
+  for (let poll = 0; poll < MAX_POLLS; poll++) {
+    try {
+      const [res] = await chrome.scripting.executeScript({
+        target: { tabId, allFrames: false },
+        func: () => {
+          return {
+            readyState: document.readyState,
+            bodyTextLength: document.body ? (document.body.innerText || '').length : 0,
+            hasContent: !!(
+              document.querySelector('[class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"]') ||
+              document.querySelector('[class*="experienc"], [class*="Experience"]') ||
+              document.querySelector('[class*="skill"], [class*="Skill"]') ||
+              document.querySelector('[class*="education"], [class*="Education"]') ||
+              document.querySelector('[class*="viewContact"], [class*="view-contact"]')
+            )
+          };
+        }
+      });
+      
+      if (res && res.result) {
+        const { readyState, bodyTextLength, hasContent } = res.result;
+        console.log(`[VHC BG v${VERSION}] Poll tab ${tabId} readyState=${readyState}, textLen=${bodyTextLength}, hasContent=${hasContent}`);
+        if (readyState === 'complete' && (bodyTextLength > 300 || hasContent)) {
+          console.log(`[VHC BG v${VERSION}] Tab ${tabId} is ready after ${poll * POLL_INTERVAL}ms!`);
+          return true;
+        }
+      }
+    } catch (err) {
+      if (err.message && (err.message.includes('No tab') || err.message.includes('cannot access') || err.message.includes('No frame'))) {
+        console.warn(`[VHC BG v${VERSION}] Tab ${tabId} closed during readiness polling.`);
+        return false;
+      }
+      console.warn(`[VHC BG v${VERSION}] Error polling tab ${tabId}:`, err.message);
+    }
+    await sleep(POLL_INTERVAL);
+  }
+  
+  console.log(`[VHC BG v${VERSION}] Tab ${tabId} wait ready timed out, proceeding anyway.`);
+  return false;
+}
+
 
 /**
  * Send a manualCapture message into the tab's content script.
@@ -221,43 +884,82 @@ async function forceCaptureInTab(tabId, opts = {}) {
  * We skip tabs that are already active+focused because content.js auto-
  * capture already covers those, and we only fire once per tab per URL.
  */
+// Consolidated onUpdated Listener
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete') return;
-  if (!isNaukriProfileUrl(tab?.url)) return;
+  try {
+    // Section 1: Clean when tab navigates to a new page (loading)
+    if (changeInfo.status === 'loading') {
+      if (cvIframeDataByTab[tabId]) {
+        delete cvIframeDataByTab[tabId];
+        console.log(`[VHC BG v${VERSION}] Cleared CV iframe data for navigating tab ${tabId}`);
+      }
+      return;
+    }
 
-  const wasContextMenu = contextMenuOpenedTabs.has(tabId);
-  const isBackground = tab.active === false;
+    if (changeInfo.status !== 'complete') return;
 
-  if (!wasContextMenu && !isBackground) return;
+    // Section 2: Background / Context-menu capture forcing
+    if (isProfileUrl(tab?.url)) {
+      const wasContextMenu = contextMenuOpenedTabs.has(tabId);
+      const isBackground = tab.active === false;
 
-  // Dedup: don't fire the same tab twice for the same URL
-  const dedupKey = `${tabId}::${tab.url}`;
-  if (backgroundCaptureKickedTabs.has(dedupKey)) return;
-  backgroundCaptureKickedTabs.add(dedupKey);
-  // Keep the set bounded
-  if (backgroundCaptureKickedTabs.size > 500) {
-    backgroundCaptureKickedTabs.clear();
+      if (wasContextMenu || isBackground) {
+        // Dedup: don't fire the same tab twice for the same normalized URL
+        const normUrl = normalizeProfileUrl(tab.url);
+        const dedupKey = `${tabId}::${normUrl}`;
+        if (!backgroundCaptureKickedTabs.has(dedupKey)) {
+          backgroundCaptureKickedTabs.add(dedupKey);
+          
+          // Keep the set bounded
+          if (backgroundCaptureKickedTabs.size > 500) {
+            backgroundCaptureKickedTabs.clear();
+          }
+
+          console.log(`[VHC BG v${VERSION}] ${wasContextMenu ? 'ctxmenu' : 'bg-tab'} profile loaded in tab ${tabId} — forcing capture`);
+          
+          // Wait adaptively for tab ready instead of hardcoded delay
+          await waitForTabReady(tabId);
+          await forceCaptureInTab(tabId, { fromContextMenu: wasContextMenu });
+          
+          // One-shot — clear the context-menu flag after the capture attempt
+          contextMenuOpenedTabs.delete(tabId);
+        }
+      }
+    }
+
+    // Section 3: Job binding from VHC dashboard tab
+    const detectedJob = detectJobFromUrl(tab.url);
+    if (detectedJob) {
+      const auth = await getAuth();
+      const details = await fetchJobDetails(detectedJob.job_id, auth);
+      if (details) {
+        await new Promise(r => chrome.storage.local.set({ vhc_active_job: details }, r));
+        console.log(`[VHC BG v${VERSION}] Active job set: ${details.job_title} (${details.job_id})`);
+        notifyPopup({ action: 'activeJobUpdated', job: details });
+      }
+    }
+  } catch (err) {
+    console.error(`[VHC BG v${VERSION}] Error in consolidated onUpdated listener:`, err.message);
   }
-
-  console.log(`[VHC BG v${VERSION}] ${wasContextMenu ? 'ctxmenu' : 'bg-tab'} profile loaded in tab ${tabId} — forcing capture`);
-
-  // v5.4.1 FIX: Increase wait time for background tabs
-  // Naukri lazy-loads profile content and Chrome throttles JS in background tabs.
-  // 4 seconds gives the page time to finish hydrating before we attempt capture.
-  // The content.js waitForCandidateProfile() provides additional smart waiting.
-  await sleep(4000);
-  await forceCaptureInTab(tabId, { fromContextMenu: wasContextMenu });
-
-  // One-shot — clear the context-menu flag after the capture attempt
-  contextMenuOpenedTabs.delete(tabId);
 });
 
-// Cleanup tracking on tab close
+// Consolidated onRemoved Listener
 chrome.tabs.onRemoved.addListener((tabId) => {
-  contextMenuOpenedTabs.delete(tabId);
-  // Also purge any dedup keys belonging to this tab
-  for (const k of backgroundCaptureKickedTabs) {
-    if (k.startsWith(`${tabId}::`)) backgroundCaptureKickedTabs.delete(k);
+  try {
+    contextMenuOpenedTabs.delete(tabId);
+    
+    // Purge any dedup keys belonging to this tab
+    for (const k of backgroundCaptureKickedTabs) {
+      if (k.startsWith(`${tabId}::`)) backgroundCaptureKickedTabs.delete(k);
+    }
+    
+    // Clean up CV iframe data
+    if (cvIframeDataByTab[tabId]) {
+      delete cvIframeDataByTab[tabId];
+      console.log(`[VHC BG v${VERSION}] Cleaned CV iframe data for closed tab ${tabId}`);
+    }
+  } catch (err) {
+    console.error(`[VHC BG v${VERSION}] Error in consolidated onRemoved listener:`, err.message);
   }
 });
 
@@ -286,20 +988,6 @@ self.addEventListener('online', () => {
   processOfflineQueue();
 });
 
-// ─── Clean up CV iframe data when tab is closed ──────────────────────────────
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (cvIframeDataByTab[tabId]) {
-    delete cvIframeDataByTab[tabId];
-    console.log(`[VHC BG v${VERSION}] Cleaned CV iframe data for closed tab ${tabId}`);
-  }
-});
-
-// Also clean when tab navigates to a new page (SPA or full navigation)
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === 'loading' && cvIframeDataByTab[tabId]) {
-    delete cvIframeDataByTab[tabId];
-  }
-});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // JOB BINDING — detect active job from VHC dashboard tab
@@ -364,23 +1052,46 @@ async function fetchJobDetails(jobId, auth) {
   }
 }
 
-// Listen for tab navigations to detect active job
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete') return;
-  const detected = detectJobFromUrl(tab.url);
-  if (!detected) return;
-
-  const auth = await getAuth();
-  const details = await fetchJobDetails(detected.job_id, auth);
-  if (!details) return;
-
-  await new Promise(r => chrome.storage.local.set({ vhc_active_job: details }, r));
-  console.log(`[VHC BG v${VERSION}] Active job set: ${details.job_title} (${details.job_id})`);
-  notifyPopup({ action: 'activeJobUpdated', job: details });
-});
 
 // ─── Message Router ───────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+
+  // ═══ CHECK EXISTING CANDIDATES (Local cache + API backend) ═══
+  if (request.action === 'checkExisting') {
+    checkExistingCandidates(request.candidates || [])
+      .then(sendResponse)
+      .catch(e => {
+        console.error(`[VHC BG v${VERSION}] checkExisting error:`, e.message);
+        sendResponse({ success: false, error: e.message, results: (request.candidates || []).map((_, i) => ({ index: i, exists: false })) });
+      });
+    return true; // Keep message channel open for async response
+  }
+
+  // ═══ DEEP-LINK: Build candidate-bank URL from configured apiUrl ═══
+  // Used by content.js to make the "Already in Database" badge an <a> with a
+  // proper href (so middle-click / ctrl-click / right-click → open in new tab
+  // all work natively). The frontend URL is derived from the api URL by
+  // stripping the leading `api.` subdomain (e.g. api.ventureshrd.com →
+  // ventureshrd.com). For non-standard hosts we just reuse the apiUrl host.
+  if (request.action === 'getCandidateBankUrl') {
+    buildCandidateBankUrl(request.candidate_id)
+      .then((url) => sendResponse({ url }))
+      .catch(() => sendResponse({ url: null }));
+    return true;
+  }
+
+  // ═══ DEEP-LINK FALLBACK: Open candidate-bank profile in a new tab ═══
+  // Used when content.js couldn't pre-resolve the URL (e.g. badge clicked
+  // before getCandidateBankUrl resolved). Pure UX-fallback path.
+  if (request.action === 'openCandidateProfile') {
+    buildCandidateBankUrl(request.candidate_id)
+      .then((url) => {
+        if (url) chrome.tabs.create({ url });
+        sendResponse({ success: !!url });
+      })
+      .catch(() => sendResponse({ success: false }));
+    return true;
+  }
 
   // ═══ CV IFRAME DATA RELAY (from content script running inside iframe) ═══
   if (request.action === 'cvIframeData') {
@@ -862,17 +1573,10 @@ async function processSingleCapture(item, auth) {
       };
     }
 
-    // ── Step 3: POST to databank ──
-    const captureResponse = await fetch(`${auth.apiUrl}/api/extension/capture`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${auth.token}`
-      },
-      body: JSON.stringify(capturePayload)
-    });
+    // ── Step 3: POST to databank (async + poll, v5.5.10) ──
+    const asyncResult = await postCaptureAsync(auth, capturePayload);
 
-    if (captureResponse.status === 401) {
+    if (asyncResult._httpResponse?.status === 401) {
       const refreshed = await refreshAccessToken(auth.apiUrl);
       if (refreshed) {
         await requeueWithFailure(item, 'Token refreshed — will retry');
@@ -882,12 +1586,7 @@ async function processSingleCapture(item, auth) {
       return;
     }
 
-    if (!captureResponse.ok) {
-      const errText = await captureResponse.text();
-      throw new Error(`Capture HTTP ${captureResponse.status}: ${errText.substring(0, 100)}`);
-    }
-
-    const captureResult = await captureResponse.json();
+    const captureResult = asyncResult._result;
 
     // ── Step 4: Success — remove from queue, update stats, log history ──
     await removeFromCaptureQueue(item._queueId);
@@ -901,6 +1600,12 @@ async function processSingleCapture(item, auth) {
       email:             item.email || null,
       phone:             item.phone || null,
       _bulk:             item._bulk || false,
+      // Multi-signal fields for offline composite matching (v5.5.6+)
+      current_employer:  item.dom_fields?.current_company || capturePayload?.current_company || null,
+      designation:       item.dom_fields?.current_designation || capturePayload?.current_designation || null,
+      location:          item.dom_fields?.current_location || capturePayload?.career_preferences?.current_location || null,
+      education:         Array.isArray(capturePayload?.education) ? (capturePayload.education[0]?.degree || capturePayload.education[0]?.institution || null) : null,
+      experience_years:  item.dom_fields?.total_experience_years || capturePayload?.total_experience_years || null,
     });
 
     const candidateId = captureResult.candidate_id;
@@ -957,6 +1662,12 @@ async function processSingleCapture(item, auth) {
           email:             item.email || null,
           phone:             item.phone || null,
           _bulk:             item._bulk || false,
+          // Multi-signal fields for offline composite matching (v5.5.6+)
+          current_employer:  item.dom_fields?.current_company || null,
+          designation:       item.dom_fields?.current_designation || null,
+          location:          item.dom_fields?.current_location || null,
+          education:         null,
+          experience_years:  item.dom_fields?.total_experience_years || null,
         });
       }
     }
@@ -1371,6 +2082,12 @@ async function addToHistory(entry) {
         phone:        entry.phone || null,    // captured phone (null = hidden/missing)
         timestamp:    new Date().toISOString(),
         bulk:         entry._bulk || false,
+        // Multi-signal fields for offline composite matching (v5.5.6+)
+        current_employer:  entry.current_employer || null,
+        designation:       entry.designation || null,
+        location:          entry.location || null,
+        education:         entry.education || null,
+        experience_years:  entry.experience_years || null,
       });
       // Keep only the latest MAX_HISTORY_ITEMS
       const trimmed = history.slice(-CONFIG.MAX_HISTORY_ITEMS);
@@ -1398,25 +2115,19 @@ async function processOfflineQueue() {
       try {
         // Map internal _mandate_id to the backend's expected field name
         const payload = { ...item, mandate_id: item._mandate_id || item.mandate_id || null };
-        const response = await fetch(`${auth.apiUrl}/api/extension/capture`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${auth.token}`
-          },
-          body: JSON.stringify(payload)
-        });
+        const asyncResult = await postCaptureAsync(auth, payload);
 
-        if (response.ok) {
-          const r = await response.json();
-          await updateStats(r.action);
+        if (asyncResult._httpResponse?.status === 401) {
+          // Don't re-queue on auth failure — caller-level token refresh will retry
+        } else if (asyncResult._result) {
+          await updateStats(asyncResult._result.action);
           console.log(`[VHC BG v${VERSION}] Offline sync OK: ${item.name}`);
-          notifyPopup({ action: 'captureComplete', name: item.name, result: r.action });
-        } else if (response.status !== 401) {
-          newQueue.push(item); // Keep for later
+          notifyPopup({ action: 'captureComplete', name: item.name, result: asyncResult._result.action });
+        } else {
+          newQueue.push(item); // Unknown shape — keep for later
         }
       } catch (_) {
-        newQueue.push(item); // Network still down
+        newQueue.push(item); // Network still down or job failed
       }
       await sleep(300);
     }
@@ -1666,6 +2377,40 @@ async function getAuth() {
         : null);
     });
   });
+}
+
+/**
+ * Convert the user's configured backend apiUrl into the matching frontend web URL,
+ * then return the deep-link to a specific candidate-bank profile.
+ *
+ * Production:   https://api.ventureshrd.com  → https://ventureshrd.com
+ * Generic:      https://app.example.com      → https://app.example.com (unchanged)
+ * Preview/dev:  https://*.emergentagent.com  → same host (frontend === api host)
+ *
+ * The generic `/candidate-bank` route on the frontend is role-aware: it
+ * redirects logged-in admins / recruiters / employers to their respective
+ * candidate-bank page, preserving the ?candidateId= query param.
+ */
+async function buildCandidateBankUrl(candidateId) {
+  if (!candidateId) return null;
+  const auth = await getAuth();
+  if (!auth || !auth.apiUrl) return null;
+  let frontendBase;
+  try {
+    const u = new URL(auth.apiUrl);
+    // Strip a leading `api.` subdomain if present (prod convention)
+    if (u.hostname.startsWith('api.')) {
+      u.hostname = u.hostname.slice(4);
+    }
+    // Drop any trailing path
+    u.pathname = '';
+    u.search = '';
+    u.hash = '';
+    frontendBase = u.toString().replace(/\/$/, '');
+  } catch {
+    frontendBase = auth.apiUrl.replace(/\/$/, '');
+  }
+  return `${frontendBase}/candidate-bank?candidateId=${encodeURIComponent(candidateId)}`;
 }
 
 

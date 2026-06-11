@@ -337,6 +337,19 @@
       animation: pulse 1.2s infinite;
     }
     .live-dot.idle { background: #cbd5e1; animation: none; }
+    .update-banner {
+      display: none; align-items: center; gap: 8px;
+      background: #1e293b; color: #e2e8f0;
+      padding: 8px 12px; font-size: 12px; line-height: 1.4;
+      border-bottom: 2px solid #7CB342;
+    }
+    .update-banner .update-msg { flex: 1; }
+    .update-banner .update-btn {
+      background: #7CB342; color: #0f172a; border: none; border-radius: 999px;
+      padding: 5px 12px; font-size: 11px; font-weight: 700; cursor: pointer;
+      white-space: nowrap; transition: background-color 0.15s ease;
+    }
+    .update-banner .update-btn:hover { background: #8fce4f; }
   </style>
 </head>
 <body>
@@ -345,7 +358,13 @@
       <h1>Ventures HRD</h1>
       <p>Naukri Auto Capture</p>
     </div>
-    <span class="version-badge">v5.4 Bg-Capture</span>
+    <span class="version-badge">v6.0.0</span>
+  </div>
+
+  <!-- Update-available banner (populated by popup.js when backend reports a newer version) -->
+  <div id="updateBanner" class="update-banner" data-testid="extension-update-banner">
+    <span class="update-msg" id="updateBannerMsg">A new version is available.</span>
+    <button class="update-btn" id="updateBannerBtn">Update now</button>
   </div>
 
   <div class="content">
