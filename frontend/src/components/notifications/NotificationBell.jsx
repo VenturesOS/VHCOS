@@ -45,12 +45,19 @@ export default function NotificationBell() {
     }
   }, []);
 
-  // Poll unread count every 60s with backoff on failure
+  // Poll unread count every 60s with backoff on failure.
+  // Hidden tabs skip the fetch entirely (recruiters keep many portal tabs
+  // open — idle tabs were generating ~40% of all API traffic) and refresh
+  // immediately when the tab becomes visible again.
   useEffect(() => {
     let interval = 60000;
     let failCount = 0;
     let timer;
     const poll = async () => {
+      if (document.hidden) {
+        timer = setTimeout(poll, interval);
+        return;
+      }
       try {
         await fetchCount();
         failCount = 0;
@@ -62,7 +69,14 @@ export default function NotificationBell() {
       timer = setTimeout(poll, interval);
     };
     poll();
-    return () => clearTimeout(timer);
+    const onVisible = () => {
+      if (!document.hidden) fetchCount();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchCount]);
 
   // Load notifications when dropdown opens

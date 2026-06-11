@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '6.0.0';
+const VERSION = '6.0.1';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we
@@ -62,6 +62,8 @@ const CONFIG = {
 //      token-refresh + requeue logic (preserves prior behaviour).
 // ═══════════════════════════════════════════════════════════════════════════════
 async function postCaptureAsync(auth, payload) {
+  // v6.0.1: clean lone surrogates / styled Unicode before serialization
+  payload = sanitizeDeep(payload);
   // 1. Submit
   const submit = await fetch(`${auth.apiUrl}/api/extension/capture/async`, {
     method: 'POST',
@@ -1161,6 +1163,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // v6.0.1: BG-tab contact rescue — content script in a hidden tab asks us to
+  // briefly activate it so Naukri renders the contact section. We remember the
+  // user's current tab and restore it on 'visibilityAssistDone' (or after a
+  // 15s safety timeout if the content script dies mid-assist).
+  if (request.action === 'visibilityAssist') {
+    (async () => {
+      try {
+        const capTabId = sender?.tab?.id;
+        const capWinId = sender?.tab?.windowId;
+        if (!capTabId) return sendResponse({ granted: false });
+        const [prevActive] = await chrome.tabs.query({ active: true, windowId: capWinId });
+        visibilityAssistState[capTabId] = {
+          prevTabId: prevActive && prevActive.id !== capTabId ? prevActive.id : null,
+          timer: setTimeout(() => restoreAfterAssist(capTabId), 15000),
+        };
+        await chrome.tabs.update(capTabId, { active: true });
+        console.log(`[VHC BG v${VERSION}] Visibility assist granted for tab ${capTabId}`);
+        sendResponse({ granted: true });
+      } catch (e) {
+        sendResponse({ granted: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === 'visibilityAssistDone') {
+    restoreAfterAssist(sender?.tab?.id);
+    sendResponse({ ok: true });
+    return false;
+  }
+
   // NEW: Bulk enqueue — accepts array of raw profiles (from list/search page scrape)
   if (request.action === 'bulkEnqueue') {
     bulkEnqueue(request.data)
@@ -1473,7 +1506,7 @@ async function processSingleCapture(item, auth) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${auth.token}`
         },
-        body: JSON.stringify({
+        body: JSON.stringify(sanitizeDeep({
           raw_text:             (item.raw_text || '').substring(0, 15000),
           page_url:             item.naukri_profile_url || '',
           page_title:           item.page_title || '',
@@ -1483,7 +1516,7 @@ async function processSingleCapture(item, auth) {
           dom_extracted_phone:  item.phone || null,
           recruiter_email:      item.recruiter_email || null,
           recruiter_phone:      item.recruiter_phone || null,
-        })
+        }))
       });
 
       if (aiResponse.status === 401) {
@@ -2195,6 +2228,39 @@ async function getQueueStatus() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── v6.0.1: Visibility-assist state (BG-tab contact rescue) ──
+const visibilityAssistState = {};
+
+async function restoreAfterAssist(tabId) {
+  const st = visibilityAssistState[tabId];
+  if (!st) return;
+  delete visibilityAssistState[tabId];
+  clearTimeout(st.timer);
+  if (st.prevTabId != null) {
+    try { await chrome.tabs.update(st.prevTabId, { active: true }); } catch (_) {}
+  }
+}
+
+// ── v6.0.1: Outbound payload hygiene ──
+// Lone UTF-16 surrogates (styled-font names like 𝐀𝐦𝐢𝐭 sliced mid-pair by
+// substring()) crash the backend's UTF-8 encoder. Strip them and NFKC-fold
+// decorative Unicode on every string before it leaves the extension.
+function sanitizeDeep(v) {
+  if (typeof v === 'string') {
+    let s = v.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '');
+    s = s.replace(/(^|[^\uD800-\uDBFF])([\uDC00-\uDFFF])/g, '$1');
+    try { s = s.normalize('NFKC'); } catch (_) {}
+    return s;
+  }
+  if (Array.isArray(v)) return v.map(sanitizeDeep);
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const k of Object.keys(v)) out[k] = sanitizeDeep(v[k]);
+    return out;
+  }
+  return v;
+}
 
 function notifyPopup(data) {
   chrome.runtime.sendMessage({ ...data, from: 'background' }).catch(() => {

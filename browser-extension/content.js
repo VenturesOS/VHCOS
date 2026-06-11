@@ -610,7 +610,10 @@
    * This is the MOST reliable source for the candidate's name.
    */
   function extractNameFromTitle() {
-    const title = document.title || '';
+    // v6.0.1: strip the browser-tab unread-count badge ("(4) Deepika Agarwal")
+    // that Naukri prepends to document.title — it broke every title-based
+    // name extraction in background tabs.
+    const title = (document.title || '').replace(/^\s*\(\d+\)\s*/, '');
     console.log(`[VHC v${VERSION}] Page title: "${title}"`);
 
     if (!title || title.length < 3) return null;
@@ -3048,6 +3051,47 @@
     const merged = mergeContacts(cvData, diff, domSelectorData, recruiterCreds, { emails: beforeEmails, phones: new Set() });
     console.log(`[VHC v${VERSION}] === FINAL: email=${merged.email || 'NONE'}, phone=${merged.phone || 'NONE'} ===`);
 
+    // Step 9.5 (v6.0.1): BACKGROUND-TAB CONTACT RESCUE
+    // In a hidden tab Naukri frequently never renders the contact section /
+    // "View Contact" button (visibility-gated lazy rendering), so background
+    // captures came back contactless ~100% of the time. If we're hidden and
+    // found no contacts, ask the service worker to flash-activate this tab
+    // (it restores the user's previous tab right after), wait for render,
+    // then re-run the reveal + extraction once.
+    let mergedFinal = merged;
+    if (document.hidden && !merged.email && !merged.phone) {
+      console.log(`[VHC v${VERSION}] BG tab + no contacts — requesting visibility assist`);
+      const assist = await new Promise((resolve) => {
+        try {
+          chrome.runtime.sendMessage({ action: 'visibilityAssist' }, (r) => {
+            if (chrome.runtime.lastError) resolve({ granted: false });
+            else resolve(r || { granted: false });
+          });
+        } catch (_) { resolve({ granted: false }); }
+      });
+      if (assist.granted) {
+        updateProgress(58, 'Activating tab to load contacts...');
+        // Wait until actually visible (max 5s), then let Naukri render
+        await new Promise((resolve) => {
+          if (!document.hidden) return resolve();
+          const t = setTimeout(() => { document.removeEventListener('visibilitychange', onVis); resolve(); }, 5000);
+          const onVis = () => {
+            if (!document.hidden) { clearTimeout(t); document.removeEventListener('visibilitychange', onVis); resolve(); }
+          };
+          document.addEventListener('visibilitychange', onVis);
+        });
+        await sleep(1200);
+        await scrollToLoadContent();
+        const reveal2 = await clickViewContactButton();
+        const newEmails2 = [...snapshotPageEmails()].filter(e => !beforeEmails.has(e));
+        const diff2 = { emails: newEmails2, phones: reveal2.revealedPhones };
+        const cvData2 = (cvData.text && cvData.text.length > 100) ? cvData : await scanCVIframe(domName);
+        mergedFinal = mergeContacts(cvData2, diff2, domSelectorData, recruiterCreds, { emails: beforeEmails, phones: new Set() });
+        console.log(`[VHC v${VERSION}] === AFTER ASSIST: email=${mergedFinal.email || 'NONE'}, phone=${mergedFinal.phone || 'NONE'} ===`);
+        try { chrome.runtime.sendMessage({ action: 'visibilityAssistDone' }); } catch (_) {}
+      }
+    }
+
     // Step 10: Capture raw text
     updateProgress(60, 'Capturing page text...');
     const rawText = getRawPageText();
@@ -3084,8 +3128,8 @@
       naukri_profile_url:   window.location.href,
       page_title:           stableTitle,
       name:                 domName || null,
-      email:                merged.email || null,
-      phone:                merged.phone || null,
+      email:                mergedFinal.email || null,
+      phone:                mergedFinal.phone || null,
       raw_text:             combinedText.substring(0, 15000),
       cv_download_url:      cvDownloadUrl || null,
       recruiter_email:      recruiterCreds.email || null,

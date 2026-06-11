@@ -2,8 +2,30 @@
 Extension-related Pydantic models.
 Models for browser extension capture, CV upload, AI extraction, and mandate evaluation.
 """
+import re
+import unicodedata
+
 from pydantic import BaseModel, field_validator
 from typing import List, Optional, Dict, Any
+
+# Lone UTF-16 surrogates (Python keeps unpaired \ud800-\udfff from JSON) crash
+# utf-8 encoding downstream (Mongo BSON, LLM calls). Naukri candidates decorate
+# names/headlines with styled Unicode (𝐀𝐦𝐢𝐭, 𝒫𝓇𝒾𝓎𝒶) whose astral chars get
+# sliced mid-pair by client-side substring() — hence the lone surrogates.
+_LONE_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
+
+
+def sanitize_unicode(v: Any) -> Any:
+    """Recursively drop lone surrogates + NFKC-fold styled Unicode to plain
+    text on strings (lists/dicts traversed). Non-strings pass through."""
+    if isinstance(v, str):
+        v = _LONE_SURROGATE_RE.sub("", v)
+        return unicodedata.normalize("NFKC", v)
+    if isinstance(v, list):
+        return [sanitize_unicode(x) for x in v]
+    if isinstance(v, dict):
+        return {k: sanitize_unicode(x) for k, x in v.items()}
+    return v
 
 
 class CVUploadRequest(BaseModel):
@@ -164,6 +186,11 @@ class CareerPreferencesInput(BaseModel):
 class CompleteNaukriProfileInput(BaseModel):
     """Complete profile input from extension — supports Naukri, LinkedIn, Foundit"""
 
+    @field_validator("*", mode="before")
+    @classmethod
+    def _clean_unicode(cls, v):
+        return sanitize_unicode(v)
+
     # Source Identification
     naukri_profile_id: Optional[str] = None
     naukri_profile_url: Optional[str] = None
@@ -301,6 +328,11 @@ class CaptureResponse(BaseModel):
 
 
 class AIExtractRequest(BaseModel):
+    @field_validator("*", mode="before")
+    @classmethod
+    def _clean_unicode(cls, v):
+        return sanitize_unicode(v)
+
     raw_text: str
     page_url: str
     page_title: Optional[str] = None

@@ -854,73 +854,122 @@ async def find_matching_candidates_for_job(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Internal — slow-path cosine for environments without Atlas Vector Search
+# Internal — bounded cosine fallback for environments without Atlas Vector Search
 # ──────────────────────────────────────────────────────────────────────────────
+# Phase 57 (Jun 2026) perf rewrite. The old fallback loaded EVERY embedding
+# (133k docs, 400-700MB incl. summaries) into one global in-process matrix
+# with a 5-minute TTL behind a single asyncio.Lock. On Atlas Flex (no
+# $vectorSearch) every similar/match-job/search call after a TTL expiry or a
+# gunicorn worker recycle re-downloaded the whole collection: 30-700s stalls,
+# connection-pool exhaustion (AutoReconnect storms), repeated memory-recovery
+# incidents, and portal-wide p99 of 40s+. This rewrite scans only the
+# clusters nearest the query:
+#   1. approximate cluster centroids (sample-mean of ~40 members, cached 6h)
+#   2. per-cluster embedding matrices (cached 30 min, LRU-capped)
+#   3. plus the newest not-yet-clustered embeddings (cached 5 min)
+#   4. numpy scoring inside asyncio.to_thread — never blocks the event loop
+#   5. display fields hydrated only for the final top-K ids
+# Worst-case Atlas transfer per cold query: ~3 clusters × ~12MB vs 700MB.
 
-# In-process cache for the all-embeddings matrix.
-# Refreshed when older than _VEC_CACHE_TTL_S so newly indexed candidates
-# show up within ~5 minutes without us paying 30s+ Mongo fetch every search.
-_VEC_CACHE: Dict[str, Any] = {"loaded_at": 0.0, "ids": None, "matrix": None, "rows": None}
-_VEC_CACHE_TTL_S = 300.0
-_VEC_CACHE_LOCK = asyncio.Lock()
+_CENTROID_CACHE: Dict[str, Any] = {"loaded_at": 0.0, "centroids": []}
+_CENTROID_TTL_S = 6 * 3600.0
+_CENTROID_LOCK = asyncio.Lock()
+
+_CLUSTER_MAT_CACHE: Dict[Any, Dict[str, Any]] = {}  # key -> {loaded_at, ttl, ids, mat}
+_CLUSTER_MAT_TTL_S = 1800.0
+_CLUSTER_MAT_MAX = 6           # LRU cap (~6 × 12MB worst case per worker)
+_CLUSTER_FETCH_LIMIT = 15000   # hard per-cluster bound
+_TOP_CLUSTERS = 3              # clusters scanned per query
+
+_UNCLUSTERED_KEY = "__unclustered__"
+_UNCLUSTERED_TTL_S = 300.0     # fresh captures should appear fast
+_UNCLUSTERED_LIMIT = 4000      # newest embeddings without a cluster_id yet
 
 
-async def _load_vector_cache(db, with_text: bool) -> Tuple[Any, Any, List[Dict[str, Any]]]:
-    """Load all embeddings into a numpy matrix once per TTL window. Returns
-    (numpy_matrix, ids_array, rows_list). Concurrent callers share the same
-    in-flight load via the lock.
+async def _get_centroids(db) -> List[Any]:
+    """Approximate centroid per cluster: mean of ≤40 sampled member vectors.
+
+    The clustering script stores centroids in PCA space (useless against raw
+    query embeddings), so we derive original-space centroids cheaply here.
+    Cached for hours — clusters only change when re-clustering runs.
     """
     import numpy as np
 
-    async with _VEC_CACHE_LOCK:
+    async with _CENTROID_LOCK:
         now = time.time()
-        # Cache hit — matrix fresh AND we already have source_text loaded if needed
-        cache_has_text = _VEC_CACHE.get("has_text", False)
-        if (
-            _VEC_CACHE["matrix"] is not None
-            and now - _VEC_CACHE["loaded_at"] < _VEC_CACHE_TTL_S
-            and (cache_has_text or not with_text)
-        ):
-            return _VEC_CACHE["matrix"], _VEC_CACHE["ids"], _VEC_CACHE["rows"]
+        if _CENTROID_CACHE["centroids"] and now - _CENTROID_CACHE["loaded_at"] < _CENTROID_TTL_S:
+            return _CENTROID_CACHE["centroids"]
 
-        proj = {
-            "_id": 0, "embedding": 1, "candidate_id": 1, "candidate_name": 1,
-            "current_employer": 1, "current_designation": 1,
-            "experience_years": 1, "current_location": 1, "summary": 1,
-        }
-        if with_text:
-            proj["source_text"] = 1
+        cluster_ids = await db["candidate_clusters"].distinct("cluster_id")
+        if not cluster_ids:
+            _CENTROID_CACHE.update({"loaded_at": now, "centroids": []})
+            return []
 
-        t0 = time.time()
-        docs = await db[EMBEDDINGS_COLL].find({}, proj).to_list(200000)
-        if not docs:
-            return None, [], []
+        async def _centroid(cid):
+            docs = await db[EMBEDDINGS_COLL].aggregate([
+                {"$match": {"cluster_id": cid}},
+                {"$sample": {"size": 40}},
+                {"$project": {"_id": 0, "embedding": 1}},
+            ]).to_list(40)
+            if not docs:
+                return None
+            m = np.array([d["embedding"] for d in docs], dtype=np.float32).mean(axis=0)
+            norm = float(np.linalg.norm(m))
+            return (cid, m / norm) if norm > 0 else None
 
-        ids = [d.get("candidate_id") for d in docs]
-        mat = np.array([d["embedding"] for d in docs], dtype=np.float32)
-        # Drop the embedding from the row dicts so we don't keep two copies in memory
-        for d in docs:
-            d.pop("embedding", None)
+        results = await asyncio.gather(*[_centroid(c) for c in cluster_ids])
+        centroids = [r for r in results if r is not None]
+        _CENTROID_CACHE.update({"loaded_at": now, "centroids": centroids})
+        logger.info(f"[TalentGraph] Cluster centroids refreshed: {len(centroids)} clusters")
+        return centroids
 
-        _VEC_CACHE.update({
-            "loaded_at": now,
-            "ids": ids,
-            "matrix": mat,
-            "rows": docs,
-            "has_text": with_text,
-        })
-        logger.info(
-            f"[TalentGraph] Vector cache loaded: {len(docs)} embeddings in "
-            f"{time.time()-t0:.1f}s (with_text={with_text})"
+
+async def _get_cluster_block(db, key) -> Tuple[List[str], Any]:
+    """(candidate_ids, numpy matrix) for one cluster — or the newest
+    unclustered embeddings when key == _UNCLUSTERED_KEY. TTL + LRU cached."""
+    import numpy as np
+
+    now = time.time()
+    entry = _CLUSTER_MAT_CACHE.get(key)
+    if entry and now - entry["loaded_at"] < entry["ttl"]:
+        return entry["ids"], entry["mat"]
+
+    proj = {"_id": 0, "candidate_id": 1, "embedding": 1}
+    if key == _UNCLUSTERED_KEY:
+        # cluster_id: None matches docs where the field is missing OR null —
+        # and it can still walk the cluster_id index.
+        cur = (
+            db[EMBEDDINGS_COLL]
+            .find({"cluster_id": None}, proj)
+            .sort("updated_at", -1)
+            .limit(_UNCLUSTERED_LIMIT)
         )
-        return mat, ids, docs
+        ttl = _UNCLUSTERED_TTL_S
+        docs = await cur.to_list(_UNCLUSTERED_LIMIT)
+    else:
+        cur = db[EMBEDDINGS_COLL].find({"cluster_id": key}, proj).limit(_CLUSTER_FETCH_LIMIT)
+        ttl = _CLUSTER_MAT_TTL_S
+        docs = await cur.to_list(_CLUSTER_FETCH_LIMIT)
+
+    ids = [d.get("candidate_id") for d in docs]
+    mat = (
+        np.array([d["embedding"] for d in docs], dtype=np.float32)
+        if docs else np.zeros((0, 1), dtype=np.float32)
+    )
+
+    # LRU-ish eviction: drop the stalest entry when over cap
+    if len(_CLUSTER_MAT_CACHE) >= _CLUSTER_MAT_MAX and key not in _CLUSTER_MAT_CACHE:
+        oldest = min(_CLUSTER_MAT_CACHE, key=lambda k: _CLUSTER_MAT_CACHE[k]["loaded_at"])
+        _CLUSTER_MAT_CACHE.pop(oldest, None)
+    _CLUSTER_MAT_CACHE[key] = {"loaded_at": now, "ttl": ttl, "ids": ids, "mat": mat}
+    return ids, mat
 
 
 def invalidate_vector_cache() -> None:
-    """Force the next search to reload from Mongo. Call this after a backfill
-    or a single-candidate upsert if you want the new vector visible immediately.
-    """
-    _VEC_CACHE.update({"loaded_at": 0.0, "matrix": None, "ids": None, "rows": None})
+    """Force the next search to reload from Mongo. Call after a backfill or
+    re-clustering run if you want new vectors visible immediately."""
+    _CENTROID_CACHE.update({"loaded_at": 0.0, "centroids": []})
+    _CLUSTER_MAT_CACHE.clear()
 
 
 async def _cosine_topk_fallback(
@@ -937,23 +986,67 @@ async def _cosine_topk_fallback(
         logger.warning("[TalentGraph] numpy missing — fallback unavailable")
         return []
 
-    mat, ids, rows = await _load_vector_cache(db, with_text=with_text)
-    if mat is None or len(rows) == 0:
+    q = np.array(qvec, dtype=np.float32)
+
+    # 1. Route the query to its nearest clusters (cheap: ≤25 dot products)
+    centroids = await _get_centroids(db)
+    chosen: List[Any] = []
+    if centroids:
+        ranked_clusters = sorted(
+            ((float(np.dot(vec, q)), cid) for cid, vec in centroids), reverse=True
+        )
+        chosen = [cid for _, cid in ranked_clusters[:_TOP_CLUSTERS]]
+    else:
+        logger.warning(
+            "[TalentGraph] No clusters found — fallback degraded to newest "
+            f"{_UNCLUSTERED_LIMIT} embeddings only. Run cluster_candidates.py."
+        )
+
+    # 2. Fetch the chosen cluster blocks + the always-included fresh bucket
+    blocks = await asyncio.gather(
+        *[_get_cluster_block(db, key) for key in chosen + [_UNCLUSTERED_KEY]]
+    )
+
+    # 3. Score in a worker thread (event loop stays free)
+    def _score() -> List[Tuple[str, float]]:
+        out: List[Tuple[str, float]] = []
+        seen: set = set()
+        for ids, mat in blocks:
+            if mat.shape[0] == 0:
+                continue
+            scores = mat @ q
+            for i in np.argsort(scores)[::-1][: limit * 3]:
+                s = float(scores[i])
+                if s < min_score:
+                    break
+                cid = ids[i]
+                if not cid or cid == exclude_id or cid in seen:
+                    continue
+                seen.add(cid)
+                out.append((cid, s))
+        out.sort(key=lambda x: x[1], reverse=True)
+        return out[:limit]
+
+    top = await asyncio.to_thread(_score)
+    if not top:
         return []
 
-    q = np.array(qvec, dtype=np.float32)
-    # vectors already L2-normalized → dot product == cosine
-    scores = (mat @ q)
+    # 4. Hydrate display fields for the final top-K only
+    proj = {
+        "_id": 0, "candidate_id": 1, "candidate_name": 1,
+        "current_employer": 1, "current_designation": 1,
+        "experience_years": 1, "current_location": 1, "summary": 1,
+    }
+    if with_text:
+        proj["source_text"] = 1
+    docs = await db[EMBEDDINGS_COLL].find(
+        {"candidate_id": {"$in": [cid for cid, _ in top]}}, proj
+    ).to_list(len(top) * 2)
+    by_id = {d.get("candidate_id"): d for d in docs}
 
-    ranked = []
-    for i, s in enumerate(scores):
-        s = float(s)
-        if s < min_score:
-            continue
-        cid = ids[i]
-        if exclude_id and cid == exclude_id:
-            continue
-        d = rows[i]
+    ranked: List[Dict[str, Any]] = []
+    for cid, s in top:
+        d = by_id.get(cid) or {}
         row = {
             "candidate_id": cid,
             "candidate_name": d.get("candidate_name"),

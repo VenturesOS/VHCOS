@@ -131,6 +131,10 @@ async def run_deferred_init(app):
         await _safe_index(db.extension_capture_jobs, "expires_at", expireAfterSeconds=0)
         await _safe_index(db.extension_capture_jobs, [("status", 1), ("updated_at", 1)])
 
+        # candidate_embeddings — cluster-bounded vector fallback (Phase 57
+        # perf rewrite) routes every similar/search query through cluster_id
+        await _safe_index(db.candidate_embeddings, "cluster_id")
+
         # users — 82 queries
         await _safe_index(db.users, "email", unique=True)
         await _safe_index(db.users, "id", unique=True)

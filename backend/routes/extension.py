@@ -1936,6 +1936,10 @@ async def capture_profile(
     
     # Clean name: strip experience years, designations, noise
     if profile.name:
+        # v6.0.1: strip browser-tab unread-count prefix — background-tab
+        # captures scrape document.title which carries the badge, producing
+        # names like "(4) Deepika Agarwal" that used to get hard-rejected.
+        profile.name = re_module.sub(r'^\s*\(\d+\)\s*', '', profile.name).strip()
         # Remove patterns like " - 15 Year(s)", " - 3.5 Year(s)", " 15 Year(s)"
         profile.name = re_module.sub(r'\s*[-–]\s*\d+[\.\d]*\s*Year\(?s?\)?\s*$', '', profile.name, flags=re_module.IGNORECASE).strip()
         # Remove trailing designations that got appended
