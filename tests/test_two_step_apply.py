@@ -14,7 +14,7 @@ import os
 import time
 from pathlib import Path
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://talent-graph-fix.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://badge-audit-v2.preview.emergentagent.com').rstrip('/')
 
 # Test resume content
 TEST_RESUME_CONTENT = """

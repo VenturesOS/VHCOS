@@ -32,7 +32,7 @@
     "service_worker": {
       "served": true,
       "registered": true,
-      "scope": "https://talent-graph-fix.preview.emergentagent.com/"
+      "scope": "https://badge-audit-v2.preview.emergentagent.com/"
     },
     "offline_html": {
       "served": true,

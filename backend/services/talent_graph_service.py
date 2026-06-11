@@ -520,7 +520,10 @@ async def find_candidates_by_text(
         # Default arm: cross-encoder (precision-boost) → hybrid fallback.
         # CROSS_ENCODER_ENABLED env-gated; falls back to bi-encoder hybrid
         # rerank when the sidecar is unreachable or disabled.
-        ranked = _cross_encoder_rerank(pool, query, limit) if pool else None
+        # NOTE: `_cross_encoder_rerank` does a blocking HTTP call to the
+        # BGE sidecar (up to BGE_SIDECAR_TIMEOUT seconds) — run it in a
+        # thread so a slow sidecar can't freeze the whole event loop.
+        ranked = (await asyncio.to_thread(_cross_encoder_rerank, pool, query, limit)) if pool else None
         if ranked is None:
             ranked = _hybrid_rerank(pool, query, limit)
     await _enrich_with_candidate_bank(db, ranked)

@@ -127,15 +127,16 @@ logger = logging.getLogger(__name__)
 ext_check_router = APIRouter(prefix="/api/extension", tags=["Browser Extension"])
 
 
-# ── First-token bucket TTL cache ─────────────────────────────────────
-# Buckets of candidate_bank docs keyed by their `name_lower` first-token
-# change rarely (new captures during the day are few vs total). A short
-# in-memory TTL cache turns most fuzzy-path batches into pure-CPU work.
+# ── Per-name bucket TTL cache ────────────────────────────────────────
+# Buckets of candidate_bank docs keyed by the card-name's token signature
+# (see `_bucket_query_for`). The extension re-scans the same search page
+# several times (scroll / poll), so a short TTL cache turns repeat scans
+# into pure-CPU work.
 #
-# Cache shape: { first_token: (expires_at_epoch, [docs...]) }
+# Cache shape: { name_signature: (expires_at_epoch, [docs...]) }
 # Bounded by _BUCKET_CACHE_MAX (LRU-ish via popitem on overflow).
 _BUCKET_CACHE_TTL_S = 300        # 5 minutes
-_BUCKET_CACHE_MAX = 256          # ~256 first-tokens — covers most Indian first-names
+_BUCKET_CACHE_MAX = 512
 _bucket_cache: dict[str, tuple[float, list[dict]]] = {}
 
 
@@ -160,6 +161,59 @@ def _cache_put(tok: str, docs: list[dict]) -> None:
         except StopIteration:
             pass
     _bucket_cache[tok] = (_t.time() + _BUCKET_CACHE_TTL_S, docs)
+
+
+def _bucket_query_for(name: Optional[str]) -> tuple[str, Optional[dict], int]:
+    """Build the per-card Mongo query for the fuzzy badge scan.
+
+    Returns ``(cache_key, query, limit)``. ``query`` is None when the
+    name has no usable token.
+
+    Phase 57 (Jun 2026): replaces the old batched-$or-with-shared-800-cap
+    approach that starved alphabetically-later names of their buckets
+    (e.g. "akash"+"amit" docs exhausted the cap so "ramesh" got an empty
+    — and then cached — bucket → no badge despite the profile being in DB).
+
+    Query shape:
+      * Multi-token card name ("Ramesh Kannan"):
+          (name_lower ^ramesh AND (\bkannan OR name_lower is single-token))
+          OR (name_lower ^kannan AND \bramesh)        ← reversed order
+        Both branches are bounded by the `name_lower_idx` prefix B-tree.
+        The "single-token DB name" clause keeps "Yash" (DB) matchable
+        from card "Yash Vardhan" (the single-vs-multi name rule).
+      * Single-token card name ("Yash"): plain prefix scan with a higher
+        limit so "yash vardhan", "yash sharma", … are all in scope.
+    """
+    if not name:
+        return "", None, 0
+    cleaned = re.sub(r"\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b", " ", name.lower())
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    tokens = [t for t in cleaned.split() if len(t) > 1]
+    if not tokens:
+        return "", None, 0
+    first = tokens[0]
+    others = [t for t in tokens[1:] if len(t) >= 3][:4]
+    if not others:
+        # Single usable token — prefix scan, generous bound (covers the
+        # vast majority of first-name buckets in a ~130k-doc bank).
+        return first, {"name_lower": {"$regex": f"^{re.escape(first)}"}}, 600
+
+    other_words = [{"name_lower": {"$regex": rf"\b{re.escape(t)}"}} for t in others]
+    branch_fwd = {
+        "$and": [
+            {"name_lower": {"$regex": f"^{re.escape(first)}"}},
+            {"$or": other_words + [{"name_lower": {"$regex": r"^\S+$"}}]},
+        ]
+    }
+    last = others[-1]
+    branch_rev = {
+        "$and": [
+            {"name_lower": {"$regex": f"^{re.escape(last)}"}},
+            {"name_lower": {"$regex": rf"\b{re.escape(first)}"}},
+        ]
+    }
+    key = first + "|" + ",".join(sorted(others))
+    return key, {"$or": [branch_fwd, branch_rev]}, 200
 
 
 # ── Allowlist gating ─────────────────────────────────────────────────
@@ -238,16 +292,6 @@ class CheckExistingResponse(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
-def _first_significant_token(name: str) -> str:
-    """Lowercased first non-trivial token. Honorifics stripped."""
-    if not name:
-        return ""
-    cleaned = re.sub(r"\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b", " ", name.lower())
-    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
-    tokens = [t for t in cleaned.split() if len(t) > 1]
-    return tokens[0] if tokens else ""
-
-
 # ── Multi-signal scoring ─────────────────────────────────────────────
 # Each signal contributes a weight when it matches. Threshold to badge
 # is 1.0 — name match alone (weight 0.5) is NOT enough; needs at least
@@ -649,192 +693,6 @@ def _is_v2_user(user: dict) -> bool:
     return (user.get("email") or "").strip().lower() in allowed
 
 
-def _headline_or_loc_hits(
-    headline: Optional[str],
-    in_location: Optional[str],
-    bank_doc: dict,
-) -> bool:
-    """Legacy helper — kept for backwards compat with any other callers."""
-    if not headline and not in_location:
-        return False
-    hay = " ".join([
-        (headline or "").lower(),
-        (in_location or "").lower(),
-    ])
-    for k in ("current_employer", "designation", "location", "headline"):
-        v = (bank_doc.get(k) or "")
-        if not v or len(str(v)) < 3:
-            continue
-        if str(v).lower().strip() in hay:
-            return True
-    return False
-
-
-async def _match_one(idx: int, c: CandidateIn) -> CheckResult:
-    """Find best matching candidate_bank doc for one input candidate.
-
-    Returns `exists=True` ONLY when name match + at least one strong
-    corroborating signal (employer / ctc / skills / etc.) push the
-    composite score above the badge threshold."""
-    first_tok = _first_significant_token(c.name)
-    if not first_tok or len(first_tok) < 2:
-        return CheckResult(index=idx, exists=False)
-
-    # Narrow the Mongo pool by requiring at least one non-first-name token
-    # from the input to appear in the DB name. Drops candidate pool from
-    # thousands of "AKASH" → handful of "Akash ... <lastname>".
-    import re as _re
-    cleaned = _re.sub(r"\b(mr|mrs|ms|dr|prof|shri|smt)\.?\b", " ", c.name.lower())
-    cleaned = _re.sub(r"[^a-z0-9\s]", " ", cleaned)
-    all_tokens = [t for t in cleaned.split() if len(t) >= 3]
-    other_tokens = [t for t in all_tokens if t != first_tok]
-
-    # PERF: prefer the indexed `name_lower` field with a case-SENSITIVE regex
-    # prefix (uses the `name_lower_idx` B-tree). Case-insensitive regex on
-    # `name` cannot use any index and forces a 126k-doc COLLSCAN per call,
-    # which made check-existing take 2-3s per batch of 25 cards.
-    #
-    # Falls back to the legacy case-insensitive `name` regex for any docs
-    # that haven't been backfilled with `name_lower` yet.
-    lower_prefix = _re.compile(rf"^{_re.escape(first_tok)}")  # NO `i` flag — index-friendly
-    legacy_prefix = _re.compile(rf"^{_re.escape(first_tok)}", _re.IGNORECASE)
-    primary: dict = {"name_lower": lower_prefix}
-    if other_tokens:
-        primary["$or"] = [
-            {"name_lower": _re.compile(rf"\b{_re.escape(t)}")}
-            for t in other_tokens[:4]
-        ]
-
-    cursor = db.candidate_bank.find(
-        primary,
-        {
-            "_id": 0, "id": 1, "name": 1,
-            "current_employer": 1, "designation": 1,
-            "location": 1, "headline": 1,
-            "experience_years": 1, "total_experience": 1,
-            "annual_ctc": 1, "current_ctc": 1,
-            "skills": 1, "education": 1,
-            "created_at": 1, "captured_at": 1,
-            "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
-            "name_lower": 1,
-        },
-    ).limit(40)
-
-    # Score every name-matching doc, pick the highest scorer
-    best_doc: Optional[dict] = None
-    best_score: float = 0.0
-    best_signals: List[str] = []
-
-    async for doc in cursor:
-        if not _strict_name_match(c.name, doc.get("name") or ""):
-            continue
-        score, signals = _score_match(c, doc)
-        if score > best_score:
-            best_score = score
-            best_signals = signals
-            best_doc = doc
-            if score >= _HIGH_THRESHOLD:
-                break  # excellent match — stop scanning
-
-    # ── Backfill fallback ──
-    # Until the one-time `name_lower` backfill finishes, some docs won't
-    # match the indexed query. If we got nothing AND a fallback is required,
-    # do the slower legacy regex on `name` (still bounded by limit=40).
-    if best_doc is None:
-        legacy_query: dict = {
-            "name": legacy_prefix,
-            "name_lower": {"$exists": False},  # only un-backfilled docs
-        }
-        cursor2 = db.candidate_bank.find(
-            legacy_query,
-            {
-                "_id": 0, "id": 1, "name": 1,
-                "current_employer": 1, "designation": 1,
-                "location": 1, "headline": 1,
-                "experience_years": 1, "total_experience": 1,
-                "annual_ctc": 1, "current_ctc": 1,
-                "skills": 1, "education": 1,
-                "created_at": 1, "captured_at": 1,
-                "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
-            },
-        ).limit(40)
-        async for doc in cursor2:
-            if not _strict_name_match(c.name, doc.get("name") or ""):
-                continue
-            score, signals = _score_match(c, doc)
-            if score > best_score:
-                best_score = score
-                best_signals = signals
-                best_doc = doc
-                if score >= _HIGH_THRESHOLD:
-                    break
-
-    # Below badge threshold → no false positive. NAME-only matches are
-    # treated as misses by design (too many shared first+last names).
-    # NOTE: We do NOT require a specific "strong" signal here — name +
-    # designation + location + experience together is enough corroboration
-    # for the threshold (1.0+). The extension does a final per-card
-    # cross-check using `matched_candidate` to catch employer conflicts.
-    if best_doc is None or best_score < _BADGE_THRESHOLD:
-        return CheckResult(
-            index=idx,
-            exists=False,
-            match_score=round(best_score, 2) if best_doc else None,
-            matched_signals=best_signals if best_doc else None,
-        )
-
-    captured_at = best_doc.get("captured_at") or best_doc.get("created_at") or None
-    confidence = "high" if best_score >= _HIGH_THRESHOLD else "medium"
-    cid = best_doc.get("id")
-    # SITE_URL is the canonical frontend URL (e.g. https://ventureshrd.com).
-    # Used so the extension never has to guess the web URL from a possibly
-    # proxied API host (e.g. a Cloudflare Worker).
-    web_base = (os.environ.get("SITE_URL") or "https://ventureshrd.com").rstrip("/")
-    profile_url = f"{web_base}/candidate-bank?candidateId={cid}" if cid else None
-
-    # Normalise education to a single string for the extension's cross-check
-    raw_edu = best_doc.get("education")
-    edu_str: Optional[str] = None
-    if isinstance(raw_edu, str):
-        edu_str = raw_edu
-    elif isinstance(raw_edu, list) and raw_edu:
-        parts: list[str] = []
-        for e in raw_edu:
-            if isinstance(e, str):
-                parts.append(e)
-            elif isinstance(e, dict):
-                parts.append(" ".join(filter(None, [
-                    str(e.get("degree", "") or ""),
-                    str(e.get("institute", "") or e.get("university", "") or ""),
-                ])).strip())
-        edu_str = " | ".join(p for p in parts if p) or None
-
-    matched_candidate = MatchedCandidate(
-        name=best_doc.get("name"),
-        current_employer=best_doc.get("current_employer"),
-        designation=best_doc.get("designation"),
-        location=best_doc.get("location"),
-        experience_years=best_doc.get("experience_years") or best_doc.get("total_experience"),
-        annual_ctc=best_doc.get("annual_ctc") or best_doc.get("current_ctc"),
-        education=edu_str,
-        naukri_profile_id=(
-            best_doc.get("naukri_profile_id")
-            or best_doc.get("naukri_id")
-            or best_doc.get("profile_id")
-        ),
-    )
-    return CheckResult(
-        index=idx,
-        exists=True,
-        candidate_id=cid,
-        captured_at=captured_at,
-        match_confidence=confidence,
-        match_score=round(best_score, 2),
-        matched_signals=best_signals,
-        profile_url=profile_url,
-        matched_candidate=matched_candidate,
-    )
-
 
 # ── Route ────────────────────────────────────────────────────────────
 # PERF NOTE
@@ -946,7 +804,6 @@ async def check_existing(
     MAX_BATCH = 50
     candidates = candidates[:MAX_BATCH]
 
-    import re as _re
     import time as _time
 
     t0 = _time.time()
@@ -1020,83 +877,64 @@ async def check_existing(
                 )
                 best_doc_by_idx[idx] = doc  # audit trail
 
-    # ── FUZZY PATH: name-prefix scan for everything not resolved above ──
-    # Collect first-tokens only for unresolved candidates.
-    cand_tokens: list[Optional[str]] = []
-    unique_first_toks: set[str] = set()
-    for i, c in enumerate(candidates):
-        tok = _first_significant_token(c.name) if i not in results_by_idx else None
-        cand_tokens.append(tok)
-        if tok and len(tok) >= 2:
-            unique_first_toks.add(tok)
+    # ── FUZZY PATH: per-card refined name queries (parallel) ──
+    # Phase 57 (Jun 2026) recall fix. The previous implementation ran ONE
+    # $or query over every first-name token in the batch with a SHARED
+    # 800-doc cap. On a page mixing popular first names ("akash" alone
+    # has ~580 docs, "rahul" ~1,237) the cap was exhausted by the
+    # alphabetically-first index ranges and later names got EMPTY buckets
+    # — which were then TTL-cached for 5 minutes. Net effect: candidates
+    # demonstrably in the DB never badged ("Ramesh Kannan" bug). Now every
+    # unresolved card gets its OWN small indexed query (see
+    # `_bucket_query_for`), all fired in parallel via asyncio.gather —
+    # no shared cap, no starvation, less data on the wire.
+    unresolved: list[tuple[int, CandidateIn]] = [
+        (i, c) for i, c in enumerate(candidates) if i not in results_by_idx
+    ]
+    n_cache_hits = 0
 
-    docs_by_first: dict[str, list[dict]] = {}
+    _FUZZY_PROJECTION = {
+        "_id": 0, "id": 1, "name": 1, "name_lower": 1,
+        "current_employer": 1, "designation": 1,
+        "location": 1, "headline": 1,
+        "experience_years": 1, "total_experience": 1,
+        "annual_ctc": 1, "current_ctc": 1,
+        "skills": 1, "education": 1,
+        "created_at": 1, "captured_at": 1,
+        "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
+    }
 
-    # Check TTL cache first — buckets for popular first-names hit ~95%+
-    # cache rate after warm-up, turning Mongo queries into pure CPU ops.
-    cache_hits: set[str] = set()
-    for tok in list(unique_first_toks):
-        cached = _cache_get(tok)
+    async def _fetch_bucket(c: CandidateIn) -> list[dict]:
+        nonlocal n_cache_hits
+        key, query, lim = _bucket_query_for(c.name)
+        if query is None:
+            return []
+        cached = _cache_get(key)
         if cached is not None:
-            docs_by_first[tok] = cached
-            cache_hits.add(tok)
-    miss_toks = unique_first_toks - cache_hits
-
-    if miss_toks:
-        # ONE indexed prefix query covering all uncached first-tokens
-        or_clauses = [
-            {"name_lower": _re.compile(rf"^{_re.escape(t)}")}
-            for t in miss_toks
-        ]
-        projection = {
-            "_id": 0, "id": 1, "name": 1, "name_lower": 1,
-            "current_employer": 1, "designation": 1,
-            "location": 1, "headline": 1,
-            "experience_years": 1, "total_experience": 1,
-            "annual_ctc": 1, "current_ctc": 1,
-            "skills": 1, "education": 1,
-            "created_at": 1, "captured_at": 1,
-            "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
-        }
-        # `.hint("name_lower_idx")` forces the optimizer to use the prefix
-        # index instead of COLLSCAN — without it Atlas's planner gets
-        # confused by the wide $or and goes full scan (3.3s → 0.6s on dev).
+            n_cache_hits += 1
+            return cached
+        # `.hint("name_lower_idx")` forces the prefix index — without it
+        # Atlas's planner occasionally picks COLLSCAN for $or queries.
         try:
-            all_docs = await db.candidate_bank.find(
-                {"$or": or_clauses},
-                projection,
-            ).hint("name_lower_idx").limit(800).to_list(800)
+            docs = await db.candidate_bank.find(
+                query, _FUZZY_PROJECTION,
+            ).hint("name_lower_idx").limit(lim).to_list(lim)
         except Exception:
             # Index missing (e.g. fresh deploy before create_indexes ran)
             # → fall back to unhinted query so the endpoint still works.
-            all_docs = await db.candidate_bank.find(
-                {"$or": or_clauses},
-                projection,
-            ).limit(800).to_list(800)
+            docs = await db.candidate_bank.find(
+                query, _FUZZY_PROJECTION,
+            ).limit(lim).to_list(lim)
+        _cache_put(key, docs)
+        return docs
 
-        # Bucket fresh docs by their own first-token, then prime the cache.
-        fresh_buckets: dict[str, list[dict]] = {tok: [] for tok in miss_toks}
-        for doc in all_docs:
-            nl = doc.get("name_lower") or (doc.get("name") or "").lower()
-            ft = _first_significant_token(nl)
-            if ft in fresh_buckets:
-                fresh_buckets[ft].append(doc)
-        for tok, bucket in fresh_buckets.items():
-            docs_by_first[tok] = bucket
-            _cache_put(tok, bucket)
+    buckets: list[list[dict]] = (
+        await asyncio.gather(*[_fetch_bucket(c) for _, c in unresolved])
+        if unresolved else []
+    )
 
-    # Track per-index best_doc + conflict reason for the audit log.
-    # (Declared earlier alongside results_by_idx.)
-
-    # Score each unresolved candidate against its bucket of docs
-    for idx, c in enumerate(candidates):
-        if idx in results_by_idx:
-            continue
-        ft = cand_tokens[idx]
-        if not ft:
-            results_by_idx[idx] = CheckResult(index=idx, exists=False)
-            continue
-        bucket = docs_by_first.get(ft, [])
+    # Score each unresolved candidate against its own bucket of docs
+    for (idx, c), bucket in zip(unresolved, buckets):
         best_doc: Optional[dict] = None
         best_score: float = 0.0
         best_signals: List[str] = []
@@ -1153,7 +991,7 @@ async def check_existing(
         "[CheckExisting%s] user=%s batch=%d hits=%d (fast=%d) cache_hits=%d/%d took=%dms",
         "-V2" if use_v2 else "",
         user.get("email"), len(candidates), n_exists, n_fast,
-        len(cache_hits), len(unique_first_toks),
+        n_cache_hits, len(unresolved),
         took_ms,
     )
 

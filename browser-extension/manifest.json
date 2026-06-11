@@ -3,7 +3,7 @@
   "name": "VHC Talent OS - Multi-Platform Capture",
   "version": "5.4.1",
   "description": "Capture candidate profiles from Naukri, LinkedIn, and Foundit to VHC Talent OS — AI extraction, offline queue, auto job-shortlisting",
-  "update_url": "https://talent-graph-fix.preview.emergentagent.com/api/extension/update.xml",
+  "update_url": "https://badge-audit-v2.preview.emergentagent.com/api/extension/update.xml",
   "permissions": [
     "alarms",
     "contextMenus",

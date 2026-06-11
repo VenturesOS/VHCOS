@@ -1,15 +1,138 @@
-<analysis>/app/browser-extension/content.jsbackground.jsmax_tokensis_runpod_reachable()backfill_and_retry_ai_tags.pycontent.jsbackground.js
-/app
-├── backend/
-│   ├── config.py / mongo_production_override.py # DB connection overrides
-│   ├── scripts/
-│   │   └── backfill_and_retry_ai_tags.py  # Leakage recovery script
-│   ├── services/
-│   │   └── llm_fallback_service.py        # Strict Qwen reachability gate
-├── frontend/
-│   ├── src/pages/admin/
-│   │   ├── AdminDashboard.jsx             # Cleaned up, added Hiring Funnel widget
-│   │   ├── AdminAnalyticsPage.jsx         # Now contains Activity Monitor tab
-│   │   ├── BatchUploadPage.jsx            # Now contains Naukri Import tab
-├── browser-extension/
-sentence-transformerscandidate_bankai_enrichment_sourceenrichment_statusphone_blocklistextraction_trackingpython-dotenvmongo_production_override.py/app/backend/scripts/backfill_and_retry_ai_tags.py/app/backend/services/llm_fallback_service.py/app/frontend/src/pages/admin/AdminAnalyticsPage.jsxBatchUploadPage.jsxAdminDashboard.jsxDataQualityPage.jsx/app/frontend/src/components/layout/Sidebar.jsxGET /api/admin/pipeline?job_id={id}POST /api/candidates/data-quality/phone-blocklistcd /home/ubuntu/vhc-platform && git pull && sudo systemctl restart gunicorn && cd frontend && yarn build && sudo cp -r build/* /var/www/html/MONGO_URL.envconfig.pymongo_production_override.pyis_runpod_reachable()/app/memory/PRD.mdemergent_haiku_4_5admin@vhc.inVhcAdmin@2024maneet@vhc.in12345678/app/browser-extension/content.js/app/browser-extension/background.jschrome.scripting.executeScriptextractAndRelay</analysis>
+<analysis>**original_problem_statement**: 
+Fix RunPod BGE Sidecar deployment, optimize extension badge scan latency, fix auto-merge regressions, audit AWS billing, fix extension badge recall (missed profiles), handle stuck extension captures, add Badge Audit UI. Add Auto merge all duplicates bulk action.
+*Mid-session emergency request:* MongoDB Atlas Flex hit 86% capacity limit (4.3GB/5GB), requiring immediate database cleanup and housekeeping automation to prevent production downtime.
+PRODUCT REQUIREMENTS: Robust candidate extraction, accurate duplicate matching, Auto merge all duplicates button, Pipeline timeline filters, XGBoost LTR Phase 2 training and integration. 
+
+**User's preferred language**: English (INSTRUCT next agent to respond in English only)
+
+**what currently exists?** 
+FastAPI + React + MongoDB application. Chrome extension v5.5.10 (async polling architecture). XGBoost LTR (Learning to Rank) is now live in production, routing 10% of search traffic to the LTR arm with weekly auto-retraining via cron. Merge All Duplicates bulk execution is live. MongoDB storage is managed via a newly implemented daily housekeeping cron script.
+
+**Last working item**: 
+    - Last item agent was working: MongoDB Atlas Emergency Cleanup. The user's production DB was about to hit its 5GB limit. The agent wrote scripts to clear old , , , and unset  blobs, recovering ~1GB of space. A  script was created, tested, and scheduled via cron on the AWS server, then committed to Git.
+    - Status: COMPLETED
+    - Agent Testing Done: Y
+    - Which testing method agent to use? NA (Already completed and deployed to AWS)
+    - User Testing Done: Y
+
+**All Pending/In progress Issue list**: 
+  Issue 1: Ramesh Kannan missing green badge on Extension UI
+     - Attempted fixes: Enabled V2 scoring on Prod, fixed  backend bug, fixed client-side override bug. V2 matches the candidate successfully, but the badge doesn't render on this specific candidate's card.
+     - Next debug checklist: Wait for user to provide the SW Network tab Payload + Response screenshots to see if the scraper is extracting an incomplete payload.
+     - Why fix this issue and what will be achieved with the fix? Stops double-captures by recruiters.
+     - Status: USER VERIFICATION PENDING / BLOCKED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend
+     - Blocked on other issue: Waiting for user to provide SW Network tab screenshots.
+
+**In progress Task List**: 
+  Task 1: Validate Badge Audit V2 Scoring
+     - Where to resume: User needs to label 20-30 cards at  to build a V2 benchmark dataset.
+     - What will be achieved with this? Tune badge scanning logic based on real-world precision/recall.
+     - Status: USER VERIFICATION PENDING
+     - Should Test frontend/backend/both after fix? NA
+     - Blocked on something: User manually labeling cards.
+
+**Upcoming and Future Tasks**
+    Upcoming Tasks:
+    - (P1) Promote v5.5.10 extension update to the entire team (currently admin-only rollout). Needs extension crx rebuild + update.xml bump.
+    - (P2) Tally Phase 55.9/55.10 (bulk client ledger sync).
+
+    Future Tasks:
+    - (P3) Clean up / stop idle RunPod A6000 (3/mo).
+    - (P3) Evaluate LTR A/B NDCG@10 metrics on the admin dashboard after triplets accumulate to see if the 10% traffic routing should be increased.
+
+**Completed work in this session**
+- Implemented Auto merge all duplicates backend loop () and frontend button in  (DONE)
+- Wrote  to extract 1900+ high-signal triplets from historical stage applications (DONE)
+- Wrote  and successfully trained  model (DONE)
+- Integrated XGBoost LTR A/B testing (10% traffic) into  via  (DONE)
+- Configured weekly Sunday cron on AWS for LTR model retraining (DONE)
+- Restored Gunicorn  config on AWS (DONE)
+- **Emergency DB Cleanup**: Cleared 1GB+ of bloat from Mongo and installed  on AWS cron (DONE)
+
+**Earlier issues found/mentioned but not fixed**
+  - None (All tasks requested in this session, including the surprise DB emergency, were completed successfully).
+
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: MongoDB storage bloat / hitting Atlas free/flex tier limits.
+  - Recurrence count: 2
+  - Status: RESOLVED (Mitigated via daily cron housekeeping script clearing old logs and previews).
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+FastAPI, React, MongoDB Atlas, Chrome Extension MV3, Subprocess ML execution, Two-Track Scoring, XGBoost (Learning to Rank), A/B Traffic Routing, Crontab automation.
+
+**key DB schema**
+  - : Contains , , heavy fields.
+  - : Stores triplet data for LTR model training.
+  -  /  / : Log tables (now aggressively TTL'd via custom python cron).
+
+**changes in tech stack**
+  -  added to backend requirements for the LTR feature.
+
+**All files of reference** 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+
+**Areas that need refactoring**: 
+  - The extension codebase  is unpacked and served statically. Need to integrate it permanently via standard  process once admin validation is complete (Upcoming P1 Task).
+
+**key api endpoints**
+  - 
+  -  (Now supports LTR routing)
+  - 
+
+**Critical Info for New Agent** 
+  - **AWS Server Parity**: The user has successfully pulled all code, restarted systemd services, and configured both the LTR and DB Housekeeping crons directly on their AWS EC2 instance. The codebase on Git  is perfectly in sync with production.
+  - **Deployment Workflow**: The user pushes code directly from this container using the **Save to Github** button in the chat input, then manually runs  on their AWS server. *You must instruct the user to Save to Github and pull on AWS to test changes.*
+  - **LTR Engine**: LTR is active. It lazily loads the  model on the first search request. 
+
+**documents and test reports created in this job** 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+
+**Last 10 User Messages and any pending HUMAN messages** 
+ - *Sequential summary*: 
+   1. User ran AWS deployment steps for LTR backfilling and cron setup.
+   2. User reported a sudden emergency: MongoDB Atlas hit 4.3GB/5GB limit.
+   3. Agent diagnosed DB bloat, created a script to clear logs and CSV previews, recovering ~1GB.
+   4. Agent wrote  and had user add it to AWS cron.
+   5. User committed the housekeeping script to Git and successfully rebased/pushed.
+   *Pending Action*: Acknowledge completion of the emergency and ask user if they want to proceed with the P1 Extension v5.5.10 rollout.
+
+**Project Health Check:**
+  - Broken: None. DB storage emergency averted.
+  - Mocked: None.
+
+**3rd Party Integrations** 
+  - MongoDB Atlas — requires User Connection String
+  - RunPod vLLM API — requires User Configured Pod URL
+
+**Testing status**
+  - Testing agent used after significant changes: NO (Heavy custom architecture logic, verified through custom Pytest test suites instead).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: , , .
+  - Known regressions: None detected.
+
+**Credentials to test flow:**
+  - Check .
+
+**What agent forgot to execute**
+  - Nothing. Agent successfully completed original tasks and successfully navigated a mid-session database emergency.
+
+**Debugging checklist for current issue**
+    Issue: Extension v5.5.10 Team Rollout (P1)
+    1. Integrate the  changes into the main extension build pipeline ().
+    2. Bump version in .
+    3. Ensure users will receive the update asynchronously without breaking existing auto-capture sessions.</analysis>

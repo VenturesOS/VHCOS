@@ -126,6 +126,11 @@ async def run_deferred_init(app):
         await _safe_index(db.search_sessions, [("user_email", 1), ("ts", -1)])
         await _safe_index(db.search_sessions, "expires_at", expireAfterSeconds=0)
 
+        # extension_capture_jobs — async capture poll-state (Phase 57:
+        # 7-day TTL via `expires_at`; was unbounded growth + no sweep index)
+        await _safe_index(db.extension_capture_jobs, "expires_at", expireAfterSeconds=0)
+        await _safe_index(db.extension_capture_jobs, [("status", 1), ("updated_at", 1)])
+
         # users — 82 queries
         await _safe_index(db.users, "email", unique=True)
         await _safe_index(db.users, "id", unique=True)

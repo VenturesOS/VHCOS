@@ -61,19 +61,26 @@ if not MONGO_URL:
 
 
 # Collections we sweep. Each entry:
-#   (collection_name, time_field, max_age_minutes)
+#   (collection_name, time_field, max_age_minutes, statuses, iso_strings)
 # `time_field` is the column on which we measure age. Some collections
 # use `started_at`, some use `created_at`. Anything older than max_age
-# AND still in 'processing' gets marked failed.
-SWEEP_TARGETS: list[tuple[str, str, int]] = [
+# AND still in one of `statuses` gets marked failed. `iso_strings=True`
+# for collections that store timestamps as ISO-8601 strings instead of
+# BSON dates (string vs date comparisons never match in Mongo).
+SWEEP_TARGETS: list[tuple[str, str, int, tuple, bool]] = [
     # Talent-graph batch matchers — usually finish in <2 min
-    ("match_jobs", "created_at", 15),
+    ("match_jobs", "created_at", 15, ("processing", "running"), False),
     # Auto job-suggestion runs — usually finish in <1 min
-    ("job_suggestions", "started_at", 10),
+    ("job_suggestions", "started_at", 10, ("processing", "running"), False),
     # Generic background jobs (clustering, backfill, etc.) — slower
-    ("background_jobs", "created_at", 30),
+    ("background_jobs", "created_at", 30, ("processing", "running"), False),
     # Bulk import / enrich jobs
-    ("bulk_enrich_jobs", "started_at", 60),
+    ("bulk_enrich_jobs", "started_at", 60, ("processing", "running"), False),
+    # Async extension captures (v5.5.10+) — normally finish in <60s.
+    # 'pending'/'processing' rows older than 10 min mean a worker died
+    # mid-job. Timestamps are ISO strings. (Phase 57 audit fix — these
+    # were never swept; 46 stuck rows found in prod.)
+    ("extension_capture_jobs", "updated_at", 10, ("pending", "processing"), True),
 ]
 
 
@@ -81,24 +88,34 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def sweep_one(db, coll_name: str, time_field: str, max_age_minutes: int) -> int:
+def sweep_one(
+    db,
+    coll_name: str,
+    time_field: str,
+    max_age_minutes: int,
+    statuses: tuple = ("processing", "running"),
+    iso_strings: bool = False,
+) -> int:
     coll = db[coll_name]
     cutoff = _utc_now() - timedelta(minutes=max_age_minutes)
-    # `processing` is the standard. Some flows use `running` instead.
+    # ISO-8601 strings sort lexicographically == chronologically, so a
+    # string cutoff works for string-timestamp collections.
+    cutoff_val = cutoff.isoformat() if iso_strings else cutoff
     q = {
-        "status": {"$in": ["processing", "running"]},
-        time_field: {"$lt": cutoff},
+        "status": {"$in": list(statuses)},
+        time_field: {"$lt": cutoff_val},
     }
     n_match = coll.count_documents(q)
     if n_match == 0:
         return 0
+    stamp = _utc_now().isoformat() if iso_strings else _utc_now()
     res = coll.update_many(
         q,
         {"$set": {
             "status": "failed",
             "error": f"auto-failed by sweeper — stuck >{max_age_minutes}min in 'processing'",
-            "failed_at": _utc_now(),
-            "completed_at": _utc_now(),  # some readers look at this field
+            "failed_at": stamp,
+            "completed_at": stamp,  # some readers look at this field
         }},
     )
     return res.modified_count
@@ -108,9 +125,9 @@ def main() -> int:
     client = pymongo.MongoClient(MONGO_URL, serverSelectionTimeoutMS=10_000)
     db = client[DB_NAME]
     total = 0
-    for coll, tf, age in SWEEP_TARGETS:
+    for coll, tf, age, statuses, iso in SWEEP_TARGETS:
         try:
-            n = sweep_one(db, coll, tf, age)
+            n = sweep_one(db, coll, tf, age, statuses=statuses, iso_strings=iso)
             if n:
                 # Only log when something changed — quiet on no-op
                 print(f"[{_utc_now().isoformat()}] {coll}: swept {n} stuck → failed (age>{age}min)")

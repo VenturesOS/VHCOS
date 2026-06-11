@@ -42,12 +42,21 @@ _snapshot = {
 }
 
 
+# Consecutive auth (401/403) failures — after _AUTH_BACKOFF_AFTER the
+# sync loop slows to hourly polls instead of spamming a dead key every
+# 2 minutes. Resets on the first successful API response.
+_AUTH_BACKOFF_AFTER = 3
+_AUTH_BACKOFF_SECONDS = 3600
+_auth_failures = 0
+
+
 def get_snapshot() -> dict:
     return {**_snapshot}
 
 
 async def _query_runpod_pods(api_key: str) -> list:
     """Fetch all pods for the account. Returns [] on failure."""
+    global _auth_failures
     query = """
     query { myself { pods { id name desiredStatus
       machine { podHostId gpuDisplayName }
@@ -60,9 +69,15 @@ async def _query_runpod_pods(api_key: str) -> list:
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={"query": query},
             )
+            if r.status_code in (401, 403):
+                _auth_failures += 1
+                if _auth_failures <= _AUTH_BACKOFF_AFTER:
+                    logger.warning(f"[RunPodSync] API HTTP {r.status_code} (auth failure #{_auth_failures}): {r.text[:200]}")
+                return []
             if r.status_code != 200:
                 logger.warning(f"[RunPodSync] API HTTP {r.status_code}: {r.text[:200]}")
                 return []
+            _auth_failures = 0
             data = r.json()
             return (data.get("data") or {}).get("myself", {}).get("pods", []) or []
         except Exception as e:
@@ -235,7 +250,17 @@ async def runpod_sync_loop():
         except Exception as e:
             logger.error(f"[RunPodSync] Cycle failed: {e}")
             _snapshot["last_error"] = f"{type(e).__name__}: {str(e)[:200]}"
-        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+        if _auth_failures >= _AUTH_BACKOFF_AFTER:
+            if _auth_failures == _AUTH_BACKOFF_AFTER:
+                logger.warning(
+                    "[RunPodSync] %d consecutive auth failures — API key is invalid/rotated. "
+                    "Backing off to hourly polls. Update RUNPOD_ACCOUNT_API_KEY in .env to restore.",
+                    _auth_failures,
+                )
+            _snapshot["last_error"] = "API key invalid (401) — polling hourly until key is rotated"
+            await asyncio.sleep(_AUTH_BACKOFF_SECONDS)
+        else:
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
 async def manual_sync_now() -> dict:

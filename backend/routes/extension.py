@@ -4,7 +4,7 @@ Handles complete Naukri profile capture with ALL fields
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import logging
 import os
@@ -2801,6 +2801,9 @@ async def capture_profile_async(
         "naukri_profile_id": profile.naukri_profile_id,
         "created_at": now_iso,
         "updated_at": now_iso,
+        # BSON date for the TTL index (services/lifecycle.py) — jobs are
+        # poll-state only; nothing references them after completion.
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
     })
     background_tasks.add_task(_run_capture_job, job_id, profile, current_user)
     logger.info(f"[capture-async] queued job_id={job_id} for {profile.name} (user={current_user.get('email')})")
@@ -2818,6 +2821,37 @@ async def capture_status(
     )
     if not job:
         raise HTTPException(status_code=404, detail="Capture job not found")
+
+    # ── Self-heal stuck jobs (Phase 57 audit fix) ──
+    # If a worker died mid-job (deploy / gunicorn recycle / OOM), the row
+    # stays 'pending'/'processing' forever and the extension polls until
+    # its own timeout. Mark anything stale >10 min as failed so the
+    # extension surfaces a retryable error instead of hanging.
+    if job.get("status") in ("pending", "processing"):
+        raw_ts = job.get("updated_at") or job.get("created_at")
+        stale = False
+        if isinstance(raw_ts, str):
+            try:
+                ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                stale = (datetime.now(timezone.utc) - ts) > timedelta(minutes=10)
+            except ValueError:
+                pass
+        if stale:
+            err = "Capture timed out (server worker restarted mid-job) — please retry"
+            await db.extension_capture_jobs.update_one(
+                {"_id": job_id},
+                {"$set": {
+                    "status": "failed",
+                    "error": err,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            job["status"] = "failed"
+            job["error"] = err
+
     # _id is the job_id (UUID string) — expose as job_id, drop _id for the client
     job["job_id"] = job.pop("_id")
     return job

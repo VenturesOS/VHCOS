@@ -42,7 +42,7 @@
       "file": "frontend/src/lib/api.js",
       "lines": "5-7",
       "implementation": "const envUrl = process.env.REACT_APP_BACKEND_URL; const API_BASE = envUrl ? `${envUrl.replace(/\\/+$/, '')}/api` : '/api';",
-      "env_value": "https://talent-graph-fix.preview.emergentagent.com"
+      "env_value": "https://badge-audit-v2.preview.emergentagent.com"
     },
     "admin_login": {
       "endpoint": "POST /api/auth/login",

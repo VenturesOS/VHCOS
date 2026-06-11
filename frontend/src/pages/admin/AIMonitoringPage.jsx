@@ -79,6 +79,7 @@ export default function AIMonitoringPage() {
       } catch {}
     }, 3000);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeJob?.id, activeJob?.status, loadAll]);
 
   const forceSync = async () => {
