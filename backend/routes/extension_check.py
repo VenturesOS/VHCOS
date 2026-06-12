@@ -527,30 +527,38 @@ _V2_SIGNAL_WEIGHTS = {
 }
 _V2_BADGE_THRESHOLD = 0.85
 _V2_HIGH_THRESHOLD = 1.20
+# Corroborators considered identity-STRONG (Phase 57.2). Weak-grade name
+# matches need at least one of these; experience/education/ctc/skills are
+# too coincidence-prone to confirm a partial name on their own (live FP:
+# card "Amit Saraswat" badged bank candidate "amit" via one shared generic
+# skill — benchmark precision hits 1.000 with skills excluded).
+_V2_STRONG_CORROBS = {
+    "employer", "headline_employer",
+    "designation", "headline_designation",
+    "location", "headline_location",
+}
 
 
-def _loose_name_match_v2(name_a: str, name_b: str) -> bool:
-    """V2 name matcher — looser than `_strict_name_match` for the
-    SINGLE-token side cases (Naukri sometimes shows just "Yash" vs
-    "Yash Vardhan" in DB), but STRICTER than the auto-merge matcher
-    for both-multi-token cases (don't badge "Akash Sharma" as
-    "Akash Gundekar" — different surnames = different people unless
-    fuzzy ratio is close).
+def _loose_name_match_v2(name_a: str, name_b: str) -> int:
+    """V2 name matcher — returns a GRADE instead of a bool (Phase 57.2):
 
-    Decision tree:
-      - Identical (after normalisation) → True
-      - De-spaced equality ("A J I T H" ↔ "ajith") → True
-      - Both sides multi-token (≥2 sig words):
-          * first AND last sig token match → True
-          * fuzzy ratio on full strings ≥ 0.80 → True (typo tolerance)
-          * else → False (precision wins over recall)
-      - Single-token side(s):
-          * first-token equality OR token-in-multi (first/last) → True
-          * fuzzy ratio ≥ 0.80 → True
-          * else → False
+        0 = no match    1 = weak match    2 = strong match
+
+    Weak matches (grade 1) only badge with a STRONG corroborator — see the
+    route's gating. Tuned against the 2,372-card audit benchmark
+    (precision was 76.3%; all 71 wrong-person badges were leaks below):
+
+      * MIDDLE-TOKEN VETO: "Mohd MONIS Siddiqui" ≠ "Mohd MOAZZAM Siddiqui"
+        (first+last matched, but the real given names contradict)
+      * INITIALS VETO: "Amit Saraswat" ≠ "Amit Kr" / "ASHOK M R" ≠
+        "Ashok Subramani" — a 1-2 char token must match SOME other-side
+        token's initial, else different person
+      * FUZZY TIGHTENED: whole-string 0.80 → 0.84 AND last tokens ≥ 0.80
+        ("Ramesh Kannan" ≠ "RAMESH KALIYAN", "Akash G. Bangalwar" ≠
+        "Akash Gangwar"; "Rajut Gupta" ↔ "Rajat Gupta" still passes)
     """
     if not name_a or not name_b:
-        return False
+        return 0
     import re as _re
     from difflib import SequenceMatcher as _SM
 
@@ -561,9 +569,9 @@ def _loose_name_match_v2(name_a: str, name_b: str) -> bool:
 
     a_clean, b_clean = _clean(name_a), _clean(name_b)
     if not a_clean or not b_clean:
-        return False
+        return 0
     if a_clean == b_clean:
-        return True
+        return 2
 
     # De-spaced form (covers "A J I T H" → "ajith")
     def _despace_if_letter_split(s: str) -> str:
@@ -573,32 +581,58 @@ def _loose_name_match_v2(name_a: str, name_b: str) -> bool:
         return s
     a_desp, b_desp = _despace_if_letter_split(a_clean), _despace_if_letter_split(b_clean)
     if a_desp == b_desp:
-        return True
+        return 2
+
+    all_a, all_b = a_clean.split(), b_clean.split()
+
+    # INITIALS-CONTRADICTION VETO (both directions): every 1-2 char token
+    # must be the initial of some token on the other side.
+    for toks, others in ((all_a, all_b), (all_b, all_a)):
+        for t in toks:
+            if len(t) <= 2 and others and not any(u[0] == t[0] for u in others):
+                return 0
 
     # Significant tokens (≥3 chars)
-    sig_a = [w for w in a_clean.split() if len(w) >= 3]
-    sig_b = [w for w in b_clean.split() if len(w) >= 3]
+    sig_a = [w for w in all_a if len(w) >= 3]
+    sig_b = [w for w in all_b if len(w) >= 3]
     if not sig_a:
-        sig_a = [w for w in a_clean.split() if len(w) > 1] or ([a_desp] if a_desp else [])
+        sig_a = [w for w in all_a if len(w) > 1] or ([a_desp] if a_desp else [])
     if not sig_b:
-        sig_b = [w for w in b_clean.split() if len(w) > 1] or ([b_desp] if b_desp else [])
+        sig_b = [w for w in all_b if len(w) > 1] or ([b_desp] if b_desp else [])
     if not sig_a or not sig_b:
-        return False
+        return 0
 
-    # Both multi-token: require first+last OR fuzzy. NOT first-only
-    # (precision guard against "Akash Sharma" ↔ "Akash Gundekar").
+    def _tok_ratio(x: str, y: str) -> float:
+        return 1.0 if x == y else _SM(None, x, y).ratio()
+
+    # Both multi-token
     if len(sig_a) >= 2 and len(sig_b) >= 2:
+        short, long_ = sorted((sig_a, sig_b), key=len)
+        worst = min(max(_tok_ratio(t, u) for u in long_) for t in short)
         if sig_a[0] == sig_b[0] and sig_a[-1] == sig_b[-1]:
-            return True
-        return _SM(None, a_clean, b_clean).ratio() >= 0.80
+            # first+last agree — but contradicting middle tokens mean a
+            # DIFFERENT given name, not a variant of the same one
+            return 0 if worst < 0.60 else 2
+        if worst >= 0.84:
+            return 2  # all tokens have counterparts (reorder / minor typos)
+        if (
+            _SM(None, a_clean, b_clean).ratio() >= 0.84
+            and _tok_ratio(sig_a[-1], sig_b[-1]) >= 0.80
+        ):
+            return 1  # typo tolerance, surname must broadly agree
+        return 0
 
-    # One side single-token: first-token match OR token-in-multi (first/last)
+    # Both single-token
     if len(sig_a) == 1 and len(sig_b) == 1:
-        return sig_a[0] == sig_b[0] or _SM(None, sig_a[0], sig_b[0]).ratio() >= 0.85
+        if sig_a[0] == sig_b[0]:
+            return 2
+        return 1 if _SM(None, sig_a[0], sig_b[0]).ratio() >= 0.88 else 0
+
+    # Single vs multi ("Yash" ↔ "Yash Vardhan") — inherently weak evidence
     single, multi = (sig_a, sig_b) if len(sig_a) == 1 else (sig_b, sig_a)
     if single[0] == multi[0] or single[0] == multi[-1]:
-        return True
-    return _SM(None, a_clean, b_clean).ratio() >= 0.80
+        return 1
+    return 1 if _SM(None, a_clean, b_clean).ratio() >= 0.84 else 0
 
 
 def _headline_contains(headline: Optional[str], needle: Optional[str], min_len: int = 4) -> bool:
@@ -938,9 +972,11 @@ async def check_existing(
         best_doc: Optional[dict] = None
         best_score: float = 0.0
         best_signals: List[str] = []
+        best_grade: int = 0
         last_conflict: Optional[str] = None
         for doc in bucket:
-            if not name_match_fn(c.name, doc.get("name") or ""):
+            grade = name_match_fn(c.name, doc.get("name") or "")
+            if not grade:
                 continue
             # V2: reject docs with explicit field-level conflicts (employer
             # mismatch, experience > 5y apart) BEFORE scoring. Cheaper than
@@ -955,6 +991,7 @@ async def check_existing(
                 best_score = score
                 best_signals = signals
                 best_doc = doc
+                best_grade = int(grade)
                 if score >= high_thr:
                     break
 
@@ -966,6 +1003,12 @@ async def check_existing(
         # alone (which never happens at 1.0 V1 threshold because
         # `name` weight is only 0.5).
         v2_has_corroborator = use_v2 and best_signals and len(best_signals) >= 2
+        # Phase 57.2 precision gate: WEAK-grade name matches (single-token
+        # side / fuzzy typo-tolerance) additionally need a STRONG
+        # corroborator. Benchmark showed experience/education/ctc
+        # coincidences alone produced wrong-person badges.
+        if use_v2 and v2_has_corroborator and best_grade < 2:
+            v2_has_corroborator = any(s in _V2_STRONG_CORROBS for s in best_signals)
 
         if best_doc is None or best_score < badge_thr or (use_v2 and not v2_has_corroborator):
             results_by_idx[idx] = CheckResult(
