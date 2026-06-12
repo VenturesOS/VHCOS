@@ -138,6 +138,7 @@ profile capture quality improvements.
     - **Tests:** `tests/test_name_match_v2.py` (12 cases — every real FP pattern + every TP pattern from prod). Live-verified both directions post-restart.
     - Files: `routes/extension_check.py` (graded matcher + gating), `scripts/auto_label_badge_audit.py` (new), `tests/test_name_match_v2.py` (new).
     - NOTE for future: recall re-benchmark needs fresh audits collected AFTER both the bucket-starvation fix and this change; the badge-audit UI remains available for spot-checking the 1 'uncertain' pair ("Ajay Chauhan"→"Ajay Chaudhary").
+    - **Re-benchmark tooling (2026-06-12):** labeler supports `--since YYYY-MM-DD` (ts is BSON datetime); `EXTENSION_CHECK_AUDIT_SAMPLE` env (0.0-1.0, default 1.0) caps team-wide audit storage (~16KB/doc; 0.3 recommended for the collection week). Early post-bucket-fix snapshot (16 audits since Jun 11): **recall 0.948** (was 0.462 pre-fix), precision 0.893 pre-matcher-deploy. **Re-benchmark ~Jun 19 on AWS:** `python3 backend/scripts/auto_label_badge_audit.py --since 2026-06-12` — expect precision ≈1.0 + recall ≥0.9.
 
 ### Near-term (P2)
 43. ~~**(P0) Full-code audit — badge starvation root cause + stuck captures + 4 more fixes**~~ ✅ **SHIPPED 2026-06-11 (current session)** — User asked for a thorough bug/slowness sweep before new features, flagging the "already in database" badge as the #1 broken feature. Audit findings + fixes:

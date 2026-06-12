@@ -44,6 +44,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import re
 from typing import List, Optional
 
@@ -1039,11 +1040,16 @@ async def check_existing(
     )
 
     # ─── Phase 56.3 audit log (fire-and-forget) ────────────────────────
-    # Same allowlist as V2 — keeps storage bounded while validation is
-    # under active iteration. To audit everyone, set
-    # EXTENSION_CHECK_V2_USERS=* OR add a dedicated allowlist later.
+    # Same allowlist as V2. With the team-wide rollout
+    # (EXTENSION_CHECK_V2_USERS=*) audit docs are ~16KB each, so
+    # EXTENSION_CHECK_AUDIT_SAMPLE (0.0-1.0, default 1.0) caps storage
+    # growth: 0.3 ≈ every 3rd scan audited — plenty for benchmarking.
     audit_id: Optional[str] = None
-    if use_v2:
+    try:
+        _sample = float(os.environ.get("EXTENSION_CHECK_AUDIT_SAMPLE", "1.0") or 1.0)
+    except ValueError:
+        _sample = 1.0
+    if use_v2 and (_sample >= 1.0 or random.random() < _sample):
         try:
             import asyncio as _asyncio
             from routes.badge_audit import write_audit_doc

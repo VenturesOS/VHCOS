@@ -22,8 +22,10 @@ comparison plus independent field corroboration:
     * else → label 'correct' (true negative)
 
 Usage:
-  python scripts/auto_label_badge_audit.py            # dry-run
-  python scripts/auto_label_badge_audit.py --write    # persist labels
+  python scripts/auto_label_badge_audit.py                      # dry-run
+  python scripts/auto_label_badge_audit.py --write              # persist labels
+  python scripts/auto_label_badge_audit.py --since 2026-06-12   # fresh audits only
+                                                                # (post-fix recall re-benchmark)
 """
 import asyncio
 import os
@@ -39,6 +41,11 @@ from motor.motor_asyncio import AsyncIOMotorClient
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 WRITE = "--write" in sys.argv
+SINCE = None
+if "--since" in sys.argv:
+    _i = sys.argv.index("--since")
+    if _i + 1 < len(sys.argv):
+        SINCE = sys.argv[_i + 1]  # ISO date prefix, e.g. 2026-06-12
 
 _HONORIFICS = {"mr", "mrs", "ms", "dr", "prof", "shri", "smt"}
 
@@ -82,7 +89,13 @@ async def main() -> None:
     cli = AsyncIOMotorClient(os.environ["MONGO_URL"])
     db = cli[os.environ["DB_NAME"]]
 
-    audits = await db.badge_audit.find({}).to_list(2000)
+    if SINCE:
+        since_dt = datetime.fromisoformat(SINCE).replace(tzinfo=timezone.utc)
+        query = {"ts": {"$gte": since_dt}}
+    else:
+        query = {}
+    audits = await db.badge_audit.find(query).to_list(5000)
+    print(f"Analyzing {len(audits)} audits" + (f" since {SINCE}" if SINCE else " (all time)"))
 
     # Batch-prefetch bank docs for ALL miss-check names (one $in query —
     # per-name find_one round-trips timed out cross-region)
