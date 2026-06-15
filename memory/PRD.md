@@ -29,7 +29,7 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
-- **(2026-06-15) Extension v6.0.2 — Naukri-session-login email leak fix (Sachin/ajit bug).**
+- **(2026-06-15) Source-only fix — Naukri-session-login email leak (Sachin/ajit bug).**
   Reported: capturing under shared Naukri seat `ajit@searchpartner.in` (VHC user Sachin) would
   on FIRST capture either (a) save `ajit@searchpartner.in` as the candidate's email, or (b)
   silently drop both phone + email. Recapture worked. Root cause: the recruiter-blocklist
@@ -44,11 +44,11 @@ profile capture quality improvements.
   (3) `mergeContacts.isRecruiterEmail` consults this blocklist;
   (4) BEFORE-snapshot fallback now also verifies the email appears inside the candidate
       profile root.
-  Files: `browser-extension/content.js`, `browser-extension/manifest.json`,
-  `browser-extension/background.js`, `backend/routes/extension.py` (changelog),
-  CRX rebuilt to `vhc-naukri-extension-v6.0.2.crx` + `latest.crx`.
-  Tests: 6 shape regressions in `backend/tests/test_extension_chrome_email_block.py`,
-  5 behavioral cases in `browser-extension/tests/test_chrome_email_block.js` — all green.
+  ⚠️ **NOT released as a standalone version** (per user direction — too small for a
+  dedicated bump). Code is merged to `browser-extension/content.js`; version remains 6.0.1.
+  Will ride along on the next planned release.
+  Files: `browser-extension/content.js`, `backend/tests/test_extension_chrome_email_block.py`
+  (4 shape tests), `browser-extension/tests/test_chrome_email_block.js` (5 behavioral cases).
 - **EC2 upgraded** `t3.medium` → `t3.xlarge` to eliminate OOM crashes.
 - **Hardened `vhc-backend`** with memory caps + worker recycling. Killed rogue gunicorn shadow service.
 - **Nginx rate-limit** added at `/api/extension/capture` (10 r/s).

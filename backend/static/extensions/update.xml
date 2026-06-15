@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='nmlmoniipcgpomhhogijpbelmpcoafjk'>
-    <updatecheck codebase='/api/extension/download.crx?v=6.0.2' version='6.0.2' hash_sha256='21d0e0b5819c50d97e2679fc33e8222ce640d7f8121236ce59ac9d9e2cff9d98' />
+    <updatecheck codebase='/api/extension/download.crx?v=6.0.1' version='6.0.1' hash_sha256='97e1c0befba7e4a17a73c705f91371714da9f85a058806e6a1e09ef471966011' />
   </app>
 </gupdate>

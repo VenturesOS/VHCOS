@@ -76,8 +76,6 @@ async def get_extension_version():
         "download_url": "/api/download/naukri-extension",
         "update_available": True,
         "changelog": [
-            "v6.0.2: Session-login email leak fix — Naukri-account email (header/nav) no longer overwrites candidate email on first capture",
-            "v6.0.2: Stricter BEFORE-snapshot fallback — only trusts emails that appear inside the candidate root",
             "v6.0.0: Async capture — no more stuck 'Processing' (job polling survives slow servers)",
             "v6.0.0: 'Already in Database' badge accuracy overhaul (server-side V2 scoring trusted)",
             "v6.0.0: Badge recall fix — candidates in the bank now badge reliably on search pages",
