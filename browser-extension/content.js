@@ -132,7 +132,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '5.5.10';
+  const VERSION = '6.0.2';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -473,6 +473,81 @@
     // Normalize: strip +91, spaces, dashes — compare last 10 digits
     const clean = (p) => p.replace(/[\s.+\-()]/g, '').slice(-10);
     return clean(phone) === clean(recruiterPhone);
+  }
+
+  /**
+   * v6.0.2 FIX (Sachin/ajit bug): Detect emails that belong to the Naukri-
+   * logged-in account (page chrome / header / user dropdown). These emails
+   * are session-scoped to the Naukri tab and are NOT covered by
+   * `chrome.storage.sync.vhc_user.email` because:
+   *   - chrome.storage stores the VHC platform login (e.g. sachin@vhc.in)
+   *   - Naukri session login may be a different account (e.g. ajit@searchpartner.in)
+   *     when teams share a Naukri seat.
+   *
+   * Without this filter, the BEFORE-snapshot fallback inside mergeContacts()
+   * picked up the Naukri header email and saved it as the candidate's email
+   * on the very first capture (only fixed itself on recapture because CV
+   * iframe became cached).
+   *
+   * Returns a Set<string> of lowercase emails found in the page chrome.
+   */
+  function snapshotChromeEmails() {
+    const chromeEmails = new Set();
+    const addIfEmail = (raw) => {
+      if (!raw) return;
+      const s = String(raw).toLowerCase().trim();
+      // Use a strict per-string match (not global) so we accept the whole string only
+      if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(s)) {
+        if (!isNaukriSystemEmail(s)) chromeEmails.add(s);
+      }
+    };
+
+    // 1) Naukri recruiter header / user-dropdown / utility-nav — explicit selectors
+    const headerSelectors = [
+      'header', '[class*="header"]', '[class*="Header"]',
+      'nav', '[class*="nav"]', '[class*="Nav"]',
+      '[class*="userInfo"]', '[class*="user-info"]', '[class*="UserInfo"]',
+      '[class*="userDropdown"]', '[class*="user-dropdown"]', '[class*="UserDropdown"]',
+      '[class*="userMenu"]', '[class*="user-menu"]', '[class*="UserMenu"]',
+      '[class*="loggedInUser"]', '[class*="logged-in-user"]',
+      '[class*="profileMenu"]', '[class*="profile-menu"]',
+      '[class*="topBar"]', '[class*="top-bar"]', '[class*="TopBar"]',
+      '[class*="utilityNav"]', '[class*="utility-nav"]',
+      // Naukri-specific recruiter shell:
+      '#root header', '#root nav', '.rdx-header', '.rdx-top-bar',
+      '[class*="recruiterHeader"]', '[class*="recruiter-header"]',
+    ];
+    for (const sel of headerSelectors) {
+      try {
+        document.querySelectorAll(sel).forEach(el => {
+          const txt = el.innerText || el.textContent || '';
+          (txt.match(EMAIL_REGEX) || []).forEach(addIfEmail);
+          // title attributes within header
+          el.querySelectorAll('[title*="@"]').forEach(t => addIfEmail(t.getAttribute('title')));
+          // data attributes occasionally hold the logged-in email
+          ['data-email', 'data-user-email', 'data-username'].forEach(attr => {
+            el.querySelectorAll(`[${attr}*="@"]`).forEach(d => addIfEmail(d.getAttribute(attr)));
+          });
+        });
+      } catch (_) { /* selector engine may not support all forms */ }
+    }
+
+    // 2) Any email that appears in document.body.innerText but NOT inside the
+    //    candidate root — that's by definition page chrome. This catches the
+    //    case where Naukri renders the logged-in email in a non-standard
+    //    container we haven't enumerated above.
+    try {
+      const candidateRoot = getCandidateRootSafe();
+      const rootText = candidateRoot ? (candidateRoot.innerText || '').toLowerCase() : '';
+      const bodyText = document.body ? (document.body.innerText || '') : '';
+      const allEmails = (bodyText.match(EMAIL_REGEX) || []);
+      for (const raw of allEmails) {
+        const e = raw.toLowerCase().trim();
+        if (!rootText || !rootText.includes(e)) addIfEmail(e);
+      }
+    } catch (_) { /* DOM may be partially loaded */ }
+
+    return chromeEmails;
   }
 
   // ===================== TEXT CAPTURE =====================
@@ -1418,10 +1493,17 @@
   function mergeContacts(cvData, diffData, domData, recruiterCreds, beforeSnapshot) {
     const rEmail = (recruiterCreds.email || '').toLowerCase().trim();
     const rPhone = cleanPhone(recruiterCreds.phone || '');
+    // v6.0.2 FIX: page-chrome / Naukri-session-login email blocklist
+    const chromeBlock = recruiterCreds.chromeEmails instanceof Set
+      ? recruiterCreds.chromeEmails
+      : new Set();
 
     function isRecruiterEmail(e) {
       if (!e) return false;
-      return rEmail && e.toLowerCase().trim() === rEmail;
+      const lower = e.toLowerCase().trim();
+      if (rEmail && lower === rEmail) return true;
+      if (chromeBlock.has(lower)) return true;  // Naukri-session login leak guard
+      return false;
     }
 
     function isRecruiterPhone(p) {
@@ -1446,8 +1528,24 @@
       }
     }
     if (!finalEmail && beforeSnapshot?.emails) {
+      // v6.0.2 FIX: BEFORE-snapshot fallback ONLY trusts emails that also
+      // appear inside the candidate profile root. Emails that exist on the
+      // page but NOT in the candidate root are page chrome (Naukri header /
+      // recruiter dropdown) and must never become the candidate's email.
+      let rootTextLower = '';
+      try {
+        const root = getCandidateRootSafe();
+        rootTextLower = root ? (root.innerText || '').toLowerCase() : '';
+      } catch (_) {}
       for (const e of beforeSnapshot.emails) {
-        if (!isBadEmail(e)) { finalEmail = e; emailSource = 'Already-visible'; break; }
+        if (isBadEmail(e)) continue;
+        if (rootTextLower && !rootTextLower.includes(e.toLowerCase())) {
+          console.warn(`[VHC v${VERSION}] 🚫 BEFORE-snapshot email "${e}" not in candidate root — treating as page chrome`);
+          continue;
+        }
+        finalEmail = e;
+        emailSource = 'Already-visible';
+        break;
       }
     }
     if (!finalEmail && domData.email && !isBadEmail(domData.email)) {
@@ -2971,7 +3069,16 @@
 
     // Step 0: Get recruiter credentials FIRST so we can filter them out everywhere
     const recruiterCreds = await getRecruiterCredentials();
-    console.log(`[VHC v${VERSION}] Recruiter blocklist: email=${recruiterCreds.email || 'none'}, phone=${recruiterCreds.phone || 'none'}`);
+    // v6.0.2 FIX (Sachin/ajit bug): snapshot the Naukri-session login email
+    // (page chrome / header / user dropdown) so it is excluded from candidate
+    // contact extraction even when it differs from the VHC login email.
+    try {
+      recruiterCreds.chromeEmails = snapshotChromeEmails();
+    } catch (e) {
+      recruiterCreds.chromeEmails = new Set();
+      console.warn(`[VHC v${VERSION}] snapshotChromeEmails failed:`, e);
+    }
+    console.log(`[VHC v${VERSION}] Recruiter blocklist: email=${recruiterCreds.email || 'none'}, phone=${recruiterCreds.phone || 'none'}, chrome=[${[...recruiterCreds.chromeEmails].join(', ') || 'none'}]`);
 
     // Step 1: DOM stability check
     const stableTitle = await waitForDOMStability();
