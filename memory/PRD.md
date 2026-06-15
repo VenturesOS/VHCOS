@@ -29,6 +29,52 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-15) Search Phase 1 — Hybrid (BGE + cross-encoder + LTR) retrieval shipped (A/B).**
+  Team reported Advanced Search + Find Candidates were "very vague, very general".
+  Root cause: `/api/candidate-bank/` and `/api/ai-search` were regex-only — they never
+  consumed the 139,848 BGE embeddings sitting in `candidate_embeddings` (~100% coverage).
+  Shipped:
+  - New endpoint **`POST /api/talent/search`** runs BOTH a hybrid retrieval leg
+    (`find_candidates_by_text`: BGE vector → cross-encoder rerank → LTR A/B) AND the
+    existing lexical regex leg (current Advanced Search) in parallel.
+  - LLM `extract_filters` parses NL queries into structured filters (skills, industry,
+    location, experience range) — applied as a soft post-filter on the hybrid pool so
+    semantic recall isn't choked at the DB layer. Missing-field-aware (e.g. candidates
+    without `experience_years` aren't dropped by an exp filter).
+  - New A/B UI at `/admin/talent-search` (also `/recruiter/...` + `/employer/...`)
+    — side-by-side columns, per-leg latency, AI-extracted filters debug strip.
+    Live demo: query "senior python developer in bangalore" — hybrid returned a 
+    Lead Python Full Stack Developer @ Bengaluru with 11 yrs; lexical returned an
+    AI Engineer and a Defence/Aerospace sales professional. Clear win.
+  - Files: `backend/routes/talent_search.py` (new), `backend/server.py` (router registry),
+    `frontend/src/pages/shared/TalentSearchABPage.jsx` (new), `frontend/src/App.js`
+    (routes), `frontend/src/components/layout/Sidebar.jsx` (sidebar entries),
+    `frontend/src/lib/api.js` (`talentSearchAPI`).
+  - 10 regressions in `backend/tests/test_talent_search_and_wrong_match.py` — all green.
+  - ⚠️ **Cold-start latency** on the first request after a worker restart is ~16s
+    (BGE model load). Subsequent queries are 1-3s. To be addressed by Phase 1.5
+    (warmup endpoint + persistent model) once 1-week A/B validation completes.
+
+- **(2026-06-15) Badge Phase A — "Wrong match?" telemetry shipped.**
+  Team complained badges sometimes point to the wrong candidate. Without explicit
+  human-confirmed FP signal, threshold tuning was guessing. Shipped:
+  - New endpoint **`POST /api/extension/audit/wrong-match`** writes to a dedicated
+    `badge_feedback` collection (180-day TTL, indexed on candidate_id + ts).
+    Separate from auto-labelled `badge_audit` so human + auto labels stay distinct.
+  - Background.js forwards `audit_id` from `/check-existing` → content.js renders
+    a small dashed `✗ Wrong match?` link beside every "Already in Database" badge.
+    One click → silent POST → link swaps to `✓ Thanks` and fades the (wrong) badge
+    to 45% opacity. **No confirmation prompt** per product spec — recruiters flag
+    in 1 click and continue.
+  - Same call also tags the originating `badge_audit` card with `user_flagged_wrong`
+    so the admin Badge Audit UI can surface human-flagged FPs without a JOIN.
+  - Admin endpoints: `GET /api/admin/badge-audit/_/feedback/wrong-match` (recent flags)
+    and `.../wrong-match/stats` (per-user roll-up). Powers the next-iteration
+    threshold-tuning dashboard.
+  - Files: `backend/routes/badge_audit.py` (new endpoints + model),
+    `backend/services/lifecycle.py` (new collection indexes),
+    `browser-extension/content.js` (badge flag link), `browser-extension/background.js`
+    (audit_id forwarding + reportWrongMatch message handler).
 - **(2026-06-15) Source-only fix — Naukri-session-login email leak (Sachin/ajit bug).**
   Reported: capturing under shared Naukri seat `ajit@searchpartner.in` (VHC user Sachin) would
   on FIRST capture either (a) save `ajit@searchpartner.in` as the candidate's email, or (b)

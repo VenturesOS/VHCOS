@@ -336,3 +336,133 @@ async def submit_feedback(
         {"$set": updates},
     )
     return {"ok": True, "updated": res.modified_count}
+
+
+# ── User-reported "Wrong match" flag (Badge Phase A, 2026-06-15) ─────
+#
+# Why a separate collection?
+#   `badge_audit` is auto-written for every backend decision and gets
+#   labelled by `auto_label_badge_audit.py` against the DB ground truth.
+#   When a recruiter clicks "Wrong match?" on the extension badge they're
+#   telling us the *match itself* is wrong — that's a different signal
+#   class (real human judgement, not auto-derived). Keeping it in
+#   `badge_feedback` lets us:
+#     • compare auto-label vs human-label disagreement
+#     • feed only human-confirmed FPs into threshold tuning
+#     • avoid polluting the labelled-audit dataset
+#
+# The endpoint is silent (returns 200 immediately, no UX echo) per user
+# direction — recruiters should NOT see a confirmation prompt.
+
+class WrongMatchReport(BaseModel):
+    audit_id: Optional[str] = None         # links to the originating audit doc
+    card_idx: Optional[int] = None         # which card in the batch
+    badge_candidate_id: str                # the DB candidate the badge pointed to
+    card_name: Optional[str] = None        # what name was on the Naukri card
+    card_headline: Optional[str] = None
+    card_employer: Optional[str] = None
+    card_location: Optional[str] = None
+    page_url: Optional[str] = None
+    extension_version: Optional[str] = None
+    reason: Optional[str] = None           # optional free-text from user
+
+
+@ext_feedback_router.post("/audit/wrong-match")
+async def report_wrong_match(
+    req: WrongMatchReport,
+    user: dict = Depends(get_current_user),
+):
+    """Silent log of a user-reported wrong-match badge.
+
+    Writes ONE document to `badge_feedback`. Returns 200 with no UI echo
+    so the extension popup can close immediately without disturbing the
+    recruiter's flow.
+    """
+    if not req.badge_candidate_id:
+        # Soft-fail: still 200 so the extension doesn't surface an error.
+        return {"ok": True, "stored": False, "reason": "missing badge_candidate_id"}
+
+    try:
+        now = datetime.now(timezone.utc)
+        doc = {
+            "id": str(uuid.uuid4()),
+            "kind": "wrong_match",
+            "ts": now,
+            "expires_at": now + timedelta(days=180),  # keep 6 mo for tuning
+            "user_email": (user.get("email") or "").lower(),
+            "user_id": user.get("id"),
+            "audit_id": req.audit_id,
+            "card_idx": req.card_idx,
+            "badge_candidate_id": req.badge_candidate_id,
+            "card_name": req.card_name,
+            "card_headline": req.card_headline,
+            "card_employer": req.card_employer,
+            "card_location": req.card_location,
+            "page_url": req.page_url,
+            "extension_version": req.extension_version,
+            "reason": (req.reason or "")[:500],
+        }
+        await db.badge_feedback.insert_one(doc)
+
+        # Also mark the originating audit card as flagged so the admin UI
+        # surfaces it without an extra collection lookup.
+        if req.audit_id and req.card_idx is not None:
+            await db.badge_audit.update_one(
+                {"id": req.audit_id, f"cards.{req.card_idx}.card_idx": req.card_idx},
+                {"$set": {
+                    f"cards.{req.card_idx}.user_flagged_wrong": True,
+                    f"cards.{req.card_idx}.user_flagged_at": now,
+                    f"cards.{req.card_idx}.user_flagged_by": (user.get("email") or "").lower(),
+                }},
+            )
+        return {"ok": True, "stored": True}
+    except Exception as e:
+        logger.warning(f"[BadgeFeedback] wrong-match store failed: {e}")
+        # Never bubble errors to the extension popup.
+        return {"ok": True, "stored": False}
+
+
+# ── Admin: list / stats for wrong-match feedback ─────────────────────
+
+@router.get("/_/feedback/wrong-match")
+async def list_wrong_match_feedback(
+    limit: int = Query(100, le=500),
+    days: int = Query(30, le=365),
+    user: dict = Depends(get_current_user),
+):
+    """Admin view of recent user-reported wrong-match flags."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    cursor = db.badge_feedback.find(
+        {"kind": "wrong_match", "ts": {"$gte": since}},
+        {"_id": 0},
+    ).sort("ts", -1).limit(limit)
+    return await cursor.to_list(limit)
+
+
+@router.get("/_/feedback/wrong-match/stats")
+async def wrong_match_stats(
+    days: int = Query(30, le=365),
+    user: dict = Depends(get_current_user),
+):
+    """Roll-up: how often does the team flag badges as wrong?"""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    pipeline = [
+        {"$match": {"kind": "wrong_match", "ts": {"$gte": since}}},
+        {"$group": {
+            "_id": "$user_email",
+            "n": {"$sum": 1},
+            "last_ts": {"$max": "$ts"},
+        }},
+        {"$sort": {"n": -1}},
+        {"$limit": 50},
+    ]
+    rows = await db.badge_feedback.aggregate(pipeline).to_list(50)
+    total = await db.badge_feedback.count_documents(
+        {"kind": "wrong_match", "ts": {"$gte": since}}
+    )
+    return {
+        "days": days,
+        "total_flags": total,
+        "by_user": [{"user_email": r["_id"], "n": r["n"], "last_ts": r["last_ts"]} for r in rows],
+    }
+

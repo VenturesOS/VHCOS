@@ -562,7 +562,9 @@ async function checkExistingCandidates(candidates) {
     if (finalHitCount < apiHitCount) {
       console.warn(`[VHC BG v${VERSION}] checkExisting: post-validation dropped ${apiHitCount - finalHitCount} hits (API ${apiHitCount} → client ${finalHitCount})`);
     }
-    return { results: finalResults };
+    // Forward audit_id so content.js can wire the per-badge "Wrong match?"
+    // flag back to /api/extension/audit/wrong-match (Badge Phase A).
+    return { results: finalResults, audit_id: apiData.audit_id || null };
   } catch (err) {
     console.warn(`[VHC BG v${VERSION}] checkExisting API call failed:`, err.message, "— falling back to local history.");
     return { results: localResults };
@@ -1057,6 +1059,47 @@ async function fetchJobDetails(jobId, auth) {
 
 // ─── Message Router ───────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+
+  // ═══ REPORT WRONG-MATCH BADGE (Badge Phase A telemetry) ═══
+  // Content.js calls this when a recruiter clicks the small "Wrong match?"
+  // link next to the green "Already in Database" badge. Silent — we never
+  // surface success/error in the UI, just log to /api/extension/audit/wrong-match.
+  if (request.action === 'reportWrongMatch') {
+    (async () => {
+      try {
+        const auth = await getAuth();
+        if (!auth?.token || !auth?.apiUrl) {
+          sendResponse({ ok: false });
+          return;
+        }
+        await fetch(`${auth.apiUrl}/api/extension/audit/wrong-match`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${auth.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            audit_id: request.audit_id || null,
+            card_idx: request.card_idx ?? null,
+            badge_candidate_id: request.badge_candidate_id,
+            card_name: request.card_name || null,
+            card_headline: request.card_headline || null,
+            card_employer: request.card_employer || null,
+            card_location: request.card_location || null,
+            page_url: request.page_url || null,
+            extension_version: VERSION,
+            reason: request.reason || null,
+          }),
+        });
+        sendResponse({ ok: true });
+      } catch (e) {
+        console.warn(`[VHC BG v${VERSION}] reportWrongMatch failed:`, e.message);
+        // Never bubble error to popup — flag stays silent per product spec.
+        sendResponse({ ok: false });
+      }
+    })();
+    return true;
+  }
 
   // ═══ CHECK EXISTING CANDIDATES (Local cache + API backend) ═══
   if (request.action === 'checkExisting') {

@@ -445,6 +445,14 @@ export const aiSearchAPI = {
   search: (params) => api.post('/ai-search', params),
 };
 
+// Talent Search v2 — hybrid (semantic + lexical) retrieval with A/B
+// comparison. Powered by `/api/talent/search`. Returns both `hybrid`
+// (BGE vector + cross-encoder rerank + LTR) and `lexical` (the old
+// regex-only path) so the team can validate side-by-side before cutover.
+export const talentSearchAPI = {
+  search: (params) => api.post('/talent/search', params),
+};
+
 // Phase 54 — ML-powered sourcing (XGBoost LTR + k-Means diversification +
 // PCA-compressed embeddings). Used by AdvancedSearchPage and
 // FindCandidatesPage AI tab to re-rank vector-search results by historical

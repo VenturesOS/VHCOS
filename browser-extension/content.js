@@ -3628,6 +3628,9 @@
       });
       
       if (response && Array.isArray(response.results)) {
+        // Badge Phase A: forward audit_id from check-existing so we can
+        // wire the "Wrong match?" feedback link on each rendered badge.
+        const auditId = response.audit_id || null;
         for (const res of response.results) {
           const match = cardMap[res.index];
           if (match && res.exists) {
@@ -3639,6 +3642,9 @@
               match_confidence: res.match_confidence,
               // Server-built deep-link — preferred over any client-side guess
               profile_url: res.profile_url,
+              // Wrong-match flag context (Badge Phase A)
+              audit_id: auditId,
+              card_idx: res.index,
             });
           }
         }
@@ -3883,6 +3889,52 @@
       } else {
         nameEl.parentNode.appendChild(badge);
       }
+
+      // Badge Phase A (2026-06-15): tiny "✗ Wrong match?" link rendered
+      // next to the green badge. One click → silent POST to
+      // /api/extension/audit/wrong-match. No popup, no confirmation —
+      // recruiter just flags it and continues working. We swap the link
+      // for a discreet "Thanks" once recorded so they don't double-tap.
+      const flag = document.createElement('a');
+      flag.className = 'vhc-wrong-match-flag';
+      flag.href = '#';
+      flag.innerText = '✗ Wrong match?';
+      flag.title = 'Flag this badge as a wrong match. Silent — used to tune accuracy.';
+      flag.style.cssText = (
+        'display:inline-block;margin-left:6px;padding:0 4px;' +
+        'font-size:10px;font-weight:500;color:#9ca3af;' +
+        'text-decoration:none;cursor:pointer;line-height:1.2;' +
+        'border:1px dashed #d1d5db;border-radius:3px;vertical-align:middle;'
+      );
+      flag.addEventListener('mouseenter', () => { flag.style.color = '#dc2626'; flag.style.borderColor = '#dc2626'; });
+      flag.addEventListener('mouseleave', () => { flag.style.color = '#9ca3af'; flag.style.borderColor = '#d1d5db'; });
+      flag.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (flag.dataset.vhcFlagged === '1') return;
+        flag.dataset.vhcFlagged = '1';
+        flag.innerText = '✓ Thanks';
+        flag.style.color = '#059669';
+        flag.style.borderColor = '#a7f3d0';
+        try {
+          chrome.runtime.sendMessage({
+            action: 'reportWrongMatch',
+            audit_id: info.audit_id || null,
+            card_idx: info.card_idx,
+            badge_candidate_id: info.candidate_id || '',
+            card_name: info.name || null,
+            card_headline: info.headline || null,
+            card_employer: info.current_employer || null,
+            card_location: info.location || null,
+            page_url: window.location.href,
+          });
+        } catch (_) { /* swallow — flag must stay silent */ }
+        // Fade out the flagged badge so the recruiter visually knows the
+        // (likely wrong) match is no longer "blocking" their workflow.
+        if (badge) badge.style.opacity = '0.45';
+        setTimeout(() => { if (flag.parentNode) flag.parentNode.removeChild(flag); }, 4000);
+      });
+      badge.parentNode.insertBefore(flag, badge.nextSibling);
     }
     
     // 3. Inject click interceptor on all profile link elements inside this card

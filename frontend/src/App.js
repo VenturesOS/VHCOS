@@ -73,6 +73,7 @@ const ContactSubmissionsPage = React.lazy(() => import("./pages/admin/ContactSub
 const SubmissionTrackerPage = React.lazy(() => import("./pages/admin/SubmissionTrackerPage"));
 const HiringFunnelPage = React.lazy(() => import("./pages/admin/HiringFunnelPage"));
 const AdvancedSearchPage = React.lazy(() => import("./pages/shared/AdvancedSearchPage"));
+const TalentSearchABPage = React.lazy(() => import("./pages/shared/TalentSearchABPage"));
 const CompanyProfilePage = React.lazy(() => import("./pages/admin/CompanyProfilePage"));
 // Tab wrapper pages (merged sidebar items)
 const CandidateBankTabsPage = React.lazy(() => import("./pages/admin/CandidateBankTabsPage"));
@@ -201,6 +202,7 @@ function App() {
             <Route path="advanced-search" element={<AdvancedSearchPage />} />
             <Route path="company-profile/:companyId" element={<CompanyProfilePage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
+            <Route path="talent-search" element={<TalentSearchABPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="jobs" element={<AdminJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
@@ -243,6 +245,7 @@ function App() {
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
+            <Route path="talent-search" element={<TalentSearchABPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
             <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="attendance" element={<AttendancePage />} />
@@ -274,6 +277,7 @@ function App() {
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
+            <Route path="talent-search" element={<TalentSearchABPage />} />
             <Route path="candidate-bank" element={<EmployerCandidateBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
