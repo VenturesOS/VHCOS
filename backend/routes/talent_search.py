@@ -315,15 +315,51 @@ def _skills_blob(c: Dict[str, Any]) -> str:
     return " ".join(parts).lower()
 
 
+def _ctc_of(c: Dict[str, Any]) -> Optional[float]:
+    """Return the candidate's current CTC in raw rupees, or None.
+    Naukri / our extension store as integer rupees (e.g. 1,500,000).
+    -1 sentinel means 'not specified'."""
+    for k in ("current_salary", "annual_ctc", "ctc", "current_ctc", "salary"):
+        v = c.get(k)
+        if v is None: continue
+        try:
+            f = float(v)
+            if f > 0: return f
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _expected_ctc_of(c: Dict[str, Any]) -> Optional[float]:
+    v = c.get("expected_salary") or c.get("expected_ctc")
+    try:
+        f = float(v) if v is not None else None
+        if f and f > 0: return f
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
 def _apply_structured_filters(
     cands: List[Dict[str, Any]],
     filters: Dict[str, Any],
+    *,
+    strict: bool = False,
 ) -> List[Dict[str, Any]]:
     """Apply LLM-extracted structured filters as a post-retrieval intersection.
 
-    Soft-match philosophy: we drop a candidate only when a filter EXPLICITLY
-    contradicts them. Missing fields on the candidate are kept — the hybrid
-    retriever already used the semantic signal to surface them.
+    Two modes
+    ---------
+    * **strict=False** (free-text query path) — softer matching, missing
+      candidate fields don't cause a drop. Designed so AI-parsed filters
+      from a vague NL query don't accidentally cull legitimate results.
+
+    * **strict=True** (mandate-driven path, ``job_id`` provided) — the
+      mandate is the source of truth: a candidate WITHOUT the
+      location/experience/CTC field is rejected when those filters are
+      set. Recruiters explicitly picked the mandate — surfacing a
+      Delhi candidate for a Chennai mandate is worse than showing fewer
+      results.
     """
     if not filters:
         return cands
@@ -337,22 +373,39 @@ def _apply_structured_filters(
     company_inc = [c.lower() for c in (filters.get("company_include") or []) if c]
     company_exc = [c.lower() for c in (filters.get("company_exclude") or []) if c]
     designation_inc = [d.lower() for d in (filters.get("designation_include") or []) if d]
+    ctc_min = filters.get("ctc_min")
+    ctc_max = filters.get("ctc_max")
+    # ±1 year leniency on the experience band — mandates are noisy.
+    exp_tol = float(filters.get("experience_tolerance", 1.0))
 
     out: List[Dict[str, Any]] = []
     for c in cands:
         e = _exp(c)
-        # Experience — only filter when candidate HAS the field
-        if e is not None:
-            if min_e is not None and e < float(min_e):
-                continue
-            if max_e is not None and e > float(max_e):
-                continue
+        # Experience — strict mode rejects when missing, soft mode keeps it
+        if min_e is not None or max_e is not None:
+            if e is None:
+                if strict: continue  # missing exp → drop in strict mode
+            else:
+                if min_e is not None and e < float(min_e) - exp_tol: continue
+                if max_e is not None and e > float(max_e) + exp_tol: continue
 
-        # Skills — at least one match required when filter is set
+        # Location — strict mode drops candidates without a location AND
+        # candidates outside the include set. Naukri candidates almost
+        # always have a location so the false-drop rate is low.
+        if location_inc:
+            loc = _location(c)
+            if not loc:
+                if strict: continue
+            else:
+                if not any(l in loc for l in location_inc):
+                    continue
+
+        # Skills — at least one match required when filter is set.
+        # Falls back to designation/headline for things like "Python"
+        # appearing in the title but not in the skill array.
         if skills:
             blob = _skills_blob(c)
             if not any(s in blob for s in skills):
-                # Soft escape: also check designation/headline for the skill
                 des = _designation(c)
                 if not any(s in des for s in skills):
                     continue
@@ -367,12 +420,6 @@ def _apply_structured_filters(
             if ind and any(i in ind for i in industry_exc):
                 continue
 
-        # Location
-        if location_inc:
-            loc = _location(c)
-            if loc and not any(l in loc for l in location_inc):
-                continue
-
         # Company include/exclude
         emp = (c.get("current_employer") or c.get("current_company") or "").lower()
         if company_inc and emp and not any(co in emp for co in company_inc):
@@ -385,6 +432,25 @@ def _apply_structured_filters(
             des = _designation(c)
             if des and not any(d in des for d in designation_inc):
                 continue
+
+        # CTC — supports both raw rupees (1_500_000) and lakhs (15.0).
+        # We coerce both sides to "rupees" using a 1L threshold heuristic
+        # because mandates and candidates store the field inconsistently.
+        if ctc_min is not None or ctc_max is not None:
+            cur = _ctc_of(c)
+            exp_ctc = _expected_ctc_of(c)
+            ctc = cur or exp_ctc
+            if ctc is None:
+                if strict: continue
+            else:
+                # Normalise: any value < 1000 is lakhs, multiply by 1e5
+                if ctc < 1000: ctc = ctc * 1e5
+                lo = float(ctc_min) if ctc_min is not None else None
+                hi = float(ctc_max) if ctc_max is not None else None
+                if lo is not None and lo < 1000: lo = lo * 1e5
+                if hi is not None and hi < 1000: hi = hi * 1e5
+                if lo is not None and ctc < lo * 0.80: continue  # 20% leniency
+                if hi is not None and ctc > hi * 1.20: continue
 
         out.append(c)
     return out
