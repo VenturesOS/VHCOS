@@ -434,6 +434,7 @@ async def find_candidates_by_text(
     min_score: float = 0.40,
     routing_key: Optional[str] = None,
     timing: Optional[Dict[str, int]] = None,
+    location_hint: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Free-form semantic search ('ML engineer with fintech in Bangalore').
 
@@ -516,6 +517,60 @@ async def find_candidates_by_text(
             timing["cosine_fallback_ms"] = int((time.time() - _t) * 1000)
             timing["cosine_fallback_hits"] = len(pool)
 
+    # ── Location seed (mandate-driven recall fix, Phase 55 / 2026-06-16) ──
+    # The vector index covers only ~1.4% of `candidate_bank`. For a tight
+    # mandate (e.g. Bangalore + 19-25L), the cluster-routed semantic pool
+    # routinely returns 0 location-correct candidates — and the keyword
+    # top-up at the bottom never fires because `len(pool) >= limit` from
+    # other geographies. Seed the pool with a location-scoped DB scan so
+    # the reranker (and the downstream strict filter) actually have
+    # Bangalore candidates to work with.
+    if location_hint and (location_hint or "").strip():
+        _t = time.time()
+        loc = location_hint.strip()
+        # Indian city aliases (Bangalore↔Bengaluru, Bombay↔Mumbai, …).
+        # Kept inline so this service stays standalone — same map exists in
+        # routes/talent_search.py for the strict-filter intersection.
+        _CITY_ALIASES = {
+            "bangalore": ["bengaluru"], "bengaluru": ["bangalore"],
+            "bombay": ["mumbai"],       "mumbai": ["bombay"],
+            "calcutta": ["kolkata"],    "kolkata": ["calcutta"],
+            "madras": ["chennai"],      "chennai": ["madras"],
+            "gurgaon": ["gurugram"],    "gurugram": ["gurgaon"],
+        }
+        base = loc.lower()
+        loc_terms = [base] + _CITY_ALIASES.get(base, [])
+        seen_ids = {r.get("candidate_id") for r in (pool or []) if r.get("candidate_id")}
+        # Token-scoped query so the seeder doesn't pull every Bangalore
+        # candidate — only those that also share at least one query token.
+        # Inject ALL location aliases so Bengaluru-stored candidates surface
+        # for a Bangalore mandate (and vice-versa).
+        seed_query = f"{' '.join(loc_terms)} {query}".strip()
+        seed = await _keyword_fallback_search(
+            db, seed_query, max(limit * 2, 40), exclude_ids=seen_ids
+        )
+        # Keep only seeds whose location actually matches the hint (or alias).
+        # `_keyword_fallback_search` joins location with skills/employer/etc.
+        # via $or, so a seed can come in from skill-match alone.
+        seed = [
+            s for s in seed
+            if any(t in (str(s.get("current_location") or "")).lower() for t in loc_terms)
+        ]
+        # Track seed IDs so we can guarantee they're in the final result
+        # set even if the reranker scores them low (no embedding/LTR features).
+        location_seed_ids: set = set()
+        if seed:
+            for s in seed:
+                s.setdefault("match_type", "location_seed")
+                if s.get("candidate_id"):
+                    location_seed_ids.add(s["candidate_id"])
+            pool = (pool or []) + seed
+        if timing is not None:
+            timing["location_seed_ms"] = int((time.time() - _t) * 1000)
+            timing["location_seed_hits"] = len(seed)
+    else:
+        location_seed_ids = set()
+
     # ── A/B rerank ──────────────────────────────────────────────────
     from services import ltr_service
     arm_ltr = ltr_service.should_use_ltr_arm(routing_key or query)
@@ -535,6 +590,22 @@ async def find_candidates_by_text(
         else:
             if timing is not None: timing["rerank_arm"] = "cross_encoder"
     if timing is not None: timing["rerank_ms"] = int((time.time() - _t) * 1000)
+
+    # Guarantee location seeds survive the rerank cull. A `_keyword_fallback_search`
+    # candidate has no embedding (cosine=0) and no LTR features, so both arms
+    # tend to push them to the bottom — even when the recruiter explicitly
+    # filtered on that location. Re-inject any missing seeds so the strict
+    # filter downstream has a chance to keep them.
+    if location_seed_ids:
+        ranked_ids = {r.get("candidate_id") for r in ranked if r.get("candidate_id")}
+        missing = [s for s in (pool or []) if s.get("candidate_id") in (location_seed_ids - ranked_ids)]
+        if missing:
+            # Slot seeds at the END so they don't crowd out high-confidence
+            # semantic hits — the strict filter (called by the route layer)
+            # will reorder by relevance.
+            ranked = ranked + missing
+            if timing is not None:
+                timing["location_seed_reinjected"] = len(missing)
 
     _t = time.time()
     await _enrich_with_candidate_bank(db, ranked)

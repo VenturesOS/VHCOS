@@ -355,6 +355,28 @@ def _expected_ctc_of(c: Dict[str, Any]) -> Optional[float]:
     return None
 
 
+# Indian city aliases — a mandate that says "Bangalore" must match
+# candidates stored as "Bengaluru" (and vice-versa). Kept tiny on purpose;
+# extend only when a real mandate surfaces a mismatch.
+_CITY_ALIASES: Dict[str, List[str]] = {
+    "bangalore": ["bengaluru"], "bengaluru": ["bangalore"],
+    "bombay": ["mumbai"],       "mumbai": ["bombay"],
+    "calcutta": ["kolkata"],    "kolkata": ["calcutta"],
+    "madras": ["chennai"],      "chennai": ["madras"],
+    "gurgaon": ["gurugram"],    "gurugram": ["gurgaon"],
+    "trivandrum": ["thiruvananthapuram"], "thiruvananthapuram": ["trivandrum"],
+    "pondicherry": ["puducherry"], "puducherry": ["pondicherry"],
+}
+
+
+def _expand_location_terms(loc: str) -> List[str]:
+    """Return [loc] + known aliases, all lowercased.  Empty input → []."""
+    if not loc:
+        return []
+    base = loc.strip().lower()
+    return [base] + _CITY_ALIASES.get(base, [])
+
+
 def _apply_structured_filters(
     cands: List[Dict[str, Any]],
     filters: Dict[str, Any],
@@ -384,7 +406,12 @@ def _apply_structured_filters(
     skills = [s.lower() for s in (filters.get("skills") or []) if s]
     industry_inc = [i.lower() for i in (filters.get("industry_include") or []) if i]
     industry_exc = [i.lower() for i in (filters.get("industry_exclude") or []) if i]
-    location_inc = [l.lower() for l in (filters.get("location_include") or []) if l]
+    location_inc = [
+        term
+        for raw in (filters.get("location_include") or [])
+        if raw
+        for term in _expand_location_terms(raw)
+    ]
     company_inc = [c.lower() for c in (filters.get("company_include") or []) if c]
     company_exc = [c.lower() for c in (filters.get("company_exclude") or []) if c]
     designation_inc = [d.lower() for d in (filters.get("designation_include") or []) if d]
@@ -514,7 +541,12 @@ def _explain_match(
             reasons.append({"label": f"Good semantic ({score:.2f})", "kind": "semantic"})
 
     # 3. Filter matches — strict signals the recruiter (or mandate) requested
-    locs = [l.lower() for l in (filters.get("location_include") or []) if l]
+    locs = [
+        term
+        for raw in (filters.get("location_include") or [])
+        if raw
+        for term in _expand_location_terms(raw)
+    ]
     if locs:
         cand_loc = (c.get("current_location") or "").lower()
         if cand_loc and any(l in cand_loc for l in locs):
@@ -740,12 +772,21 @@ async def talent_search(
     try:
         # Pull a wider pool so structured-filter intersection still leaves
         # us with `limit` results in most cases.
+        # Location hint: when the filter (mandate or manual) requests a city,
+        # pass it to `find_candidates_by_text` so the service seeds the pool
+        # with location-correct candidates before reranking. This fixes the
+        # tight-band recall gap (e.g. Bangalore 19-25L returning 0).
+        loc_hint = None
+        loc_inc = filters.get("location_include") if isinstance(filters, dict) else None
+        if loc_inc and isinstance(loc_inc, list) and loc_inc:
+            loc_hint = str(loc_inc[0]) if loc_inc[0] else None
         pool = await find_candidates_by_text(
             db, q,
             limit=min(req.limit * 3, 200),
             min_score=0.35,
             routing_key=routing_key,
             timing=hybrid_breakdown,
+            location_hint=loc_hint,
         )
         normalised = [_normalise_hybrid(r) for r in pool]
         # Mandate-driven path (job_id provided) — the recruiter explicitly

@@ -7,7 +7,7 @@ smoke at PRD time.
 from __future__ import annotations
 
 from routes.talent_search import _build_query_from_job, _apply_structured_filters
-from routes.talent_search import _explain_match
+from routes.talent_search import _explain_match, _expand_location_terms
 
 
 
@@ -235,8 +235,9 @@ def test_explain_match_filter_chips():
     assert any("Exp 8y in 5-10y" in l for l in labels)
     assert any("CTC ₹22.0L" in l for l in labels)
     assert any("Skills: React" in l for l in labels)
-    # Location chip — "bangalore" not in "bengaluru, ka" so no chip
-    assert not any(l.startswith("Location:") for l in labels)
+    # Location chip — "bangalore" now aliases to "bengaluru" so the chip
+    # IS produced even though raw strings don't substring-match.
+    assert any(l.startswith("Location: Bengaluru") for l in labels)
 
 
 def test_explain_match_location_alias():
@@ -288,4 +289,38 @@ def test_explain_match_caps_at_six():
     }
     rs = _explain_match(c, "engineer mumbai", filters, leg="hybrid")
     assert len(rs) <= 6
+
+
+
+# ── City alias resolution (Bangalore ↔ Bengaluru, etc.) ───────────────
+
+
+def test_expand_location_terms_known_aliases():
+    assert set(_expand_location_terms("Bangalore")) == {"bangalore", "bengaluru"}
+    assert set(_expand_location_terms("Bengaluru")) == {"bengaluru", "bangalore"}
+    assert set(_expand_location_terms("Mumbai")) == {"mumbai", "bombay"}
+    assert set(_expand_location_terms("Gurugram")) == {"gurugram", "gurgaon"}
+
+
+def test_expand_location_terms_unknown_passes_through():
+    assert _expand_location_terms("Pune") == ["pune"]
+    assert _expand_location_terms("") == []
+    assert _expand_location_terms(None) == []
+
+
+def test_strict_filter_matches_via_alias():
+    """Mandate says 'Bangalore', candidate stored as 'Bengaluru' — must match."""
+    cands = [
+        _cand("A", current_location="Bengaluru", experience_years=8, current_salary=1_500_000),
+        _cand("B", current_location="Mumbai",    experience_years=8, current_salary=1_500_000),
+    ]
+    out = _apply_structured_filters(cands, {"location_include": ["Bangalore"]}, strict=True)
+    assert [c["id"] for c in out] == ["A"]
+
+
+def test_explain_match_chip_uses_alias():
+    c = {"current_location": "Bengaluru, KA", "score": 0.5, "match_type": "vector"}
+    rs = _explain_match(c, "x", {"location_include": ["Bangalore"]}, leg="hybrid")
+    labels = [r["label"] for r in rs]
+    assert any(l.startswith("Location: Bengaluru") for l in labels)
 

@@ -29,6 +29,36 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-16) Mandate recall fix — location-aware pool seeding + city aliases.**
+  Bangalore mandates were returning 0 because the cluster-routed semantic pool
+  rarely overlaps with the requested geography (only ~1.4% of `candidate_bank`
+  is embedded) and the existing keyword top-up only fires when the pool is
+  under-full. Three coordinated fixes:
+    1. `find_candidates_by_text` accepts a new `location_hint` arg. When set,
+       it runs a token-scoped `_keyword_fallback_search` over `candidate_bank`,
+       post-filters to candidates whose `current_location` matches the hint
+       (or alias), and merges them into the pool BEFORE rerank.
+    2. The reranker (cross-encoder / LTR / hybrid) gives zero-cosine seed
+       candidates a low score and they get culled with the 30-item cap; we
+       now re-inject any seeds dropped by the rerank back onto the end of
+       the result list, so they reach the strict filter and the explainer chips.
+    3. Indian city aliases — `Bangalore ↔ Bengaluru`, `Bombay ↔ Mumbai`,
+       `Calcutta ↔ Kolkata`, `Madras ↔ Chennai`, `Gurgaon ↔ Gurugram` (+ a few
+       smaller pairs). Used by `_apply_structured_filters`, `_explain_match`,
+       and the location seed.
+  Endpoint passes `location_hint = filters.location_include[0]` automatically
+  when the mandate (or manual filter) sets a city.
+  Live-verified: `sales manager bangalore` → 10 results, all
+  `Bengaluru / Bangalore - Karnataka`, with `[Location: Bengaluru]` chip on
+  each. `hybrid_breakdown` now reports `location_seed_hits` /
+  `location_seed_reinjected` for observability.
+  Tests: 36/36 across `tests/test_talent_search_mandate.py` (+4 new — alias
+  helper, alias passes through unknown city, strict filter via alias, chip via
+  alias) + `tests/test_talent_search_and_wrong_match.py`.
+  Files: `services/talent_graph_service.py` (`find_candidates_by_text` +
+  `location_hint`), `routes/talent_search.py` (`_CITY_ALIASES`,
+  `_expand_location_terms`, hint propagation).
+
 - **(2026-06-16) Talent Search — "Why match?" inline explainer chips.**
   Each hybrid + lexical card on `/admin/talent-search` now carries a `match_reasons[]`
   array (computed by `_explain_match(c, query, filters, leg=...)` — pure function, no
