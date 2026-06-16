@@ -433,8 +433,14 @@ async def find_candidates_by_text(
     limit: int = 20,
     min_score: float = 0.40,
     routing_key: Optional[str] = None,
+    timing: Optional[Dict[str, int]] = None,
 ) -> List[Dict[str, Any]]:
     """Free-form semantic search ('ML engineer with fintech in Bangalore').
+
+    Optional ``timing`` dict — when passed, populated with per-step
+    millisecond timings (`embed_ms`, `vector_search_ms`, `cosine_fallback_ms`,
+    `rerank_ms`, `enrich_ms`). Lets the talent-search endpoint surface a
+    latency breakdown to callers without a redeploy.
 
     Uses a hybrid score = 0.85·cosine + 0.15·keyword_overlap so that candidates
     whose source text actually mentions the query's discriminative keywords
@@ -455,13 +461,16 @@ async def find_candidates_by_text(
     smart-tag fallback over the live `candidate_bank` so users never see an
     empty page just because the backfill hasn't caught up.
     """
+    _t = time.time()
     qvec = await asyncio.to_thread(embed_text, query)
+    if timing is not None: timing["embed_ms"] = int((time.time() - _t) * 1000)
     if not qvec:
         return await _keyword_fallback_search(db, query, limit)
 
     # Pull a wider pool than the user asked for so re-rank has room to work.
     fetch_limit = max(limit * 3, 60)
 
+    _t = time.time()
     pool = None
     try:
         pipeline = [
@@ -494,51 +503,55 @@ async def find_candidates_by_text(
             pool = [r for r in results if r.get("score", 0) >= min_score]
     except Exception as e:
         logger.info(f"[TalentGraph] text-search via $vectorSearch unavailable: {e}")
+    if timing is not None:
+        timing["vector_search_ms"] = int((time.time() - _t) * 1000)
+        timing["vector_search_hits"] = len(pool) if pool is not None else 0
 
     if pool is None:
+        _t = time.time()
         pool = await _cosine_topk_fallback(
             db, qvec, exclude_id=None, limit=fetch_limit, min_score=min_score, with_text=True
         )
+        if timing is not None:
+            timing["cosine_fallback_ms"] = int((time.time() - _t) * 1000)
+            timing["cosine_fallback_hits"] = len(pool)
 
     # ── A/B rerank ──────────────────────────────────────────────────
-    # LTR arm (Phase 56.8): 10% of traffic (env LTR_AB_PCT) routes
-    # through the XGBoost ranker. The arm is decided deterministically
-    # from `routing_key` (typically user_id+query) so a recruiter
-    # retrying the same query lands in the same arm — keeps NDCG
-    # measurable across repeats.
     from services import ltr_service
     arm_ltr = ltr_service.should_use_ltr_arm(routing_key or query)
 
+    _t = time.time()
     ranked = None
     if arm_ltr and pool:
-        # LTR needs candidate_bank fields (skills/cluster_id/updated_at)
-        # that the slim vector projection doesn't include — fetch only
-        # for the A/B-selected arm to keep cross-encoder traffic untouched.
         await _load_ltr_features(db, pool)
         ranked = ltr_service.rerank(pool, query, limit)
+        if timing is not None: timing["rerank_arm"] = "ltr_xgboost"
     if ranked is None:
         # Default arm: cross-encoder (precision-boost) → hybrid fallback.
-        # CROSS_ENCODER_ENABLED env-gated; falls back to bi-encoder hybrid
-        # rerank when the sidecar is unreachable or disabled.
-        # NOTE: `_cross_encoder_rerank` does a blocking HTTP call to the
-        # BGE sidecar (up to BGE_SIDECAR_TIMEOUT seconds) — run it in a
-        # thread so a slow sidecar can't freeze the whole event loop.
         ranked = (await asyncio.to_thread(_cross_encoder_rerank, pool, query, limit)) if pool else None
         if ranked is None:
             ranked = _hybrid_rerank(pool, query, limit)
+            if timing is not None: timing["rerank_arm"] = "hybrid"
+        else:
+            if timing is not None: timing["rerank_arm"] = "cross_encoder"
+    if timing is not None: timing["rerank_ms"] = int((time.time() - _t) * 1000)
+
+    _t = time.time()
     await _enrich_with_candidate_bank(db, ranked)
-    # Tag vector hits so the UI / API consumers can distinguish them from
-    # the keyword fallback top-up below.
+    if timing is not None: timing["enrich_ms"] = int((time.time() - _t) * 1000)
+
     for r in ranked:
         r.setdefault("match_type", "vector")
 
     # Top-up with keyword fallback so users always see a usable list even
     # when embedding coverage is sparse.
     if len(ranked) < limit:
+        _t = time.time()
         seen_ids = {r.get("candidate_id") for r in ranked if r.get("candidate_id")}
         needed   = limit - len(ranked)
         fallback = await _keyword_fallback_search(db, query, needed, exclude_ids=seen_ids)
         ranked.extend(fallback)
+        if timing is not None: timing["keyword_topup_ms"] = int((time.time() - _t) * 1000)
 
     return ranked
 

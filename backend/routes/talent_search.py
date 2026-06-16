@@ -395,13 +395,17 @@ async def talent_search(
     # filter schema across the UI. Failure here is non-fatal — we still
     # run the retrieval legs with an empty filter set.
     filters: Dict[str, Any] = req.filters or {}
+    extract_ms = 0
     if not filters:
+        _es = time.time()
         try:
             extraction = await extract_filters(q)
             filters = extraction.get("filters") or {}
         except Exception as e:
             logger.info(f"[TalentSearch] filter extraction skipped: {e}")
             filters = {}
+        extract_ms = int((time.time() - _es) * 1000)
+        debug["extract_filters_ms"] = extract_ms
 
     routing_key = f"{current_user.get('id', 'anon')}|{q.lower()}"
     debug: Dict[str, Any] = {}
@@ -409,6 +413,7 @@ async def talent_search(
     # ── Step 2: HYBRID leg ───────────────────────────────────────────
     t0 = time.time()
     hybrid: List[Dict[str, Any]] = []
+    hybrid_breakdown: Dict[str, Any] = {}
     try:
         # Pull a wider pool so structured-filter intersection still leaves
         # us with `limit` results in most cases.
@@ -417,6 +422,7 @@ async def talent_search(
             limit=min(req.limit * 3, 200),
             min_score=0.35,
             routing_key=routing_key,
+            timing=hybrid_breakdown,
         )
         normalised = [_normalise_hybrid(r) for r in pool]
         filtered = _apply_structured_filters(normalised, filters)
@@ -433,6 +439,8 @@ async def talent_search(
         logger.exception(f"[TalentSearch] hybrid leg failed: {e}")
         debug["hybrid_error"] = str(e)
     took_hybrid = int((time.time() - t0) * 1000)
+    if hybrid_breakdown:
+        debug["hybrid_breakdown"] = hybrid_breakdown
 
     # ── Step 3: LEXICAL leg (A/B) ────────────────────────────────────
     lexical: Optional[List[Dict[str, Any]]] = None
