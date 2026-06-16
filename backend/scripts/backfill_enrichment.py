@@ -37,8 +37,16 @@ from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
 
 from services.profile_enricher import enrich_candidate  # noqa: E402
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    force=True,  # override config.py's earlier basicConfig — without
+                 # this, the script's logger.info() calls are silently
+                 # squelched in production where vhc_config sets up
+                 # logging before this module is imported.
+)
 logger = logging.getLogger("backfill_enrichment")
+logger.setLevel(logging.INFO)
 
 
 async def _top_companies(db, n: int) -> List[str]:
@@ -61,6 +69,7 @@ async def _top_companies(db, n: int) -> List[str]:
 
 
 async def main(top: int, allow_llm: bool, dry_run: bool, limit: int) -> None:
+    logger.info(f"=== backfill_enrichment START: top={top} allow_llm={allow_llm} dry_run={dry_run} limit={limit or 'all'} ===")
     client = AsyncIOMotorClient(os.environ["MONGO_URL"], tlsAllowInvalidCertificates=True)
     db = client[os.environ["DB_NAME"]]
 
@@ -118,7 +127,7 @@ async def main(top: int, allow_llm: bool, dry_run: bool, limit: int) -> None:
                     {"id": doc["id"]}, {"$set": updates}
                 )
 
-        if seen % 100 == 0:
+        if seen % 50 == 0:
             rate = seen / max(time.time() - t0, 1e-6)
             logger.info(
                 f"  progress: {seen:,}/{total:,} "
