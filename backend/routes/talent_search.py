@@ -173,7 +173,8 @@ _CANDIDATE_PROJECTION = {
 
 
 class TalentSearchRequest(BaseModel):
-    query: str = Field(..., min_length=2)
+    query: Optional[str] = Field(None, min_length=2)
+    job_id: Optional[str] = None  # When set, build query from the mandate's JD + skills
     limit: int = Field(50, ge=1, le=200)
     compare_lexical: bool = True
     filters: Optional[Dict[str, Any]] = None  # client may pre-extract / override
@@ -186,6 +187,83 @@ class TalentSearchResponse(BaseModel):
     hybrid: List[Dict[str, Any]]
     lexical: Optional[List[Dict[str, Any]]] = None
     debug: Optional[Dict[str, Any]] = None
+    job: Optional[Dict[str, Any]] = None  # echoed when job_id was provided
+
+
+def _build_query_from_job(job: Dict[str, Any]) -> Dict[str, Any]:
+    """Compose a hybrid-search input from a mandate document.
+
+    Returns ``{"query": str, "filters": dict}`` so the caller can seed both
+    legs of the search. The query string is a compact 3-line digest that
+    reads well to the BGE encoder (no JSON blobs, no boilerplate); the
+    filters carry the deterministic fields (skills / location / exp range)
+    that the LLM extraction would otherwise have to re-derive from prose.
+    """
+    title = (job.get("title") or "").strip()
+    company = (job.get("company_name") or "").strip()
+    location = (job.get("location") or "").strip()
+
+    # Skills can live on `required_skills`, `skills`, or buried in `description`.
+    skills_raw = (
+        job.get("required_skills")
+        or job.get("skills")
+        or []
+    )
+    if isinstance(skills_raw, str):
+        # Comma / semicolon separated string fallback
+        skills_raw = [s.strip() for s in skills_raw.replace(";", ",").split(",") if s.strip()]
+    skills: List[str] = []
+    for s in (skills_raw or []):
+        if isinstance(s, dict):
+            name = s.get("name") or s.get("skill") or ""
+        else:
+            name = str(s)
+        name = name.strip()
+        if name and name not in skills:
+            skills.append(name)
+
+    # Experience range — handles common JD field names
+    min_e = (
+        job.get("min_experience")
+        or job.get("min_experience_years")
+        or job.get("experience_min")
+    )
+    max_e = (
+        job.get("max_experience")
+        or job.get("max_experience_years")
+        or job.get("experience_max")
+    )
+    try: min_e = float(min_e) if min_e not in (None, "") else None
+    except (TypeError, ValueError): min_e = None
+    try: max_e = float(max_e) if max_e not in (None, "") else None
+    except (TypeError, ValueError): max_e = None
+
+    # JD snippet — first ~600 chars is enough for the encoder to pick up
+    # the role flavour without overwhelming the cosine signal.
+    jd_snippet = (job.get("description") or job.get("jd_text") or "")
+    jd_snippet = " ".join(jd_snippet.split())[:600]  # collapse whitespace
+
+    # Compose the natural-language query
+    query_parts: List[str] = []
+    if title: query_parts.append(title)
+    if skills: query_parts.append("with " + ", ".join(skills[:8]))
+    if location: query_parts.append("in " + location)
+    if min_e or max_e:
+        if min_e and max_e: query_parts.append(f"{int(min_e)}-{int(max_e)} years")
+        elif min_e: query_parts.append(f"{int(min_e)}+ years")
+        elif max_e: query_parts.append(f"upto {int(max_e)} years")
+    query = " ".join(query_parts).strip()
+    # Tag the JD snippet on the end so the encoder picks up nuance the
+    # title alone misses (e.g. "manage offshore PMO" → strategist vs IC).
+    if jd_snippet:
+        query = f"{query}. {jd_snippet}" if query else jd_snippet
+
+    filters: Dict[str, Any] = {}
+    if skills: filters["skills"] = skills[:12]
+    if location: filters["location_include"] = [location]
+    if min_e is not None: filters["min_experience"] = min_e
+    if max_e is not None: filters["max_experience"] = max_e
+    return {"query": query[:1500], "filters": filters}
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -387,6 +465,41 @@ async def talent_search(
     if role not in ("admin", "employer", "recruiter", "account_manager"):
         raise HTTPException(status_code=403, detail="Not authorised")
 
+    # ── Step 0: Resolve query from job_id when provided ──────────────
+    # Lets recruiters pick a running mandate from the UI instead of
+    # composing the natural-language query themselves. We synthesise a
+    # rich query string from (title + skills + first ~600 chars of JD)
+    # and seed structured filters from the mandate (location, min/max
+    # experience, skills). The LLM extraction step still runs to layer
+    # on whatever extra signal the JD body carries — but that's a free
+    # win on top of the deterministic seed.
+    job_meta: Optional[Dict[str, Any]] = None
+    if req.job_id:
+        try:
+            job = await db.jobs.find_one({"id": req.job_id}, {"_id": 0})
+        except Exception as e:
+            logger.warning(f"[TalentSearch] job fetch failed: {e}")
+            job = None
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Mandate {req.job_id} not found")
+        synthesised = _build_query_from_job(job)
+        if not req.query:
+            req.query = synthesised["query"]
+        # Seed filters BEFORE the LLM extraction step looks at them.
+        # User-supplied filters still override (req.filters wins).
+        seed_filters = synthesised["filters"]
+        if req.filters:
+            seed_filters.update({k: v for k, v in req.filters.items() if v not in (None, [], "")})
+        req.filters = seed_filters
+        job_meta = {
+            "id": job.get("id"),
+            "title": job.get("title"),
+            "company_name": job.get("company_name"),
+        }
+
+    if not req.query or len(req.query.strip()) < 2:
+        raise HTTPException(status_code=400, detail="query or job_id required")
+
     q = req.query.strip()
     if len(q) < 2:
         raise HTTPException(status_code=400, detail="query too short")
@@ -506,6 +619,7 @@ async def talent_search(
         hybrid=hybrid,
         lexical=lexical,
         debug=debug or None,
+        job=job_meta,
     )
 
 

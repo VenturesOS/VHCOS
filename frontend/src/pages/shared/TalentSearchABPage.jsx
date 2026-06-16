@@ -22,7 +22,7 @@ import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Sparkles, FileText, Briefcase, MapPin, Clock, ExternalLink, Loader2, GitCompare, Zap } from 'lucide-react';
+import { Sparkles, FileText, Briefcase, MapPin, Clock, ExternalLink, Loader2, GitCompare, Zap, X } from 'lucide-react';
 
 const EXAMPLE_QUERIES = [
   'senior react developer with AWS in Bangalore',
@@ -113,33 +113,63 @@ export default function TalentSearchABPage() {
   const [result, setResult] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [shortlistJobId, setShortlistJobId] = useState('');
+  // Mandate-driven search — when set, sends `job_id` and lets the backend
+  // synthesise the query from title + skills + JD snippet. The shortlist
+  // target defaults to the same mandate so one click can ship a candidate.
+  const [mandateId, setMandateId] = useState('');
 
   useEffect(() => {
     jobAPI.getAll().then(r => setJobs(r.data || [])).catch(() => {});
   }, []);
 
+  const handleMandateSelect = useCallback((jobId) => {
+    setMandateId(jobId);
+    setShortlistJobId(jobId);  // pre-populate shortlist target
+    // Show the human-readable hint in the query box (the backend will
+    // overwrite this with the full JD-derived query). Helps recruiters
+    // remember which mandate they're working with.
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      setQuery(`Mandate: ${job.title}${job.company_name ? ` — ${job.company_name}` : ''}`);
+    }
+  }, [jobs]);
+
+  const clearMandate = useCallback(() => {
+    setMandateId('');
+    setQuery('');
+  }, []);
+
   const handleSearch = useCallback(async (e) => {
     e?.preventDefault?.();
-    if (!query.trim() || query.trim().length < 3) {
-      toast.error('Type at least 3 characters');
+    if (!mandateId && (!query.trim() || query.trim().length < 3)) {
+      toast.error('Pick a mandate or type a query (3+ chars)');
       return;
     }
     setLoading(true);
     setResult(null);
     try {
-      const res = await talentSearchAPI.search({
-        query: query.trim(),
+      const payload = {
         limit: 25,
         compare_lexical: true,
-      });
+      };
+      if (mandateId) {
+        payload.job_id = mandateId;
+      } else {
+        payload.query = query.trim();
+      }
+      const res = await talentSearchAPI.search(payload);
       setResult(res.data);
+      // If backend synthesised a query from the mandate, show it.
+      if (mandateId && res.data?.query) {
+        setQuery(res.data.query.slice(0, 200) + (res.data.query.length > 200 ? '…' : ''));
+      }
     } catch (err) {
       console.error('[TalentSearch] failed', err);
       toast.error(err?.response?.data?.detail || 'Search failed');
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, mandateId]);
 
   const handleView = (c) => {
     navigate(`/candidate-bank?candidateId=${c.id}`);
@@ -178,14 +208,47 @@ export default function TalentSearchABPage() {
       {/* Search box */}
       <Card>
         <CardContent className="p-4">
+          {/* Mandate selector — when set, the backend builds the query from JD */}
+          <div className="flex items-center gap-2 mb-3 text-sm">
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Search for a mandate:</span>
+            <Select value={mandateId} onValueChange={handleMandateSelect}>
+              <SelectTrigger className="h-8 w-[340px]" data-testid="talent-search-mandate-select">
+                <SelectValue placeholder="Pick a running mandate (or type free-text below)" />
+              </SelectTrigger>
+              <SelectContent>
+                {jobs
+                  .filter(j => !j.status || ['open', 'active', 'in_progress', 'running'].includes(String(j.status).toLowerCase()))
+                  .map((j) => (
+                    <SelectItem key={j.id} value={j.id}>
+                      {j.title}{j.company_name ? ` — ${j.company_name}` : ''}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {mandateId && (
+              <Button
+                size="sm" variant="ghost"
+                onClick={clearMandate}
+                className="h-7 px-2"
+                data-testid="talent-search-clear-mandate"
+              >
+                <X className="h-3 w-3" />Clear
+              </Button>
+            )}
+          </div>
+
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
             <Input
               autoFocus
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. senior react developer with AWS in Bangalore"
+              onChange={(e) => { setQuery(e.target.value); if (mandateId) setMandateId(''); }}
+              placeholder={mandateId
+                ? "Mandate query will be auto-built from the JD"
+                : "e.g. senior react developer with AWS in Bangalore"}
               className="flex-1"
               data-testid="talent-search-input"
+              disabled={!!mandateId && !!query.startsWith('Mandate: ')}
             />
             <Button
               type="submit"
@@ -202,7 +265,7 @@ export default function TalentSearchABPage() {
               <button
                 key={i}
                 type="button"
-                onClick={() => setQuery(q)}
+                onClick={() => { setQuery(q); setMandateId(''); }}
                 className="text-xs px-2 py-0.5 rounded border hover:bg-muted"
                 data-testid={`talent-search-example-${i}`}
               >
