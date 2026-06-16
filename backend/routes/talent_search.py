@@ -44,6 +44,7 @@ POST /api/talent/search
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -390,25 +391,35 @@ async def talent_search(
     if len(q) < 2:
         raise HTTPException(status_code=400, detail="query too short")
 
+    debug: Dict[str, Any] = {}
+
     # ── Step 1: LLM filter extraction ────────────────────────────────
     # Reused from the existing ai-search flow so admins see one consistent
     # filter schema across the UI. Failure here is non-fatal — we still
     # run the retrieval legs with an empty filter set.
+    #
+    # Hard timeout (5 s) so a slow/unreachable RunPod sidecar cannot
+    # stall the whole search. The 500s we saw post-deploy traced to
+    # extract_filters() hanging past the gunicorn graceful-timeout.
     filters: Dict[str, Any] = req.filters or {}
     extract_ms = 0
     if not filters:
         _es = time.time()
         try:
-            extraction = await extract_filters(q)
-            filters = extraction.get("filters") or {}
-        except Exception as e:
-            logger.info(f"[TalentSearch] filter extraction skipped: {e}")
+            extraction = await asyncio.wait_for(extract_filters(q), timeout=5.0)
+            filters = (extraction or {}).get("filters") or {}
+        except asyncio.TimeoutError:
+            logger.warning("[TalentSearch] filter extraction timed out (>5s) — falling back to empty filters")
             filters = {}
+            debug["extract_filters_timeout"] = True
+        except Exception as e:  # noqa: BLE001 — never want this to 500 the request
+            logger.warning(f"[TalentSearch] filter extraction failed: {type(e).__name__}: {e}")
+            filters = {}
+            debug["extract_filters_error"] = f"{type(e).__name__}: {str(e)[:200]}"
         extract_ms = int((time.time() - _es) * 1000)
         debug["extract_filters_ms"] = extract_ms
 
     routing_key = f"{current_user.get('id', 'anon')}|{q.lower()}"
-    debug: Dict[str, Any] = {}
 
     # ── Step 2: HYBRID leg ───────────────────────────────────────────
     t0 = time.time()
