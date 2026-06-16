@@ -29,6 +29,28 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-16) Talent Search — "Why match?" inline explainer chips.**
+  Each hybrid + lexical card on `/admin/talent-search` now carries a `match_reasons[]`
+  array (computed by `_explain_match(c, query, filters, leg=...)` — pure function, no
+  DB access). Reasons are typed:
+    * `semantic` (violet) — score band + "Semantic match" / "Strong semantic (0.79)"
+    * `model` (sky) — "Cross-encoder reranked" / "AI ranker (LTR)"
+    * `filter` (emerald) — strict matches: "Location: Bengaluru", "Exp 8y in 5-10y",
+      "CTC ₹22.0L in band"
+    * `keyword` (amber) — "Skills: React, AWS +2" or "Query terms: …" when no skill
+      filter set
+  Frontend renders chips below the skill row in `ResultCard` with `data-testid="talent-search-reasons-<id>"`
+  + per-chip `data-testid="talent-search-reason-<id>-<i>"`. Capped at 6 chips so the
+  row stays readable. Same payload powers the lexical column (without semantic/model
+  chips since regex doesn't earn them).
+  Live-verified: query `react developer bangalore aws` → first hit "Preetham P /
+  Bengaluru / 0.79" with chips `[Semantic match] [Strong semantic (0.79)] [Skills: React, Aws]`.
+  Tests: 22/22 pytest (7 new — strong semantic, filter chip set, location-alias,
+  query-keyword fallback when no skill filter, LTR label, lexical-leg skip-semantic,
+  six-chip cap).
+  Files: `routes/talent_search.py` (_explain_match + wiring), `frontend/src/pages/shared/TalentSearchABPage.jsx`
+  (ResultCard chip row).
+
 - **(2026-06-15) Search Phase 2.5 — Mandate-driven STRICT filter enforcement.**
   Mandate dropdown was surfacing Delhi candidates for Chennai mandates, ignoring
   experience bands, and silently bypassing salary brackets. RCA: (1) `_apply_structured_filters`

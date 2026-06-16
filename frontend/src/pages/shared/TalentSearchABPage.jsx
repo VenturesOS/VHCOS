@@ -83,6 +83,35 @@ function ResultCard({ candidate, onShortlist, onView, columnVariant }) {
                 ))}
               </div>
             )}
+            {Array.isArray(candidate.match_reasons) && candidate.match_reasons.length > 0 && (
+              <div
+                className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-dashed border-muted-foreground/20"
+                data-testid={`talent-search-reasons-${candidate.id}`}
+                title="Why this candidate matched"
+              >
+                <span className="text-[10px] text-muted-foreground/80 font-medium mr-0.5">
+                  Why match:
+                </span>
+                {candidate.match_reasons.map((r, i) => {
+                  const palette = {
+                    semantic: 'bg-violet-50 text-violet-700 border-violet-200',
+                    filter:   'bg-emerald-50 text-emerald-700 border-emerald-200',
+                    keyword:  'bg-amber-50 text-amber-800 border-amber-200',
+                    model:    'bg-sky-50 text-sky-700 border-sky-200',
+                  };
+                  const cls = palette[r.kind] || 'bg-muted text-muted-foreground border-muted';
+                  return (
+                    <span
+                      key={i}
+                      className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}
+                      data-testid={`talent-search-reason-${candidate.id}-${i}`}
+                    >
+                      {r.label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1 shrink-0">
             <Button

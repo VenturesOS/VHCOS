@@ -7,6 +7,8 @@ smoke at PRD time.
 from __future__ import annotations
 
 from routes.talent_search import _build_query_from_job, _apply_structured_filters
+from routes.talent_search import _explain_match
+
 
 
 def test_job_query_basic():
@@ -200,3 +202,90 @@ def test_soft_mode_keeps_missing_fields():
     out = _apply_structured_filters(cands, filters, strict=False)
     # All three are kept because the missing-field rules don't fire in soft mode
     assert {c["id"] for c in out} == {"missing_loc", "missing_exp", "missing_ctc"}
+
+
+# ── Match-reasons explainer (UI chips) ────────────────────────────────
+
+
+def test_explain_match_semantic_strong():
+    c = {"score": 0.81, "match_type": "vector", "current_location": "Bangalore"}
+    rs = _explain_match(c, "react developer bangalore", {}, leg="hybrid")
+    labels = [r["label"] for r in rs]
+    assert any("Strong semantic" in l for l in labels)
+    assert any("Semantic match" in l for l in labels)
+
+
+def test_explain_match_filter_chips():
+    c = {
+        "score": 0.62, "match_type": "cross_encoder",
+        "current_location": "Bengaluru, KA",
+        "experience_years": 8,
+        "current_salary": 2_200_000,
+        "skills": ["react", "aws"],
+    }
+    filters = {
+        "location_include": ["bangalore"],   # not in cand_loc; should NOT chip
+        "min_experience": 5, "max_experience": 10,
+        "ctc_min": 2_000_000, "ctc_max": 2_500_000,
+        "skills": ["react"],
+    }
+    rs = _explain_match(c, "react", filters, leg="hybrid")
+    labels = [r["label"] for r in rs]
+    assert any("Cross-encoder" in l for l in labels)
+    assert any("Exp 8y in 5-10y" in l for l in labels)
+    assert any("CTC ₹22.0L" in l for l in labels)
+    assert any("Skills: React" in l for l in labels)
+    # Location chip — "bangalore" not in "bengaluru, ka" so no chip
+    assert not any(l.startswith("Location:") for l in labels)
+
+
+def test_explain_match_location_alias():
+    c = {"current_location": "Bangalore", "score": 0.5, "match_type": "vector"}
+    rs = _explain_match(c, "x", {"location_include": ["bangalore"]}, leg="hybrid")
+    labels = [r["label"] for r in rs]
+    assert any(l.startswith("Location: Bangalore") for l in labels)
+
+
+def test_explain_match_query_keyword_hits_when_no_skill_filter():
+    c = {
+        "score": 0.5, "match_type": "vector",
+        "current_employer": "Acme Fintech",
+        "headline": "Backend engineer",
+        "skills": ["python", "kafka"],
+    }
+    rs = _explain_match(c, "python kafka fintech backend", {}, leg="hybrid")
+    labels = [r["label"] for r in rs]
+    assert any(l.startswith("Query terms:") for l in labels)
+
+
+def test_explain_match_ltr_label():
+    c = {"score": 0.5, "match_type": "ltr_xgboost"}
+    rs = _explain_match(c, "x", {}, leg="hybrid")
+    assert any(r["label"] == "AI ranker (LTR)" for r in rs)
+
+
+def test_explain_match_lexical_skips_semantic_label():
+    """Lexical leg must NOT claim semantic match — it's regex only."""
+    c = {"current_location": "Pune", "experience_years": 6}
+    rs = _explain_match(c, "x", {"location_include": ["pune"], "min_experience": 5, "max_experience": 8}, leg="lexical")
+    labels = [r["label"] for r in rs]
+    assert not any("Semantic" in l for l in labels)
+    assert not any("AI ranker" in l for l in labels)
+    assert any(l.startswith("Location:") for l in labels)
+    assert any("Exp 6y" in l for l in labels)
+
+
+def test_explain_match_caps_at_six():
+    c = {
+        "score": 0.9, "match_type": "vector",
+        "current_location": "Mumbai", "experience_years": 7,
+        "current_salary": 2_000_000, "skills": ["a", "b", "c", "d", "e"],
+    }
+    filters = {
+        "location_include": ["mumbai"], "min_experience": 5, "max_experience": 10,
+        "ctc_min": 1_500_000, "ctc_max": 3_000_000,
+        "skills": ["a", "b", "c", "d", "e"],
+    }
+    rs = _explain_match(c, "engineer mumbai", filters, leg="hybrid")
+    assert len(rs) <= 6
+

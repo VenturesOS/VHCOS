@@ -476,6 +476,122 @@ def _apply_structured_filters(
 # render them with one component.
 # ──────────────────────────────────────────────────────────────────────
 
+def _explain_match(
+    c: Dict[str, Any],
+    query: str,
+    filters: Optional[Dict[str, Any]] = None,
+    *,
+    leg: str = "hybrid",
+) -> List[Dict[str, str]]:
+    """Build a short list of `{label, kind}` reasons explaining why a candidate
+    surfaced. Rendered as chips on the A/B Talent Search UI so recruiters can
+    quickly trust (or flag) every hit. Pure function — no DB access.
+
+    `kind` is one of: "semantic", "filter", "keyword", "model" (the UI maps
+    it to a chip colour). `label` is a short human string (<35 chars).
+    """
+    reasons: List[Dict[str, str]] = []
+    filters = filters or {}
+
+    # 1. Model / retrieval mode — tells the recruiter HOW the hit was found
+    mtype = c.get("match_type")
+    if leg == "hybrid":
+        if mtype == "ltr_xgboost":
+            reasons.append({"label": "AI ranker (LTR)", "kind": "model"})
+        elif mtype == "cross_encoder":
+            reasons.append({"label": "Cross-encoder reranked", "kind": "model"})
+        elif mtype == "keyword":
+            reasons.append({"label": "Keyword top-up", "kind": "keyword"})
+        else:
+            reasons.append({"label": "Semantic match", "kind": "semantic"})
+
+    # 2. Score band — semantic confidence
+    score = c.get("score")
+    if isinstance(score, (int, float)) and leg == "hybrid":
+        if score >= 0.70:
+            reasons.append({"label": f"Strong semantic ({score:.2f})", "kind": "semantic"})
+        elif score >= 0.50:
+            reasons.append({"label": f"Good semantic ({score:.2f})", "kind": "semantic"})
+
+    # 3. Filter matches — strict signals the recruiter (or mandate) requested
+    locs = [l.lower() for l in (filters.get("location_include") or []) if l]
+    if locs:
+        cand_loc = (c.get("current_location") or "").lower()
+        if cand_loc and any(l in cand_loc for l in locs):
+            reasons.append({
+                "label": f"Location: {c.get('current_location')}",
+                "kind": "filter",
+            })
+
+    min_e = filters.get("min_experience")
+    max_e = filters.get("max_experience")
+    if (min_e is not None or max_e is not None) and c.get("experience_years") is not None:
+        try:
+            e = float(c["experience_years"])
+            lo = float(min_e) if min_e is not None else None
+            hi = float(max_e) if max_e is not None else None
+            if (lo is None or e >= lo - 1) and (hi is None or e <= hi + 1):
+                if lo is not None and hi is not None:
+                    reasons.append({"label": f"Exp {int(e)}y in {int(lo)}-{int(hi)}y", "kind": "filter"})
+                elif lo is not None:
+                    reasons.append({"label": f"Exp {int(e)}y ≥ {int(lo)}y", "kind": "filter"})
+                elif hi is not None:
+                    reasons.append({"label": f"Exp {int(e)}y ≤ {int(hi)}y", "kind": "filter"})
+        except (TypeError, ValueError):
+            pass
+
+    ctc_min = filters.get("ctc_min")
+    ctc_max = filters.get("ctc_max")
+    if ctc_min is not None or ctc_max is not None:
+        ctc = _ctc_of(c) or _expected_ctc_of(c)
+        if ctc is not None:
+            ctc_norm = ctc * 1e5 if ctc < 1000 else ctc
+            lo = float(ctc_min) if ctc_min is not None else None
+            hi = float(ctc_max) if ctc_max is not None else None
+            if lo is not None and lo < 1000: lo *= 1e5
+            if hi is not None and hi < 1000: hi *= 1e5
+            in_lo = lo is None or ctc_norm >= lo * 0.80
+            in_hi = hi is None or ctc_norm <= hi * 1.20
+            if in_lo and in_hi:
+                reasons.append({"label": f"CTC ₹{ctc_norm/1e5:.1f}L in band", "kind": "filter"})
+
+    # 4. Skill / keyword overlap — discrete tokens that matched
+    skills_filter = [s.lower() for s in (filters.get("skills") or []) if s]
+    cand_skills_blob = _skills_blob(c) + " " + _designation(c)
+    if skills_filter:
+        hit = [s for s in skills_filter if s in cand_skills_blob]
+        if hit:
+            head = ", ".join(s.title() for s in hit[:3])
+            extra = f" +{len(hit)-3}" if len(hit) > 3 else ""
+            reasons.append({"label": f"Skills: {head}{extra}", "kind": "keyword"})
+
+    # 5. Free-text query token hits — same logic as _query_keywords but inlined
+    #    so this remains a pure function (no module-level imports of services).
+    if query and not skills_filter:
+        import re as _re
+        toks = [
+            t.lower() for t in _re.findall(r"[A-Za-z][A-Za-z\+\-\.]{2,}", query.lower())
+            if t.lower() not in {
+                "and", "the", "with", "who", "for", "from", "into", "year", "years",
+                "exp", "experience", "experienced", "senior", "junior", "lead",
+                "candidate", "candidates", "must", "should", "looking",
+            }
+        ][:8]
+        haystack = " ".join([
+            cand_skills_blob,
+            (c.get("current_employer") or ""),
+            (c.get("headline") or ""),
+            (c.get("summary") or ""),
+        ]).lower()
+        hits = [t for t in toks if t in haystack]
+        if hits:
+            head = ", ".join(t for t in hits[:3])
+            extra = f" +{len(hits)-3}" if len(hits) > 3 else ""
+            reasons.append({"label": f"Query terms: {head}{extra}", "kind": "keyword"})
+
+    return reasons[:6]   # cap so the chip row stays readable
+
+
 def _normalise_hybrid(r: Dict[str, Any]) -> Dict[str, Any]:
     """Map a `find_candidates_by_text` result to the unified shape."""
     return {
@@ -500,6 +616,7 @@ def _normalise_hybrid(r: Dict[str, Any]) -> Dict[str, Any]:
         "smart_tags": r.get("smart_tags") or [],
         "score": round(float(r.get("score") or 0.0), 4),
         "match_type": r.get("match_type") or "vector",
+        "match_reasons": r.get("match_reasons") or [],
         "source": "hybrid",
     }
 
@@ -527,6 +644,7 @@ def _normalise_lexical(c: Dict[str, Any]) -> Dict[str, Any]:
         "smart_tags": c.get("smart_tags") or [],
         "score": None,
         "match_type": "lexical_regex",
+        "match_reasons": c.get("match_reasons") or [],
         "source": "lexical",
     }
 
@@ -659,6 +777,9 @@ async def talent_search(
                 }
                 filtered = normalised
         hybrid = filtered[: req.limit]
+        # Attach human-readable reasons to each hybrid card (UI chips).
+        for c in hybrid:
+            c["match_reasons"] = _explain_match(c, q, filters, leg="hybrid")
     except Exception as e:
         logger.exception(f"[TalentSearch] hybrid leg failed: {e}")
         debug["hybrid_error"] = str(e)
@@ -683,6 +804,8 @@ async def talent_search(
             except Exception:
                 pass
             lexical = [_normalise_lexical(c) for c in rows]
+            for c in lexical:
+                c["match_reasons"] = _explain_match(c, q, filters, leg="lexical")
         except Exception as e:
             logger.exception(f"[TalentSearch] lexical leg failed: {e}")
             debug["lexical_error"] = str(e)
