@@ -219,6 +219,48 @@ async def lifespan(app: FastAPI):
     except Exception as _e:
         logging.warning(f"[Lifespan] Talent Graph index init skipped: {_e}")
 
+    # 7. BGE embedding model + cluster-cache preload (Search Phase 1.5,
+    # 2026-06-15). The first hit to /api/talent/search used to pay ~16s:
+    # ~5s loading the sentence-transformers model + ~5s fetching cluster
+    # blocks from Mongo + ~5s on the first vector forward pass. We now
+    # preload both in background so the FIRST request is 1-3 s (just the
+    # vector lookup + rerank), not 16 s.
+    #
+    # When BGE_SIDECAR_URL is set we skip the local preload entirely —
+    # the sidecar is the production embedding path and there is no
+    # in-process model to warm.
+    try:
+        from services.embed_client import is_remote_enabled
+        if not is_remote_enabled():
+            import asyncio as _a
+
+            async def _warmup_search():
+                try:
+                    from services.talent_graph_service import (
+                        embed_text as _embed,
+                        prime_all_clusters as _prime,
+                    )
+                    from config import db as _wdb
+                    # Step 1: load BGE model (blocking — runs in worker thread)
+                    await _a.to_thread(_embed, "warmup")
+                    # Step 2: prime ALL cluster blocks + the unclustered
+                    # bucket so the user-facing fallback never pays a
+                    # cold Mongo fetch. ~3-5 s wall-clock for 25 clusters
+                    # but kills the per-query 5 s tax for every search.
+                    try:
+                        await _prime(_wdb)
+                    except Exception as _se:
+                        logging.info(f"[Lifespan] cluster cache prime skipped: {_se}")
+                except Exception as _e:
+                    logging.info(f"[Lifespan] BGE model preload soft-failed: {_e}")
+
+            _a.create_task(_warmup_search())
+            logging.info("[Lifespan] BGE model + cluster cache preload kicked off")
+        else:
+            logging.info("[Lifespan] BGE remote sidecar enabled — skipping local preload")
+    except Exception as _e:
+        logging.warning(f"[Lifespan] BGE model preload skipped: {_e}")
+
     yield  # ── App is running ──
 
     # ── Shutdown ──

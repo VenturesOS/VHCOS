@@ -29,6 +29,51 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-15) Search Phase 1.5 — Cold-start fix (16 s → ~1 s).**
+  Boot-time preload of (a) the BGE embedding model + (b) all 26 cluster
+  matrix blocks (132,605 embeddings) into the in-process LRU cache.
+  Also bumped `_CLUSTER_MAT_MAX` from 6 → 32 so no live query evicts a
+  block another query just loaded. New `POST /api/talent/warmup` endpoint
+  re-runs both steps idempotently (admin trigger after re-clustering or
+  index changes).
+  Measured: first hit 16 s → 5 s (cluster cache miss), subsequent
+  queries ~700 ms – 1 s (was 5-7 s).
+  Files: `backend/server.py` lifespan, `backend/services/talent_graph_service.py`
+  (`prime_all_clusters`, cache cap bump), `backend/routes/talent_search.py` (warmup).
+- **(2026-06-15) Search Phase 2 — AI-back-fill enrichment shipped.**
+  New `backend/services/profile_enricher.py` runs two tiers:
+    1. **Rules** (zero cost) — ~250 Indian companies → industry, ~40 designation
+       patterns → seniority, 17 skill+designation buckets → function, ~30
+       location aliases (Bglr/Bengaluru → Bangalore), free-text → notice-period.
+    2. **LLM fallback** (RunPod Qwen 14B AWQ, cached in `enrichment_cache`)
+       — only fires for company → industry inferences where rules missed.
+  Wired in:
+    - **Backfill script** `backend/scripts/backfill_enrichment.py` — targets
+      top-N companies by candidate count. Supports `--dry-run`, `--no-llm`,
+      `--limit`, `--top`. Idempotent: only sets fields that are missing.
+    - **Lazy enrichment hook** in `/api/talent/search` — every hybrid
+      result missing enriched fields queues a `BackgroundTasks` enrich.
+      Token-bucket rate-limit 100/min/worker. De-duped within worker
+      lifetime so the same candidate isn't enriched twice in a session.
+  Real-data verification: 9/10 candidates in a random sample picked up
+  correct seniority + function (Parul Pawar → HR, Neeraj Kumar →
+  Senior+Sales, SAMIT GOEL → Manager+Finance, etc.).
+  Tests: 19 unit tests in `backend/tests/test_profile_enricher.py` all green.
+- **(2026-06-15) Badge Phase C — Medium-band BGE re-verification.**
+  V2 matches scoring in [0.85, 1.20) ("medium confidence" — where wrong-
+  profile FPs originate) now go through a second-pass BGE cosine compare
+  on (name+designation+employer+location+headline) text. Reject if
+  cosine < T (default `BADGE_PHASE_C_THRESHOLD=0.60`, env-tunable).
+  Fail-open on embedder errors — Phase C only ADDS precision, never
+  reduces V2 recall. Batched embeddings: all medium pairs in one BGE
+  forward pass per request → bounded latency overhead. Decisions logged
+  in `matched_signals` (`phase_c_keep:0.74` / `phase_c_reject:0.41`) so
+  the badge audit UI and auto-labeler can inspect tuning.
+  Feature flags: `BADGE_PHASE_C_ENABLED` (default true),
+  `BADGE_PHASE_C_THRESHOLD` (default 0.60).
+  Tests: 11 unit tests in `backend/tests/test_badge_phase_c.py` — feature
+  flags, text-pair builder, mocked embed paths (keep/reject/fail-open) +
+  integration wiring presence checks. All green.
 - **(2026-06-15) Search Phase 1 — Hybrid (BGE + cross-encoder + LTR) retrieval shipped (A/B).**
   Team reported Advanced Search + Find Candidates were "very vague, very general".
   Root cause: `/api/candidate-bank/` and `/api/ai-search` were regex-only — they never

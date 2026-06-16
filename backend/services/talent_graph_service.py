@@ -877,7 +877,7 @@ _CENTROID_LOCK = asyncio.Lock()
 
 _CLUSTER_MAT_CACHE: Dict[Any, Dict[str, Any]] = {}  # key -> {loaded_at, ttl, ids, mat}
 _CLUSTER_MAT_TTL_S = 1800.0
-_CLUSTER_MAT_MAX = 6           # LRU cap (~6 × 12MB worst case per worker)
+_CLUSTER_MAT_MAX = 32          # LRU cap — covers all 25 clusters + unclustered + headroom
 _CLUSTER_FETCH_LIMIT = 15000   # hard per-cluster bound
 _TOP_CLUSTERS = 3              # clusters scanned per query
 
@@ -970,6 +970,33 @@ def invalidate_vector_cache() -> None:
     re-clustering run if you want new vectors visible immediately."""
     _CENTROID_CACHE.update({"loaded_at": 0.0, "centroids": []})
     _CLUSTER_MAT_CACHE.clear()
+
+
+async def prime_all_clusters(db) -> Dict[str, Any]:
+    """Phase 1.5 boot warmup: fetch EVERY cluster block + the unclustered
+    bucket into the in-process matrix cache so the cluster-routing
+    fallback never pays a Mongo round-trip on the user-facing path.
+
+    Returns a small dict summarising what was loaded — useful for the
+    /api/talent/warmup endpoint response and for boot logs.
+
+    Cost: ~5 s × N_clusters_in_parallel (typically 2-4 s wall-clock for
+    25 clusters with motor's connection pool). RAM ≈ 7.7 MB per cluster
+    block + ~12 MB unclustered ≈ 200 MB total for the 140k bank.
+    """
+    cluster_ids = await db["candidate_clusters"].distinct("cluster_id")
+    keys = list(cluster_ids) + [_UNCLUSTERED_KEY]
+    # Parallel fetch — motor's pool handles back-pressure
+    try:
+        await asyncio.gather(*[_get_cluster_block(db, k) for k in keys])
+    except Exception as e:
+        logger.warning(f"[TalentGraph] prime_all_clusters partial failure: {e}")
+    loaded = len(_CLUSTER_MAT_CACHE)
+    total_rows = sum(len(v["ids"]) for v in _CLUSTER_MAT_CACHE.values())
+    logger.info(
+        f"[TalentGraph] Cluster cache primed: {loaded} blocks, {total_rows:,} embeddings"
+    )
+    return {"blocks_loaded": loaded, "embeddings_in_cache": total_rows}
 
 
 async def _cosine_topk_fallback(

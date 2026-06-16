@@ -128,6 +128,11 @@ async def run_deferred_init(app):
         await _safe_index(db.badge_feedback, [("badge_candidate_id", 1), ("ts", -1)])
         await _safe_index(db.badge_feedback, "expires_at", expireAfterSeconds=0)
 
+        # enrichment_cache — Search Phase 2 (2026-06-15). Long-lived cache
+        # for LLM-derived inferences (company → industry); _id is the
+        # cache key so no extra index needed beyond the default.
+        # (no TTL — these answers don't expire)
+
         # search_sessions — Phase 56.5 LTR telemetry (180-day TTL)
         await _safe_index(db.search_sessions, "id", unique=True)
         await _safe_index(db.search_sessions, [("ts", -1)])

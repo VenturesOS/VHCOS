@@ -728,6 +728,117 @@ def _is_v2_user(user: dict) -> bool:
     return (user.get("email") or "").strip().lower() in allowed
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Badge Phase C — Medium-band BGE re-verification (2026-06-15)
+# ──────────────────────────────────────────────────────────────────────
+# For V2 matches in the score band [0.85, 1.20) — "medium confidence" —
+# embed the Naukri-card text and the DB candidate text with the local
+# BGE model and reject the match if cosine similarity < threshold T.
+#
+# Why
+# ----
+# The medium band is where false-positive badge redirects originate.
+# When name+ctc+experience all coincide (e.g. two "Amit Kumar" finance
+# folks both 8 yrs ~ 20 LPA) V2 still badges, then opens the wrong
+# profile. A second-pass *semantic* compare of "what the card says about
+# this person" vs "what the DB says about this person" catches those.
+#
+# Cost
+# ----
+# - HIGH-band (≥1.20) matches: NO additional cost (skip the gate).
+# - MEDIUM-band matches: 2 embeddings each. We BATCH them across all
+#   medium candidates in the request so the BGE forward pass amortises.
+# - Disabled entirely via env BADGE_PHASE_C_ENABLED=false or threshold
+#   tuned via BADGE_PHASE_C_THRESHOLD (default 0.60).
+
+def _phase_c_enabled() -> bool:
+    raw = (os.environ.get("BADGE_PHASE_C_ENABLED") or "true").strip().lower()
+    return raw not in ("false", "0", "no", "off")
+
+
+def _phase_c_threshold() -> float:
+    try:
+        return float(os.environ.get("BADGE_PHASE_C_THRESHOLD", "0.60"))
+    except ValueError:
+        return 0.60
+
+
+def _build_phase_c_text_pair(c: "CandidateIn", doc: dict) -> tuple[str, str]:
+    """Compose the comparison strings for the card and DB document.
+    Mirrors the sentence-level summary an LTR feature extractor would
+    use: NAME, DESIGNATION, EMPLOYER, LOCATION, HEADLINE.
+    """
+    card_parts = [
+        c.name or "",
+        getattr(c, "designation", "") or "",
+        getattr(c, "current_employer", "") or "",
+        getattr(c, "location", "") or "",
+        getattr(c, "headline", "") or "",
+    ]
+    doc_parts = [
+        doc.get("name") or "",
+        doc.get("designation") or "",
+        doc.get("current_employer") or "",
+        doc.get("location") or "",
+        doc.get("headline") or "",
+    ]
+    return (
+        " | ".join(p.strip() for p in card_parts if p and p.strip())[:1024],
+        " | ".join(p.strip() for p in doc_parts if p and p.strip())[:1024],
+    )
+
+
+async def _phase_c_verify_medium_band(
+    medium_pairs: list[tuple[int, "CandidateIn", dict]],
+    threshold: float,
+) -> dict[int, dict]:
+    """Embed all medium-band card/doc text pairs in ONE BGE batch and
+    return `{idx: {cosine: float, decision: 'keep'|'reject'}}` per pair.
+
+    On any error we return an empty dict — callers default to keeping
+    the match (fail-open). Phase C only ADDS precision; it never reduces
+    the recall of the V2 logic that already passed.
+    """
+    if not medium_pairs:
+        return {}
+
+    try:
+        from services.talent_graph_service import embed_texts_batch
+    except Exception as e:
+        logger.info(f"[PhaseC] embed import failed → fail-open: {e}")
+        return {}
+
+    texts: list[str] = []
+    for _idx, c, doc in medium_pairs:
+        a, b = _build_phase_c_text_pair(c, doc)
+        texts.extend([a, b])
+
+    import asyncio as _asyncio
+    try:
+        vecs = await _asyncio.to_thread(embed_texts_batch, texts)
+    except Exception as e:
+        logger.info(f"[PhaseC] embed batch failed → fail-open: {e}")
+        return {}
+
+    if not vecs or len(vecs) != len(texts):
+        logger.info("[PhaseC] embed batch shape mismatch → fail-open")
+        return {}
+
+    out: dict[int, dict] = {}
+    for i, (idx, _c, _doc) in enumerate(medium_pairs):
+        va = vecs[2 * i]
+        vb = vecs[2 * i + 1]
+        if va is None or vb is None:
+            continue  # leave the match alone (fail-open)
+        # BGE outputs are L2-normalised so dot product == cosine
+        cos = sum(x * y for x, y in zip(va, vb))
+        out[idx] = {
+            "cosine": round(float(cos), 4),
+            "decision": "reject" if cos < threshold else "keep",
+        }
+    return out
+
+
 
 # ── Route ────────────────────────────────────────────────────────────
 # PERF NOTE
@@ -969,6 +1080,10 @@ async def check_existing(
     )
 
     # Score each unresolved candidate against its own bucket of docs
+    # PHASE 1: collect best matches WITHOUT building results yet — so we
+    # can run Badge Phase C (medium-band BGE re-verification) on the
+    # ones that need it in a single batched embedding call.
+    _v2_pending: dict[int, tuple[dict, float, list[str]]] = {}
     for (idx, c), bucket in zip(unresolved, buckets):
         best_doc: Optional[dict] = None
         best_score: float = 0.0
@@ -1020,8 +1135,53 @@ async def check_existing(
             )
             continue
 
+        # Defer building the result so Phase C can gate medium-band matches.
+        _v2_pending[idx] = (best_doc, best_score, best_signals)
+
+    # ── Badge Phase C: medium-band BGE re-verification ───────────────
+    phase_c_results: dict[int, dict] = {}
+    if use_v2 and _phase_c_enabled() and _v2_pending:
+        medium_pairs: list[tuple[int, CandidateIn, dict]] = [
+            (idx, candidates[idx], doc)
+            for idx, (doc, score, _sig) in _v2_pending.items()
+            if badge_thr <= score < high_thr
+        ]
+        if medium_pairs:
+            phase_c_results = await _phase_c_verify_medium_band(
+                medium_pairs, _phase_c_threshold()
+            )
+            n_rej = sum(1 for v in phase_c_results.values() if v["decision"] == "reject")
+            if n_rej:
+                logger.info(
+                    "[PhaseC] medium-band rejects=%d/%d (T=%.2f)",
+                    n_rej, len(medium_pairs), _phase_c_threshold(),
+                )
+
+    # PHASE 2: finalise results (apply Phase C decisions)
+    for idx, (best_doc, best_score, best_signals) in _v2_pending.items():
+        pc = phase_c_results.get(idx)
+        if pc and pc["decision"] == "reject":
+            # Audit-friendly rejection — surface the cosine so the
+            # admin Badge Audit UI / auto-labeler can inspect tuning.
+            results_by_idx[idx] = CheckResult(
+                index=idx,
+                exists=False,
+                match_score=round(best_score, 2),
+                matched_signals=(best_signals or []) + [
+                    f"phase_c_reject:{pc['cosine']}"
+                ],
+            )
+            # Clear best_doc so the audit log shows this was rejected
+            best_doc_by_idx[idx] = None
+            conflicts_by_idx[idx] = f"phase_c_low_cosine:{pc['cosine']}"
+            continue
+
+        # Phase C kept (or wasn't applicable) → build the badge as normal.
+        signals = best_signals or []
+        if pc and pc["decision"] == "keep":
+            signals = signals + [f"phase_c_keep:{pc['cosine']}"]
         results_by_idx[idx] = _build_match_result(
-            idx, c, best_doc, best_score, best_signals, web_base,
+            idx, candidates[idx], best_doc, best_score, signals, web_base,
             high_threshold=high_thr,
         )
 

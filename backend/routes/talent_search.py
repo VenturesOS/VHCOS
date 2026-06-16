@@ -48,7 +48,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from config import db
@@ -59,9 +59,98 @@ from services.ai_search import (
     apply_stability_filters,
 )
 from services.talent_graph_service import find_candidates_by_text
+from services.profile_enricher import enrich_candidate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/talent", tags=["Talent Search"])
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Lazy enrichment hook — Search Phase 2 (2026-06-15)
+# ──────────────────────────────────────────────────────────────────────
+# When a hybrid search surfaces a candidate that's still missing one of
+# the enriched fields (industry / seniority / function / canonical
+# location / notice_period_days), we queue an `enrich_candidate` task
+# via FastAPI's `BackgroundTasks`. A simple token-bucket caps the rate
+# at 100/min so we never overload the RunPod sidecar or the DB during
+# spiky traffic.
+#
+# Bucket state lives at module scope (per-process). For multi-worker
+# deployments each worker gets its own 100/min cap — acceptable since
+# the bucket is intentionally conservative.
+
+import asyncio as _a
+import time as _t
+
+_ENRICH_BUCKET_MAX = 100  # tokens per minute
+_ENRICH_BUCKET = {
+    "tokens": _ENRICH_BUCKET_MAX,
+    "last_refill": _t.time(),
+    "lock": _a.Lock(),
+    "seen_ids": set(),  # de-dupe within this worker's lifetime
+}
+
+
+async def _take_token() -> bool:
+    """Return True if the rate-limit allows another enrichment task."""
+    async with _ENRICH_BUCKET["lock"]:
+        now = _t.time()
+        elapsed = now - _ENRICH_BUCKET["last_refill"]
+        if elapsed >= 1.0:
+            # Refill proportional to elapsed time (cap at max)
+            refill = int(elapsed * (_ENRICH_BUCKET_MAX / 60.0))
+            if refill > 0:
+                _ENRICH_BUCKET["tokens"] = min(
+                    _ENRICH_BUCKET_MAX, _ENRICH_BUCKET["tokens"] + refill
+                )
+                _ENRICH_BUCKET["last_refill"] = now
+        if _ENRICH_BUCKET["tokens"] > 0:
+            _ENRICH_BUCKET["tokens"] -= 1
+            return True
+    return False
+
+
+def _needs_enrichment(c: Dict[str, Any]) -> bool:
+    """Cheap O(1) check — true iff at least one canonical field is missing."""
+    if not c.get("industry") and not c.get("current_industry"):
+        return True
+    if not c.get("enriched_seniority"):
+        return True
+    if not c.get("enriched_function"):
+        return True
+    if not c.get("enriched_location"):
+        return True
+    return False
+
+
+async def _enrich_one(candidate_id: str) -> None:
+    """Background task — load the full candidate doc and apply enrichment."""
+    try:
+        doc = await db.candidate_bank.find_one(
+            {"id": candidate_id},
+            {
+                "_id": 0, "id": 1, "current_employer": 1, "current_company": 1,
+                "industry": 1, "current_industry": 1,
+                "current_designation": 1, "designation": 1, "headline": 1,
+                "key_skills": 1, "skills": 1,
+                "current_location": 1, "location": 1,
+                "summary": 1, "profile_summary": 1, "notice_period_days": 1,
+                "enriched_seniority": 1, "enriched_function": 1,
+                "enriched_location": 1,
+            },
+        )
+        if not doc:
+            return
+        updates = await enrich_candidate(doc, db, allow_llm=True)
+        if updates:
+            await db.candidate_bank.update_one(
+                {"id": candidate_id}, {"$set": updates}
+            )
+            logger.info(
+                f"[LazyEnrich] {candidate_id} ← {sorted(k for k in updates if not k.startswith('enrich'))}"
+            )
+    except Exception as e:
+        logger.info(f"[LazyEnrich] candidate {candidate_id} failed: {e}")
 
 
 # ── Projection shared across both legs so the UI renders the same card ─
@@ -289,6 +378,7 @@ def _normalise_lexical(c: Dict[str, Any]) -> Dict[str, Any]:
 @router.post("/search", response_model=TalentSearchResponse)
 async def talent_search(
     req: TalentSearchRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     """Hybrid (semantic + lexical) candidate search with A/B comparison."""
@@ -367,6 +457,29 @@ async def talent_search(
             lexical = []
         took_lex = int((time.time() - t0) * 1000)
 
+    # ── Step 4: Lazy enrichment hook ─────────────────────────────────
+    # Walk the hybrid leg (the surface the team will actually use) and
+    # queue enrichment for any candidate missing canonical fields. The
+    # token bucket below caps spend at 100 enrichments / min / worker
+    # so a noisy search never overloads RunPod.
+    try:
+        queued = 0
+        for c in hybrid:
+            cid = c.get("id")
+            if not cid or cid in _ENRICH_BUCKET["seen_ids"]:
+                continue
+            if not _needs_enrichment(c):
+                continue
+            if not await _take_token():
+                break  # rate-limit hit — leave the rest for later searches
+            _ENRICH_BUCKET["seen_ids"].add(cid)
+            background_tasks.add_task(_enrich_one, cid)
+            queued += 1
+        if queued:
+            debug["lazy_enrich_queued"] = queued
+    except Exception as e:
+        logger.debug(f"[TalentSearch] lazy enrich hook failed: {e}")
+
     return TalentSearchResponse(
         query=q,
         filters=filters,
@@ -375,3 +488,49 @@ async def talent_search(
         lexical=lexical,
         debug=debug or None,
     )
+
+
+@router.post("/warmup")
+async def warmup(current_user: dict = Depends(get_current_user)):
+    """Force-load the BGE embedding model AND prime the cluster-vector
+    cache so the first user-facing search after a worker restart is hot.
+
+    Runs:
+      1. `embed_text("warmup")` — pulls the BGE model into RAM (~5 s cold)
+      2. `find_candidates_by_text("warmup")` — fetches the top-3 clusters
+         + unclustered bucket into the in-process matrix cache so the
+         first real query doesn't pay the per-cluster Mongo round-trip
+         (saves ~4-5 s on cold-cache searches over the 139k embedding set).
+
+    Idempotent — caches are TTL'd so subsequent calls do almost nothing.
+    """
+    if current_user.get("role") not in ("admin", "employer", "recruiter", "account_manager"):
+        raise HTTPException(status_code=403, detail="Not authorised")
+    import asyncio as _a
+    t0 = time.time()
+    step_ms: Dict[str, int] = {}
+    try:
+        from services.talent_graph_service import embed_text, prime_all_clusters
+        # Step 1: embedding model
+        s = time.time()
+        vec = await _a.to_thread(embed_text, "warmup ping")
+        step_ms["embed"] = int((time.time() - s) * 1000)
+        # Step 2: prime ALL cluster blocks (one-shot)
+        s = time.time()
+        try:
+            primed = await prime_all_clusters(db)
+            step_ms["cluster_cache"] = int((time.time() - s) * 1000)
+            step_ms["blocks_loaded"] = primed.get("blocks_loaded", 0)
+        except Exception as e:
+            logger.info(f"[TalentSearch] warmup cluster prime failed: {e}")
+            step_ms["cluster_cache"] = int((time.time() - s) * 1000)
+        ok = bool(vec)
+    except Exception as e:
+        logger.warning(f"[TalentSearch] warmup failed: {e}")
+        ok = False
+    return {
+        "ok": ok,
+        "took_ms": int((time.time() - t0) * 1000),
+        "step_ms": step_ms,
+        "model_ready": ok,
+    }
