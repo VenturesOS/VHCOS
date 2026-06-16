@@ -29,6 +29,37 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-15) Search Phase 2.5 — Mandate-driven STRICT filter enforcement.**
+  Mandate dropdown was surfacing Delhi candidates for Chennai mandates, ignoring
+  experience bands, and silently bypassing salary brackets. RCA: (1) `_apply_structured_filters`
+  was always called with `strict=False`; (2) a "fall back to unfiltered pool if hits < 5"
+  branch in `routes/talent_search.py` reset `filtered = normalised` for all paths,
+  including mandate-driven; (3) `_build_query_from_job` never extracted `salary_min`/
+  `salary_max` from the mandate doc, so CTC was never passed as a filter. Fix (one batch):
+    1. `_build_query_from_job` now maps mandate `salary_min`/`salary_max` (with
+       `min_salary`/`max_salary`/`ctc_min`/`ctc_max` aliases) → filter `ctc_min`/`ctc_max`.
+    2. `talent_search` endpoint runs `_apply_structured_filters(..., strict=True)` when
+       `req.job_id` is set. Strict mode drops candidates with missing location / experience /
+       CTC fields when the filter is set (the mandate is source of truth).
+    3. Removed the silent unfiltered-fallback for the mandate path. Low-recall is now
+       surfaced via `debug.hybrid_low_recall` so the UI/analytics can show the recruiter
+       a tight result list instead of misleading mismatches. Free-text queries keep
+       the old softer behaviour (`debug.hybrid_filter_relaxed`).
+    4. `_enrich_with_candidate_bank` (talent_graph_service) now enriches a result if ANY
+       canonical field (designation / employer / location / experience) is missing — not
+       just when ALL are missing. Naukri embeddings often have designation populated but
+       empty `current_location` (the field name in candidate_bank is `location`); the old
+       ALL-missing gate let those candidates fall through enrichment and then get culled
+       by the location filter even though candidate_bank had the right value.
+  Live-verified on prod-shape DB: GURGAON 15-18L mandate now returns 0 (was returning
+  60 non-Gurgaon hits via the silent fallback); free-text `regional sales manager` still
+  returns 20 enriched hits with valid `current_location` for all.
+  Tests: 15/15 in `tests/test_talent_search_mandate.py` (8 new — salary extraction
+  shapes incl. invalid input, location/experience/CTC drop-on-strict, soft-mode preserves
+  missing-field tolerance), 25/25 across the talent-search suite.
+  Files: `routes/talent_search.py` (_build_query_from_job + strict gate),
+  `services/talent_graph_service.py` (_enrich_with_candidate_bank predicate).
+
 - **(2026-06-15) Search Phase 1.5 — Cold-start fix (16 s → ~1 s).**
   Boot-time preload of (a) the BGE embedding model + (b) all 26 cluster
   matrix blocks (132,605 embeddings) into the in-process LRU cache.

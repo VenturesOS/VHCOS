@@ -6,7 +6,7 @@ smoke at PRD time.
 """
 from __future__ import annotations
 
-from routes.talent_search import _build_query_from_job
+from routes.talent_search import _build_query_from_job, _apply_structured_filters
 
 
 def test_job_query_basic():
@@ -89,3 +89,114 @@ def test_job_query_collapses_whitespace_in_description():
     assert "Line 1. Line 2. Line 3." in out["query"]
     assert "\n" not in out["query"]
     assert "\t" not in out["query"]
+
+
+
+# ── Salary extraction from mandate → ctc_min/ctc_max filters ──────────
+
+
+def test_job_query_extracts_salary_range():
+    """salary_min / salary_max on the mandate must surface as ctc_min/ctc_max
+    in the filter payload so the strict-filter intersection can enforce
+    the bracket."""
+    job = {
+        "title": "Lead Backend",
+        "salary_min": 2_500_000,
+        "salary_max": 4_000_000,
+    }
+    out = _build_query_from_job(job)
+    assert out["filters"]["ctc_min"] == 2_500_000
+    assert out["filters"]["ctc_max"] == 4_000_000
+
+
+def test_job_query_salary_partial():
+    out_min_only = _build_query_from_job({"title": "X", "salary_min": 1_800_000})
+    assert out_min_only["filters"].get("ctc_min") == 1_800_000
+    assert "ctc_max" not in out_min_only["filters"]
+    out_max_only = _build_query_from_job({"title": "X", "salary_max": 2_000_000})
+    assert "ctc_min" not in out_max_only["filters"]
+    assert out_max_only["filters"].get("ctc_max") == 2_000_000
+
+
+def test_job_query_salary_alias_fields():
+    """Legacy jobs sometimes use min_salary / max_salary or ctc_*."""
+    assert _build_query_from_job({"title": "X", "min_salary": 1_500_000})["filters"]["ctc_min"] == 1_500_000
+    assert _build_query_from_job({"title": "X", "ctc_max": 3_500_000})["filters"]["ctc_max"] == 3_500_000
+
+
+def test_job_query_salary_invalid_ignored():
+    """Garbage salary values must not crash and must not populate filters."""
+    out = _build_query_from_job({"title": "X", "salary_min": "abc", "salary_max": None})
+    assert "ctc_min" not in out["filters"]
+    assert "ctc_max" not in out["filters"]
+
+
+# ── Strict filter enforcement (mandate-driven search) ─────────────────
+
+
+def _cand(name, **kw):
+    base = {"id": name, "name": name}
+    base.update(kw)
+    return base
+
+
+def test_strict_location_drops_mismatch():
+    cands = [
+        _cand("A", current_location="Chennai", experience_years=5),
+        _cand("B", current_location="Delhi", experience_years=5),
+        _cand("C", current_location=None, experience_years=5),  # missing → drop in strict
+    ]
+    filters = {"location_include": ["chennai"]}
+    out = _apply_structured_filters(cands, filters, strict=True)
+    assert [c["id"] for c in out] == ["A"]
+
+
+def test_strict_experience_drops_outside_band():
+    """min/max experience with ±1y tolerance — strict mode drops missing exp too."""
+    cands = [
+        _cand("ok", experience_years=6, current_location="Chennai"),
+        _cand("too_jr", experience_years=2, current_location="Chennai"),
+        _cand("too_sr", experience_years=15, current_location="Chennai"),
+        _cand("missing", experience_years=None, current_location="Chennai"),
+    ]
+    filters = {"min_experience": 5, "max_experience": 10}
+    out = _apply_structured_filters(cands, filters, strict=True)
+    assert [c["id"] for c in out] == ["ok"]
+
+
+def test_strict_ctc_drops_outside_band_and_missing():
+    """ctc_min/ctc_max with 20% leniency. Missing CTC → drop in strict mode."""
+    cands = [
+        _cand("in_band", current_salary=2_500_000),         # within 2L-4L
+        _cand("too_low", current_salary=1_500_000),         # well below
+        _cand("too_high", current_salary=6_000_000),        # well above
+        _cand("edge_low", current_salary=1_700_000),        # within 20% of 2L floor
+        _cand("missing", current_salary=None),              # strict → drop
+    ]
+    filters = {"ctc_min": 2_000_000, "ctc_max": 4_000_000}
+    out = _apply_structured_filters(cands, filters, strict=True)
+    ids = [c["id"] for c in out]
+    assert "in_band" in ids
+    assert "edge_low" in ids        # 20% leniency
+    assert "too_low" not in ids
+    assert "too_high" not in ids
+    assert "missing" not in ids
+
+
+def test_soft_mode_keeps_missing_fields():
+    """Free-text path: missing location/exp/ctc must NOT be dropped."""
+    cands = [
+        _cand("missing_loc", experience_years=5),
+        _cand("missing_exp", current_location="Chennai"),
+        _cand("missing_ctc", current_location="Chennai", experience_years=5),
+    ]
+    filters = {
+        "location_include": ["chennai"],
+        "min_experience": 3,
+        "max_experience": 8,
+        "ctc_min": 2_000_000,
+        "ctc_max": 4_000_000,
+    }
+    out = _apply_structured_filters(cands, filters, strict=False)
+    # All three are kept because the missing-field rules don't fire in soft mode
+    assert {c["id"] for c in out} == {"missing_loc", "missing_exp", "missing_ctc"}

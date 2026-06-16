@@ -238,6 +238,19 @@ def _build_query_from_job(job: Dict[str, Any]) -> Dict[str, Any]:
     try: max_e = float(max_e) if max_e not in (None, "") else None
     except (TypeError, ValueError): max_e = None
 
+    # Salary range — mandates store as `salary_min` / `salary_max` (raw INR
+    # rupees per `backend/models/job.py`). Map to the filter schema's
+    # `ctc_min` / `ctc_max` so the post-retrieval intersection can enforce
+    # the bracket. _apply_structured_filters handles both raw-rupees and
+    # lakhs internally and gives ±20% leniency so mandates with a tight
+    # band don't cull legitimate candidates.
+    sal_min = job.get("salary_min") or job.get("min_salary") or job.get("ctc_min")
+    sal_max = job.get("salary_max") or job.get("max_salary") or job.get("ctc_max")
+    try: sal_min = float(sal_min) if sal_min not in (None, "") else None
+    except (TypeError, ValueError): sal_min = None
+    try: sal_max = float(sal_max) if sal_max not in (None, "") else None
+    except (TypeError, ValueError): sal_max = None
+
     # JD snippet — first ~600 chars is enough for the encoder to pick up
     # the role flavour without overwhelming the cosine signal.
     jd_snippet = (job.get("description") or job.get("jd_text") or "")
@@ -263,6 +276,8 @@ def _build_query_from_job(job: Dict[str, Any]) -> Dict[str, Any]:
     if location: filters["location_include"] = [location]
     if min_e is not None: filters["min_experience"] = min_e
     if max_e is not None: filters["max_experience"] = max_e
+    if sal_min is not None: filters["ctc_min"] = sal_min
+    if sal_max is not None: filters["ctc_max"] = sal_max
     return {"query": query[:1500], "filters": filters}
 
 
@@ -615,15 +630,34 @@ async def talent_search(
             timing=hybrid_breakdown,
         )
         normalised = [_normalise_hybrid(r) for r in pool]
-        filtered = _apply_structured_filters(normalised, filters)
-        # If structured filters cull too aggressively, fall back to the
-        # unfiltered semantic pool so the user still sees ranked results.
-        if len(filtered) < min(5, req.limit):
-            debug["hybrid_filter_relaxed"] = {
-                "after_filter": len(filtered),
-                "original_pool": len(normalised),
-            }
-            filtered = normalised
+        # Mandate-driven path (job_id provided) — the recruiter explicitly
+        # picked a mandate, so location / experience / CTC are HARD bounds.
+        # Strict mode also drops candidates whose filter field is missing
+        # (no location → reject for a Chennai mandate; no CTC → reject when
+        # a salary band is set). Free-text queries keep the softer semantics
+        # so vague NL searches don't get over-culled.
+        strict_filter = req.job_id is not None
+        filtered = _apply_structured_filters(normalised, filters, strict=strict_filter)
+        if strict_filter:
+            # Never silently bypass mandate filters — a small but correct
+            # result list is strictly better than a long list of mis-matches.
+            # Surface the low-recall signal in debug for the UI/analytics.
+            if len(filtered) < min(5, req.limit):
+                debug["hybrid_low_recall"] = {
+                    "after_strict_filter": len(filtered),
+                    "original_pool": len(normalised),
+                    "filters_applied": sorted(k for k, v in (filters or {}).items() if v not in (None, [], "")),
+                }
+        else:
+            # If structured filters cull too aggressively on a free-text
+            # query, fall back to the unfiltered semantic pool so the user
+            # still sees ranked results.
+            if len(filtered) < min(5, req.limit):
+                debug["hybrid_filter_relaxed"] = {
+                    "after_filter": len(filtered),
+                    "original_pool": len(normalised),
+                }
+                filtered = normalised
         hybrid = filtered[: req.limit]
     except Exception as e:
         logger.exception(f"[TalentSearch] hybrid leg failed: {e}")

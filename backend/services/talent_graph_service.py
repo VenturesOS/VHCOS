@@ -641,9 +641,17 @@ async def _enrich_with_candidate_bank(db, results: List[Dict[str, Any]]) -> None
     """
     if not results:
         return
+    # Enrich any result missing ANY of the display/filter fields. The old
+    # logic required ALL THREE to be missing — but Naukri embeddings often
+    # carry the designation while `current_location` is empty (the field
+    # name in candidate_bank is `location`, not `current_location`), so a
+    # strict location filter would cull them before this hydration ran.
     needs = [
         r for r in results
-        if not (r.get("current_designation") and r.get("current_employer") and r.get("current_location"))
+        if not r.get("current_designation")
+        or not r.get("current_employer")
+        or not r.get("current_location")
+        or r.get("experience_years") is None
     ]
     if not needs:
         return
