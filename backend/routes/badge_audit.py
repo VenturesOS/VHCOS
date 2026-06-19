@@ -295,6 +295,80 @@ async def stats_overview(
     }
 
 
+@router.get("/_/stats/badge-views")
+async def badge_view_stats(
+    days: int = Query(30, le=365),
+    user: dict = Depends(get_current_user),
+):
+    """Rolling counter of how many candidates have seen the 'Already in
+    Database' badge from the extension, plus how many were scanned. Powers
+    the small counter chip on the Badge Audit page.
+
+    Returns:
+      - `total_scanned`: cards the extension checked against the bank.
+      - `total_shown`: subset that surfaced the green badge to the user.
+      - `total_scan_calls`: API call count.
+      - `daily`: last-N day breakdown for the sparkline.
+      - `by_user`: top 10 users by `shown_count` this period.
+      - `dedup_rate_pct`: shown / scanned — how often a Naukri search
+        result was already in our bank (the value the extension adds).
+    """
+    from datetime import date as _date, timedelta as _td
+    today = _date.today()
+    horizon = (today - _td(days=days - 1)).isoformat()
+    try:
+        daily_docs = await db.badge_view_stats.find(
+            {"day": {"$gte": horizon}},
+            {"_id": 0, "day": 1, "scanned_count": 1, "shown_count": 1, "scan_calls": 1},
+        ).sort("day", 1).to_list(days)
+    except Exception as e:
+        return {"error": f"query failed: {e}", "daily": []}
+
+    total_scanned = sum(d.get("scanned_count", 0) for d in daily_docs)
+    total_shown   = sum(d.get("shown_count", 0)   for d in daily_docs)
+    total_calls   = sum(d.get("scan_calls", 0)    for d in daily_docs)
+
+    # Per-user breakdown (top 10 by shown_count)
+    user_pipeline = [
+        {"$match": {"day": {"$gte": horizon}}},
+        {"$group": {
+            "_id": "$user_email",
+            "shown_count":   {"$sum": "$shown_count"},
+            "scanned_count": {"$sum": "$scanned_count"},
+        }},
+        {"$sort":  {"shown_count": -1}},
+        {"$limit": 10},
+    ]
+    try:
+        by_user = await db.badge_view_stats_user.aggregate(user_pipeline).to_list(10)
+    except Exception:
+        by_user = []
+
+    return {
+        "days":             days,
+        "total_scanned":    total_scanned,
+        "total_shown":      total_shown,
+        "total_scan_calls": total_calls,
+        "dedup_rate_pct": round(100.0 * total_shown / total_scanned, 2) if total_scanned else 0.0,
+        "daily": [
+            {
+                "day": d["day"],
+                "scanned": d.get("scanned_count", 0),
+                "shown":   d.get("shown_count", 0),
+            }
+            for d in daily_docs
+        ],
+        "by_user": [
+            {
+                "email":   u.get("_id"),
+                "shown":   u.get("shown_count", 0),
+                "scanned": u.get("scanned_count", 0),
+            }
+            for u in by_user
+        ],
+    }
+
+
 # ── Extension feedback (no auth checking version handles it) ──────────
 
 class ClientCardFeedback(BaseModel):

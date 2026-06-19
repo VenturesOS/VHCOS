@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../lib/auth';
 import { useNavigate } from 'react-router-dom';
-import { candidateBankAPI, jobAPI, matchingAPI, sourcingAPI } from '../../lib/api';
+import { candidateBankAPI, jobAPI, matchingAPI, sourcingAPI, talentSearchAPI } from '../../lib/api';
 import { trackEvent } from '../../hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -132,6 +132,49 @@ export default function AdvancedSearchPage() {
       if (filters.hasPhone) params.has_phone = true;
       if (filters.hasEmail) params.has_email = true;
       if (filters.smartTags) params.smart_tags = filters.smartTags;
+
+      // Phase 55.10 cutover — when the recruiter typed ANY natural-language
+      // query (keywords / designation / industry), route through the new
+      // hybrid endpoint. It enforces strict filters server-side (location,
+      // experience), runs role-relevance, respects boolean NOT, applies
+      // city aliases, and returns chip-ready `match_reasons`. The legacy
+      // `candidateBankAPI.getAll` path stays as fallback for pure
+      // structured-filter searches (no NL query at all).
+      const nlQuery = [
+        filters.keywords,
+        filters.designation,
+        filters.industry,
+      ].filter(Boolean).join(' ').trim();
+
+      if (nlQuery) {
+        const hybridFilters = {};
+        if (filters.skills) hybridFilters.skills = filters.skills.split(',').map(s => s.trim()).filter(Boolean);
+        if (filters.location) hybridFilters.location_include = [filters.location];
+        if (filters.minExp) hybridFilters.min_experience = parseFloat(filters.minExp);
+        if (filters.maxExp) hybridFilters.max_experience = parseFloat(filters.maxExp);
+
+        // Convert "exclude keywords" → boolean NOT clause appended to query.
+        const queryWithNot = filters.excludeKeywords
+          ? `${nlQuery} NOT ${filters.excludeKeywords}`
+          : nlQuery;
+
+        const hybridRes = await talentSearchAPI.search({
+          query: queryWithNot,
+          limit: 50,
+          compare_lexical: false,
+          filters: Object.keys(hybridFilters).length ? hybridFilters : undefined,
+        });
+        const hits = hybridRes.data.hybrid || [];
+        setResults(hits);
+        setTotalFound(hits.length);
+        const tookMs = hybridRes.data.took_ms || 0;
+        if (hits.length === 0) {
+          toast.info('No candidates matched the role + filters. Try broadening keywords or relaxing the location/experience band.');
+        } else {
+          toast.success(`Hybrid search · ${hits.length} matches in ${tookMs}ms`);
+        }
+        return;
+      }
 
       const res = await candidateBankAPI.getAll(params);
       setResults(res.data.candidates || []);

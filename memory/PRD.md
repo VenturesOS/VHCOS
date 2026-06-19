@@ -29,6 +29,50 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-19) P0 cutover + badge counter + audit polish.**
+
+  **(P0) Advanced Search cutover to hybrid endpoint** — `AdvancedSearchPage`
+  now routes through `/api/talent/search` when the recruiter typed any
+  natural-language query (keywords / designation / industry). The legacy
+  `candidateBankAPI.getAll` lexical path remains as the fallback for
+  pure structured-filter searches. Conversion:
+   * keywords + designation + industry → `query`
+   * `excludeKeywords` → appended as `NOT <terms>` (uses Boolean operator
+     work from earlier today)
+   * skills (comma-sep) → `filters.skills`
+   * location → `filters.location_include` (city alias-aware)
+   * minExp / maxExp → `filters.min_experience` / `max_experience`
+  Result: every NL search through the legacy UI now benefits from role
+  relevance, seniority gate, education gate, city aliases, RRF, prior
+  shortlist boost, and per-mandate token weights.
+
+  **Badge view counter** — every `/api/extension/check-existing` call now
+  upserts a per-day rolling counter in two new collections:
+   * `badge_view_stats` (day-aggregated: scanned_count, shown_count,
+     scan_calls)
+   * `badge_view_stats_user` (per-user-per-day for "power user"
+     leaderboard)
+  New endpoint `GET /api/admin/badge-audit/_/stats/badge-views?days=30`
+  returns totals, daily sparkline, top-10 users, and `dedup_rate_pct`
+  (= shown/scanned, the value the extension adds).
+
+  **Badge Audit page** (`/admin/badge-audit`) now shows a prominent
+  emerald-highlighted tile **"Badge views (30d)"** above the existing
+  stats strip, with the dedup rate as the hint. Visually distinct so
+  the team knows at a glance how many duplicate-saves the extension
+  prevented.
+
+  Files: `routes/extension_check.py` (counter upsert), `routes/badge_audit.py`
+  (`/_/stats/badge-views`), `frontend/src/pages/admin/BadgeAuditPage.jsx`
+  (StatsStrip + viewStats load), `frontend/src/pages/shared/AdvancedSearchPage.jsx`
+  (hybrid cutover), `frontend/src/lib/api.js` (no change — talentSearchAPI
+  already exported).
+
+  Tests: 61/61 pytest still passing. Live smoke: check-existing → counter
+  inserts; /_/stats/badge-views returns {total_scanned, total_shown,
+  by_user[]}; Advanced Search "backend python bangalore NOT java" returns
+  5 Python developers from Bengaluru, none with Java.
+
 - **(2026-06-19) Search accuracy push — all 10 recommendations shipped.**
 
   1. **BGE embedding coverage** — verified 100% (141,383/141,403 candidates).

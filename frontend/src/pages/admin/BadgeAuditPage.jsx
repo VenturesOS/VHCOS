@@ -61,10 +61,18 @@ const fmtTime = (iso) => {
 };
 
 // ── Header stats strip ───────────────────────────────────────────────
-function StatsStrip({ stats }) {
+function StatsStrip({ stats, viewStats }) {
   const tiles = [
+    {
+      label: "Badge views (30d)",
+      value: viewStats?.total_shown?.toLocaleString() ?? "—",
+      hint: viewStats
+        ? `${viewStats.total_scanned.toLocaleString()} cards scanned · ${viewStats.dedup_rate_pct}% dedup`
+        : "from extension `Already in DB` button",
+      highlight: true,
+    },
     { label: "Batches", value: stats?.n_batches ?? "—" },
-    { label: "Cards", value: stats?.n_cards ?? "—" },
+    { label: "Cards (7d)", value: stats?.n_cards ?? "—" },
     { label: "Recall", value: stats ? `${stats.recall_pct}%` : "—",
       hint: `${stats?.n_hits ?? 0} matched / ${stats?.n_cards ?? 0}` },
     { label: "Via Naukri ID",
@@ -74,15 +82,19 @@ function StatsStrip({ stats }) {
       value: stats ? `${stats.avg_took_ms}ms` : "—" },
   ];
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
       {tiles.map((t) => (
         <div
           key={t.label}
-          className="bg-white border border-slate-200 rounded-lg px-4 py-3"
-          data-testid={`audit-stat-${t.label.toLowerCase().replace(/\s/g, "-")}`}
+          className={`bg-white border rounded-lg px-4 py-3 ${
+            t.highlight ? "border-emerald-300 bg-emerald-50/40" : "border-slate-200"
+          }`}
+          data-testid={`audit-stat-${t.label.toLowerCase().replace(/\s/g, "-").replace(/[()]/g, "")}`}
         >
           <div className="text-xs text-slate-500">{t.label}</div>
-          <div className="text-2xl font-semibold text-slate-900">{t.value}</div>
+          <div className={`text-2xl font-semibold ${t.highlight ? "text-emerald-700" : "text-slate-900"}`}>
+            {t.value}
+          </div>
           {t.hint && <div className="text-[11px] text-slate-400 mt-0.5">{t.hint}</div>}
         </div>
       ))}
@@ -304,6 +316,7 @@ function CardDecisionRow({ card, batchId, onLabel }) {
 // ── Main page ────────────────────────────────────────────────────────
 export default function BadgeAuditPage() {
   const [stats, setStats] = useState(null);
+  const [viewStats, setViewStats] = useState(null);
   const [batches, setBatches] = useState([]);
   const [selected, setSelected] = useState(null);  // full batch detail
   const [loadingList, setLoadingList] = useState(false);
@@ -317,6 +330,12 @@ export default function BadgeAuditPage() {
     } catch (e) {
       // soft fail — stats are nice-to-have
       console.warn("stats load failed", e);
+    }
+    try {
+      const vs = await api("/admin/badge-audit/_/stats/badge-views?days=30");
+      setViewStats(vs);
+    } catch (e) {
+      console.warn("badge-view stats load failed", e);
     }
   }, []);
 
@@ -378,7 +397,7 @@ export default function BadgeAuditPage() {
         </Button>
       </div>
 
-      <StatsStrip stats={stats} />
+      <StatsStrip stats={stats} viewStats={viewStats} />
 
       <div className="flex items-center gap-2 mb-3">
         <Button

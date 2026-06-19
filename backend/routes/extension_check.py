@@ -46,6 +46,7 @@ import logging
 import os
 import random
 import re
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
@@ -1198,6 +1199,42 @@ async def check_existing(
         n_cache_hits, len(unresolved),
         took_ms,
     )
+
+    # ─── Badge view counter (per-day rolling) ──────────────────────────
+    # Each call writes ONE upsert recording how many candidates were
+    # scanned and how many showed the "Already in DB" badge to the user.
+    # Read aggregate on the admin Badge Audit page so recruiters see how
+    # many duplicate-saves the extension prevented.
+    try:
+        from datetime import date as _date
+        today = _date.today().isoformat()
+        await db.badge_view_stats.update_one(
+            {"day": today},
+            {
+                "$inc": {
+                    "scanned_count": len(candidates),  # candidates scanned today
+                    "shown_count":   n_exists,         # badges actually shown
+                    "scan_calls":    1,                # API calls
+                },
+                "$set":  {"last_seen_at": datetime.now(timezone.utc).isoformat()},
+                "$setOnInsert": {"day": today, "created_at": datetime.now(timezone.utc).isoformat()},
+            },
+            upsert=True,
+        )
+        # Per-user breakdown (optional — useful for picking power users)
+        await db.badge_view_stats_user.update_one(
+            {"day": today, "user_email": user.get("email")},
+            {
+                "$inc": {"scanned_count": len(candidates), "shown_count": n_exists},
+                "$setOnInsert": {
+                    "day": today, "user_email": user.get("email"),
+                    "user_id": user.get("id"),
+                },
+            },
+            upsert=True,
+        )
+    except Exception as _e:
+        logger.warning(f"[BadgeView] counter update failed: {_e}")
 
     # ─── Phase 56.3 audit log (fire-and-forget) ────────────────────────
     # Same allowlist as V2. With the team-wide rollout
