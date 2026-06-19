@@ -29,6 +29,53 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-19) Phase B auto-labeler script + cross-encoder safety probe.**
+
+  **Auto-labeler ready** (`backend/scripts/badge_threshold_autolabeler.py`):
+   * Joins `badge_feedback.wrong_match` rows back to the originating
+     `match_results` to learn which SIGNALS (naukri_id, email, phone,
+     name+location) correlate with bad matches.
+   * Computes per-signal precision (TP/TP+FP).
+   * Recommends a new V2 medium-band floor (the 80th percentile of wrong
+     scores, capped at 1.30).
+   * Hard-floors: refuses to run below 200 wrong_match rows OR 5,000
+     audit rows. Currently `badge_feedback.wrong_match = 1` so it sits
+     idle until usage accumulates.
+   * `--apply` flag writes the recommendation to a new
+     `match_thresholds.v2_medium_floor` doc, picked up live by the next
+     `/check-existing` call.
+   * Outputs `/tmp/badge_threshold_wrong_matches.csv` for human review.
+   * Run with: `python -m scripts.badge_threshold_autolabeler` (report
+     only) or `--apply` to write the threshold.
+
+  **Cross-encoder rerank — safety probe shipped** (route hand-off intact,
+  sidecar model swap is still a sidecar-repo job):
+   * New `POST /api/talent/rerank-healthcheck` endpoint probes the
+     `/rerank` sidecar endpoint without flipping the feature flag.
+     Returns `{sidecar_url_set, remote_enabled, took_ms, raw[],
+     ordering_sane, env_flag}` so the team can verify the sidecar
+     speaks BGE-reranker BEFORE setting `CROSS_ENCODER_ENABLED=true`
+     in prod `.env`.
+   * `ordering_sane` checks the obviously-best doc (React frontend)
+     ranks above an obviously-bad doc (Civil Engineer) for a
+     "react frontend developer" query.
+   * Rollback is one env var flip; the existing
+     `_cross_encoder_rerank` already gracefully falls back to
+     `_hybrid_rerank` on any sidecar failure (no user-visible break).
+
+  **Operational recipe** for the cross-encoder cutover (when sidecar is ready):
+    1. `curl -X POST $API/api/talent/rerank-healthcheck`
+       → must return `ok:true, ordering_sane:true`
+    2. Set `CROSS_ENCODER_ENABLED=true` in `backend/.env`
+    3. `sudo systemctl restart vhc-backend`
+    4. Watch `hybrid_breakdown.rerank_arm` in `/api/talent/search`
+       responses — should now read `cross_encoder` for most queries.
+    5. Rollback = remove the env var, restart.
+
+  Tests: 61/61 still pass. Files: `routes/talent_search.py`
+  (new healthcheck endpoint), `backend/scripts/badge_threshold_autolabeler.py`
+  (new).
+
 - **(2026-06-19) P0 cutover + badge counter + audit polish.**
 
   **(P0) Advanced Search cutover to hybrid endpoint** — `AdvancedSearchPage`

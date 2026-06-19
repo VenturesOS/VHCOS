@@ -1442,3 +1442,63 @@ async def warmup(current_user: dict = Depends(get_current_user)):
         "step_ms": step_ms,
         "model_ready": ok,
     }
+
+
+
+@router.post("/rerank-healthcheck")
+async def rerank_healthcheck(current_user: dict = Depends(get_current_user)):
+    """Probe the cross-encoder / BGE-reranker sidecar without flipping the
+    feature flag. Use this BEFORE setting `CROSS_ENCODER_ENABLED=true` in
+    production to confirm the sidecar is reachable, responsive, and serving
+    a reranker (not just embeddings).
+
+    Returns:
+      ok                : True if sidecar returned a non-empty rerank
+      sidecar_url_set   : whether BGE_SIDECAR_URL is configured
+      remote_enabled    : `is_remote_enabled()` (URL + circuit closed)
+      took_ms           : sidecar call latency
+      ordering_sane     : True if the obviously-best doc came back top-1
+      raw               : first few scores for inspection
+      env_flag          : current state of CROSS_ENCODER_ENABLED
+    """
+    import time, os
+    t0 = time.time()
+    sidecar_url = bool(os.environ.get("BGE_SIDECAR_URL"))
+    env_flag = os.environ.get("CROSS_ENCODER_ENABLED", "false")
+    out: Dict[str, Any] = {
+        "sidecar_url_set": sidecar_url,
+        "env_flag":        env_flag,
+        "remote_enabled":  False,
+        "ok":              False,
+    }
+    try:
+        from services.embed_client import is_remote_enabled, rerank_remote
+        out["remote_enabled"] = is_remote_enabled()
+        if not out["remote_enabled"]:
+            out["error"] = "sidecar not reachable or circuit open"
+            out["took_ms"] = int((time.time() - t0) * 1000)
+            return out
+        query = "react frontend developer"
+        docs = [
+            "React frontend engineer with TypeScript and Redux",      # 0 — best
+            "Backend Java developer Spring Boot",                     # 1
+            "Civil engineer site planning AutoCAD",                   # 2
+            "Sales manager FMCG retail",                              # 3
+            "React Native mobile + Node.js backend",                  # 4 — second best
+        ]
+        hits = await asyncio.to_thread(rerank_remote, query, docs, 5)
+        out["took_ms"] = int((time.time() - t0) * 1000)
+        if not hits:
+            out["error"] = "rerank_remote returned empty"
+            return out
+        out["raw"] = hits[:5]
+        # Sanity: the React-frontend doc (index 0) should rank above the
+        # Civil Engineer doc (index 2). We don't insist on perfect ordering
+        # — just that the reranker discriminates direction.
+        idx_to_rank = {h["index"]: r for r, h in enumerate(hits)}
+        out["ordering_sane"] = idx_to_rank.get(0, 99) < idx_to_rank.get(2, 99)
+        out["ok"] = True
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+        out["took_ms"] = int((time.time() - t0) * 1000)
+    return out
