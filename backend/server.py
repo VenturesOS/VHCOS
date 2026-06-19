@@ -143,6 +143,7 @@ cv_upload_router = _safe_import("routes.cv_upload", "cv_upload_router")
 ai_search_router = _safe_import("routes.ai_search", "ai_search_router")
 sourcing_router = _safe_import("routes.sourcing_search", "sourcing_router")
 talent_search_router = _safe_import("routes.talent_search", "router")
+talent_feedback_router = _safe_import("routes.talent_feedback", "router")
 contact_router = _safe_import("routes.contact", "router")
 blog_router = _safe_import("routes.blog", "router")
 seo_router = _safe_import("routes.seo", "router")
@@ -315,6 +316,7 @@ _all_routers = [
     ltr_router,
     ltr_admin_router,
     talent_search_router,
+    talent_feedback_router,
 ]
 
 for _r in _all_routers:

@@ -595,6 +595,51 @@ async def find_candidates_by_text(
             if timing is not None: timing["rerank_arm"] = "cross_encoder"
     if timing is not None: timing["rerank_ms"] = int((time.time() - _t) * 1000)
 
+    # ── RRF fusion (when multiple retrievers contributed) ───────────
+    # Reciprocal Rank Fusion: for each candidate, score = Σ 1/(60+rank_k).
+    # Compared to ranking only by the reranker output, RRF rewards
+    # candidates that show up in MULTIPLE retrievers (vector + location
+    # seed) — a strong signal that they're a real match, not a lucky
+    # high score in one channel. The k=60 constant is the standard from
+    # the RRF paper; tuning it lower amplifies top-rank dominance.
+    if location_seed_ids and ranked:
+        rrf_scores: Dict[Any, float] = {}
+        rrf_components: Dict[Any, List[str]] = {}
+        # Channel 1: the reranker output (the strongest single signal).
+        for rk, r in enumerate(ranked):
+            cid = r.get("candidate_id")
+            if not cid: continue
+            rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (60 + rk)
+            rrf_components.setdefault(cid, []).append("rerank")
+        # Channel 2: the location-seed leg, ranked by their `_keyword_fallback_search`
+        # base score (already 0.35..0.85). Anything in this channel is
+        # location-correct, so its rank is a high-quality signal.
+        loc_seeds_sorted = sorted(
+            [s for s in (pool or []) if s.get("candidate_id") in location_seed_ids],
+            key=lambda x: float(x.get("score") or 0.0),
+            reverse=True,
+        )
+        for rk, s in enumerate(loc_seeds_sorted):
+            cid = s.get("candidate_id")
+            if not cid: continue
+            rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (60 + rk)
+            rrf_components.setdefault(cid, []).append("location")
+        # Build the lookup, then re-sort `ranked` by RRF score (descending).
+        by_id = {r.get("candidate_id"): r for r in ranked if r.get("candidate_id")}
+        for s in loc_seeds_sorted:
+            cid = s.get("candidate_id")
+            if cid not in by_id:
+                by_id[cid] = s
+        for cid, r in by_id.items():
+            r["rrf_score"] = round(rrf_scores.get(cid, 0.0), 6)
+            r["rrf_channels"] = rrf_components.get(cid, [])
+        ranked = sorted(by_id.values(), key=lambda r: r.get("rrf_score") or 0, reverse=True)
+        if timing is not None:
+            timing["rrf_fused"] = len(ranked)
+            timing["rrf_multi_channel"] = sum(
+                1 for r in ranked if len(r.get("rrf_channels") or []) > 1
+            )
+
     # Guarantee location seeds survive the rerank cull. A `_keyword_fallback_search`
     # candidate has no embedding (cosine=0) and no LTR features, so both arms
     # tend to push them to the bottom — even when the recruiter explicitly
@@ -710,6 +755,9 @@ async def _keyword_fallback_search(
             "current_designation": d.get("designation") or d.get("current_designation") or d.get("headline"),
             "current_location": d.get("location") or d.get("current_location"),
             "experience_years": d.get("experience_years") or d.get("total_experience_years"),
+            "headline": d.get("headline"),
+            "skills": d.get("skills") or [],
+            "smart_tags": d.get("smart_tags") or [],
             "summary": d.get("summary"),
             "score": round(0.35 + 0.5 * score, 4),   # 0.35..0.85, clearly < pure vector hits
             "match_type": "keyword",
@@ -731,12 +779,20 @@ async def _enrich_with_candidate_bank(db, results: List[Dict[str, Any]]) -> None
     # carry the designation while `current_location` is empty (the field
     # name in candidate_bank is `location`, not `current_location`), so a
     # strict location filter would cull them before this hydration ran.
+    # Re-enrich any result that's missing role-relevance signals
+    # (designation/employer/location/exp OR the skills/headline/tags that the
+    # role-relevance step reads). The embedding collection projection doesn't
+    # carry skills/headline/smart_tags so a result fresh out of $vectorSearch
+    # would otherwise score 0 against role tokens, even when candidate_bank
+    # has rich data for that profile.
     needs = [
         r for r in results
         if not r.get("current_designation")
         or not r.get("current_employer")
         or not r.get("current_location")
         or r.get("experience_years") is None
+        or not r.get("skills")
+        or not r.get("headline")
     ]
     if not needs:
         return
@@ -752,6 +808,9 @@ async def _enrich_with_candidate_bank(db, results: List[Dict[str, Any]]) -> None
             "total_experience_years": 1, "experience_years": 1,
             "headline": 1, "resume_headline": 1,
             "work_experience": 1,
+            "skills": 1, "smart_tags": 1,
+            "highest_qualification": 1, "education": 1,
+            "current_salary": 1,
         },
     )
     by_id = {d["id"]: d async for d in cursor}
@@ -787,6 +846,21 @@ async def _enrich_with_candidate_bank(db, results: List[Dict[str, Any]]) -> None
             or c.get("experience_years")
             or c.get("total_experience_years")
         )
+        # Role-relevance / education / CTC fields — needed by the
+        # downstream filters (skills array, smart tags, headline,
+        # qualifications, current salary).
+        if not r.get("skills"):
+            r["skills"] = c.get("skills") or []
+        if not r.get("smart_tags"):
+            r["smart_tags"] = c.get("smart_tags") or []
+        if not r.get("headline"):
+            r["headline"] = c.get("headline") or c.get("resume_headline")
+        if not r.get("highest_qualification"):
+            r["highest_qualification"] = c.get("highest_qualification")
+        if not r.get("education"):
+            r["education"] = c.get("education")
+        if r.get("current_salary") is None:
+            r["current_salary"] = c.get("current_salary")
 
 
 async def _load_ltr_features(db, results: List[Dict[str, Any]]) -> None:

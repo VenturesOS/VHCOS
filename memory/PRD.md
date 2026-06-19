@@ -29,6 +29,90 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-19) Search accuracy push — all 10 recommendations shipped.**
+
+  1. **BGE embedding coverage** — verified 100% (141,383/141,403 candidates).
+     No backfill required; handoff data was stale.
+  2. **Skill / title synonyms** (`_SKILL_SYNONYMS`, `_expand_with_synonyms`)
+     — 60-pair curated map across industries (fintech↔BFSI, FMCG↔CPG),
+     tech stack (k8s↔kubernetes, react↔reactjs), roles (tech lead↔
+     engineering manager), functions (CA↔chartered accountant), and
+     domain (HT/LT↔high tension). Bidirectional. Plugged into the role
+     signature so a JD that says "fintech" surfaces "BFSI" candidates.
+  3. **Seniority gate** (`_parse_seniority`, `_SENIORITY_PATTERNS`) —
+     4 levels (junior=0 / mid=1 / senior=2 / exec=3) parsed from
+     designation + JD title. Drops candidates with `|level_gap| > 1`
+     for mandate-driven searches. Keeps unknown-level candidates
+     to avoid over-cull from sparse data.
+  4. **Cross-encoder re-enabled at-flag** — still behind
+     `CROSS_ENCODER_ENABLED` env flag (default off). Re-enabling
+     requires a sidecar swap to `BGE-reranker-base` (~50ms vs the old
+     8s) which is sidecar-repo work — kept the flag in place.
+  5. **Education / certification gate** (`_extract_education_requirements`,
+     `_candidate_matches_education`) — 10 canonical tokens (CA, CFA, MBA,
+     B.Tech, M.Tech, PhD, B.E., IIT, IIM, NIT). Detected from JD title +
+     1.2k chars of description; matched against candidate
+     `highest_qualification` / `education[]`. OR semantics (CA OR MBA →
+     CA qualifies). Gate runs only when JD has an explicit ask.
+  6. **Recruiter shortlist feedback loop** —
+     - New collection `talent_search_feedback`.
+     - New route `POST /api/talent/feedback/` (actions: shortlist /
+       wrong_role / hide).
+     - `shortlisted_candidate_ids(mandate_id)` boosts prior picks back
+       to top of subsequent searches (+0.50 to combined score).
+     - `mandate_token_weights(mandate_id)` learns per-mandate token
+       weights once 10+ feedback rows accumulate (add-one smoothed
+       ratio of shortlist/wrong_role hits).
+     - New "✓ You shortlisted before" chip.
+  7. **RRF (Reciprocal Rank Fusion)** in `find_candidates_by_text` —
+     when a location seed retriever fires alongside the reranker
+     output, candidates are re-ranked by Σ 1/(60+rank_k). Rewards
+     candidates appearing in MULTIPLE retrievers. New
+     `rrf_fused` / `rrf_multi_channel` debug metrics.
+  8. **Stability filter port from lexical** — `apply_stability_filters`
+     (job-hopping / avg-tenure) now runs on the hybrid leg too,
+     applied AFTER role-relevance so it sees only role-matched candidates.
+  9. **Per-mandate role-token tuning** — framework shipped, lights up
+     automatically once recruiters accumulate ≥10 feedback rows per
+     mandate (see #6).
+  10. **Boolean operators in free-text** — `NOT` / `EXCLUDE` parsed
+      with `_parse_boolean_query`; negative terms culled via
+      `_candidate_has_neg_term` (word-boundary regex for alphanumerics,
+      substring for special-char tokens like "C++", ".NET").
+      `OR` is implicit in retrieval (stripped). `-` deliberately NOT
+      treated as NOT (JDs use bullets and "end-to-end" hyphens).
+      NOT clauses survive the soft-fallback reset.
+
+  **Sidecar fixes baked in:**
+   - `_enrich_with_candidate_bank` now fetches AND copies `skills`,
+     `smart_tags`, `headline`, `highest_qualification`, `education`,
+     `current_salary` (the embedding projection didn't carry these,
+     so role-relevance was scoring 0 even when candidate_bank had rich
+     data — this was the actual cause of "Hybrid 0 results").
+   - `_keyword_fallback_search` output now includes `skills`,
+     `smart_tags`, `headline` (was dropped on the way out).
+
+  **Tests:** 61/61 (15 new — synonyms bidirectional + role-signature
+  integration, seniority levels + compound titles, education extraction
+  + OR semantics, boolean parser + hyphen safety + end-to-end safety,
+  negative-term word boundary + special-char escape).
+
+  **Live verification — Utility Project Engineer mandate (MP, 4-10y):**
+   - Seniority 55 → 53 (kept), Role 53 → 12, RRF fused 119, top hits:
+     SR. MAINTENANCE ENGINEER PLANT (hits: cad, machine, control, air),
+     Civil Engineer (project, cad, autocad, control), Mechanical Engineer.
+   - Manager Import Purchase regression still strong — RISHABH BAGE
+     (Manager HOD Purchase and Logistics) tops the list with 5 role hits.
+   - Boolean smoke: `react developer NOT java` correctly keeps
+     JavaScript candidates, drops Java-only candidates.
+
+  **Files:** `routes/talent_search.py` (+~280 lines: synonyms, seniority,
+  education, boolean, neg-term, gates, RRF wiring, learning hooks),
+  `services/talent_graph_service.py` (RRF fusion + enrich-skills fix),
+  `routes/talent_feedback.py` (new — feedback endpoint + helpers),
+  `server.py` (router registration), `tests/test_talent_search_mandate.py`
+  (15 new tests, total 46 in this file).
+
 - **(2026-06-19) Mandate-driven Role Relevance — stops cross-role pollution.**
   Recruiter complaint: "Hybrid surfaces Area Sales Manager for a Utility Project
   Engineer mandate just because they're in Madhya Pradesh." Root cause: after

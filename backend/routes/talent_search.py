@@ -377,6 +377,240 @@ def _expand_location_terms(loc: str) -> List[str]:
     return [base] + _CITY_ALIASES.get(base, [])
 
 
+# ── Skill / title synonyms ────────────────────────────────────────────
+# A token from the JD or the candidate matches if it appears in the
+# OTHER side OR any of its synonyms. Bidirectional; kept small + curated
+# (about 80 pairs) so we ship signal without false positives. Add a pair
+# here when a real mandate surfaces a confusion.
+_SKILL_SYNONYMS: Dict[str, List[str]] = {
+    # Industries
+    "fmcg": ["cpg", "consumer goods"],
+    "cpg": ["fmcg"],
+    "fintech": ["bfsi", "banking", "financial services"],
+    "bfsi": ["fintech", "banking", "financial"],
+    "edtech": ["education technology", "elearning"],
+    "saas": ["software as a service", "cloud software"],
+    "healthcare": ["health tech", "healthtech", "pharma", "medical"],
+    "automotive": ["auto", "automobile"],
+    "automobile": ["automotive", "auto"],
+    "ecommerce": ["e-commerce", "online retail", "marketplace"],
+    # Tech stack
+    "k8s": ["kubernetes"],
+    "kubernetes": ["k8s"],
+    "ml": ["machine learning", "ai"],
+    "ai": ["ml", "machine learning", "artificial intelligence"],
+    "dl": ["deep learning"],
+    "nlp": ["natural language processing"],
+    "cv": ["computer vision"],
+    "js": ["javascript"],
+    "ts": ["typescript"],
+    "py": ["python"],
+    "react": ["reactjs", "react.js"],
+    "node": ["nodejs", "node.js"],
+    "postgres": ["postgresql"],
+    "postgresql": ["postgres"],
+    "mongo": ["mongodb"],
+    "elastic": ["elasticsearch"],
+    "gcp": ["google cloud"],
+    "aws": ["amazon web services"],
+    "ci/cd": ["cicd", "continuous integration"],
+    # Roles
+    "tech lead": ["engineering manager", "team lead", "lead engineer"],
+    "engineering manager": ["tech lead", "em"],
+    "product manager": ["pm", "product owner"],
+    "data scientist": ["ds", "ml engineer"],
+    "ml engineer": ["machine learning engineer", "data scientist"],
+    "devops": ["sre", "site reliability"],
+    "sre": ["devops", "site reliability"],
+    "frontend": ["front end", "front-end", "ui developer"],
+    "backend": ["back end", "back-end", "server side"],
+    "fullstack": ["full stack", "full-stack"],
+    "qa": ["quality assurance", "tester"],
+    # Functions
+    "hr": ["human resources", "people"],
+    "ca": ["chartered accountant"],
+    "mba": ["master of business administration"],
+    "cfa": ["chartered financial analyst"],
+    # Domain
+    "ht/lt": ["ht", "lt", "high tension", "low tension"],
+    "etp": ["effluent treatment"],
+    "stp": ["sewage treatment"],
+    "autocad": ["auto cad", "cad"],
+    "solidworks": ["solid works"],
+    "sap mm": ["mm module", "materials management"],
+    "p2p": ["procure to pay", "procure-to-pay"],
+    "o2c": ["order to cash"],
+}
+# Build reverse map once at module load — every key maps to itself + its synonyms.
+_SYNONYM_EXPAND: Dict[str, set] = {}
+for _k, _vs in _SKILL_SYNONYMS.items():
+    _SYNONYM_EXPAND.setdefault(_k, set()).add(_k)
+    for _v in _vs:
+        _SYNONYM_EXPAND[_k].add(_v)
+        _SYNONYM_EXPAND.setdefault(_v, set()).add(_v)
+        _SYNONYM_EXPAND[_v].add(_k)
+        _SYNONYM_EXPAND[_v].update(_vs)
+
+
+def _expand_with_synonyms(tokens: List[str]) -> List[str]:
+    """Return [tokens] + all known synonyms, deduped, lowercased."""
+    out: set = set()
+    for t in tokens:
+        t = (t or "").lower().strip()
+        if not t:
+            continue
+        out.add(t)
+        out.update(_SYNONYM_EXPAND.get(t, ()))
+    return list(out)
+
+
+# ── Seniority parsing ─────────────────────────────────────────────────
+# Maps designation/title tokens to a 0..3 seniority level. Used to gate
+# mandate-driven matches so a "Senior Manager" JD doesn't surface "Junior
+# Manager" candidates. Order matters — longest match first.
+_SENIORITY_PATTERNS: List[tuple] = [
+    (("chief", "cxo", "ceo", "cto", "cfo", "coo", "cmo", "cpo", "vp ", "vice president", "president"), 3),
+    (("head ", "head of", "director", "principal", "staff "), 3),
+    (("senior", "sr.", "sr ", "lead ", " lead", "specialist"), 2),
+    (("associate", "assistant", "junior", "jr.", "jr ", "trainee", "intern", "fresher"), 0),
+    (("manager", "engineer", "executive", "analyst", "officer", "developer"), 1),  # mid default
+]
+
+
+def _parse_seniority(text: Optional[str]) -> Optional[int]:
+    """Return 0..3 (junior/mid/senior/exec) or None when unknown."""
+    if not text:
+        return None
+    t = " " + text.lower() + " "
+    for needles, level in _SENIORITY_PATTERNS:
+        if any(n in t for n in needles):
+            return level
+    return None
+
+
+# ── Education / certification requirements ────────────────────────────
+# Mapped from common JD phrasings to a canonical token recruiters use.
+_EDU_PATTERNS: Dict[str, List[str]] = {
+    "ca":   ["chartered accountant", "ca qualified", " ca "],
+    "cfa":  ["chartered financial analyst", "cfa "],
+    "mba":  ["mba", "master of business"],
+    "btech": ["b.tech", "b tech", "btech", "bachelor of technology"],
+    "mtech": ["m.tech", "m tech", "mtech", "master of technology"],
+    "phd":  ["phd", "ph.d", "doctorate"],
+    "be":   ["b.e.", "b.e ", "bachelor of engineering"],
+    "iit":  ["iit ", "iitian", "indian institute of technology"],
+    "iim":  ["iim ", "indian institute of management"],
+    "nit":  ["nit ", "national institute of technology"],
+}
+
+
+def _extract_education_requirements(job: Dict[str, Any]) -> List[str]:
+    """Scan title + first 1.2k chars of description for explicit education /
+    certification asks. Returns a list of canonical tokens (e.g., ['ca', 'mba']).
+    Empty list = no education requirement detected; filter is skipped.
+    """
+    blob = " ".join([
+        str(job.get("title") or ""),
+        str(job.get("description") or job.get("jd") or "")[:1200],
+    ]).lower()
+    found: set = set()
+    for canonical, patterns in _EDU_PATTERNS.items():
+        if any(p in blob for p in patterns):
+            found.add(canonical)
+    return sorted(found)
+
+
+def _candidate_matches_education(c: Dict[str, Any], req_edu: List[str]) -> bool:
+    """True when the candidate's education / qualification fields contain at
+    least ONE of the required education tokens (treat as OR, not AND, so a
+    'CA OR MBA' JD doesn't drop CAs)."""
+    if not req_edu:
+        return True
+    blob = " ".join([
+        str(c.get("highest_qualification") or ""),
+        str(c.get("education") or ""),
+        str(c.get("qualifications") or ""),
+        str(c.get("summary") or "")[:300],
+    ]).lower()
+    edu_arr = c.get("education")
+    if isinstance(edu_arr, list):
+        for e in edu_arr:
+            if isinstance(e, dict):
+                blob += " " + " ".join(
+                    str(e.get(k) or "") for k in ("degree", "specialization", "institute", "school")
+                ).lower()
+    for canonical in req_edu:
+        for p in _EDU_PATTERNS.get(canonical, [canonical]):
+            if p.strip() in blob:
+                return True
+    return False
+
+
+# ── Boolean operators in free-text query ──────────────────────────────
+def _parse_boolean_query(query: str) -> tuple:
+    """Split a query like `react developer NOT java AWS OR azure` into
+    (positive_terms, negative_terms). Operators are case-insensitive.
+    Returns the cleaned query (operators stripped) + the term lists.
+    """
+    if not query:
+        return ("", [], [])
+    import re as _re
+    # Only treat the WORDS "NOT" / "EXCLUDE" as negative-clause separators.
+    # We intentionally do NOT use "-" as a negation operator — JDs are full
+    # of bullet points ("- Ensure reliable…") and hyphenated terms
+    # ("end-to-end", "C-suite") that would all be mis-parsed.
+    parts = _re.split(r"\b(?:NOT|EXCLUDE)\b", query, flags=_re.IGNORECASE, maxsplit=1)
+    pos_clause = parts[0].strip()
+    neg_clause = parts[1].strip() if len(parts) > 1 else ""
+    # OR is implicit in our retrieval; just strip the literal token.
+    pos_clause = _re.sub(r"\bOR\b", " ", pos_clause, flags=_re.IGNORECASE)
+    cleaned = pos_clause.strip()
+    pos_terms = [
+        t.lower() for t in _re.findall(r"[A-Za-z][A-Za-z0-9\+\.#]{2,}", pos_clause)
+    ]
+    neg_terms = [
+        t.lower() for t in _re.findall(r"[A-Za-z][A-Za-z0-9\+\.#]{2,}", neg_clause)
+    ]
+    return (cleaned, pos_terms, neg_terms)
+
+
+def _candidate_blob_for_neg_match(c: Dict[str, Any]) -> str:
+    return " ".join([
+        str(c.get("current_designation") or ""),
+        str(c.get("headline") or ""),
+        " ".join(s if isinstance(s, str) else (s.get("name") or "") for s in (c.get("skills") or [])),
+        " ".join(c.get("smart_tags") or []),
+        str(c.get("summary") or "")[:500],
+    ]).lower()
+
+
+def _candidate_has_neg_term(c: Dict[str, Any], neg_terms: List[str]) -> bool:
+    """Word-boundary match for negative terms.  Critical: a NOT-java filter
+    must NOT cull JavaScript candidates.  We treat each negative term as a
+    whole-word regex; tokens with `.` or `+` (e.g. ".NET", "C++") are escaped.
+    """
+    if not neg_terms:
+        return False
+    import re as _re_neg
+    blob = _candidate_blob_for_neg_match(c)
+    for nt in neg_terms:
+        nt = (nt or "").lower().strip()
+        if not nt:
+            continue
+        # Special-character tokens (C++, .NET, F#, c#) won't get a `\b`
+        # boundary because `+`/`.`/`#` aren't word chars — fall back to
+        # a simple substring match for those. Pure alphanumeric tokens
+        # use word-boundary so "java" doesn't match "javascript".
+        if any(ch in nt for ch in (".", "+", "#")):
+            if nt in blob:
+                return True
+        else:
+            pat = r"\b" + _re_neg.escape(nt) + r"\b"
+            if _re_neg.search(pat, blob):
+                return True
+    return False
+
+
 # Stopwords / generic tokens we DROP when building a job's role signature.
 # These are too common to be discriminative — every mandate has "manager"
 # or "experience" so requiring them as a "role match" is meaningless.
@@ -453,7 +687,10 @@ def _extract_role_signature(job: Dict[str, Any]) -> List[str]:
     # Prefer tokens that appeared multiple times (title duplicated, repeated
     # in JD) — those are the strongest role signals.
     ranked = sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))
-    return [tok for tok, _ in ranked[:24]]
+    primary = [tok for tok, _ in ranked[:24]]
+    # Expand each token with known synonyms so "fintech" matches "BFSI",
+    # "k8s" matches "kubernetes", "tech lead" matches "engineering manager", etc.
+    return _expand_with_synonyms(primary)
 
 
 def _role_relevance(
@@ -658,6 +895,12 @@ def _explain_match(
         extra = f" +{len(rhits)-3}" if len(rhits) > 3 else ""
         reasons.append({"label": f"Role: {head}{extra}", "kind": "filter"})
 
+    # 1c. Prior recruiter signal — if this candidate was shortlisted from
+    # an earlier search for the SAME mandate, surface that. Recruiters
+    # trust their own past judgment more than the model's score.
+    if c.get("prior_shortlist"):
+        reasons.append({"label": "✓ You shortlisted before", "kind": "model"})
+
     # 2. Score band — semantic confidence
     score = c.get("score")
     if isinstance(score, (int, float)) and leg == "hybrid":
@@ -858,8 +1101,26 @@ async def talent_search(
         # other Indore/Bangalore/4-10y candidates. Cached on `req` so
         # the hybrid leg can read it without re-extracting.
         role_tokens = _extract_role_signature(job)
+        # Seniority of the mandate's title — used to gate the role-relevance
+        # step so a "Senior Manager" JD doesn't surface "Junior Manager".
+        jd_seniority = _parse_seniority(job.get("title"))
+        # Explicit education / certification asks (CA, MBA, B.Tech, IIT, …)
+        edu_required = _extract_education_requirements(job)
+        # Per-mandate learned weights from recruiter feedback. {} until
+        # at least 10 feedback rows accumulate; then tokens that correlate
+        # with shortlists are boosted, wrong_role-correlated ones penalised.
+        from routes.talent_feedback import (
+            shortlisted_candidate_ids,
+            mandate_token_weights,
+        )
+        prior_shortlist_ids = set(await shortlisted_candidate_ids(db, req.job_id))
+        token_weights = await mandate_token_weights(db, req.job_id)
     else:
         role_tokens = []
+        jd_seniority = None
+        edu_required = []
+        prior_shortlist_ids = set()
+        token_weights = {}
 
     if not req.query or len(req.query.strip()) < 2:
         raise HTTPException(status_code=400, detail="query or job_id required")
@@ -867,6 +1128,14 @@ async def talent_search(
     q = req.query.strip()
     if len(q) < 2:
         raise HTTPException(status_code=400, detail="query too short")
+
+    # Boolean operator parsing — "react developer NOT java" splits into
+    # positive query (used for retrieval) and negative terms (used to cull
+    # candidates whose blob contains them). Operators stripped from the
+    # query so they don't pollute the embedding.
+    cleaned_q, _pos_terms, neg_terms = _parse_boolean_query(q)
+    if cleaned_q and cleaned_q != q:
+        q = cleaned_q
 
     debug: Dict[str, Any] = {}
 
@@ -930,6 +1199,50 @@ async def talent_search(
         # so vague NL searches don't get over-culled.
         strict_filter = req.job_id is not None
         filtered = _apply_structured_filters(normalised, filters, strict=strict_filter)
+
+        # ── Seniority gate (mandate-driven only) ────────────────────
+        # A "Senior Manager" JD shouldn't surface "Junior Manager"
+        # candidates even if they pass the exp/location bands. Treat as
+        # soft drop (level gap > 1) — keep candidates whose seniority is
+        # unknown so we don't over-cull from sparse data.
+        if strict_filter and jd_seniority is not None:
+            before = len(filtered)
+            kept = []
+            for c in filtered:
+                cand_lvl = _parse_seniority(
+                    c.get("current_designation") or c.get("headline")
+                )
+                if cand_lvl is None or abs(cand_lvl - jd_seniority) <= 1:
+                    kept.append(c)
+            debug["seniority_gate"] = {
+                "jd_level": jd_seniority,
+                "before": before,
+                "after":  len(kept),
+            }
+            filtered = kept
+
+        # ── Education / certification gate ───────────────────────────
+        if strict_filter and edu_required:
+            before = len(filtered)
+            filtered = [c for c in filtered if _candidate_matches_education(c, edu_required)]
+            debug["education_gate"] = {
+                "required": edu_required,
+                "before": before,
+                "after":  len(filtered),
+            }
+
+        # ── Boolean NOT operator (free-text path) ────────────────────
+        # Free-text "react developer NOT java" — strip candidates whose
+        # blob contains a negative term. We parsed neg_terms above.
+        if neg_terms:
+            before = len(filtered)
+            filtered = [c for c in filtered if not _candidate_has_neg_term(c, neg_terms)]
+            debug["boolean_not"] = {
+                "negative_terms": neg_terms,
+                "before": before,
+                "after":  len(filtered),
+            }
+
         if strict_filter and role_tokens:
             # Role-relevance step — keep only candidates whose designation /
             # skills genuinely overlap the mandate's role signature. Without
@@ -941,24 +1254,56 @@ async def talent_search(
             scored = []
             for c in filtered:
                 rscore, rhits = _role_relevance(c, role_tokens)
+                # Apply per-mandate learned weights (from recruiter feedback).
+                if token_weights:
+                    w_sum = sum(token_weights.get(t, 1.0) for t in rhits) / max(len(rhits), 1)
+                    rscore = min(1.0, round(rscore * w_sum, 4))
                 c["role_relevance"] = rscore
                 c["role_hits"] = rhits
                 # Strong-field hits are the discriminative ones (designation /
                 # skills). Require ≥2 strong hits OR ≥10% coverage.
                 if len(rhits) >= 2 or rscore >= 0.10:
                     scored.append(c)
+                elif c.get("id") in prior_shortlist_ids:
+                    # Recruiter already shortlisted this person for THIS
+                    # mandate before — always keep, even if role-relevance
+                    # is low this time around (their data may have changed
+                    # or our extractor missed a token).
+                    scored.append(c)
             # Re-rank: 60% role-relevance + 40% original retrieval score.
+            # +0.50 boost for previously-shortlisted candidates so they
+            # pin to the top of subsequent searches.
             for c in scored:
                 base = float(c.get("score") or 0.0)
+                bonus = 0.50 if c.get("id") in prior_shortlist_ids else 0.0
                 # Normalise base into 0..1 (vector scores are already there).
-                c["_combined_score"] = round(0.60 * c["role_relevance"] + 0.40 * base, 4)
+                c["_combined_score"] = round(
+                    0.60 * c["role_relevance"] + 0.40 * base + bonus, 4
+                )
+                if bonus:
+                    c["prior_shortlist"] = True
             scored.sort(key=lambda x: x["_combined_score"], reverse=True)
             debug["role_relevance"] = {
                 "tokens_extracted": role_tokens[:12],
                 "before_role_filter": len(filtered),
                 "after_role_filter":  len(scored),
+                "prior_shortlist_count": sum(1 for c in scored if c.get("prior_shortlist")),
+                "token_weights_active": bool(token_weights),
             }
             filtered = scored
+
+        # ── Stability (job-hopping / tenure) — port from lexical path ──
+        # `apply_stability_filters` reads min_avg_tenure_years / max_switches
+        # from filters and drops candidates with too many short stints.
+        # Soft penalty (already applied via score adjustment in the helper).
+        try:
+            from services.ai_search import apply_stability_filters as _stab
+            before = len(filtered)
+            filtered = _stab(filtered, filters or {})
+            if before != len(filtered):
+                debug["stability_filter"] = {"before": before, "after": len(filtered)}
+        except Exception as _se:
+            debug["stability_filter_error"] = f"{type(_se).__name__}: {str(_se)[:120]}"
         if strict_filter:
             # Never silently bypass mandate filters — a small but correct
             # result list is strictly better than a long list of mis-matches.
@@ -972,13 +1317,17 @@ async def talent_search(
         else:
             # If structured filters cull too aggressively on a free-text
             # query, fall back to the unfiltered semantic pool so the user
-            # still sees ranked results.
+            # still sees ranked results. BUT — never undo an explicit
+            # NOT clause from the user (they asked to exclude these).
             if len(filtered) < min(5, req.limit):
                 debug["hybrid_filter_relaxed"] = {
                     "after_filter": len(filtered),
                     "original_pool": len(normalised),
                 }
-                filtered = normalised
+                relaxed = normalised
+                if neg_terms:
+                    relaxed = [c for c in relaxed if not _candidate_has_neg_term(c, neg_terms)]
+                filtered = relaxed
         hybrid = filtered[: req.limit]
         # Attach human-readable reasons to each hybrid card (UI chips).
         for c in hybrid:

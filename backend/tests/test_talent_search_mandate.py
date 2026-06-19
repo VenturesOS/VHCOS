@@ -12,6 +12,12 @@ from routes.talent_search import (
     _expand_location_terms,
     _extract_role_signature,
     _role_relevance,
+    _expand_with_synonyms,
+    _parse_seniority,
+    _extract_education_requirements,
+    _candidate_matches_education,
+    _parse_boolean_query,
+    _candidate_has_neg_term,
 )
 
 
@@ -398,4 +404,170 @@ def test_role_relevance_empty_tokens_defaults_pass():
     score, hits = _role_relevance(c, [])
     assert score == 1.0
     assert hits == []
+
+
+
+# ── Skill / title synonyms ────────────────────────────────────────────
+
+
+def test_synonyms_bidirectional():
+    out = set(_expand_with_synonyms(["fintech"]))
+    assert "fintech" in out
+    assert "bfsi" in out
+    out2 = set(_expand_with_synonyms(["bfsi"]))
+    assert "fintech" in out2
+
+    out3 = set(_expand_with_synonyms(["k8s"]))
+    assert "kubernetes" in out3
+
+
+def test_synonyms_role_signature_picks_up_alias():
+    """A JD that says 'fintech' should have role tokens that match a candidate
+    with 'BFSI' in their skills."""
+    job = {"title": "Senior Backend Engineer Fintech", "description": "Build payment APIs."}
+    tokens = set(_extract_role_signature(job))
+    assert "fintech" in tokens
+    assert "bfsi" in tokens   # synonym expansion
+
+
+# ── Seniority parsing ────────────────────────────────────────────────
+
+
+def test_parse_seniority_levels():
+    assert _parse_seniority("Junior Engineer") == 0
+    assert _parse_seniority("Manager") == 1
+    assert _parse_seniority("Senior Manager") == 2
+    assert _parse_seniority("Lead Engineer") == 2
+    assert _parse_seniority("Head of Engineering") == 3
+    assert _parse_seniority("VP Engineering") == 3
+    assert _parse_seniority("Director") == 3
+    assert _parse_seniority(None) is None
+    assert _parse_seniority("") is None
+
+
+def test_parse_seniority_handles_compound_titles():
+    """`Sr.` and `Sr ` variants should both parse as senior."""
+    assert _parse_seniority("Sr. Procurement Engineer") == 2
+    assert _parse_seniority("Sr Engineering Manager") == 2
+
+
+# ── Education extraction ─────────────────────────────────────────────
+
+
+def test_extract_education_ca_and_mba():
+    job = {
+        "title": "Finance Manager (CA qualified preferred)",
+        "description": "Looking for CA or MBA from Tier-1 institute.",
+    }
+    edu = _extract_education_requirements(job)
+    assert "ca" in edu
+    assert "mba" in edu
+
+
+def test_extract_education_no_requirement():
+    job = {"title": "Backend Engineer", "description": "Build APIs in Python."}
+    assert _extract_education_requirements(job) == []
+
+
+def test_candidate_matches_education_present():
+    c = {"highest_qualification": "MBA - Finance, IIM Calcutta"}
+    assert _candidate_matches_education(c, ["mba"]) is True
+
+
+def test_candidate_matches_education_absent():
+    c = {"highest_qualification": "B.Sc Mathematics"}
+    assert _candidate_matches_education(c, ["mba", "ca"]) is False
+
+
+def test_candidate_matches_education_empty_pass():
+    """No education requirement = every candidate passes."""
+    c = {}
+    assert _candidate_matches_education(c, []) is True
+
+
+# ── Boolean query parsing ────────────────────────────────────────────
+
+
+def test_parse_boolean_not():
+    cleaned, pos, neg = _parse_boolean_query("react developer NOT java")
+    assert "java" not in cleaned.lower()
+    assert "react" in pos
+    assert "developer" in pos
+    assert "java" in neg
+
+
+def test_parse_boolean_or_implicit():
+    """OR is implicit in retrieval — token stripped from query string."""
+    cleaned, pos, neg = _parse_boolean_query("python OR golang AWS")
+    assert "or" not in cleaned.lower().split()
+    assert "python" in pos
+    assert "golang" in pos
+    assert "aws" in pos
+    assert neg == []
+
+
+def test_parse_boolean_no_operators():
+    cleaned, pos, neg = _parse_boolean_query("backend engineer")
+    assert cleaned == "backend engineer"
+    assert "backend" in pos
+    assert "engineer" in pos
+    assert neg == []
+
+
+def test_parse_boolean_empty():
+    cleaned, pos, neg = _parse_boolean_query("")
+    assert cleaned == ""
+    assert pos == []
+    assert neg == []
+
+
+def test_parse_boolean_does_not_split_on_hyphen():
+    """Bullet hyphens and hyphenated terms must NOT be treated as NOT operators.
+    Regression: a JD description starting with `- Ensure reliable…` would
+    otherwise cull every candidate that mentioned 'ensure'."""
+    cleaned, pos, neg = _parse_boolean_query(
+        "Utility Project Engineer – Machine Execution.\n- Ensure reliable operation."
+    )
+    assert neg == []
+    assert "ensure" in pos        # everything before the hyphen stays positive
+    assert "reliable" in pos
+
+
+def test_parse_boolean_end_to_end_not_treated_as_not():
+    cleaned, pos, neg = _parse_boolean_query("backend engineer with end-to-end ownership")
+    assert neg == []
+    assert "end" in pos
+
+
+
+# ── Word-boundary negative-term matching ─────────────────────────────
+
+
+def test_neg_term_word_boundary_keeps_javascript():
+    """`NOT java` must NOT cull a JavaScript developer (substring vs word)."""
+    c = {"skills": ["JavaScript", "React", "Node.js"]}
+    assert _candidate_has_neg_term(c, ["java"]) is False
+
+
+def test_neg_term_word_boundary_culls_java():
+    c = {"skills": ["Java", "Spring Boot", "Hibernate"]}
+    assert _candidate_has_neg_term(c, ["java"]) is True
+
+
+def test_neg_term_skips_empty():
+    c = {"skills": ["Anything"]}
+    assert _candidate_has_neg_term(c, []) is False
+    assert _candidate_has_neg_term(c, [""]) is False
+
+
+def test_neg_term_matches_in_designation():
+    c = {"current_designation": "Java Backend Engineer", "skills": []}
+    assert _candidate_has_neg_term(c, ["java"]) is True
+
+
+def test_neg_term_escapes_special_chars():
+    """A negative term `c++` must match the candidate's `C++` skill literally,
+    not be interpreted as a regex."""
+    c = {"skills": ["C++", "Linux"]}
+    assert _candidate_has_neg_term(c, ["c++"]) is True
 
