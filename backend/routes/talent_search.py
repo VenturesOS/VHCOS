@@ -377,6 +377,116 @@ def _expand_location_terms(loc: str) -> List[str]:
     return [base] + _CITY_ALIASES.get(base, [])
 
 
+# Stopwords / generic tokens we DROP when building a job's role signature.
+# These are too common to be discriminative — every mandate has "manager"
+# or "experience" so requiring them as a "role match" is meaningless.
+_ROLE_STOPWORDS: set = {
+    "and", "the", "for", "from", "with", "into", "etc", "etc.", "well",
+    "year", "years", "exp", "experience", "experienced", "experienced.",
+    "senior", "junior", "lead", "team", "role", "candidate", "candidates",
+    "must", "should", "able", "ability", "responsible", "responsibility",
+    "responsibilities", "good", "strong", "excellent", "preferred", "preference",
+    "knowledge", "understanding", "working", "work", "job", "company",
+    "industry", "experience.", "based", "located", "location", "salary",
+    "ctc", "compensation", "skills", "skill", "required", "requirement",
+    "requirements", "qualification", "qualifications", "education", "degree",
+    "graduate", "graduation", "post", "post-graduate", "btech", "mtech", "bsc",
+    "msc", "diploma", "engineering", "engineer", "engineers", "minimum",
+    "maximum", "min", "max", "around", "least", "more", "less", "than",
+    "open", "close", "office", "field", "site", "remote", "hybrid", "onsite",
+    "looking", "candidate.", "key", "responsibilities:", "description:",
+    "title", "designation", "department", "department:", "to", "of", "in",
+    "on", "at", "by", "as", "or", "an", "a", "is", "be", "any", "all",
+    "this", "that", "these", "those", "will", "have", "has", "had", "are",
+    "was", "were", "can", "could", "may", "might", "shall", "would",
+    "do", "does", "done", "make", "made", "give", "given", "take", "taken",
+    "manager", "managers", "executive", "officer", "lead.", "head", "associate",
+    "assistant", "deputy", "vice", "president", "vp", "director", "chief",
+    "founder", "co-founder", "co", "founder.", "internship", "intern",
+    "fresher", "trainee", "apprentice",
+}
+
+
+def _extract_role_signature(job: Dict[str, Any]) -> List[str]:
+    """Build the 'role token' fingerprint for a mandate.
+
+    Pulls strong role indicators from the job's TITLE (heaviest), explicit
+    `skills` / `key_skills` arrays, and the first ~800 chars of the
+    `description`. Filters out generic stopwords ("manager", "experience",
+    "engineer" — too common to discriminate).
+
+    Returns a deduplicated list of lowercase tokens, capped at ~20.
+    The mandate-driven path uses this to score candidate role-relevance
+    so we don't surface "Area Sales Manager" for a "Utility Project
+    Engineer" mandate just because they share a city.
+    """
+    import re as _re
+    parts: List[str] = []
+    title = (job.get("title") or "").strip()
+    if title:
+        parts.append(title)
+        parts.append(title)   # weight title 2× by duplicating
+    # Explicit skill arrays (rarely populated but heavily weighted when present)
+    for fld in ("skills", "key_skills", "must_have_skills", "good_to_have_skills"):
+        v = job.get(fld)
+        if isinstance(v, list):
+            parts.extend(str(s) for s in v if s)
+            parts.extend(str(s) for s in v if s)   # 2× weight
+        elif isinstance(v, str) and v.strip():
+            parts.append(v)
+    # JD body — first 800 chars catches the responsibility/skill bullets
+    desc = (job.get("description") or job.get("jd") or "")[:800]
+    if desc:
+        parts.append(desc)
+
+    blob = " ".join(parts).lower()
+    # Tokenise: keep multi-char alphanumerics + ./+/# (so HT/LT, AutoCAD,
+    # C++, .NET, ETL survive). Treat "HT/LT" as two tokens.
+    raw = _re.findall(r"[a-z][a-z0-9\+\.#]{2,}", blob)
+    seen: Dict[str, int] = {}
+    for t in raw:
+        if t in _ROLE_STOPWORDS:
+            continue
+        if len(t) < 3:
+            continue
+        seen[t] = seen.get(t, 0) + 1
+    # Prefer tokens that appeared multiple times (title duplicated, repeated
+    # in JD) — those are the strongest role signals.
+    ranked = sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [tok for tok, _ in ranked[:24]]
+
+
+def _role_relevance(
+    candidate: Dict[str, Any], role_tokens: List[str]
+) -> tuple:
+    """Score how strongly a candidate matches the mandate's role signature.
+
+    Returns (score: float in 0..1, matched_tokens: list[str]).
+    Designation + skills array carry full weight; summary half-weight.
+    """
+    if not role_tokens:
+        return (1.0, [])
+    des = (candidate.get("current_designation") or "").lower()
+    head = (candidate.get("headline") or "").lower()
+    skills_blob = " ".join(
+        s if isinstance(s, str) else (s.get("name") or "")
+        for s in (candidate.get("skills") or [])
+    ).lower()
+    smart = " ".join(candidate.get("smart_tags") or []).lower()
+    strong_blob = " ".join([des, head, skills_blob, smart])
+    summary_blob = (candidate.get("summary") or "").lower()[:800]
+
+    hits_strong = [t for t in role_tokens if t in strong_blob]
+    hits_summary = [
+        t for t in role_tokens
+        if t not in strong_blob and t in summary_blob
+    ]
+    # Strong field hit = 1.0, summary-only hit = 0.5
+    raw = len(hits_strong) + 0.5 * len(hits_summary)
+    score = min(1.0, raw / max(len(role_tokens), 1))
+    return (round(score, 4), hits_strong[:6])
+
+
 def _apply_structured_filters(
     cands: List[Dict[str, Any]],
     filters: Dict[str, Any],
@@ -537,6 +647,16 @@ def _explain_match(
             reasons.append({"label": "Keyword top-up", "kind": "keyword"})
         else:
             reasons.append({"label": "Semantic match", "kind": "semantic"})
+
+    # 1b. Role-relevance — pre-computed by the mandate-driven path. The
+    # chip says WHICH role tokens actually matched (designation/skills),
+    # which is the recruiter-facing answer to "why did you surface this
+    # person for a Utility Project Engineer mandate?".
+    rhits = c.get("role_hits")
+    if rhits:
+        head = ", ".join(rhits[:3])
+        extra = f" +{len(rhits)-3}" if len(rhits) > 3 else ""
+        reasons.append({"label": f"Role: {head}{extra}", "kind": "filter"})
 
     # 2. Score band — semantic confidence
     score = c.get("score")
@@ -733,6 +853,13 @@ async def talent_search(
             "title": job.get("title"),
             "company_name": job.get("company_name"),
         }
+        # Role signature for relevance ranking — captures the title +
+        # JD-body tokens that genuinely discriminate this role from
+        # other Indore/Bangalore/4-10y candidates. Cached on `req` so
+        # the hybrid leg can read it without re-extracting.
+        role_tokens = _extract_role_signature(job)
+    else:
+        role_tokens = []
 
     if not req.query or len(req.query.strip()) < 2:
         raise HTTPException(status_code=400, detail="query or job_id required")
@@ -803,6 +930,35 @@ async def talent_search(
         # so vague NL searches don't get over-culled.
         strict_filter = req.job_id is not None
         filtered = _apply_structured_filters(normalised, filters, strict=strict_filter)
+        if strict_filter and role_tokens:
+            # Role-relevance step — keep only candidates whose designation /
+            # skills genuinely overlap the mandate's role signature. Without
+            # this, "Area Sales Manager" surfaces for a "Utility Project
+            # Engineer" mandate just because they share a city + match the
+            # exp band. Threshold is intentionally low (≥2 strong-field hits
+            # OR ≥0.10 coverage) so we don't over-cull when title tokens
+            # are unusually unique.
+            scored = []
+            for c in filtered:
+                rscore, rhits = _role_relevance(c, role_tokens)
+                c["role_relevance"] = rscore
+                c["role_hits"] = rhits
+                # Strong-field hits are the discriminative ones (designation /
+                # skills). Require ≥2 strong hits OR ≥10% coverage.
+                if len(rhits) >= 2 or rscore >= 0.10:
+                    scored.append(c)
+            # Re-rank: 60% role-relevance + 40% original retrieval score.
+            for c in scored:
+                base = float(c.get("score") or 0.0)
+                # Normalise base into 0..1 (vector scores are already there).
+                c["_combined_score"] = round(0.60 * c["role_relevance"] + 0.40 * base, 4)
+            scored.sort(key=lambda x: x["_combined_score"], reverse=True)
+            debug["role_relevance"] = {
+                "tokens_extracted": role_tokens[:12],
+                "before_role_filter": len(filtered),
+                "after_role_filter":  len(scored),
+            }
+            filtered = scored
         if strict_filter:
             # Never silently bypass mandate filters — a small but correct
             # result list is strictly better than a long list of mis-matches.

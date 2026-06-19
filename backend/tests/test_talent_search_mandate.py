@@ -7,7 +7,12 @@ smoke at PRD time.
 from __future__ import annotations
 
 from routes.talent_search import _build_query_from_job, _apply_structured_filters
-from routes.talent_search import _explain_match, _expand_location_terms
+from routes.talent_search import (
+    _explain_match,
+    _expand_location_terms,
+    _extract_role_signature,
+    _role_relevance,
+)
 
 
 
@@ -326,4 +331,71 @@ def test_explain_match_chip_uses_alias():
     rs = _explain_match(c, "x", {"location_include": ["Bangalore"]}, leg="hybrid")
     labels = [r["label"] for r in rs]
     assert any(l.startswith("Location: Bengaluru") for l in labels)
+
+
+
+# ── Role-signature / relevance (mandate-driven role filter) ────────────
+
+
+def test_extract_role_signature_pulls_title_and_jd_tokens():
+    job = {
+        "title": "Utility Project Engineer – Machine Execution Planning",
+        "description": "Ensure reliable operation of all utility services (HT/LT power, lighting, compressed air, natural gas, substations). Design AutoCAD layouts for greenfield expansions.",
+    }
+    tokens = _extract_role_signature(job)
+    # Title tokens must be present (with 2× weight) so they rank top
+    assert "utility" in tokens
+    assert "project" in tokens
+    assert "planning" in tokens
+    # Generic stopwords must be excluded
+    assert "engineer" not in tokens         # too common; in stopwords
+    assert "experience" not in tokens
+    assert "manager" not in tokens
+
+
+def test_extract_role_signature_uses_skills_array_when_present():
+    job = {
+        "title": "Backend Engineer",
+        "skills": ["Python", "Kafka", "PostgreSQL"],
+        "description": "Build scalable services.",
+    }
+    tokens = _extract_role_signature(job)
+    assert "python" in tokens
+    assert "kafka" in tokens
+    assert "postgresql" in tokens
+
+
+def test_role_relevance_designation_match():
+    role_tokens = ["utility", "planning", "execution", "machine", "autocad", "gas"]
+    c = {
+        "current_designation": "Utility Engineer - Planning",
+        "skills": ["AutoCAD", "Machine Layout"],
+    }
+    score, hits = _role_relevance(c, role_tokens)
+    assert score >= 0.5
+    assert "utility" in hits
+    assert "planning" in hits
+    assert "autocad" in hits
+
+
+def test_role_relevance_zero_for_unrelated_role():
+    """Area Sales Manager must NOT match a Utility Project Engineer mandate."""
+    role_tokens = ["utility", "planning", "execution", "machine", "autocad", "gas", "substation"]
+    c = {
+        "current_designation": "Area Sales Manager",
+        "skills": ["Retail Sales", "CRM", "Excel", "PowerPoint"],
+        "summary": "Sales leader for FMCG.",
+    }
+    score, hits = _role_relevance(c, role_tokens)
+    assert score == 0.0
+    assert hits == []
+
+
+def test_role_relevance_empty_tokens_defaults_pass():
+    """When the JD has no extractable role signature, every candidate passes
+    (returns 1.0) — we don't want to break free-text searches."""
+    c = {"current_designation": "Whatever"}
+    score, hits = _role_relevance(c, [])
+    assert score == 1.0
+    assert hits == []
 

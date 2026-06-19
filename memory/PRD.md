@@ -29,6 +29,42 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-19) Mandate-driven Role Relevance — stops cross-role pollution.**
+  Recruiter complaint: "Hybrid surfaces Area Sales Manager for a Utility Project
+  Engineer mandate just because they're in Madhya Pradesh." Root cause: after
+  location + experience filters passed, we ranked purely by retrieval score,
+  never checking that the candidate's actual role/skills overlapped the JD.
+  Fix — added a new role-relevance step in the mandate-driven path:
+    1. `_extract_role_signature(job)` — pulls strong role tokens from the
+       title (2× weighted) + explicit `skills[]`/`key_skills` arrays +
+       first 800 chars of the JD body. A 70-entry `_ROLE_STOPWORDS` set
+       drops generic noise (manager, engineer, experience, responsibility…)
+       so requiring a "role match" actually means something. Returns top-24
+       tokens by frequency.
+    2. `_role_relevance(candidate, tokens)` — counts how many role tokens
+       appear in the candidate's designation + headline + skills + smart_tags
+       (full weight) and summary (½ weight). Returns `(score, matched_tokens)`.
+    3. Endpoint, after strict filter: drops candidates with < 2 strong-field
+       hits AND < 10% coverage, then re-ranks by `0.60·role_relevance +
+       0.40·retrieval_score`. Surfaces `role_relevance` + `role_hits` on each
+       card; the explainer shows a new `Role: planning, execution, autocad`
+       chip so recruiters can see WHICH tokens drove the match.
+  Live-verified — "Utility Project Engineer – Machine Execution Planning"
+  (MP, 4-10y, 8-10L):
+    * Before: Area Sales Manager @ TECHNONICOL (mismatch), Civil Site Engineer
+    * After: Praveen Yadav — Civil Site Engineer Structural (planning,
+      execution, project, autocad), ATUL KUSHWAH — SR. MAINTENANCE ENGINEER
+      PLANT (machine, air, control), Pradeep Prasad — Civil Engineer (project,
+      autocad, control). Pool culled 70 → 15 by role-relevance.
+  Regression check — "Manager - Import Purchase Pithampur" mandate still works:
+  top hit is now RISHABH BAGE (Manager HOD Purchase and Logistics, role-hits =
+  end, purchase, cha, clearance, documentation), pool 52 → 18.
+  Tests: 41/41 (5 new — role signature extracts title+JD, stopwords excluded,
+  explicit skills[] honoured, designation-match scores high, unrelated role
+  scores 0, empty tokens default-pass).
+  Files: `routes/talent_search.py` (`_extract_role_signature`,
+  `_role_relevance`, `_ROLE_STOPWORDS`, endpoint wiring, "Role:" chip).
+
 - **(2026-06-16) Mandate recall — Indore mandate now returns 10/10 perfect hits.**
   Two coordinated fixes after the location-seed work showed 120 candidates being
   pulled but 0 surviving the strict filter:
