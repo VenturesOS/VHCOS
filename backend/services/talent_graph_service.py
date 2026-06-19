@@ -541,21 +541,25 @@ async def find_candidates_by_text(
         base = loc.lower()
         loc_terms = [base] + _CITY_ALIASES.get(base, [])
         seen_ids = {r.get("candidate_id") for r in (pool or []) if r.get("candidate_id")}
-        # Token-scoped query so the seeder doesn't pull every Bangalore
-        # candidate — only those that also share at least one query token.
-        # Inject ALL location aliases so Bengaluru-stored candidates surface
-        # for a Bangalore mandate (and vice-versa).
-        seed_query = f"{' '.join(loc_terms)} {query}".strip()
+        # Location-PRIMARY scan: restrict candidate_bank to docs in this
+        # city (with aliases), then rank by query-token overlap. Without
+        # `location_filter`, the OR-regex on JD tokens sorted by `created_at`
+        # would return only the latest 40 candidates matching ANY token —
+        # which for Indore returned 6/1856. With `location_filter`, we get
+        # candidates that are GUARANTEED to be in the requested city and
+        # share at least one query token.
+        seed_query = query.strip() or " ".join(loc_terms)
         seed = await _keyword_fallback_search(
-            db, seed_query, max(limit * 2, 40), exclude_ids=seen_ids
+            db, seed_query, max(limit * 4, 80),
+            exclude_ids=seen_ids,
+            location_filter=loc_terms,
         )
         # Keep only seeds whose location actually matches the hint (or alias).
         # `_keyword_fallback_search` joins location with skills/employer/etc.
         # via $or, so a seed can come in from skill-match alone.
-        seed = [
-            s for s in seed
-            if any(t in (str(s.get("current_location") or "")).lower() for t in loc_terms)
-        ]
+        # DB query already restricted candidates to the location filter, so
+        # no further post-filter is needed (was needed in the old token-OR
+        # path which let through skill-only matches from other cities).
         # Track seed IDs so we can guarantee they're in the final result
         # set even if the reranker scores them low (no embedding/LTR features).
         location_seed_ids: set = set()
@@ -632,10 +636,16 @@ async def _keyword_fallback_search(
     query: str,
     limit: int,
     exclude_ids: Optional[set] = None,
+    location_filter: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Keyword + smart-tag fallback over `candidate_bank` when the embedding
     pool is sparse. Returns docs in the same shape as the vector search path
     so downstream code doesn't branch.
+
+    `location_filter` — when set, RESTRICTS the candidate pool to documents
+    whose `location` matches any of the supplied (lowercase) location terms.
+    Used by the mandate-driven location seed so we always pull from the
+    requested city, not "latest 40 by any token".
     """
     import re as _re_kw
     tokens = [t.strip() for t in _re_kw.findall(r"[A-Za-z0-9\.\+\#]{2,}", query) if t.strip()]
@@ -658,7 +668,11 @@ async def _keyword_fallback_search(
         {"industry":    {"$regex": pat, "$options": "i"}},
         {"summary":     {"$regex": pat, "$options": "i"}},
     ]
-    q = {"$or": base_or}
+    q: Dict[str, Any] = {"$or": base_or}
+    if location_filter:
+        loc_pat = "|".join(_re_kw.escape(t) for t in location_filter if t)
+        if loc_pat:
+            q = {"$and": [{"location": {"$regex": loc_pat, "$options": "i"}}, q]}
     if exclude_ids:
         q = {"$and": [q, {"id": {"$nin": list(exclude_ids)}}]}
 

@@ -166,23 +166,26 @@ def test_strict_experience_drops_outside_band():
     assert [c["id"] for c in out] == ["ok"]
 
 
-def test_strict_ctc_drops_outside_band_and_missing():
-    """ctc_min/ctc_max with 20% leniency. Missing CTC → drop in strict mode."""
+def test_strict_ctc_drops_outside_band_but_keeps_missing():
+    """ctc_min/ctc_max with 20% leniency. Missing CTC is SOFT (kept) even in
+    strict mode — salary data is missing for ~85% of Indian candidate records.
+    Only candidates with KNOWN CTC outside the band are dropped.
+    """
     cands = [
         _cand("in_band", current_salary=2_500_000),         # within 2L-4L
         _cand("too_low", current_salary=1_500_000),         # well below
         _cand("too_high", current_salary=6_000_000),        # well above
         _cand("edge_low", current_salary=1_700_000),        # within 20% of 2L floor
-        _cand("missing", current_salary=None),              # strict → drop
+        _cand("missing", current_salary=None),              # kept (CTC soft)
     ]
     filters = {"ctc_min": 2_000_000, "ctc_max": 4_000_000}
     out = _apply_structured_filters(cands, filters, strict=True)
     ids = [c["id"] for c in out]
     assert "in_band" in ids
     assert "edge_low" in ids        # 20% leniency
+    assert "missing" in ids         # SOFT: kept even in strict mode
     assert "too_low" not in ids
     assert "too_high" not in ids
-    assert "missing" not in ids
 
 
 def test_soft_mode_keeps_missing_fields():

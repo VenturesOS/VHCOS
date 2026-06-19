@@ -483,7 +483,13 @@ def _apply_structured_filters(
             exp_ctc = _expected_ctc_of(c)
             ctc = cur or exp_ctc
             if ctc is None:
-                if strict: continue
+                # CTC is SOFT even in strict mode — salary data is missing
+                # for ~85% of Indian candidate records and is the most
+                # negotiable field. Keep the candidate; let recruiters
+                # qualify the band on a call. (Location + experience
+                # remain HARD because the data is dense and recruiters
+                # treat them as firm constraints.)
+                pass
             else:
                 # Normalise: any value < 1000 is lakhs, multiply by 1e5
                 if ctc < 1000: ctc = ctc * 1e5

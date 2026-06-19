@@ -29,6 +29,32 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-16) Mandate recall — Indore mandate now returns 10/10 perfect hits.**
+  Two coordinated fixes after the location-seed work showed 120 candidates being
+  pulled but 0 surviving the strict filter:
+    1. `_keyword_fallback_search` now accepts `location_filter: Optional[List[str]]`.
+       When set, restricts the candidate-bank scan with `location:{$regex:loc|aliases}`
+       as the PRIMARY filter. The old implementation OR-matched JD tokens across
+       skills/designation/location/etc., sorted by `created_at desc`, and limited
+       to 40 — for the Indore mandate this returned 6/1856 Indore candidates.
+       Service-side seed now calls with `location_filter=loc_terms`, getting all
+       Indore candidates that share at least one query token (120 vs 6).
+    2. CTC is now SOFT even in strict mode (`_apply_structured_filters`). Salary
+       data is missing for ~85% of candidate records (1,586/1,856 Indore candidates
+       have empty `current_salary`). Missing CTC is no longer a drop signal; only
+       candidates with KNOWN CTC outside the ±20% band are dropped. Location and
+       experience remain HARD (their data is dense, recruiters treat them as firm).
+  Live-verified — "Manager - Import Purchase Pithampur" (Indore, 10-18y, 11-18L)
+  before: 0 results. After: 10 results, ALL Indore, top hits:
+    * RISHABH BAGE — Manager HOD Purchase and Logistics (12y)
+    * Neetesh gupta — Assistant Manager Import Procurement (9y)
+    * SHAKEEL KHAN — Procurement & Purchasing | Supplier
+    * MAYANK BANSAL — Business Development Manager (15y)
+  Tests: 36/36 (updated `test_strict_ctc_drops_outside_band_and_missing` →
+  `…but_keeps_missing` to reflect new soft policy).
+  Files: `services/talent_graph_service.py` (`_keyword_fallback_search` +
+  `location_filter`, seed wiring), `routes/talent_search.py` (CTC soft branch).
+
 - **(2026-06-16) Mandate recall fix — location-aware pool seeding + city aliases.**
   Bangalore mandates were returning 0 because the cluster-routed semantic pool
   rarely overlaps with the requested geography (only ~1.4% of `candidate_bank`
