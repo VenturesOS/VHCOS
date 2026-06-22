@@ -293,6 +293,26 @@ async def run_deferred_init(app):
     except Exception as e:
         logging.warning(f"[AttendanceScheduler] Failed to start: {e}")
 
+    # --- Badge auto-labeler (daily report; gated by sample size floor) ---
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from scripts.badge_threshold_autolabeler import main as _autolabel_main
+
+        async def _run_autolabeler():
+            try:
+                await _autolabel_main(apply_change=False)
+            except Exception as e:
+                logging.warning(f"[AutoLabeler] daily run failed: {e}")
+
+        autolabel_sched = AsyncIOScheduler()
+        # 09:15 IST = 03:45 UTC — runs after the BGE backfill keeper finishes
+        autolabel_sched.add_job(_run_autolabeler, 'cron', hour=3, minute=45, id='badge_autolabeler_daily')
+        autolabel_sched.start()
+        app.state.autolabel_scheduler = autolabel_sched
+        logging.warning("[AutoLabeler] Daily run scheduled (03:45 UTC / 09:15 IST). Script refuses to apply until ≥200 wrong_match flags accumulate.")
+    except Exception as e:
+        logging.warning(f"[AutoLabeler] Failed to start: {e}")
+
     # --- Recruiter performance reports (Daily + Weekly Excel to team leaders) ---
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler

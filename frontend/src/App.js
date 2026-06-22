@@ -65,6 +65,7 @@ const AdminAnalyticsPage = React.lazy(() => import("./pages/admin/AdminAnalytics
 const AnalyticsHubPage = React.lazy(() => import("./pages/admin/AnalyticsHubPage"));
 const ClustersPage = React.lazy(() => import("./pages/admin/ClustersPage"));
 const BadgeAuditPage = React.lazy(() => import("./pages/admin/BadgeAuditPage"));
+const TallyHealthPage = React.lazy(() => import("./pages/admin/TallyHealthPage"));
 const DigestEmailPage = React.lazy(() => import("./pages/admin/DigestEmailPage"));
 const DailyDigestPage = React.lazy(() => import("./pages/admin/DailyDigestPage"));
 const RevenueDashboardPage = React.lazy(() => import("./pages/admin/RevenueDashboardPage"));
@@ -197,6 +198,7 @@ function App() {
             <Route path="analytics-hub" element={<AnalyticsHubPage />} />
             <Route path="clusters" element={<ClustersPage />} />
             <Route path="badge-audit" element={<BadgeAuditPage />} />
+            <Route path="tally-health" element={<TallyHealthPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />

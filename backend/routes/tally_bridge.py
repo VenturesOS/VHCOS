@@ -21,7 +21,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from config import db
-from services.tally_xml import build_sales_voucher_xml
+from services.tally_xml import build_sales_voucher_xml, build_ledger_create_xml
+from utils.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +153,287 @@ async def status(_: None = Depends(_require_bridge_token)):
     pushed_today = await db.bills.count_documents({
         "tally.last_success_at": {"$regex": f"^{today}"},
     })
+    pending_ledgers = await db.finance_clients.count_documents({
+        "name": {"$ne": ""},
+        "$or": [{"tally.ledger_pushed": {"$ne": True}}, {"tally": {"$exists": False}}],
+    })
+    receipts_today = await db.tally_receipts.count_documents({
+        "received_at": {"$regex": f"^{today}"},
+    })
+    # Record a heartbeat doc so the admin UI knows the bridge is alive
+    await db.tally_bridge_heartbeat.update_one(
+        {"_id": "singleton"},
+        {"$set": {
+            "last_seen_at": datetime.now(timezone.utc).isoformat(),
+            "pending_bills":   pending,
+            "pending_ledgers": pending_ledgers,
+        }},
+        upsert=True,
+    )
     return {
-        "pending": pending,
-        "pushed_total": pushed,
-        "pushed_today": pushed_today,
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "pending":         pending,
+        "pending_ledgers": pending_ledgers,
+        "pushed_total":    pushed,
+        "pushed_today":    pushed_today,
+        "receipts_today":  receipts_today,
+        "ts":              datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Phase 55.9: Bulk client-ledger sync ──────────────────────────────
+
+
+class LedgerQueueItem(BaseModel):
+    """Bridge fetches this to push a party ledger to Tally before any
+    bills referencing it. Bridge must process ledgers BEFORE bills in the
+    same poll cycle."""
+    client_id: str
+    ledger_name: str
+    gstin: Optional[str] = None
+    state: Optional[str] = None
+    xml: str
+
+
+class LedgerAck(BaseModel):
+    client_id: str
+    success: bool
+    error: Optional[str] = None
+    raw_response: Optional[str] = None
+    pushed_at: Optional[str] = None
+
+
+@tally_router.get("/ledgers/queue", response_model=List[LedgerQueueItem])
+async def ledger_queue(
+    company: str = "VENTURE HRD CENTRE PVT LTD",
+    limit: int = 25,
+    _: None = Depends(_require_bridge_token),
+):
+    """Return up-to-`limit` client ledgers awaiting Tally creation.
+
+    Eligible when:
+      • `name` is non-empty (Tally needs the party display name)
+      • `tally.ledger_pushed` ≠ True
+
+    A ledger is pushed once. Subsequent invoices for the same party
+    are matched by name in `build_sales_voucher_xml`.
+    """
+    q = {
+        "name": {"$nin": ["", None]},
+        "$or": [{"tally.ledger_pushed": {"$ne": True}}, {"tally": {"$exists": False}}],
+    }
+    out: List[LedgerQueueItem] = []
+    cursor = db.finance_clients.find(q, {"_id": 0}).sort("created_at", 1).limit(int(limit))
+    async for c in cursor:
+        try:
+            xml = build_ledger_create_xml(
+                company_name=company,
+                ledger_name=c.get("name") or "",
+                parent_group="Sundry Debtors",
+                gstin=(c.get("gst_number") or "").strip(),
+                state=(c.get("state") or "").strip(),
+            )
+        except Exception as e:
+            logger.warning("[Tally ledger queue] skip %s — xml build failed: %s", c.get("id"), e)
+            continue
+        out.append(LedgerQueueItem(
+            client_id=c["id"],
+            ledger_name=c.get("name") or "",
+            gstin=(c.get("gst_number") or None),
+            state=(c.get("state") or None),
+            xml=xml,
+        ))
+    return out
+
+
+@tally_router.post("/ledgers/ack")
+async def ledger_ack(payload: LedgerAck, _: None = Depends(_require_bridge_token)):
+    """Bridge reports back on a ledger-create. We mark the client pushed
+    (success) or store the error and let the bridge retry on its next
+    poll."""
+    client = await db.finance_clients.find_one({"id": payload.client_id}, {"_id": 0, "id": 1, "tally": 1})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    now_iso = payload.pushed_at or datetime.now(timezone.utc).isoformat()
+    history = (client.get("tally") or {}).get("history") or []
+    history.append({
+        "at":      now_iso,
+        "success": payload.success,
+        "error":   payload.error,
+        "raw":     (payload.raw_response or "")[:1500],
+    })
+    tally_state = {
+        "ledger_pushed":   payload.success,
+        "last_attempt_at": now_iso,
+        "last_success_at": now_iso if payload.success else (client.get("tally") or {}).get("last_success_at"),
+        "last_error":      None if payload.success else payload.error,
+        "history":         history[-10:],
+    }
+    await db.finance_clients.update_one(
+        {"id": payload.client_id},
+        {"$set": {"tally": tally_state, "updated_at": now_iso}},
+    )
+    return {"ok": True, "pushed": payload.success}
+
+
+# ── Phase 55.10: Payment receipt pull (Tally → VHC) ──────────────────
+
+
+class ReceiptItem(BaseModel):
+    """Single payment receipt as read from Tally by the bridge."""
+    tally_voucher_id: str           # unique receipt voucher GUID/number from Tally
+    party_name: str
+    amount: float
+    receipt_date: str               # ISO yyyy-mm-dd
+    against_bill_number: Optional[str] = None   # if Tally records a bill-ref
+    against_bill_id: Optional[str] = None       # VHC bill id when bridge can resolve
+    instrument: Optional[str] = None            # cheque/neft/upi/cash
+    instrument_no: Optional[str] = None
+    narration: Optional[str] = None
+    raw: Optional[str] = None
+
+
+class ReceiptsPayload(BaseModel):
+    receipts: List[ReceiptItem]
+
+
+@tally_router.post("/receipts")
+async def receipts_inbound(
+    payload: ReceiptsPayload,
+    _: None = Depends(_require_bridge_token),
+):
+    """Bridge posts a batch of payment receipts pulled from Tally.
+
+    Reconciliation logic (best-effort):
+      1. If `against_bill_id` is supplied → mark that bill as paid.
+      2. Else if `against_bill_number` + `party_name` resolve to a
+         single bill in VHC → mark it paid.
+      3. Otherwise → store the receipt unmatched so the finance team
+         can resolve from the admin UI.
+
+    Duplicate protection: `tally_voucher_id` is unique. Subsequent posts
+    of the same voucher are upserts (no double-counting).
+    """
+    inserted = 0
+    duplicates = 0
+    matched = 0
+    unmatched = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for r in payload.receipts:
+        existing = await db.tally_receipts.find_one(
+            {"tally_voucher_id": r.tally_voucher_id},
+            {"_id": 0, "id": 1},
+        )
+        if existing:
+            duplicates += 1
+            continue
+
+        # Try to resolve a bill
+        bill = None
+        if r.against_bill_id:
+            bill = await db.bills.find_one({"id": r.against_bill_id}, {"_id": 0, "id": 1, "totals": 1})
+        if not bill and r.against_bill_number and r.party_name:
+            bill = await db.bills.find_one(
+                {
+                    "bill_number": r.against_bill_number,
+                    "client_legal_name": {"$regex": f"^{r.party_name}$", "$options": "i"},
+                },
+                {"_id": 0, "id": 1, "totals": 1},
+            )
+
+        receipt_doc = {
+            "id":                f"rcpt-{r.tally_voucher_id}",
+            "tally_voucher_id":  r.tally_voucher_id,
+            "party_name":        r.party_name,
+            "amount":            float(r.amount),
+            "receipt_date":      r.receipt_date,
+            "against_bill_number": r.against_bill_number,
+            "matched_bill_id":   bill.get("id") if bill else None,
+            "instrument":        r.instrument,
+            "instrument_no":     r.instrument_no,
+            "narration":         (r.narration or "")[:500],
+            "received_at":       now_iso,
+            "status":            "matched" if bill else "unmatched",
+        }
+        await db.tally_receipts.insert_one(receipt_doc)
+        inserted += 1
+        if bill:
+            matched += 1
+            # Mark bill paid if the receipt covers the grand total.
+            grand = float((bill.get("totals") or {}).get("grand_total") or 0)
+            paid_status = "paid" if r.amount >= grand * 0.99 else "part_paid"
+            await db.bills.update_one(
+                {"id": bill["id"]},
+                {"$set": {
+                    "payment_status": paid_status,
+                    "last_payment_at": now_iso,
+                    "tally_receipt_id": receipt_doc["id"],
+                    "updated_at": now_iso,
+                }},
+            )
+        else:
+            unmatched += 1
+
+    return {
+        "received":   len(payload.receipts),
+        "inserted":   inserted,
+        "duplicates": duplicates,
+        "matched":    matched,
+        "unmatched":  unmatched,
+    }
+
+
+# ── Admin-facing health endpoint (JWT auth, no bridge token) ─────────
+
+
+@tally_router.get("/admin/health")
+async def admin_health(user: dict = Depends(get_current_user)):
+    """Read-only health snapshot for the `/admin/tally-health` UI.
+
+    Differs from `/status` in that it uses JWT auth (any logged-in admin
+    can view) and includes the most recent heartbeat from the Windows
+    bridge so the team can see if it's still polling.
+    """
+    today = datetime.now(timezone.utc).date().isoformat()
+    pending = await db.bills.count_documents({
+        "status": {"$in": ["sent", "paid"]},
+        "client_legal_name": {"$ne": ""},
+        "$or": [{"tally.pushed": {"$ne": True}}, {"tally": {"$exists": False}}],
+    })
+    pushed_today = await db.bills.count_documents({"tally.last_success_at": {"$regex": f"^{today}"}})
+    pending_ledgers = await db.finance_clients.count_documents({
+        "name": {"$nin": ["", None]},
+        "$or": [{"tally.ledger_pushed": {"$ne": True}}, {"tally": {"$exists": False}}],
+    })
+    receipts_today = await db.tally_receipts.count_documents({"received_at": {"$regex": f"^{today}"}})
+    receipts_unmatched = await db.tally_receipts.count_documents({"status": "unmatched"})
+    heartbeat = await db.tally_bridge_heartbeat.find_one({"_id": "singleton"}, {"_id": 0})
+    # Last 10 push failures for quick diagnosis
+    failed_cursor = db.bills.find(
+        {"tally.last_error": {"$ne": None}, "tally.pushed": {"$ne": True}},
+        {"_id": 0, "id": 1, "bill_number": 1, "client_legal_name": 1, "tally.last_error": 1, "tally.last_attempt_at": 1},
+    ).sort("tally.last_attempt_at", -1).limit(10)
+    failures = [d async for d in failed_cursor]
+    return {
+        "pending_bills":      pending,
+        "pending_ledgers":    pending_ledgers,
+        "pushed_today":       pushed_today,
+        "receipts_today":     receipts_today,
+        "receipts_unmatched": receipts_unmatched,
+        "heartbeat":          heartbeat,
+        "recent_failures":    failures,
+        "ts":                 datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@tally_router.get("/admin/receipts/unmatched")
+async def admin_receipts_unmatched(
+    limit: int = 50,
+    user: dict = Depends(get_current_user),
+):
+    """List unmatched receipts so the finance team can resolve them."""
+    cur = db.tally_receipts.find(
+        {"status": "unmatched"},
+        {"_id": 0},
+    ).sort("received_at", -1).limit(int(limit))
+    return [r async for r in cur]

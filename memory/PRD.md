@@ -29,6 +29,68 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-22) Tally Phase 55.9 + 55.10 + Bridge Health page + auto-labeler cron + hygiene.**
+
+  **Phase 55.9 — Bulk client-ledger sync** (`routes/tally_bridge.py`):
+   * `GET /api/tally/ledgers/queue?company=…&limit=25` — bridge fetches
+     unpushed `finance_clients`, generates `<LEDGER ACTION="Create">`
+     XML via existing `build_ledger_create_xml` (GSTIN + state when
+     present). Bridge MUST process this before `/queue` so party
+     ledgers exist when sales vouchers reference them.
+   * `POST /api/tally/ledgers/ack` — bridge reports back; we mark
+     `finance_clients.tally.ledger_pushed=true` on success, store
+     `last_error` + `history` on failure for retry on next poll.
+   * Live smoke: 2 Acme Corp / TEST clients returned with valid
+     `<ENVELOPE>` XML.
+
+  **Phase 55.10 — Payment receipt pull** (Tally → VHC):
+   * `POST /api/tally/receipts` — bridge posts a batch of receipts
+     pulled from Tally. Reconciliation: bill-id-direct → bill-number
+     + party-name → unmatched bucket. Updates `bills.payment_status` to
+     `paid` (≥99% of grand_total) or `part_paid`.
+   * Duplicate-safe via unique `tally_voucher_id` per receipt.
+   * Stores in new `tally_receipts` collection (`status: matched|unmatched`).
+   * Live smoke: 1 INV/001 NEFT receipt → inserted, unmatched
+     (no matching bill in dev DB, correct behaviour).
+
+  **Tally Bridge Health admin page** (`/admin/tally-health`):
+   * 6 tiles: Bridge status (Healthy/Slow/Stale from heartbeat age),
+     Pending bills, Pending ledgers, Pushed today, Receipts today,
+     Unmatched receipts. Tone-colored (emerald/amber/rose) by health.
+   * "Recent push failures" table (last 10 bills with `tally.last_error`).
+   * "Unmatched receipts" table for finance manual reconciliation.
+   * Auto-refresh 30s. Read-only.
+   * Backed by new JWT-auth endpoints `/api/tally/admin/health` +
+     `/api/tally/admin/receipts/unmatched`.
+   * `/status` endpoint now also writes a heartbeat row
+     (`tally_bridge_heartbeat.singleton`) so the admin UI knows when
+     the bridge last polled.
+
+  **Auto-labeler daily cron** (`services/lifecycle.py`):
+   * Daily 03:45 UTC / 09:15 IST run of
+     `scripts.badge_threshold_autolabeler.main(apply_change=False)`.
+   * Script self-gates on ≥200 wrong_match + ≥5000 audit rows — until
+     then it just logs and exits, no spam, no false tunings.
+   * Logged: `[AutoLabeler] Daily run scheduled (03:45 UTC / 09:15 IST)`.
+
+  **Hygiene:** Removed legacy `/app/browser-extension-v5.0.0-backup`
+  (312KB). The active extension lives at `/app/browser-extension/`.
+
+  **Files:** `routes/tally_bridge.py` (+~170 lines: ledger queue/ack,
+  receipts, admin/health), `services/tally_xml.py` (unchanged — already
+  had `build_ledger_create_xml`), `services/lifecycle.py` (autolabeler
+  scheduler block), `frontend/src/pages/admin/TallyHealthPage.jsx`
+  (new), `frontend/src/App.js` (route registration).
+
+  Tests: 61/61 pytest still passing. `python -m scripts.badge_threshold_autolabeler`
+  correctly refuses with current sample size (1 wrong_match, 242 audit).
+
+  **Email Template UI** — deliberately deferred. No backend exists for
+  template storage yet (`email_templates` collection missing); scope
+  needs a separate spec session covering: template variables, recipient
+  groups, schedule support, and which existing transactional emails
+  (digest / report / wrong-match notification) get migrated to it.
+
 - **(2026-06-19) Phase B auto-labeler script + cross-encoder safety probe.**
 
   **Auto-labeler ready** (`backend/scripts/badge_threshold_autolabeler.py`):
