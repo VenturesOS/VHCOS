@@ -1241,12 +1241,16 @@ async def check_existing(
     # (EXTENSION_CHECK_V2_USERS=*) audit docs are ~16KB each, so
     # EXTENSION_CHECK_AUDIT_SAMPLE (0.0-1.0, default 1.0) caps storage
     # growth: 0.3 ≈ every 3rd scan audited — plenty for benchmarking.
+    # Audit write — fires for BOTH V1 (fast path) and V2 (precision) so the
+    # `badge_audit` collection reflects real production traffic, not just
+    # the V2 sample. Earlier this was gated on `use_v2`, which meant the
+    # auto-labeler never saw enough rows to converge despite heavy usage.
     audit_id: Optional[str] = None
     try:
         _sample = float(os.environ.get("EXTENSION_CHECK_AUDIT_SAMPLE", "1.0") or 1.0)
     except ValueError:
         _sample = 1.0
-    if use_v2 and (_sample >= 1.0 or random.random() < _sample):
+    if _sample >= 1.0 or random.random() < _sample:
         try:
             import asyncio as _asyncio
             from routes.badge_audit import write_audit_doc

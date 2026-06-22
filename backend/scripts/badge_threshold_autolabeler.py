@@ -40,8 +40,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
 log = logging.getLogger("badge_autolabeler")
 
-MIN_FEEDBACK = int(os.environ.get("AUTOLABELER_MIN_FEEDBACK", "200"))
-MIN_AUDIT    = int(os.environ.get("AUTOLABELER_MIN_AUDIT",    "5000"))
+MIN_FEEDBACK = int(os.environ.get("AUTOLABELER_MIN_FEEDBACK", "50"))
+MIN_AUDIT    = int(os.environ.get("AUTOLABELER_MIN_AUDIT",    "1500"))
 
 
 async def _get_db():
@@ -51,59 +51,82 @@ async def _get_db():
 
 async def _check_sample_size(db) -> Dict[str, int]:
     n_fb = await db.badge_feedback.count_documents({"kind": "wrong_match"})
-    n_au = await db.match_results.count_documents({})
-    log.info("Sample sizes: badge_feedback.wrong_match=%d, match_results=%d", n_fb, n_au)
+    n_au = await db.badge_audit.count_documents({})
+    log.info("Sample sizes: badge_feedback.wrong_match=%d, badge_audit=%d", n_fb, n_au)
     return {"feedback": n_fb, "audit": n_au}
 
 
 async def _load_wrong_match_pairs(db) -> List[Dict[str, Any]]:
-    """For each wrong-match feedback row, fetch the underlying match_results
-    record so we know which SIGNAL fired and what SCORE the engine assigned.
-    Output rows are denormalised + ready for analysis.
+    """For each wrong-match feedback row, fetch the originating `badge_audit`
+    batch and pull the matching `cards[card_idx]` entry so we know which
+    SIGNALS fired and what SCORE the engine assigned. Denormalised rows.
     """
     out: List[Dict[str, Any]] = []
     cur = db.badge_feedback.find({"kind": "wrong_match"})
     async for fb in cur:
-        audit_id   = fb.get("audit_id")
-        card_idx   = fb.get("card_idx")
-        badge_cid  = fb.get("badge_candidate_id")
-        # Try the audit-id + card-idx lookup first (precise).
-        match_doc = None
-        if audit_id and card_idx is not None:
-            match_doc = await db.match_results.find_one(
-                {"audit_id": audit_id, "card_idx": card_idx}
-            )
-        # Fallback: any match_results row pointing at the same candidate.
-        if not match_doc and badge_cid:
-            match_doc = await db.match_results.find_one(
-                {"candidate_id": badge_cid},
+        audit_id  = fb.get("audit_id")
+        card_idx  = fb.get("card_idx")
+        badge_cid = fb.get("badge_candidate_id")
+        card = None
+        if audit_id:
+            batch = await db.badge_audit.find_one({"id": audit_id}, {"_id": 0, "cards": 1})
+            if batch and isinstance(batch.get("cards"), list):
+                if card_idx is not None and 0 <= card_idx < len(batch["cards"]):
+                    card = batch["cards"][card_idx]
+                # Fallback: find by matched_candidate_id within this batch
+                if not card and badge_cid:
+                    for c in batch["cards"]:
+                        if c.get("matched_candidate_id") == badge_cid:
+                            card = c
+                            break
+        if not card and badge_cid:
+            # Last-ditch: search ALL recent audit batches
+            batch = await db.badge_audit.find_one(
+                {"cards.matched_candidate_id": badge_cid},
+                {"_id": 0, "cards.$": 1},
                 sort=[("ts", -1)],
             )
-        if not match_doc:
+            if batch and batch.get("cards"):
+                card = batch["cards"][0]
+        if not card:
             continue
         out.append({
-            "feedback_id":   fb.get("id"),
-            "candidate_id":  badge_cid,
-            "card_name":     fb.get("card_name"),
-            "score":         match_doc.get("score"),
-            "matched_signals": match_doc.get("matched_signals") or [],
-            "match_type":    match_doc.get("match_type"),
+            "feedback_id":     fb.get("id"),
+            "candidate_id":    badge_cid or card.get("matched_candidate_id"),
+            "card_name":       fb.get("card_name") or card.get("card_name"),
+            "score":           card.get("match_score"),
+            "confidence":      card.get("match_confidence"),
+            "matched_signals": card.get("matched_signals") or [],
+            "conflict_reason": card.get("conflict_reason"),
         })
     return out
 
 
 async def _load_positives(db, limit: int = 5000) -> List[Dict[str, Any]]:
-    """Sample N recent match_results that have NO wrong-match flag — assumed
-    correct (recruiter would have flagged if not). Used as the negative class
-    for the auto-labeler.
+    """Sample N recent `badge_audit.cards` entries marked `exists: True` and
+    NOT flagged as wrong-match — assumed correct (recruiter would have
+    clicked "Wrong match?" otherwise).
     """
-    # IDs we know are wrong:
-    bad = set()
+    bad: set = set()
     async for d in db.badge_feedback.find({"kind": "wrong_match"}, {"badge_candidate_id": 1}):
         if d.get("badge_candidate_id"):
             bad.add(d["badge_candidate_id"])
-    cur = db.match_results.find({"candidate_id": {"$nin": list(bad)}}).limit(limit)
-    return [d async for d in cur]
+    out: List[Dict[str, Any]] = []
+    batches = db.badge_audit.find({}, {"_id": 0, "cards": 1}).sort("ts", -1).limit(limit)
+    async for b in batches:
+        for c in (b.get("cards") or []):
+            if not c.get("exists"):
+                continue
+            if c.get("matched_candidate_id") in bad:
+                continue
+            out.append({
+                "candidate_id":    c.get("matched_candidate_id"),
+                "score":           c.get("match_score"),
+                "matched_signals": c.get("matched_signals") or [],
+            })
+            if len(out) >= limit:
+                return out
+    return out
 
 
 def _signal_precision(pos: List[Dict[str, Any]], neg: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
