@@ -7,7 +7,27 @@
  * Backend: `GET /api/tally/admin/health` + `/api/tally/admin/receipts/unmatched`.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { api } from "../../lib/api";
+
+const envUrl = process.env.REACT_APP_BACKEND_URL;
+const API_BASE = envUrl ? `${envUrl.replace(/\/+$/, "")}/api` : "/api";
+const getToken = () =>
+  localStorage.getItem("access_token") || localStorage.getItem("vhc_token");
+
+async function api(path, init = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+      ...(init.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  return res.json();
+}
 
 const fmtRelative = (iso) => {
   if (!iso) return "—";
