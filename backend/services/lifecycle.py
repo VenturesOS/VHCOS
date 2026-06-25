@@ -297,6 +297,7 @@ async def run_deferred_init(app):
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from scripts.badge_threshold_autolabeler import main as _autolabel_main
+        from services.weekly_digest import send_weekly_digest
 
         async def _run_autolabeler():
             try:
@@ -304,12 +305,22 @@ async def run_deferred_init(app):
             except Exception as e:
                 logging.warning(f"[AutoLabeler] daily run failed: {e}")
 
+        async def _run_weekly_digest():
+            try:
+                res = await send_weekly_digest(dry_run=False)
+                logging.warning(f"[WeeklyDigest] sent={res.get('sent')} failed={res.get('failed')} rows={res.get('rows')}")
+            except Exception as e:
+                logging.warning(f"[WeeklyDigest] failed: {e}")
+
         autolabel_sched = AsyncIOScheduler()
-        # 09:15 IST = 03:45 UTC — runs after the BGE backfill keeper finishes
+        # 03:45 UTC = 09:15 IST — daily badge audit auto-labeler
         autolabel_sched.add_job(_run_autolabeler, 'cron', hour=3, minute=45, id='badge_autolabeler_daily')
+        # 11:30 UTC Friday = 17:00 IST Friday — weekly recruiter digest
+        autolabel_sched.add_job(_run_weekly_digest, 'cron', day_of_week='fri', hour=11, minute=30, id='weekly_recruiter_digest')
         autolabel_sched.start()
         app.state.autolabel_scheduler = autolabel_sched
-        logging.warning("[AutoLabeler] Daily run scheduled (03:45 UTC / 09:15 IST). Script refuses to apply until ≥200 wrong_match flags accumulate.")
+        logging.warning("[AutoLabeler] Daily run scheduled (03:45 UTC / 09:15 IST).")
+        logging.warning("[WeeklyDigest] Friday 11:30 UTC / 17:00 IST scheduled.")
     except Exception as e:
         logging.warning(f"[AutoLabeler] Failed to start: {e}")
 

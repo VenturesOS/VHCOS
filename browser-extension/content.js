@@ -2236,6 +2236,13 @@
     // /resdex/resume/XXX or path segment
     const pathMatch = url.match(/\/(?:resume|profile|cv|preview)\/([a-zA-Z0-9_-]+)/i);
     if (pathMatch) return pathMatch[1];
+    // Naukri search-results format: /resdex/profile/<hash> or
+    // .../profile/<hash>?…
+    const resdexMatch = url.match(/\/resdex\/[^/]*\/([a-zA-Z0-9_-]{12,})/i);
+    if (resdexMatch) return resdexMatch[1];
+    // Naukri's hashed naukri_<hex> token in any path segment
+    const naukriHash = url.match(/(naukri_[a-f0-9]{20,})/i);
+    if (naukriHash) return naukriHash[1];
     // sid param
     const sidMatch = url.match(/[?&]sid=([^&]+)/i);
     if (sidMatch) return sidMatch[1];
@@ -3714,6 +3721,24 @@
       if (!naukri_id && profileUrl) {
         naukri_id = extractIdFromUrl(profileUrl);
       }
+      // 4. From sibling anchor in the card (Naukri sometimes hides the
+      //    profile URL behind a button click handler and exposes the real
+      //    href on another <a> nearby).
+      if (!naukri_id) {
+        const anyHref = cardEl.querySelectorAll('a[href*="resdex"], a[href*="naukri_"]');
+        for (const a of anyHref) {
+          const tryId = extractIdFromUrl(a.href);
+          if (tryId) { naukri_id = tryId; break; }
+        }
+      }
+      // 5. Diagnostic: when we still can't find an ID, log the card's
+      //    first 200 chars of outerHTML once per page so we can update
+      //    the selectors. Throttled so it doesn't spam.
+      if (!naukri_id && !window.__vhcNaukriIdMissingLogged) {
+        window.__vhcNaukriIdMissingLogged = true;
+        console.warn('[VHC] naukri_id not extracted from card — DOM sample:',
+          (cardEl.outerHTML || '').slice(0, 400));
+      }
 
       const nameEl = cardEl.querySelector(
         'a.candidate-name, [class*="candidateName"], [class*="candidate-name"], ' +
@@ -3901,13 +3926,24 @@
       flag.innerText = '✗ Wrong match?';
       flag.title = 'Flag this badge as a wrong match. Silent — used to tune accuracy.';
       flag.style.cssText = (
-        'display:inline-block;margin-left:6px;padding:0 4px;' +
-        'font-size:10px;font-weight:500;color:#9ca3af;' +
+        'display:inline-flex;align-items:center;gap:3px;' +
+        'margin-left:6px;padding:2px 7px;' +
+        'font-size:11px;font-weight:500;color:#dc2626;' +
+        'background:#fef2f2;' +
         'text-decoration:none;cursor:pointer;line-height:1.2;' +
-        'border:1px dashed #d1d5db;border-radius:3px;vertical-align:middle;'
+        'border:1px solid #fecaca;border-radius:11px;vertical-align:middle;' +
+        'transition:all 120ms ease;'
       );
-      flag.addEventListener('mouseenter', () => { flag.style.color = '#dc2626'; flag.style.borderColor = '#dc2626'; });
-      flag.addEventListener('mouseleave', () => { flag.style.color = '#9ca3af'; flag.style.borderColor = '#d1d5db'; });
+      flag.addEventListener('mouseenter', () => {
+        flag.style.background = '#fee2e2';
+        flag.style.borderColor = '#dc2626';
+        flag.style.transform = 'scale(1.05)';
+      });
+      flag.addEventListener('mouseleave', () => {
+        flag.style.background = '#fef2f2';
+        flag.style.borderColor = '#fecaca';
+        flag.style.transform = 'scale(1)';
+      });
       flag.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();

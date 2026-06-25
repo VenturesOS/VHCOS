@@ -29,6 +29,36 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-06-25) Phase 55.x post-ship verification pass.**
+  Re-verified the full shipping batch from this fork on the preview environment.
+  Results:
+   * `EXTENSION_CHECK_AUDIT_SAMPLE` correctly defaults to `1.0` (100%) when
+     unset — preview `.env` does NOT contain the var, so audit sampling is
+     at full rate. **Same check must be confirmed on AWS prod `.env`** by
+     the user (no key present = full sampling).
+   * Badge audit stats (30d): 105,232 scanned / 63,867 shown / **60.69%
+     dedup rate** across 38 active recruiters. Top user `hr35@vhc.in`
+     scanned 7,393 cards and saved 4,968 duplicate captures.
+   * Tally bridge health: 4 pending bills, 2 pending ledgers, 1 unmatched
+     receipt (`Acme Corp INV/001`, ₹50,000 NEFT) awaiting reconciliation
+     in the admin UI.
+   * Weekly digest dry-run: ready to send to 38 recipients on the next
+     Friday 11:30 IST cron.
+   * Hybrid talent search live smoke: `react developer bangalore` → 3 hits
+     in 1.9 s, top match Sudeepta Roy (Bangalore, semantic 0.85, React
+     skill chip, location filter chip).
+   * Cross-encoder `rerank-healthcheck` endpoint live: returns
+     `sidecar not reachable or circuit open` because preview `.env` has
+     no `BGE_SIDECAR_URL` — expected, the cutover is gated on the user
+     deploying the BGE-reranker-base model on their RunPod sidecar.
+   * AutoLabeler cron dry-run: `feedback=1 < floor 50, audit=1988 ≥ 1500`
+     — refuses to tune. Will activate once the team accumulates more
+     "Wrong match?" clicks.
+   * 98/98 pytest tests passing in the search / extension / badge / phase-C
+     / enricher suites. Standalone integration tests
+     (`test_tally_bridge.py`, `test_extension_check.py`) are script-runners
+     and continue to run via `python tests/<file>` against a live server.
+
 - **(2026-06-22) Tally Phase 55.9 + 55.10 + Bridge Health page + auto-labeler cron + hygiene.**
 
   **Phase 55.9 — Bulk client-ledger sync** (`routes/tally_bridge.py`):

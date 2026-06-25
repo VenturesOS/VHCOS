@@ -88,7 +88,13 @@ async def queue(
         ],
     }
     out: List[QueueItem] = []
-    cursor = db.bills.find(q, {"_id": 0}).sort("created_at", 1).limit(int(limit))
+    # Sort: priority_at (manual fast-track) first, then FIFO by created_at.
+    # Using a compound sort means "Push to Tally now" actions surface at the
+    # front of the bridge's next poll without disturbing global queue order.
+    cursor = db.bills.find(q, {"_id": 0}).sort([
+        ("tally.priority_at", -1),
+        ("created_at", 1),
+    ]).limit(int(limit))
     async for b in cursor:
         try:
             xml = build_sales_voucher_xml(b, company)
@@ -437,3 +443,54 @@ async def admin_receipts_unmatched(
         {"_id": 0},
     ).sort("received_at", -1).limit(int(limit))
     return [r async for r in cur]
+
+
+@tally_router.post("/admin/bills/{bill_id}/push-now")
+async def admin_push_bill_now(
+    bill_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Bump a bill's `created_at` so the bridge picks it up on the very
+    next poll instead of waiting in FIFO. Useful for fast-tracking urgent
+    invoices without losing queue order for the rest.
+
+    Returns the new position; bridge still has to actually call /queue
+    for the push to happen — typically within 30s on prod.
+    """
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0, "id": 1, "bill_number": 1, "tally": 1, "status": 1})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if (bill.get("tally") or {}).get("pushed"):
+        return {"ok": True, "already_pushed": True, "bill_id": bill_id}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.bills.update_one(
+        {"id": bill_id},
+        {"$set": {"tally.priority_at": now_iso, "updated_at": now_iso}},
+    )
+    return {
+        "ok": True,
+        "bill_id": bill_id,
+        "bill_number": bill.get("bill_number"),
+        "priority_at": now_iso,
+        "message": "Bumped to top of bridge queue — bridge polls every ~30s on prod.",
+    }
+
+
+@tally_router.get("/admin/pending-bills")
+async def admin_pending_bills(
+    limit: int = 10,
+    user: dict = Depends(get_current_user),
+):
+    """List the next N bills awaiting Tally push, in queue order (priority
+    first then FIFO). Powers the "Push now" mini-tile on the health page.
+    """
+    q = {
+        "status": {"$in": ["sent", "paid"]},
+        "client_legal_name": {"$ne": ""},
+        "$or": [{"tally.pushed": {"$ne": True}}, {"tally": {"$exists": False}}],
+    }
+    cur = db.bills.find(
+        q,
+        {"_id": 0, "id": 1, "bill_number": 1, "client_legal_name": 1, "created_at": 1, "totals": 1, "tally": 1},
+    ).sort([("tally.priority_at", -1), ("created_at", 1)]).limit(int(limit))
+    return [b async for b in cur]

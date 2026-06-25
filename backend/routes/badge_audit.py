@@ -369,6 +369,21 @@ async def badge_view_stats(
     }
 
 
+@router.post("/_/digest/run-now")
+async def trigger_weekly_digest_now(
+    dry_run: bool = False,
+    user: dict = Depends(get_current_user),
+):
+    """Admin-trigger the weekly recruiter digest immediately. Use
+    `?dry_run=true` to preview the recipient list + per-user numbers
+    without actually sending emails."""
+    from services.weekly_digest import send_weekly_digest, build_weekly_digest_rows
+    if dry_run:
+        rows = await build_weekly_digest_rows(days=7)
+        return {"would_send": len(rows), "rows": rows[:20]}
+    return await send_weekly_digest(dry_run=False)
+
+
 # ── Extension feedback (no auth checking version handles it) ──────────
 
 class ClientCardFeedback(BaseModel):

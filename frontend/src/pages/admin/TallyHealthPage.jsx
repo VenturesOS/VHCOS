@@ -69,18 +69,22 @@ const ToneTile = ({ label, value, hint, tone = "slate", dataTestid }) => {
 const TallyHealthPage = () => {
   const [health, setHealth] = useState(null);
   const [unmatched, setUnmatched] = useState([]);
+  const [pending, setPending] = useState([]);
+  const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [h, u] = await Promise.all([
+      const [h, u, p] = await Promise.all([
         api("/tally/admin/health"),
         api("/tally/admin/receipts/unmatched?limit=50").catch(() => []),
+        api("/tally/admin/pending-bills?limit=10").catch(() => []),
       ]);
       setHealth(h);
       setUnmatched(Array.isArray(u) ? u : []);
+      setPending(Array.isArray(p) ? p : []);
       setErr(null);
     } catch (e) {
       setErr(e?.message || "Failed to load Tally bridge health");
@@ -88,6 +92,18 @@ const TallyHealthPage = () => {
       setLoading(false);
     }
   }, []);
+
+  const pushNow = async (billId) => {
+    setBusyId(billId);
+    try {
+      await api(`/tally/admin/bills/${billId}/push-now`, { method: "POST" });
+      await load();
+    } catch (e) {
+      setErr(`Push failed: ${e?.message}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   useEffect(() => {
     load();
