@@ -192,6 +192,21 @@ async def admin_publish_blog(blog_id: str, current_user: dict = Depends(require_
         import asyncio
         asyncio.create_task(auto_post_on_publish(blog))
 
+        # Ping IndexNow (Bing/Yandex/etc.) so the new URL is crawled fast.
+        # Zero-cost when INDEXNOW_KEY isn't set — service short-circuits.
+        try:
+            from services.indexnow import fire_and_forget
+            slug = blog.get("slug") or ""
+            btype = (blog.get("blog_type") or "").lower()
+            path_prefix = "industrial-hiring-insights" if btype == "employer" else "career-insights"
+            host = os.environ.get("INDEXNOW_HOST", "ventureshrd.com")
+            fire_and_forget([
+                f"https://{host}/{path_prefix}/{slug}",
+                f"https://{host}/{path_prefix}",
+            ])
+        except Exception:
+            pass
+
     return {"message": "Blog published"}
 
 

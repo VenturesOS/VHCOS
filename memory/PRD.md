@@ -29,6 +29,77 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-06 late) Phase 55.11b — P1 polish: blog SEO, sidebar dark polish, IndexNow.**
+
+  Follow-up pass on the audit's P1 items after the P0 remediation ship:
+
+  **Blog SEO — full `SEOHead` + `articleLD` coverage** (`pages/public/BlogPages.jsx`):
+   * All 4 blog surfaces (`EmployerBlogList`, `EmployerBlogArticle`,
+     `CandidateBlogList`, `CandidateBlogArticle`) now go through the same
+     `SEOHead` component used for `PublicJobPage`. Removed the ad-hoc
+     `<Helmet>` blocks + `BlogArticleSchema` helper (its output was a subset
+     of what `articleLD` emits).
+   * Article pages carry proper Article JSON-LD via `articleLD(blog, prefix)`
+     — headline, description, image, datePublished, dateModified,
+     `mainEntityOfPage`, publisher — plus a two-item breadcrumb via
+     `breadcrumbLD`. Meets Google's Article rich-result eligibility.
+   * List pages get correct canonicals + OG defaults (no article schema —
+     they're indexes, not articles).
+
+  **Sidebar dark-mode polish** (`components/layout/Sidebar.jsx`):
+   * The whole `Sidebar` container now switches to `dark:bg-slate-900` with
+     `dark:border-slate-800` borders. Every hardcoded slate color (logo
+     title, subtitle, user name/email, nav item states, action buttons)
+     gained a `dark:` counterpart. Active nav still shows the emerald
+     `bg-[#DCFCE7]` in light and a matching `bg-[#1a3a1a] text-[#9acd32]`
+     in dark. Brand primary preserved for recognition.
+   * Mobile menu button + drawer also themed.
+   * Verified: after `ThemeToggle` flips `<html class="dark">`, the sidebar
+     background becomes dark instantly and stays legible.
+
+  **IndexNow — real-time crawl pings on publish** (`services/indexnow.py`):
+   * New service module with `ping_indexnow(urls)` (async, HTTP 200/202 = ok,
+     never raises) and `fire_and_forget(urls)` (safe from sync handlers).
+   * Wired into two publish flows:
+       - `PUT /api/blog/admin/{blog_id}/publish` → pings the article URL +
+         its parent index page (`/industrial-hiring-insights/{slug}` for
+         employer blogs, `/career-insights/{slug}` for candidate).
+       - `PATCH /jobs/{job_id}/career-page-status` when transitioning to
+         `live` → pings `/jobs/{job_id}` + `/website/careers.html`.
+   * Bing, Yandex, Seznam, Naver all crawl within seconds of a ping.
+     Google doesn't accept IndexNow directly but syndicates via Bing.
+   * **Ops setup required** (one-time, on the AWS server):
+       1. Pick a random key: `openssl rand -hex 16`
+       2. Add to `/home/ubuntu/vhc-platform/backend/.env`:
+              INDEXNOW_KEY=<the-hex-key>
+              INDEXNOW_HOST=ventureshrd.com
+       3. Publish the key at `https://ventureshrd.com/<key>.txt` — the file
+          MUST contain only the key. Simplest — nginx `location = /<key>.txt`
+          returning 200 with the key as body. Alternatively drop the file
+          into the static docroot.
+       4. `sudo systemctl restart vhc-backend`. Service short-circuits to
+          "disabled" when `INDEXNOW_KEY` is unset, so any deploy without
+          the key set is safe — pings simply don't fire.
+
+  **Nginx sitemap/robots verification** — user runbook, not a code change:
+   ```bash
+   # Confirm the dynamic sitemap is reachable at the domain root:
+   curl -sI https://ventureshrd.com/sitemap.xml | head -3
+   curl -sI https://ventureshrd.com/robots.txt  | head -3
+   # If either returns 404, add to nginx server block:
+   #   location = /sitemap.xml { proxy_pass http://127.0.0.1:8001/api/sitemap.xml; }
+   #   location = /robots.txt  { proxy_pass http://127.0.0.1:8001/api/robots.txt;  }
+   # Then: sudo nginx -t && sudo systemctl reload nginx
+   ```
+   The static `frontend/public/robots.txt` continues to reference the
+   dynamic sitemap; the check just confirms Google actually reaches it.
+
+  **Files:**
+   - New: `backend/services/indexnow.py`.
+   - Modified: `frontend/src/pages/public/BlogPages.jsx`,
+     `frontend/src/components/layout/Sidebar.jsx`,
+     `backend/routes/blog.py`, `backend/routes/jobs.py`.
+
 - **(2026-07-06) Phase 55.11 — P0 audit remediation (SEO + search perf + security + ⌘K + dark mode).**
 
   Applied the drop-in optimization pack from the external `VHCOS_TEAM_EVALUATION_REPORT`

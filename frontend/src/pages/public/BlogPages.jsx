@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { blogAPI } from '../../lib/api';
 import { ArrowLeft, Calendar, Clock, Tag, Globe, MapPin, Share2 } from 'lucide-react';
+import SEOHead from '../../components/shared/SEOHead';
+import { articleLD, breadcrumbLD } from '../../lib/structuredData';
 
 function ShareButtons({ title, url }) {
   const encoded = encodeURIComponent(url);
@@ -156,15 +158,22 @@ export function EmployerBlogArticle() {
 
   return (
     <div className="min-h-screen bg-white" data-testid="employer-blog-article">
-      <Helmet>
-        <title>{blog.title} - VHC Talent Advisory</title>
-        <meta name="description" content={blog.meta_description} />
-        <meta property="og:title" content={blog.title} />
-        <meta property="og:description" content={blog.meta_description} />
-        <meta property="og:type" content="article" />
-        <meta name="keywords" content={(blog.keywords || []).join(', ')} />
-      </Helmet>
-      <BlogArticleSchema blog={blog} type="employer" />
+      <SEOHead
+        title={blog.title}
+        description={blog.meta_description}
+        path={`/industrial-hiring-insights/${blog.slug}`}
+        image={blog.cover_image}
+        type="article"
+        publishedTime={blog.published_at}
+        modifiedTime={blog.updated_at || blog.published_at}
+        jsonLd={[
+          articleLD(blog, 'industrial-hiring-insights'),
+          breadcrumbLD([
+            { name: 'Industrial Hiring Insights', path: '/industrial-hiring-insights' },
+            { name: blog.title, path: `/industrial-hiring-insights/${blog.slug}` },
+          ]),
+        ]}
+      />
 
       <header style={{ background: '#111827', padding: '16px 24px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -235,13 +244,11 @@ export function CandidateBlogList() {
 
   return (
     <div className="min-h-screen bg-white" data-testid="candidate-blog-list">
-      <Helmet>
-        <title>Career Insights & Advice - VHC Talent Advisory</title>
-        <meta name="description" content="Career growth tips, salary trends, resume guidance, and industry insights for industrial professionals including engineers, plant HR, and manufacturing leaders." />
-        <meta property="og:title" content="Career Insights & Advice - VHC Talent Advisory" />
-        <meta property="og:description" content="Career advice and insights for industrial professionals." />
-        <meta property="og:type" content="website" />
-      </Helmet>
+      <SEOHead
+        title="Career Insights & Advice"
+        description="Career growth tips, salary trends, resume guidance, and industry insights for industrial professionals including engineers, plant HR, and manufacturing leaders."
+        path="/career-insights"
+      />
 
       <header style={{ background: '#111827', padding: '16px 24px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -337,15 +344,22 @@ export function CandidateBlogArticle() {
 
   return (
     <div className="min-h-screen bg-white" data-testid="candidate-blog-article">
-      <Helmet>
-        <title>{blog.title} - Career Insights | VHC Talent Advisory</title>
-        <meta name="description" content={blog.meta_description} />
-        <meta property="og:title" content={blog.title} />
-        <meta property="og:description" content={blog.meta_description} />
-        <meta property="og:type" content="article" />
-        <meta name="keywords" content={(blog.keywords || []).join(', ')} />
-      </Helmet>
-      <BlogArticleSchema blog={blog} type="candidate" />
+      <SEOHead
+        title={blog.title}
+        description={blog.meta_description}
+        path={`/career-insights/${blog.slug}`}
+        image={blog.cover_image}
+        type="article"
+        publishedTime={blog.published_at}
+        modifiedTime={blog.updated_at || blog.published_at}
+        jsonLd={[
+          articleLD(blog, 'career-insights'),
+          breadcrumbLD([
+            { name: 'Career Insights', path: '/career-insights' },
+            { name: blog.title, path: `/career-insights/${blog.slug}` },
+          ]),
+        ]}
+      />
 
       <header style={{ background: '#111827', padding: '16px 24px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

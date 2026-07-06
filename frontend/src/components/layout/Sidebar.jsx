@@ -182,12 +182,12 @@ export const Sidebar = () => {
   const SidebarContent = () => (
     <>
       {/* Logo */}
-      <div className="p-4 lg:p-6 border-b border-slate-200">
+      <div className="p-4 lg:p-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <img src={LOGO_URL} alt="Ventures HRD" className="h-10 lg:h-14 w-auto" />
           <div className="flex-1">
-            <h1 className="font-heading font-bold text-base lg:text-lg text-slate-900">Ventures HRD</h1>
-            <p className="text-xs text-slate-500 capitalize">{user?.role} Portal</p>
+            <h1 className="font-heading font-bold text-base lg:text-lg text-slate-900 dark:text-slate-100">Ventures HRD</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{user?.role} Portal</p>
           </div>
           <NotificationBell />
         </div>
@@ -204,8 +204,8 @@ export const Sidebar = () => {
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
                 isActive
-                  ? 'bg-[#DCFCE7] text-[#7CB342]'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-[#7CB342]'
+                  ? 'bg-[#DCFCE7] text-[#7CB342] dark:bg-[#1a3a1a] dark:text-[#9acd32]'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#7CB342] dark:hover:text-[#9acd32]'
               }`
             }
           >
@@ -216,23 +216,23 @@ export const Sidebar = () => {
       </nav>
 
       {/* User section */}
-      <div className="p-4 border-t border-slate-200" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="p-4 border-t border-slate-200 dark:border-slate-800" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex items-center gap-3 mb-4 px-2">
-          <div className="w-10 h-10 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-            <span className="text-[#7CB342] font-semibold">
+          <div className="w-10 h-10 rounded-full bg-[#DCFCE7] dark:bg-[#1a3a1a] flex items-center justify-center">
+            <span className="text-[#7CB342] dark:text-[#9acd32] font-semibold">
               {user?.name?.charAt(0).toUpperCase()}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-900 truncate">{user?.name}</p>
-            <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{user?.name}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
           </div>
         </div>
         {/* Download Extension - Only for admin, employer, recruiter */}
         {['admin', 'employer', 'recruiter'].includes(user?.role) && (
           <Button
             variant="ghost"
-            className="w-full justify-start text-slate-600 hover:text-[#7CB342] hover:bg-[#DCFCE7] mb-1"
+            className="w-full justify-start text-slate-600 dark:text-slate-300 hover:text-[#7CB342] dark:hover:text-[#9acd32] hover:bg-[#DCFCE7] dark:hover:bg-[#1a3a1a] mb-1"
             onClick={() => {
               const link = document.createElement('a');
               link.href = `${process.env.REACT_APP_BACKEND_URL}/api/download/naukri-extension`;
@@ -247,7 +247,7 @@ export const Sidebar = () => {
         )}
         <Button
           variant="ghost"
-          className="w-full justify-start text-slate-600 hover:text-amber-600 hover:bg-amber-50 mb-1"
+          className="w-full justify-start text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 mb-1"
           onClick={() => setReportOpen(true)}
           data-testid="report-issue-btn"
         >
@@ -257,7 +257,7 @@ export const Sidebar = () => {
         <ThemeToggle className="mb-1" />
         <Button
           variant="ghost"
-          className="w-full justify-start text-slate-600 hover:text-red-600 hover:bg-red-50"
+          className="w-full justify-start text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
           onClick={handleLogout}
           data-testid="logout-btn"
         >
@@ -273,7 +273,7 @@ export const Sidebar = () => {
     <>
       {/* Mobile menu button */}
       <button
-        className="lg:hidden fixed top-3 left-3 z-50 p-2.5 bg-white rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+        className="lg:hidden fixed top-3 left-3 z-50 p-2.5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
         onClick={() => setMobileOpen(!mobileOpen)}
         data-testid="mobile-menu-btn"
       >

@@ -558,7 +558,23 @@ async def update_career_page_status(
     })
     
     await db.jobs.find_one({"id": job_id}, {"_id": 0})
-    
+
+    # Ping IndexNow when a job goes LIVE on the career page — Google for Jobs
+    # eligibility unlocked at the same time; nudge Bing/Yandex to re-crawl now
+    # rather than waiting for the next scheduled sweep. Fire-and-forget,
+    # zero-cost when INDEXNOW_KEY isn't configured.
+    if update.new_status == "live":
+        try:
+            import os as _os
+            from services.indexnow import fire_and_forget
+            _host = _os.environ.get("INDEXNOW_HOST", "ventureshrd.com")
+            fire_and_forget([
+                f"https://{_host}/jobs/{job_id}",
+                f"https://{_host}/website/careers.html",
+            ])
+        except Exception:
+            pass
+
     return {
         "success": True,
         "message": f"Job {'posted to' if update.new_status == 'live' else 'removed from'} career page",
