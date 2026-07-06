@@ -2,6 +2,7 @@ import "@/App.css";
 import React, { Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "./lib/auth";
 import { Toaster } from "./components/ui/sonner";
 import GoogleAnalytics from "./components/GoogleAnalytics";
@@ -159,6 +160,7 @@ const CandidateBankRedirect = React.lazy(() => import("./pages/CandidateBankRedi
 function App() {
   return (
     <ChunkErrorBoundary>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem storageKey="vhc-theme">
     <HelmetProvider>
     <AuthProvider>
       <BrowserRouter>
@@ -353,6 +355,7 @@ function App() {
       <Toaster position="top-right" richColors />
     </AuthProvider>
     </HelmetProvider>
+    </ThemeProvider>
     </ChunkErrorBoundary>
   );
 }

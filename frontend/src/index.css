@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+/*
+ * PERF FIX (2026-07): font @import removed — fonts now load in <head>
+ * of public/index.html with preconnect. CSS @import is render-blocking
+ * because it forces the parser to wait for a second CSS chain to
+ * resolve before first paint. Move + preconnect knocks 200-400ms off
+ * the LCP on cold visits.
+ */
 
 @tailwind base;
 @tailwind components;
@@ -74,6 +80,31 @@ code {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+  }
+
+  /* Dark theme — mirrors :root but inverts foreground/background pairs.
+     Toggled by next-themes writing `class="dark"` on <html>.  Kept the
+     brand primary (VHC green) the same so recruiter recognition survives. */
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 84 49% 52%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 138 25% 18%;
+    --accent-foreground: 84 49% 70%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 210 40% 96%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 84 49% 52%;
   }
 }
 

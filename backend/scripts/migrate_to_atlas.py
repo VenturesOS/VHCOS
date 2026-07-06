@@ -8,10 +8,20 @@ from pymongo import MongoClient
 import certifi
 import sys
 
-# Configuration
-LOCAL_MONGO_URL = "mongodb://localhost:27017"
-ATLAS_MONGO_URL = "mongodb+srv://vhc_app_user:9VcZcHYTtIdGeVY@cluster0.vuhdiod.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority"
-DB_NAME = "vhc_talent_os"
+# Configuration — credentials come from environment only.
+# The Atlas credential was previously hardcoded here; treat it as
+# COMPROMISED and rotate before the next migration run. Set MONGO_URL
+# (and optionally LOCAL_MONGO_URL / DB_NAME) in .env before invoking.
+import os
+LOCAL_MONGO_URL = os.environ.get("LOCAL_MONGO_URL", "mongodb://localhost:27017")
+ATLAS_MONGO_URL = os.environ.get("ATLAS_MONGO_URL") or os.environ.get("MONGO_URL")
+DB_NAME = os.environ.get("DB_NAME", "vhc_talent_os")
+
+if not ATLAS_MONGO_URL:
+    sys.exit(
+        "ATLAS_MONGO_URL (or MONGO_URL) must be set in the environment.\n"
+        "Never hardcode credentials in scripts — see VHCOS_TEAM_EVALUATION_REPORT.md §2."
+    )
 
 # Collections to migrate
 COLLECTIONS = [

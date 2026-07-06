@@ -4,13 +4,15 @@ import { Sidebar } from './Sidebar';
 import { Toaster } from '../ui/sonner';
 import EnvironmentBadge from '../shared/EnvironmentBadge';
 import ExtensionUpdateBanner from '../shared/ExtensionUpdateBanner';
+import CommandPalette from '../shared/CommandPalette';
+import SEOHead from '../shared/SEOHead';
 
 export const DashboardLayout = ({ allowedRoles }) => {
   const { user, loading, isAuthenticated } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] dark:bg-slate-950">
         <div className="spinner" />
       </div>
     );
@@ -28,7 +30,9 @@ export const DashboardLayout = ({ allowedRoles }) => {
   const showBadge = ['admin', 'recruiter', 'employer', 'accounts'].includes(user?.role);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950">
+      {/* All authenticated dashboards are private — noindex per SEO fix (2026-07). */}
+      <SEOHead title="VHC Talent OS" noindex />
       {showBadge && <EnvironmentBadge />}
       <Sidebar />
       <main className={`lg:pl-64 min-h-screen ${showBadge ? 'pt-6' : ''}`}>
@@ -37,6 +41,8 @@ export const DashboardLayout = ({ allowedRoles }) => {
           <Outlet />
         </div>
       </main>
+      {/* Global ⌘K / Ctrl+K launcher — role-aware nav + live candidate lookup. */}
+      <CommandPalette />
       <Toaster position="top-right" />
     </div>
   );

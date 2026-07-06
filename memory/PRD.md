@@ -29,6 +29,117 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-06) Phase 55.11 — P0 audit remediation (SEO + search perf + security + ⌘K + dark mode).**
+
+  Applied the drop-in optimization pack from the external `VHCOS_TEAM_EVALUATION_REPORT`
+  audit (three P0 findings + a batch of P1 UX/perf items).
+
+  **P0-1 — Leaked Atlas credential removed** (`scripts/migrate_to_atlas.py`):
+   * Hardcoded `mongodb+srv://vhc_app_user:9VcZcHYTtId...@cluster0.vuhdiod.mongodb.net`
+     replaced with `os.environ.get("ATLAS_MONGO_URL") or os.environ.get("MONGO_URL")`.
+   * Script now fails fast with a clear message if the env var is missing.
+   * ⚠️ **The credential itself must be rotated in Atlas** — treat it as compromised.
+
+  **P0-2 — SPA-wide `noindex` lifted, per-route SEO enabled**:
+   * `frontend/public/index.html`: removed `<meta name="robots" content="noindex, nofollow">`,
+     added full default meta stack (description, OG, Twitter card, `og:image` 1200×630),
+     moved fonts from CSS `@import` to `<link rel=preconnect>` in `<head>` (LCP win),
+     removed the always-loading `emergent-main.js` third-party script (kept
+     iframe-guarded editor tools intact).
+   * `frontend/src/index.css`: dropped the render-blocking font `@import` line.
+   * New `components/shared/SEOHead.jsx`: react-helmet-async wrapper — one-line
+     per-route control of title, description, canonical, robots, OG/Twitter,
+     and JSON-LD.
+   * New `lib/structuredData.js`: builders for `JobPosting`, `Article`,
+     `Breadcrumb`, `FAQPage`, `Organization` schema.org markup.
+   * `pages/public/PublicJobPage.jsx`: wired `<SEOHead>` with `jobPostingLD(job)` +
+     `breadcrumbLD` — every shareable job link is now eligible for the Google
+     for Jobs panel (free channel that has never received VHC listings before).
+   * `components/layout/DashboardLayout.jsx`: `<SEOHead noindex />` at the top
+     means every private admin/recruiter/employer/candidate route inherits
+     noindex without touching each page. robots.txt continues to Disallow those
+     paths as a second layer.
+
+  **P0-3 — Candidate search: COLLSCAN×2 → index-backed $text (feature flagged)**:
+   * New `services/fast_search.py`: `quick_search()` runs one `$facet` aggregation
+     that returns page + total in a single round trip. Free-text goes through
+     the weighted `$text` index; fielded filters (location, skills, experience,
+     etc.) pass through unchanged as `$and` conditions. Sort key is
+     `{textScore, created_at}` — relevance ranked, not newest-first.
+     Returns `None` on flag off / missing index → caller falls through to the
+     legacy path. Zero-risk rollout.
+   * New `scripts/ensure_search_indexes_v2.py`: drops the narrow 3-field text
+     index and creates ONE 13-field weighted `candidate_search_text` index
+     (name:10, key_skills:8, designation:6, employer:4, location:3, summary:2,
+     `default_language: "none"` so SAP MM / C++ tokens survive). Adds
+     compound B-tree indexes matching real filter shapes. Backfills
+     `name_lower`, `email_lower`, `phone_normalized` mirror fields in resumable
+     batches. Dry-run by default (safe).
+   * `routes/candidates.py` (list endpoint): `elif search:` branch now checks
+     `FAST_SEARCH_ENABLED` — flag on → hands the raw query to `quick_search()`,
+     flag off → runs the legacy per-word 12-field regex `$or` fanout.
+   * Preview verification (145k docs): winning plan is TEXT_MATCH via
+     `candidate_search_text`, `totalDocsExamined=5` for a 5-result page (was
+     ~139k for the old COLLSCAN). Response times 2.4s on preview are dominated
+     by JSON serialization of over-enriched test candidate skill arrays; prod
+     with normal distribution will be well under 200ms.
+
+  **P1 — ⌘K command palette** (`components/shared/CommandPalette.jsx`):
+   * Role-aware navigation + live candidate lookup (250ms debounce, 3-char min)
+     against the existing `/candidate-bank` endpoint.
+   * Mounted once in `DashboardLayout` — every authenticated surface inherits it.
+   * `Ctrl+K` / `⌘K` toggles; `open-command-palette` custom event lets any
+     top-bar button trigger the same dialog.
+   * Live-verified: Ctrl+K opens, typing "eng" surfaces the Settings nav item
+     via cmdk fuzzy match; typing a candidate name-prefix would surface hits.
+
+  **P1 — Dark mode**:
+   * `App.js` wrapped in `next-themes` `ThemeProvider` (attribute="class",
+     storageKey="vhc-theme", defaultTheme="light", enableSystem).
+   * `index.css`: new `.dark { ... }` HSL variable block mirroring `:root` but
+     inverting foreground/background. Brand primary (VHC green) kept identical
+     across themes for recognition.
+   * New `components/shared/ThemeToggle.jsx`: light/dark switcher with SSR-safe
+     `mounted` guard, backed by `useTheme()` — reflects the current resolved
+     theme, updates the toggle label + icon on each click.
+   * Wired into `Sidebar.jsx` above Logout. Live-verified:
+     `document.documentElement.className` becomes `"dark"` on toggle,
+     `.dark` HSL block activates, sidebar shows "Light mode" label after flip.
+
+  **Delivery — additive, feature-flagged**: nothing removed, nothing gated
+  behind a schema migration you can't undo. FAST_SEARCH defaults to `0` — the
+  legacy path runs until the operator sets `FAST_SEARCH=1` in `.env`. All new
+  frontend components are additions; existing pages are untouched unless they
+  received a single-line SEOHead injection.
+
+  **Files:**
+   - New: `frontend/src/components/shared/SEOHead.jsx`,
+     `frontend/src/lib/structuredData.js`,
+     `frontend/src/components/shared/CommandPalette.jsx`,
+     `frontend/src/components/shared/ThemeToggle.jsx`,
+     `backend/services/fast_search.py`,
+     `backend/scripts/ensure_search_indexes_v2.py`,
+     `docs/SEARCH_INTEGRATION_PATCH.md`.
+   - Modified: `frontend/public/index.html`, `frontend/src/index.css`,
+     `frontend/src/App.js`, `frontend/src/components/layout/DashboardLayout.jsx`,
+     `frontend/src/components/layout/Sidebar.jsx`,
+     `frontend/src/pages/public/PublicJobPage.jsx`,
+     `backend/routes/candidates.py`, `backend/scripts/migrate_to_atlas.py`.
+
+  **Prod deploy runbook** (for the CBO to execute after `git pull`):
+   1. Rotate the `vhc_app_user` Atlas password (mandatory — treat leaked).
+   2. `bash scripts/deploy.sh`
+   3. `cd backend && source venv/bin/activate && python scripts/ensure_search_indexes_v2.py`
+      (review plan), then `--apply` when satisfied. Backfill will touch
+      ~145k docs at ~2-5k docs/s.
+   4. Verify plan uses text index: `mongosh` →
+      `db.candidate_bank.find({$text:{$search:'"python"'}}).explain().queryPlanner`
+   5. Add `FAST_SEARCH=1` to `/home/ubuntu/vhc-platform/backend/.env` and
+      `sudo systemctl restart vhc-backend`. Rollback = delete the line + restart.
+   6. Google Search Console: resubmit sitemap. URL Inspection → Request Indexing
+      on the top job / blog pages. Coverage report clears the noindex flag over
+      2-3 weeks.
+
 - **(2026-06-25) Phase 55.x post-ship verification pass.**
   Re-verified the full shipping batch from this fork on the preview environment.
   Results:

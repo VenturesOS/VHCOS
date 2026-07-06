@@ -46,6 +46,7 @@ import { useState } from 'react';
 import { Button } from '../ui/button';
 import { ReportIssueDialog } from '../shared/ReportIssueDialog';
 import NotificationBell from '../notifications/NotificationBell';
+import ThemeToggle from '../shared/ThemeToggle';
 
 const LOGO_URL = '/assets/vhc_logo.svg';
 
@@ -253,6 +254,7 @@ export const Sidebar = () => {
           <Bug className="w-4 h-4 mr-2" />
           Report Issue
         </Button>
+        <ThemeToggle className="mb-1" />
         <Button
           variant="ghost"
           className="w-full justify-start text-slate-600 hover:text-red-600 hover:bg-red-50"

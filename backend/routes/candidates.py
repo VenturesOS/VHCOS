@@ -1751,28 +1751,37 @@ async def list_candidates(
             return {"candidates": [], "total": 0, "page": 1, "limit": limit, "pages": 0, "next_cursor": None}
 
     # ── Boolean search (takes priority over simple search) ──
+    _fast_text_query = None
     if boolean_search:
         bool_filter = parse_boolean_query(boolean_search)
         if bool_filter:
             conditions.append(bool_filter)
-    # ── Text search with synonym expansion ──
+    # ── Text search ──
+    # FAST_SEARCH=1 → index-backed $text handled later by
+    # services.fast_search (relevance-ranked, single $facet round trip).
+    # We record the raw string and skip building regex conditions.
+    # FAST_SEARCH=0 → legacy synonym-regex path, unchanged.
     elif search:
-        import re
-        from services.synonym_service import get_synonym_regex
-        words = [w.strip() for w in search.split() if w.strip()]
-        searchable_fields = [
-            "name", "email", "phone", "key_skills", "skills",
-            "current_designation", "designation", "headline",
-            "current_company", "company", "location", "current_location",
-        ]
-        for word in words:
-            # Expand word with synonyms for better recall
-            pattern = get_synonym_regex(word)
-            word_conditions = [
-                {field: {"$regex": pattern, "$options": "i"}}
-                for field in searchable_fields
+        from services.fast_search import FAST_SEARCH_ENABLED
+        if FAST_SEARCH_ENABLED:
+            _fast_text_query = search
+        else:
+            import re
+            from services.synonym_service import get_synonym_regex
+            words = [w.strip() for w in search.split() if w.strip()]
+            searchable_fields = [
+                "name", "email", "phone", "key_skills", "skills",
+                "current_designation", "designation", "headline",
+                "current_company", "company", "location", "current_location",
             ]
-            conditions.append({"$or": word_conditions})
+            for word in words:
+                # Expand word with synonyms for better recall
+                pattern = get_synonym_regex(word)
+                word_conditions = [
+                    {field: {"$regex": pattern, "$options": "i"}}
+                    for field in searchable_fields
+                ]
+                conditions.append({"$or": word_conditions})
 
     # ── Phone search ──
     if phone:
@@ -2030,6 +2039,33 @@ async def list_candidates(
         ]})
 
     query = {"$and": conditions} if conditions else {}
+
+    # ── Fast path (FAST_SEARCH=1): index-backed $text + count in one round trip ──
+    # See services/fast_search.py + docs/SEARCH_INTEGRATION_PATCH.md.
+    # Returns None on flag off / missing text index → falls through to
+    # the legacy path below unchanged.
+    if not use_cursor:
+        try:
+            from services.fast_search import quick_search
+            fast = await quick_search(
+                db,
+                search=_fast_text_query,
+                extra_conditions=conditions,
+                page=page,
+                limit=limit,
+            )
+            if fast is not None:
+                fast_docs, fast_total = fast
+                return {
+                    "candidates": fast_docs,
+                    "total":      fast_total,
+                    "page":       page,
+                    "limit":      limit,
+                    "pages":      (fast_total + limit - 1) // limit if limit else 0,
+                    "next_cursor": None,
+                }
+        except Exception as _e:
+            logger.warning(f"[list_candidates] fast_search unavailable, using legacy path: {_e}")
 
     # ── Performance: count_documents on 130k+ docs is a full collection scan
     # and gets slower as the bank grows. Use the cheap server metadata count

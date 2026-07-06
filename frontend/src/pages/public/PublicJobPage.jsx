@@ -29,6 +29,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { TurnstileWidget, isTurnstileEnabled } from '../../components/TurnstileWidget';
+import SEOHead from '../../components/shared/SEOHead';
+import { jobPostingLD, breadcrumbLD } from '../../lib/structuredData';
 
 const API_URL = '';
 
@@ -199,6 +201,20 @@ export default function PublicJobPage() {
 
   return (
     <div className="min-h-screen bg-gray-50" data-testid="public-job-page">
+      {/* SEO: JobPosting JSON-LD makes this listing eligible for the
+          Google for Jobs panel. Was previously absent — free channel unused. */}
+      <SEOHead
+        title={job ? `${job.title}${job.location ? ` — ${job.location}` : ''}` : 'Job'}
+        description={(job?.description || job?.title || '').replace(/<[^>]+>/g, '').slice(0, 155)}
+        path={`/jobs/${job?.id || ''}`}
+        jsonLd={job ? [
+          jobPostingLD(job),
+          breadcrumbLD([
+            { name: 'Careers', path: '/website/careers.html' },
+            { name: job.title || 'Job', path: `/jobs/${job.id}` },
+          ]),
+        ] : null}
+      />
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
