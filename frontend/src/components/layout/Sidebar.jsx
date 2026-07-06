@@ -41,6 +41,7 @@ import {
   FileSpreadsheet,
   MessageCircle,
   Zap,
+  Merge,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -60,6 +61,7 @@ const navItems = {
     { icon: TrendingUp, label: 'Analytics Hub', path: '/admin/analytics-hub' },
     { icon: Layers, label: 'Clusters', path: '/admin/clusters' },
     { icon: ShieldCheck, label: 'Badge Audit', path: '/admin/badge-audit' },
+    { icon: Merge, label: 'Dedupe', path: '/admin/dedupe' },
     { icon: IndianRupee, label: 'Salary Benchmark', path: '/admin/salary-benchmark' },
     { icon: IndianRupee, label: 'Revenue', path: '/admin/revenue' },
     { icon: Sparkles, label: 'Find Candidates', path: '/admin/find-candidates' },

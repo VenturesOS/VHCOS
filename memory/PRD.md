@@ -29,6 +29,94 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-06 evening) Phase 55.11c — P0/P1/P2 sprint: gitleaks CI, alias canonicalization, dedupe merge UI, Vite + content runbooks.**
+
+  Final round of the audit follow-through — three code deliverables shipped
+  and two large-scope items scoped into runbooks (so the next agent session
+  or the internal team can execute without re-discovery).
+
+  **P0 — Gitleaks CI** (`.github/workflows/gitleaks.yml`):
+   * 10-line GitHub Actions workflow that runs `gitleaks/gitleaks-action@v2`
+     on every push and PR against `main`. `fetch-depth: 0` scans full
+     history so the July Atlas-credential purge stays enforced going
+     forward — any commit that reintroduces a secret will fail the CI
+     check and block the merge.
+
+  **P2 — Alias-field canonicalization** (`backend/scripts/canonicalize_aliases.py`):
+   * Same runbook pattern as `ensure_search_indexes_v2.py`: dry-run by
+     default, `--apply` to execute, `--batch` tunable.
+   * Canonical field per family:
+       - `skills`            (falls back to `key_skills`)
+       - `current_location`  (falls back to `location`)
+       - `current_employer`  (falls back to `current_company`, then `company`)
+   * Non-destructive: only writes when the canonical field is missing.
+     Alias fields left in place so read-compat is preserved — no service
+     interruption. Preview run showed 146k docs eligible; a resumable
+     bulk_write should complete in ~1-2 minutes on prod.
+
+  **P2 — Candidate Dedupe Merge UI** (`frontend/src/pages/admin/DedupeMergePage.jsx`):
+   * New admin route `/admin/dedupe` (added to `App.js` lazy imports +
+     admin sidebar with the `Merge` icon).
+   * Reads from the existing `GET /api/candidate-bank/find-all-duplicates`
+     — top 50 email-based groups + top 50 phone-based groups.
+   * Per-group table shows Name / Email / Phone / Designation / Employer /
+     Location / Source / Captured with row checkboxes; recruiter unchecks
+     any records that shouldn't fold into the merge.
+   * "Merge selected (N)" per group → `POST /candidate-bank/merge-duplicates`;
+     "Merge all groups" bulk button → `POST /candidate-bank/merge-all-duplicates`
+     (with a confirm dialog because it can't be undone).
+   * Field-level survivorship is delegated to the existing backend merge
+     helper (newer wins, non-empty wins over empty) — the UI stays lean
+     and doesn't try to reinvent that logic.
+   * Dark-mode themed alongside the sidebar; SEOHead noindex; all
+     interactive elements carry data-testids for testing.
+   * Preview verification: page loads, endpoint returns 17 email + 23
+     phone groups, top group (`ajit@searchpartner.in`) shows 25 records
+     duplicated across sources.
+
+  **P2 — Vite migration runbook** (`docs/VITE_MIGRATION_RUNBOOK.md`):
+   * Full 10-step runbook — pre-flight, `vite.config.js` skeleton, entry
+     move, env-var handling (kept `REACT_APP_*` prefix via `envPrefix`
+     for zero-touch), deploy.sh compat, `/website/` static handling,
+     verification, rollback plan.
+   * Deferred to follow-up PRs: `REACT_APP_*` → `VITE_*` rename,
+     jest → vitest, `.js` → `.jsx` sweep. Kept out of this migration to
+     keep blast radius small.
+   * Not executed in this session because the migration touches every
+     build/deploy path and needs a dedicated feature branch + smoke test
+     matrix. Shipping it mid-session with 20 other tasks risks a partial
+     migration that must be reverted.
+
+  **P1 — Content sprint strategy** (`docs/CONTENT_SPRINT_STRATEGY.md`):
+   * 5 pillar topics tuned for commercial intent + Indian industrial
+     manufacturing niche:
+       1. "Manufacturing Recruitment Agency in Pune" (Chakan/Talegaon corridor)
+       2. "Plant Head Hiring in India — Salary, Skills, Sourcing"
+       3. "Executive Search for Auto Component Manufacturers"
+       4. "Hiring for Aerospace and Defence Manufacturing"
+       5. "Retained vs Contingent Recruitment for Industrial Roles"
+   * Each pillar comes with 3 cluster article topics, target keywords,
+     Ahrefs-informed volume estimates, and a copy-paste-ready
+     `/api/blog/generate` prompt so your content team can spawn a first
+     draft in one click, then edit for VHC's case-study numbers.
+   * Weekly cadence recommended: 1 pillar + 3 clusters/week × 5 weeks.
+     Interlinks: pillar↔clusters + all articles → live jobs via the
+     existing `/api/public/jobs/list` endpoint. IndexNow already wired
+     from Phase 55.11b — every publish pings Bing/Yandex.
+   * Not writing the actual articles: 25-30 quality SEO articles is
+     40-70 hours of *content marketing* work, not code work. Producing
+     them with an agent in one session yields generic content that
+     ranks nowhere. The runbook is what the content team actually needs.
+
+  **Files:**
+   - New: `.github/workflows/gitleaks.yml`,
+     `backend/scripts/canonicalize_aliases.py`,
+     `frontend/src/pages/admin/DedupeMergePage.jsx`,
+     `docs/VITE_MIGRATION_RUNBOOK.md`,
+     `docs/CONTENT_SPRINT_STRATEGY.md`.
+   - Modified: `frontend/src/App.js` (route + lazy import),
+     `frontend/src/components/layout/Sidebar.jsx` (nav entry + Merge icon).
+
 - **(2026-07-06 late) Phase 55.11b — P1 polish: blog SEO, sidebar dark polish, IndexNow.**
 
   Follow-up pass on the audit's P1 items after the P0 remediation ship:
