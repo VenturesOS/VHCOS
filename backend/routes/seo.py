@@ -125,7 +125,7 @@ Disallow: /login
 Disallow: /register
 Disallow: /api/
 
-Sitemap: {BASE_URL}/api/sitemap.xml
+Sitemap: {BASE_URL}/sitemap.xml
 """
     return PlainTextResponse(content=content, headers={"Cache-Control": "public, max-age=86400"})
 
