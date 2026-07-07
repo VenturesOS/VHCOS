@@ -29,6 +29,9 @@ FAST_SEARCH_ENABLED = os.environ.get("FAST_SEARCH", "0") == "1"
 
 # Fields returned to list views. Excludes raw_profile_text and other
 # heavyweight blobs — trimming the payload matters as much as the scan.
+# Must include every field the candidate-list UI renders, or the field
+# silently drops from the API response only on the fast path (which is a
+# ghost-bug because the legacy path uses exclude-mode and returns everything).
 LIST_PROJECTION = {
     "_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1,
     "headline": 1, "current_designation": 1, "designation": 1,
@@ -40,6 +43,12 @@ LIST_PROJECTION = {
     "current_salary": 1, "expected_salary": 1,
     "source": 1, "smart_tags": 1, "created_at": 1, "updated_at": 1,
     "enriched_seniority": 1, "enriched_function": 1, "enriched_location": 1,
+    # AI enrichment surface — needed by the "Q"/"EC" admin badge in
+    # CandidateListItem. Was missing → badge silently disappeared on the
+    # fast-search path.
+    "ai_enrichment_source": 1, "ai_enriched_at": 1, "enrichment_status": 1,
+    # UI-critical booleans / URLs the row card reads directly.
+    "bulk_import_restricted": 1, "cv_attached": 1, "resume_url": 1, "is_active": 1,
 }
 
 _DIGITS = re.compile(r"\D+")

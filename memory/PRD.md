@@ -29,6 +29,12 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-07) Phase 55.11g — P0 Q badge root cause fixed + full delivery package.**
+  * **Root cause:** `services/fast_search.py` `LIST_PROJECTION` (include-mode) omitted `ai_enrichment_source`, `bulk_import_restricted`, `cv_attached`, `resume_url`, `is_active`, `ai_enriched_at`, `enrichment_status`. When `FAST_SEARCH=1` (prod flag), the short-circuit path silently stripped these fields — the "Q" badge, "Admin" pill, resume-download icon and "Attach CV" button all disappeared without any error. Legacy path (exclude-mode) was unaffected.
+  * Fix: added the 7 missing fields to `LIST_PROJECTION`.
+  * Ready-to-deploy: `/app/backend/services/fast_search.py` (LIST_PROJECTION block updated).
+  * Deployment note added to summary: user needs to scp the file to prod EC2 + `sudo systemctl restart vhc-backend`.
+
 - **(2026-07-07) Phase 55.11f — Dedupe UX + content sprint kickstart + post-Vite scripts.**
 
   **Dedupe UX + backend fix:**
