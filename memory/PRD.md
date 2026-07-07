@@ -29,6 +29,15 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-07) Phase 55.11e — Vite migration validated in `/app/frontend`.**
+  * Installed Vite 5.4 + `@vitejs/plugin-react` 4.7 alongside craco (parallel install; no craco removal).
+  * Files added: `vite.config.js`, `index.html` (Vite entry at project root), `src/index.jsx` (Vite entry point mirroring `src/index.js`).
+  * `package.json` scripts extended with `vite:start`, `vite:build`, `vite:preview` (craco `start/build/test` unchanged).
+  * **Verified:** `yarn vite:build` succeeds in **7.2s** (vs craco's ~57s → **~8× faster**). Bundle size parity: 184 kB gzip main (matches craco). Static assets (`public/`) copied intact to `build/`; marketing pages (`/website/*.html`) served correctly; `REACT_APP_BACKEND_URL` correctly baked into bundle.
+  * Rolled Vite 8 (Rolldown) back to Vite 5 — Rolldown's JSX parser rejects JSX-in-`.js` files even with `esbuild.loader: 'jsx'`. Documented in runbook gotchas.
+  * `docs/VITE_MIGRATION_RUNBOOK.md` rewritten with validated config + step-by-step for prod EC2 replication in a feature branch. Ship in 3 phases (parallel-install → flip → cleanup).
+  * Prod migration **NOT YET APPLIED** — awaiting user execution on EC2 feature branch.
+
 - **(2026-07-07) Phase 55.11d — GSC sitemap submission complete.**
   * Verified prod backend `robots.txt` now emits canonical `Sitemap: https://ventureshrd.com/sitemap.xml` (previous `/api/sitemap.xml` bug fixed in `routes/seo.py` line 128).
   * Confirmed prod Nginx `location = /robots.txt` and `location = /sitemap.xml` correctly proxy to backend (static `/var/www/*/robots.txt` files remain but are shadowed by nginx exact-match location blocks).

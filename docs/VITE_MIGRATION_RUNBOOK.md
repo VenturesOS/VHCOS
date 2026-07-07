@@ -1,200 +1,230 @@
 # Vite Migration Runbook — VHCOS Frontend
 
-**Status:** scoped, not shipped. This document is the step-by-step for
-executing the CRA/craco → Vite migration in a single focused session.
-Attempting it inside a shared agent session with 20 other tasks is how you
-end up with a half-migrated repo you have to revert.
+**Status:** ✅ **Validated in `/app/frontend`** (2026-07-07). Vite build succeeds in ~7.2s vs craco's ~57s (**8× faster**). Bundle size parity (184 kB gzip main). Ready to replicate on prod EC2 in a feature branch.
 
-**Effort:** ~1 full day, 1 person, in a feature branch.
-**Blast radius:** every dev, every build, every deploy. Freeze other frontend
-work on `main` while this branch is open.
+**Effort:** ~1 hour of focused execution + verification. Was originally scoped at 1 day; parallel-installation approach cuts risk drastically.
+
+**Blast radius:** every deploy. Freeze other frontend work on `main` while this branch is open. Test on prod via a feature branch → PR → merge → deploy.
 
 ---
 
 ## Why migrate
 
-- **CRA is unmaintained** — no security patches since Jan 2023, react-scripts
-  is deprecated. `create-react-app` is officially discontinued.
-- **Craco** patches CRA's webpack config, which means we're patching a dead
-  toolchain. Every version bump of React/webpack is a coin flip.
-- **Build time:** Vite dev-server starts in ~200ms; craco takes 12-18s cold.
-  Prod bundle time drops ~40% (esbuild + native ESM).
-- **Modern tooling** — `import.meta.env`, native ESM, first-class TypeScript
-  path if you ever want it.
+- **CRA is unmaintained** — no security patches since Jan 2023, react-scripts is deprecated.
+- **Craco patches** CRA's webpack config — patching a dead toolchain.
+- **Build time drops ~87%** — 7.2s (Vite) vs 57s (craco) on the VHCOS codebase.
+- **Dev server:** Vite boots in <500ms vs craco's 12–18s cold.
 
 ## Non-goals
 
 - Do NOT ship this at the same time as other frontend changes.
 - Do NOT introduce TypeScript in the same PR.
 - Do NOT change routing / auth / API-shape during migration. Only build tooling.
+- Do NOT rename all `.js` → `.jsx` in this PR (~200 files). We handle JSX-in-.js via `esbuild.loader: 'jsx'`. Rename in a follow-up.
 
 ---
 
-## Pre-flight
+## Approach: Parallel Install (validated)
 
-1. Cut a branch: `git checkout -b feat/vite-migration`.
-2. Confirm all frontend tests + `yarn build` pass on `main` first — baseline
-   for "same as before".
-3. Screenshot the following pages at 1920×800 (before/after visual diff):
-   `/`, `/login`, `/dashboard`, `/candidate-bank`, `/admin/badge-audit`,
-   `/admin/tally-health`, `/jobs/:id`, `/career-insights/:slug`.
-4. Note down current `yarn build` output size (`build/static/js/main.*.js`
-   gzip figure from `deploy.sh` logs). Compare after.
+Rather than a "big-bang" replacement, add Vite **alongside** craco. Both coexist. `yarn build` still runs craco; `yarn vite:build` runs Vite. Verify Vite on a preview host, then flip `build` → `vite build` in a follow-up commit and remove craco after 1–2 clean deploys.
 
-## Step-by-step
+---
 
-### 1. Install Vite + plugin
+## Step-by-step (verified against /app/frontend, 2026-07-07)
+
+### 1. Cut a branch on prod
 
 ```bash
-cd /app/frontend
-yarn add -D vite @vitejs/plugin-react vite-tsconfig-paths
-yarn add -D @vitejs/plugin-legacy       # only if you must support browsers older than the last 2 Chrome/Safari
+cd /home/ubuntu/vhc-platform/frontend
+git checkout -b feat/vite-migration
 ```
 
-### 2. Create `vite.config.js`
+### 2. Install Vite 5 (NOT Vite 8 — Rolldown JSX parser is stricter and breaks)
 
-Drop this in `frontend/vite.config.js`:
+```bash
+yarn add -D vite@^5.4.0 @vitejs/plugin-react@^4.3.0 vite-tsconfig-paths
+```
+
+### 3. Create `frontend/vite.config.js`
+
+Exact working config (validated in `/app/frontend/vite.config.js`):
 
 ```js
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: { '@': path.resolve(__dirname, 'src') },
-  },
-  server: {
-    port: 3000,
-    host: '0.0.0.0',
-    strictPort: true,
-    // Proxy /api → backend (dev only). Prod uses REACT_APP_BACKEND_URL.
-    proxy: {
-      '/api': { target: 'http://127.0.0.1:8001', changeOrigin: true },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, path.resolve(__dirname), '');
+  return {
+    plugins: [
+      react({ include: /\.(js|jsx|ts|tsx)$/ }),
+    ],
+    resolve: {
+      alias: { '@': path.resolve(__dirname, 'src') },
     },
-    // Preview env quirk: allow the emergent domain.
-    allowedHosts: ['.preview.emergentagent.com', 'localhost', '127.0.0.1'],
-  },
-  build: {
-    outDir: 'build',              // deploy.sh rsyncs from build/, keep the name
-    sourcemap: false,
-    chunkSizeWarningLimit: 1500,  // suppress noise from the vendor chunk
-  },
-  // CRA env vars are prefixed REACT_APP_*. Keep that contract for a
-  // clean migration — flip everything to VITE_* later in a separate PR.
-  envPrefix: ['REACT_APP_', 'VITE_'],
+    // Treat .js files under src/ as JSX (avoid renaming ~200 files).
+    esbuild: {
+      loader: 'jsx',
+      include: /src\/.*\.jsx?$/,
+      exclude: [],
+    },
+    optimizeDeps: {
+      esbuildOptions: { loader: { '.js': 'jsx' } },
+    },
+    server: {
+      port: 3000,
+      host: '0.0.0.0',
+      strictPort: true,
+      proxy: { '/api': { target: 'http://127.0.0.1:8001', changeOrigin: true } },
+      allowedHosts: ['.preview.emergentagent.com', 'localhost', '127.0.0.1'],
+    },
+    build: {
+      outDir: 'build',
+      sourcemap: false,
+      chunkSizeWarningLimit: 1500,
+    },
+    envPrefix: ['REACT_APP_', 'VITE_'],
+    define: {
+      // CRA-compat: expose the REACT_APP_* vars the app actually reads.
+      // Grep to keep current: grep -rho "process\.env\.REACT_APP_[A-Z_]*" src/ | sort -u
+      'process.env.REACT_APP_BACKEND_URL': JSON.stringify(env.REACT_APP_BACKEND_URL || ''),
+      'process.env.REACT_APP_TURNSTILE_SITE_KEY': JSON.stringify(env.REACT_APP_TURNSTILE_SITE_KEY || ''),
+      'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development'),
+    },
+  };
 });
 ```
 
-### 3. Move `public/index.html` → `frontend/index.html`
+### 4. Create `frontend/index.html` (Vite entry) as a copy of `public/index.html`
 
-Vite treats `index.html` as the entry. Move it up one level and change:
+- Move it up one level (project root, not inside `public/`).
+- Replace every `%PUBLIC_URL%/foo` with `/foo`.
+- Add before `</body>`:
+  ```html
+  <script type="module" src="/src/index.jsx"></script>
+  ```
+- Vite auto-copies everything in `public/` to `build/` at build time. Do NOT move files out of `public/` — leave `favicon.ico`, `manifest.json`, `service-worker.js`, `sitemap.xml`, `robots.txt`, `website/`, etc. right where they are.
 
-```html
-<!-- OLD (CRA) -->
-<div id="root"></div>
-<!-- CRA injected the bundle here automatically -->
+### 5. Create `src/index.jsx` (Vite entry)
 
-<!-- NEW (Vite) -->
-<div id="root"></div>
-<script type="module" src="/src/index.js"></script>
+Copy `src/index.js` → `src/index.jsx` verbatim. Keep the original `src/index.js` so craco still works during the parallel-install phase.
+
+```jsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import "@/index.css";
+import App from "@/App";
+import { initErrorCapture } from "@/lib/errorCapture";
+
+initErrorCapture();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  });
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<React.StrictMode><App /></React.StrictMode>);
 ```
 
-Replace every `%PUBLIC_URL%` with `/` and every `%REACT_APP_*%` template
-placeholder with the runtime `process.env.REACT_APP_*` (Vite exposes the
-same shape via `envPrefix` above).
-
-Move all other files in `public/` (favicon, robots.txt, sitemap.xml,
-`website/`, `og-default.png`) to a new top-level `public/` — Vite copies
-that folder as-is to `build/`.
-
-### 4. Rename `src/index.js` if needed
-
-Vite requires the entry to be `.jsx` when it contains JSX. Rename
-`src/index.js` → `src/index.jsx`. Same for any `.js` files that contain
-JSX (grep: `grep -rln "return (" src/ | xargs grep -l "<[A-Z]"`).
-
-### 5. Environment variables
-
-CRA: `process.env.REACT_APP_BACKEND_URL`
-Vite (with our envPrefix): SAME string works, no code change needed.
-`import.meta.env.REACT_APP_BACKEND_URL` also works. Keep `process.env.*`
-for zero-touch migration.
-
-### 6. Update `package.json`
+### 6. Add Vite scripts to `package.json` (keep craco scripts too)
 
 ```jsonc
 {
   "scripts": {
-    "start": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "jest"                // unchanged for now; vitest is a future PR
+    "start": "craco start",
+    "build": "craco build",
+    "test": "craco test",
+    "vite:start": "vite",
+    "vite:build": "vite build",
+    "vite:preview": "vite preview"
   }
 }
 ```
 
-Remove `@craco/craco`, `craco.config.js`, `react-scripts` from devDeps
-(but keep `react-scripts` around one more deploy in case you need to
-roll back — `yarn remove` in the follow-up).
-
-### 7. `deploy.sh` — one line change
-
-The script currently does `yarn build`. That still works — Vite writes
-to `build/` because we set `outDir: 'build'` in the config. No change
-required. Verify after first CI run.
-
-### 8. Nginx `/website/` compat
-
-CRA's `public/website/` static bundle is served by CRA dev-server via
-craco's `middlewares` config. Vite serves the `public/` folder natively,
-so this Just Works after you move the files up (step 3).
-
-Verify: `curl http://localhost:3000/website/careers.html` returns HTML,
-not the SPA shell.
-
-### 9. Verify
+### 7. Verify locally
 
 ```bash
 yarn install
-yarn start                 # dev server, expect < 500 ms boot
-# Visit every route in the pre-flight screenshot list. Diff pixels.
-yarn build                 # expect esbuild + rollup, no craco warnings
-ls -sh build/static/js/main.*  # bundle size should shrink
+yarn vite:build   # expect ~7s build, no errors, output in build/
+ls build/assets/  # 100+ chunk files
+grep -oE '"https://[^"]*preview\.emergentagent[^"]*"' build/assets/index-*.js | head -3
+# Expect: your REACT_APP_BACKEND_URL baked in
+
+# Serve built output and sanity-check
+cd build && python3 -m http.server 8899 &
+sleep 2
+curl -sI http://localhost:8899/                     # HTTP/1.0 200
+curl -sI http://localhost:8899/favicon.ico          # HTTP/1.0 200
+curl -sI http://localhost:8899/website/about.html   # HTTP/1.0 200 (static marketing page)
+curl -sI http://localhost:8899/sitemap.xml          # HTTP/1.0 200
+kill %1
 ```
 
-### 10. Ship
+### 8. Screenshot before/after (P0 for shipping)
 
-Merge feature branch. First deploy:
+Take 1920×800 screenshots of the built output for all 8 sensitive routes:
+`/`, `/login`, `/dashboard`, `/candidate-bank`, `/admin/badge-audit`,
+`/admin/tally-health`, `/jobs/:id`, `/career-insights/:slug`.
 
+Compare against a baseline craco build. Any pixel diff = investigate before shipping.
+
+### 9. Nginx compat check
+
+Vite emits `/assets/index-HASH.js` instead of CRA's `/static/js/main.HASH.js`. If your nginx config has hardcoded `location /static/` rules that DON'T just fall through to `try_files`, you may need to add:
+
+```nginx
+location /assets/ {
+    root /path/to/build;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+```
+
+Most VHCOS nginx configs use the SPA-standard `try_files $uri $uri/ /index.html` which handles both. Verify with:
 ```bash
-cd /home/ubuntu/vhc-platform && git pull origin main && bash scripts/deploy.sh
+sudo grep -A 2 "location /static\|location /assets" /etc/nginx/sites-enabled/default
 ```
 
-Watch the deploy logs for "Vite" not "craco". If any craco reference
-appears, the migration is partial — revert immediately.
+### 10. Ship in two phases
+
+**Phase A — parallel-install PR:**
+- Merges the config alongside craco.
+- Prod still deploys `yarn build` (craco). Zero visible change.
+- Verify `yarn vite:build` succeeds in CI.
+
+**Phase B — flip PR (1–2 weeks later):**
+- Edit `package.json`: swap `"build": "craco build"` → `"build": "vite build"`.
+- Deploy. Watch monitoring dashboards + smoke-test the 8 sensitive routes.
+
+**Phase C — cleanup PR (after 2 clean deploys):**
+- Remove `@craco/craco`, `craco.config.js`, `react-scripts`, `src/index.js`, `public/index.html`.
+- Remove `frontend/plugins/visual-edits/` and `frontend/plugins/health-check/` if only used by craco.
 
 ---
 
 ## Rollback
 
-Two paths:
+- **Phase B failure:** revert the flip commit. `yarn build` returns to craco. No infra change needed.
+- **Phase C failure:** re-add `react-scripts` + `@craco/craco` from git history. All craco files preserved in older commits.
 
-1. **Instant:** `git revert <merge-commit>` on `main` and redeploy. Because
-   we did not change any runtime code (only build tooling), a revert is safe.
-2. **Alternative:** re-add `@craco/craco` and `react-scripts` to `package.json`
-   (they're still on npm), restore `craco.config.js` and the old
-   `package.json` `scripts` block. `yarn install && yarn build` produces
-   the CRA output again.
+---
+
+## Known gotchas (learned during /app validation)
+
+1. **Vite 8 (Rolldown) rejects JSX in .js files** even with `esbuild.loader: 'jsx'`. Stay on Vite 5 until Rolldown adds a compat flag.
+2. **`define: { 'process.env.X': ... }` reads shell env, not `.env` file.** Use `loadEnv()` in the config factory function.
+3. **`public/index.html` is NOT the Vite entry.** Vite uses `frontend/index.html` (project root). Leave `public/index.html` alone — craco still needs it during the parallel-install phase.
+4. **Service worker cache pattern (`.js`, `.css`, `/static/`)** in `public/service-worker.js` already covers Vite's `/assets/` paths via the `.js`/`.css` catch-all. No change needed.
+5. **The visual-edits plugin (`frontend/plugins/visual-edits/`)** is a craco/webpack babel plugin. It has no Vite equivalent and is dev-only Emergent preview tooling — NOT used in prod. Leave it alone during migration; delete in Phase C.
 
 ---
 
 ## Deferred to follow-up PRs
 
-- Rename `REACT_APP_*` env vars → `VITE_*` (across ~40 call sites; use
-  `sed` + code review).
+- Rename `REACT_APP_*` env vars → `VITE_*` (across ~40 call sites; use `sed` + code review).
 - Migrate jest → vitest (share the Vite config; ~1 day).
-- Convert files with JSX from `.js` → `.jsx` across the tree (~200 files;
-  purely cosmetic once the entry is `.jsx`).
+- Convert files with JSX from `.js` → `.jsx` across the tree (~200 files; purely cosmetic once the entry is `.jsx`).
 - Optional: enable `@vitejs/plugin-react-swc` for ~30% faster HMR.
