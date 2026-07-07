@@ -1,0 +1,33 @@
+{
+  "summary": "Backend sanity check for /api/sitemap.xml and /api/robots.txt on preview backend (127.0.0.1:8001). Both endpoints return HTTP 200 with correct content types. Sitemap XML is valid, parses successfully, root tag is urlset in sitemaps.org namespace, contains 141 <url><loc> entries. robots.txt contains a Sitemap: directive.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/robots.txt", "issue": "Sitemap directive points to 'https://ventureshrd.com/api/sitemap.xml' instead of the canonical 'https://ventureshrd.com/sitemap.xml' (which is what the request contract expected, and matches the URL prod is proxied to). Google will still follow /api/sitemap.xml since it returns 200 valid XML, but the cleaner canonical URL /sitemap.xml would be preferable for GSC submission and consistency with the proxied public URL."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL: Update robots.txt Sitemap directive from 'https://ventureshrd.com/api/sitemap.xml' to 'https://ventureshrd.com/sitemap.xml' for consistency with the canonical proxied URL and cleaner GSC discovery.",
+    "For the original GSC 'Invalid sitemap address' issue on prod: since preview backend works fine and prod curl also returns valid XML per user context, the issue is likely a GSC-side caching/property-verification quirk. Recommend resubmitting in GSC after robots.txt fix, or waiting 24-48h for re-crawl."
+  ],
+  "critical_code_review_comments": [
+    "robots.txt Sitemap directive uses /api/sitemap.xml instead of the canonical /sitemap.xml public URL — minor inconsistency worth aligning."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Sitemap and robots endpoints verified working on preview backend. Sitemap has 141 URLs, valid XML per sitemaps.org 0.9 schema. Only minor issue: robots.txt Sitemap directive uses /api/sitemap.xml rather than the canonical /sitemap.xml.",
+  "verification_details": {
+    "sitemap_status": 200,
+    "sitemap_content_type": "application/xml",
+    "sitemap_root_tag": "{http://www.sitemaps.org/schemas/sitemap/0.9}urlset",
+    "sitemap_url_count": 141,
+    "robots_status": 200,
+    "robots_content_type": "text/plain; charset=utf-8",
+    "robots_sitemap_directive": "Sitemap: https://ventureshrd.com/api/sitemap.xml"
+  }
+}
