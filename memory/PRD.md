@@ -29,6 +29,15 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-07) Phase 55.11d — GSC sitemap submission complete.**
+  * Verified prod backend `robots.txt` now emits canonical `Sitemap: https://ventureshrd.com/sitemap.xml` (previous `/api/sitemap.xml` bug fixed in `routes/seo.py` line 128).
+  * Confirmed prod Nginx `location = /robots.txt` and `location = /sitemap.xml` correctly proxy to backend (static `/var/www/*/robots.txt` files remain but are shadowed by nginx exact-match location blocks).
+  * Sitemap serves 141 URLs (static + published blogs + shareable jobs).
+  * User submitted sitemap to Google Search Console with full URL `https://ventureshrd.com/sitemap.xml` — GSC returned **Success**. Discovery/indexing pending Google crawl (24–72h).
+  * Frontend rebuilt (`yarn build` on prod) — includes badge code + all Phase 55.11 UI shipped.
+  * Fixed prod `.env` write permission (`chown ubuntu:ubuntu`) so `runpod_sync_service` can persist rotating RunPod pod URLs.
+  * Verified Qwen enrichment health on prod: **487/500 recent captures = `runpod_qwen14b`** (97.4%), 5 `all_failed`, 7 None, 1 `emergent_haiku_4_5` fallback. Backend enrichment pipeline is healthy.
+
 - **(2026-07-06 evening) Phase 55.11c — P0/P1/P2 sprint: gitleaks CI, alias canonicalization, dedupe merge UI, Vite + content runbooks.**
 
   Final round of the audit follow-through — three code deliverables shipped
