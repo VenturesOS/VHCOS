@@ -38,7 +38,10 @@ import sys
 import time
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+# override=True ensures the .env value wins over any stale shell env — the
+# script previously failed with a bad-auth error when the operator's shell
+# had a leftover `MONGO_URL=` from an earlier `set -a; source .env` session.
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import UpdateOne

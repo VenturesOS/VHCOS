@@ -42,7 +42,9 @@ import sys
 import time
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+# override=True — see canonicalize_aliases.py for the reasoning (stale
+# shell-env MONGO_URL can silently override the .env value in scripts).
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING, DESCENDING, TEXT, UpdateOne
