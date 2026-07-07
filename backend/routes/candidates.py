@@ -2372,11 +2372,16 @@ async def find_all_duplicates(
 
     # Step 2: Fetch candidates for duplicate emails
     email_dupes = []
+    _dup_projection = {
+        "_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1,
+        "current_designation": 1, "current_employer": 1, "current_location": 1,
+        "source": 1, "created_at": 1, "updated_at": 1,
+    }
     for ek in email_keys:
         dup_email = ek["_id"]
         candidates = await db.candidate_bank.find(
             {"email": {"$regex": f"^{dup_email}$", "$options": "i"}},
-            {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "source": 1, "created_at": 1}
+            _dup_projection,
         ).to_list(20)
         email_dupes.append({
             "_id": dup_email,
@@ -2403,7 +2408,7 @@ async def find_all_duplicates(
         dup_phone = pk["_id"]
         candidates = await db.candidate_bank.find(
             {"phone_normalized": dup_phone},
-            {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "source": 1, "created_at": 1}
+            _dup_projection,
         ).to_list(20)
         phone_dupes.append({
             "_id": dup_phone,

@@ -1,21 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { candidateBankAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '../../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Loader2, Merge, Mail, Phone, RefreshCw, ChevronRight } from 'lucide-react';
+import { Loader2, Merge, Mail, Phone, RefreshCw, Crown, Info } from 'lucide-react';
 import SEOHead from '../../components/shared/SEOHead';
 
 /**
- * DedupeMergePage — admin surface for reviewing + merging duplicate
- * candidate records. Reads from GET /candidate-bank/find-all-duplicates
- * (groups on lowercased email and normalized phone, top 50 each) and
- * calls POST /candidate-bank/merge-duplicates with the selected IDs.
+ * DedupeMergePage — admin surface for reviewing + merging duplicate candidates.
  *
- * The backend merge helper handles field-level survivorship (newer wins,
- * non-empty wins over empty) so this UI stays intentionally lean —
- * the recruiter picks which records go into a group and clicks Merge.
+ * Reads GET /candidate-bank/find-all-duplicates (groups on lowercased email
+ * and normalized phone, top 50 each) and POSTs to /merge-duplicates with the
+ * selected IDs. Backend picks field-level survivorship: newest `updated_at`
+ * wins, `completeness_score` as tiebreaker. Non-empty wins over empty.
  */
 
 const FIELDS = [
@@ -42,9 +51,33 @@ const displayValue = (c, k) => {
   return String(v);
 };
 
+// Mirrors backend `_merge_candidate_group`: newest updated_at wins, completeness_score
+// tie-breaker. This is a display-only preview — the backend has the final say.
+const completenessScore = (d) => {
+  let s = 0;
+  for (const [k, v] of Object.entries(d || {})) {
+    if (k.startsWith('_') || k === 'id' || k === 'created_at' || k === 'updated_at') continue;
+    if (v && v !== '' && !(Array.isArray(v) && v.length === 0)) s += 1;
+  }
+  return s;
+};
+
+const predictSurvivor = (candidates) => {
+  if (!candidates?.length) return null;
+  const sorted = [...candidates].sort((a, b) => {
+    const ta = a.updated_at || a.created_at || '';
+    const tb = b.updated_at || b.created_at || '';
+    if (ta !== tb) return ta < tb ? 1 : -1;
+    return completenessScore(b) - completenessScore(a);
+  });
+  return sorted[0]?.id;
+};
+
 function DuplicateGroup({ group, kind, onMerged }) {
   const [selected, setSelected] = useState(new Set((group.candidates || []).map(c => c.id)));
   const [merging, setMerging] = useState(false);
+
+  const survivorId = useMemo(() => predictSurvivor(group.candidates), [group.candidates]);
 
   const toggle = (id) => {
     setSelected(prev => {
@@ -63,7 +96,11 @@ function DuplicateGroup({ group, kind, onMerged }) {
     setMerging(true);
     try {
       const res = await candidateBankAPI.mergeDuplicates(ids);
+      const skipped = res?.data?.skipped?.length || 0;
       toast.success(res?.data?.message || 'Merge complete.');
+      if (skipped > 0) {
+        toast.warning(`${skipped} donor(s) skipped due to low match score. See merge_history.`);
+      }
       onMerged?.();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Merge failed.');
@@ -99,39 +136,56 @@ function DuplicateGroup({ group, kind, onMerged }) {
             <thead className="text-left text-xs uppercase text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-2 w-8"></th>
+                <th className="p-2 w-8"></th>
                 {FIELDS.map(f => <th key={f.key} className="p-2 whitespace-nowrap">{f.label}</th>)}
               </tr>
             </thead>
             <tbody>
-              {(group.candidates || []).map(c => (
-                <tr
-                  key={c.id}
-                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${selected.has(c.id) ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : ''}`}
-                  data-testid={`dedupe-row-${c.id}`}
-                >
-                  <td className="p-2 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(c.id)}
-                      onChange={() => toggle(c.id)}
-                      className="accent-[#7CB342]"
-                      data-testid={`dedupe-checkbox-${c.id}`}
-                    />
-                  </td>
-                  {FIELDS.map(f => (
-                    <td key={f.key} className="p-2 whitespace-nowrap text-slate-700 dark:text-slate-200">
-                      {displayValue(c, f.key)}
+              {(group.candidates || []).map(c => {
+                const isSurvivor = c.id === survivorId;
+                return (
+                  <tr
+                    key={c.id}
+                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
+                      selected.has(c.id) ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : ''
+                    } ${isSurvivor ? 'font-medium' : ''}`}
+                    data-testid={`dedupe-row-${c.id}`}
+                  >
+                    <td className="p-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(c.id)}
+                        onChange={() => toggle(c.id)}
+                        className="accent-[#7CB342]"
+                        data-testid={`dedupe-checkbox-${c.id}`}
+                      />
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    <td className="p-2 text-center">
+                      {isSurvivor && (
+                        <Crown
+                          className="w-4 h-4 text-amber-500 inline"
+                          aria-label="Predicted survivor"
+                          title="Predicted survivor (newest updated_at, richest data). Backend has final say."
+                          data-testid={`dedupe-survivor-${c.id}`}
+                        />
+                      )}
+                    </td>
+                    {FIELDS.map(f => (
+                      <td key={f.key} className="p-2 whitespace-nowrap text-slate-700 dark:text-slate-200">
+                        {displayValue(c, f.key)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-          <ChevronRight className="w-3 h-3" />
-          Backend picks field-level survivorship (newer wins, non-empty wins over empty).
-          Uncheck any row you do not want folded into the group.
+          <Crown className="w-3 h-3 text-amber-500" />
+          Row marked with a crown is the predicted survivor. Backend picks field-level
+          survivorship (newer wins, non-empty wins over empty) and enforces a 2-of-3
+          name/email/phone gate — donors that fail are flagged for manual review.
         </p>
       </CardContent>
     </Card>
@@ -143,6 +197,7 @@ export default function DedupeMergePage() {
   const [emailGroups, setEmailGroups] = useState([]);
   const [phoneGroups, setPhoneGroups] = useState([]);
   const [merging, setMerging] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -160,7 +215,7 @@ export default function DedupeMergePage() {
   useEffect(() => { load(); }, []);
 
   const mergeAll = async () => {
-    if (!window.confirm('Bulk-merge every group shown here? This cannot be undone.')) return;
+    setBulkOpen(false);
     setMerging(true);
     try {
       const res = await candidateBankAPI.mergeAllDuplicates();
@@ -174,6 +229,11 @@ export default function DedupeMergePage() {
   };
 
   const totalGroups = emailGroups.length + phoneGroups.length;
+  const totalDuplicateRecords = useMemo(
+    () => [...emailGroups, ...phoneGroups].reduce((acc, g) => acc + (g.count || 0), 0),
+    [emailGroups, phoneGroups],
+  );
+  const estimatedFolds = Math.max(0, totalDuplicateRecords - totalGroups);
 
   return (
     <div className="max-w-7xl mx-auto" data-testid="dedupe-merge-page">
@@ -191,17 +251,56 @@ export default function DedupeMergePage() {
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button
-            onClick={mergeAll}
-            disabled={merging || loading || totalGroups === 0}
-            className="bg-[#7CB342] hover:bg-[#689F38] text-white"
-            data-testid="dedupe-merge-all-btn"
-          >
-            {merging ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Merge className="w-4 h-4 mr-2" />}
-            Merge all groups
-          </Button>
+          <AlertDialog open={bulkOpen} onOpenChange={setBulkOpen}>
+            <AlertDialogTrigger asChild>
+              <Button
+                disabled={merging || loading || totalGroups === 0}
+                className="bg-[#7CB342] hover:bg-[#689F38] text-white"
+                data-testid="dedupe-merge-all-btn"
+              >
+                {merging ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Merge className="w-4 h-4 mr-2" />}
+                Merge all groups
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent data-testid="dedupe-merge-all-dialog">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Bulk-merge every duplicate group?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will fold <strong>{totalDuplicateRecords}</strong> records into{' '}
+                  <strong>{totalGroups}</strong> groups — approximately{' '}
+                  <strong>{estimatedFolds}</strong> donor records will be deleted after being
+                  merged into their surviving master. Donors that fail the 2-of-3
+                  name/email/phone match gate are flagged, not deleted. <strong>This cannot be undone.</strong>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="dedupe-merge-all-cancel">Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={mergeAll}
+                  className="bg-[#7CB342] hover:bg-[#689F38]"
+                  data-testid="dedupe-merge-all-confirm"
+                >
+                  Yes, merge all
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
+
+      {!loading && totalGroups > 0 && (
+        <div
+          className="mb-6 flex items-center gap-3 rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100"
+          data-testid="dedupe-summary"
+        >
+          <Info className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <span>
+            <strong>{totalGroups}</strong> duplicate groups covering{' '}
+            <strong>{totalDuplicateRecords}</strong> records. Merging all will remove
+            approximately <strong>{estimatedFolds}</strong> donor records.
+          </span>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 py-16 justify-center">

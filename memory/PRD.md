@@ -29,6 +29,27 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-07) Phase 55.11f — Dedupe UX + content sprint kickstart + post-Vite scripts.**
+
+  **Dedupe UX + backend fix:**
+  * Bug: `find-all-duplicates` API returned only 6 fields, but frontend displayed 8 → `Designation`, `Employer`, `Location` always showed `—`. Fixed backend projection in `routes/candidates.py` to include `current_designation`, `current_employer`, `current_location`, `updated_at`.
+  * `DedupeMergePage.jsx` improvements:
+      - **Predicted-survivor indicator** (crown icon on row that will win, mirrors backend's `updated_at DESC, completeness_score` sort logic).
+      - **Shadcn AlertDialog** replaces jarring `window.confirm` for bulk-merge — now shows totals ("fold X records into Y groups → ~Z donors deleted").
+      - **Summary banner** at top of the page with duplicate totals.
+      - **Toast warning** when merge skips donors due to the SEC-05 2-of-3 match gate (previously silent).
+
+  **Content sprint kickstart** (`backend/scripts/content_sprint_kickstart.py`):
+  * Batch-generates all 5 pillars + 15 clusters as drafts via `POST /api/blog/generate`.
+  * Turns "5 weeks of human writers" into "review 20 drafts + polish". Human editors then publish per the strategy doc.
+  * Flags: `--only-pillars`, `--pillar N`, `--dry-run`. Sequential runs (~15-25 min total via Qwen) with configurable cooldown.
+
+  **Post-Vite cleanup script** (`frontend/scripts/post_vite_cleanup.sh`):
+  * Step 1 `--step rename`: renames JSX-bearing `.js` files to `.jsx` (only 2 hits: `App.js`, `structuredData.js` — codebase already largely `.jsx`).
+  * Step 2 `--step env`: flips `process.env.REACT_APP_*` → `import.meta.env.VITE_*` across 14 hits (13 for BACKEND_URL, 1 for TURNSTILE).
+  * Step 3 `--step test`: manual playbook for vitest scaffolding (minimal test suite so no automation).
+  * All steps `--dry-run` safe. Run AFTER Vite Phase B (flip-build) is live.
+
 - **(2026-07-07) Phase 55.11e — Vite migration validated in `/app/frontend`.**
   * Installed Vite 5.4 + `@vitejs/plugin-react` 4.7 alongside craco (parallel install; no craco removal).
   * Files added: `vite.config.js`, `index.html` (Vite entry at project root), `src/index.jsx` (Vite entry point mirroring `src/index.js`).
