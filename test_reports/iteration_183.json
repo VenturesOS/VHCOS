@@ -1,0 +1,39 @@
+{
+  "summary": "Phase 55.11j — Tested reset_admin_password.py. 10/11 pytest tests pass. CRITICAL BUG confirmed: script writes to password_hash/hashed_password but /api/auth/login reads user['password']. After reset, login STILL returns 401. Admin login currently works only because admin's `password` field already has a valid bcrypt hash (unrelated to the script). Baseline admin login (admin@vhc.in / VhcAdmin@2024) returns 200 without any script run.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "scripts/reset_admin_password.py + POST /api/auth/login",
+        "issue": "Script writes bcrypt hash to password_hash & hashed_password only, but routes/auth.py:183 reads user['password']. After running the script on a user with empty password field, POST /api/auth/login returns HTTP 401 'Invalid credentials'. The emergency fix does NOT actually restore login. Fix: in reset_password(), add 'password': new_hash to the $set dict (alongside password_hash & hashed_password).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_reset_admin_password.py",
+    "/app/test_reports/pytest/phase_55_11j_reset_admin.xml"
+  ],
+  "action_items": [
+    "In /app/backend/scripts/reset_admin_password.py::reset_password, add \"password\": new_hash to the update $set (alongside password_hash / hashed_password) so the field the login route actually reads is updated. Without this the emergency script is a no-op for login recovery.",
+    "Optional: audit for any other legacy code paths that still read password_hash / hashed_password. If none, the script can write ONLY 'password'; if some do, writing all three is fine.",
+    "Consider updating /app/memory/PRD or a runbook noting the canonical field name is `password` (not `password_hash`)."
+  ],
+  "critical_code_review_comments": [
+    "reset_admin_password.py mismatch with login route field name — see critical bug above. This is the whole reason for phase 55.11j; the script as-shipped will not restore prod admin login.",
+    "Script assumes password field naming convention that does not match the codebase (routes/auth.py, seed_users.py all use `password`).",
+    "_get_db() uses tlsAllowInvalidCertificates=True — acceptable for emergency script but flag for security review.",
+    "Script does not log to a file (only stdout) — for prod emergency ops consider structured logging."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reset_admin_password.py (new — 11 tests)"
+  ],
+  "success_rate": {"backend": "91% (10/11)", "frontend": "n/a"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 — verified working via POST /api/auth/login (baseline test passes without any script intervention)",
+  "seed_data_creation": "Test seeds RESET_TEST_<label>_<uuid>@example.com users; final cleanup test deletes all RESET_TEST_ users. Admin@vhc.in was NEVER modified.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent adds `'password': new_hash` to update dict in reset_admin_password.py::reset_password, re-run: cd /app/backend && python3 -m pytest tests/test_reset_admin_password.py -v. test_login_endpoint_after_reset must go green. Do NOT reset admin@vhc.in — its `password` field already has a valid bcrypt hash and login currently works.",
+  "rca_of_the_issue": "RCA: The login endpoint /api/auth/login (backend/routes/auth.py line 183) authenticates via `verify_password(credentials.password, user['password'])` — it looks up the `password` field. The new script writes ONLY `password_hash` and `hashed_password`. Confirmed by direct MongoDB inspection: admin@vhc.in doc has key `password` (60-char bcrypt string) and no `password_hash`/`hashed_password` at all. Reproduction: seed user with empty `password`, run script with any password X, then POST /api/auth/login {email, X} → 401. Mitigation: one-line fix in reset_password() to include `'password': new_hash` in the $set. Also verified the reset_admin script did NOT actually fix admin login on prod — login likely worked before because admin's `password` field was still populated; the empty `password_hash` observation was misleading (it's a vestigial field the login route never consulted)."
+}
