@@ -163,3 +163,96 @@ async def llm_live_banner(
         "message": "Qwen 14B primary, all systems green",
         "details": snap,
     }
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Atlas storage — read-only analysis + one-shot prune
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Fields safe to strip on already-enriched documents. Kept in sync with
+# scripts/atlas_storage_cleanup.py::DISPOSABLE_FIELDS.
+_DISPOSABLE_FIELDS = [
+    "raw_profile_text",
+    "raw_text_for_enrichment",
+    "ai_full_text",
+    "resume_latex",
+    "profile_update_audit",
+]
+_ENRICHED_FILTER = {"enrichment_status": "enriched"}
+
+
+@router.get("/atlas/storage-analysis")
+async def atlas_storage_analysis(current_user=Depends(get_current_user), db=Depends(get_db)):
+    """Return collection storage + reclaimable field counts.
+
+    Read-only. Meant to power the admin UI's storage widget so operators
+    know what --prune-raw will actually free without SSHing to prod.
+    """
+    _require_admin(current_user)
+    stats = await db.command("collStats", "candidate_bank")
+
+    reclaimable: dict[str, int] = {}
+    for f in _DISPOSABLE_FIELDS:
+        reclaimable[f] = await db.candidate_bank.count_documents({
+            **_ENRICHED_FILTER,
+            f: {"$exists": True, "$ne": None},
+        })
+
+    return {
+        "count":            stats.get("count", 0),
+        "storage_size":     stats.get("storageSize", 0),
+        "uncompressed_size": stats.get("size", 0),
+        "index_size":       stats.get("totalIndexSize", 0),
+        "avg_doc_size":     stats.get("avgObjSize", 0),
+        "enriched_docs":    await db.candidate_bank.count_documents(_ENRICHED_FILTER),
+        "reclaimable":      reclaimable,
+        "disposable_fields": _DISPOSABLE_FIELDS,
+    }
+
+
+@router.post("/atlas/prune-raw-fields")
+async def atlas_prune_raw_fields(
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
+    dry_run: bool = True,
+):
+    """Strip disposable raw/derived text fields on enriched documents.
+
+    Set `dry_run=false` (query param) to actually apply. Defaults to true
+    so a stray curl doesn't torch data. Only touches docs where
+    `enrichment_status == 'enriched'` — pending / all_failed / None docs
+    keep their raw text so retries can still work.
+    """
+    _require_admin(current_user)
+
+    reclaimable: dict[str, int] = {}
+    for f in _DISPOSABLE_FIELDS:
+        reclaimable[f] = await db.candidate_bank.count_documents({
+            **_ENRICHED_FILTER,
+            f: {"$exists": True, "$ne": None},
+        })
+
+    if dry_run:
+        return {
+            "dry_run": True,
+            "would_prune": reclaimable,
+            "total_field_removals": sum(reclaimable.values()),
+        }
+
+    results: dict[str, dict] = {}
+    for f in _DISPOSABLE_FIELDS:
+        if reclaimable[f] == 0:
+            results[f] = {"matched": 0, "modified": 0, "skipped": True}
+            continue
+        res = await db.candidate_bank.update_many(
+            {**_ENRICHED_FILTER, f: {"$exists": True}},
+            {"$unset": {f: ""}},
+        )
+        results[f] = {"matched": res.matched_count, "modified": res.modified_count}
+
+    return {
+        "dry_run": False,
+        "results": results,
+        "note": "Atlas M0 does not expose `compact`; storageSize drops lazily via WiredTiger.",
+    }

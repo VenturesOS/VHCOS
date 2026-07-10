@@ -1,0 +1,23 @@
+{
+  "summary": "Phase 55.11i — Atlas storage cleanup endpoints tested end-to-end. All 8 pytest cases passed: auth gating (401 no-token / 403 non-admin) on both endpoints, response schema for /storage-analysis, dry-run default is non-mutating, real prune (dry_run=false) only strips disposable fields on enrichment_status=='enriched' docs and leaves pending docs intact, and second consecutive real prune is idempotent (still 200, modified integers reported).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_atlas_storage_cleanup.py",
+    "/app/test_reports/pytest/phase_55_11i_atlas_cleanup.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "admin_monitoring.py: `_require_admin` is called AFTER the `get_current_user` dependency, which is correct; however `_require_admin` raises 401 for missing user — in practice get_current_user already 401s so that branch is dead code (harmless).",
+    "atlas_prune_raw_fields: uses `{f: {\"$exists\": True}}` in update filter (drops the `$ne: None` guard used in the count). This is fine because $unset on a missing/null field is a no-op, but it means `matched_count` can be larger than the pre-check `reclaimable[f]` when null-valued docs exist. Non-blocking cosmetic mismatch between the ‘would_prune’ count and the actual `matched` count.",
+    "No structured audit log written when destructive `dry_run=false` runs — recommend an entry in an audit collection (who, when, per-field modified) so the operator UI has a history."
+  ],
+  "updated_files": ["/app/backend/tests/test_atlas_storage_cleanup.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 (from /app/memory/test_credentials.md); hr6@vhc.in / 12345678 used as non-admin.",
+  "seed_data_creation": "Seeded 3 ATLAS_CLEANUP_TEST_* candidate_bank docs per test (enriched-remove, pending-preserve, enriched-full). All sentinels deleted in fixture teardown; post-run count verified = 0.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Tests live at /app/backend/tests/test_atlas_storage_cleanup.py. They run destructive prune on the live Atlas DB but only touch docs whose _id/name starts with ATLAS_CLEANUP_TEST_, and clean up after themselves. Uses REACT_APP_BACKEND_URL for API and MONGO_URL for seeding. Note: candidate_bank has a unique index on `id` (not just `_id`), so any seeded doc MUST include a unique `id` field.",
+  "rca of the issue": "N/A — feature works as specified."
+}
