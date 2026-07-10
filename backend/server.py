@@ -262,6 +262,47 @@ async def lifespan(app: FastAPI):
     except Exception as _e:
         logging.warning(f"[Lifespan] BGE model preload skipped: {_e}")
 
+    # 8. Fast-search projection sanity check — guards against the class of
+    # bug where fast_search.LIST_PROJECTION (include-mode) silently drops a
+    # field the legacy exclude-mode projection would have returned. Bit us
+    # hard on the "Q" admin badge (Phase 55.11g). Missing fields log a
+    # warning at boot so it can never happen unnoticed again.
+    try:
+        from services.fast_search import LIST_PROJECTION as _fast_proj
+        # Fields the legacy path in routes/candidates.py explicitly excludes
+        # (everything else is returned). Keep in sync with `list_projection`
+        # in routes/candidates.py::list_candidates.
+        _legacy_excluded = {
+            "_id", "embedding", "raw_text_for_enrichment", "raw_profile_text",
+            "ai_full_text", "resume_latex", "naukri_data", "profile_update_audit",
+        }
+        # Fields the frontend candidate list card reads (grep the src tree
+        # for `candidate\.\w+` under CandidateListItem to keep this current).
+        _ui_required = {
+            "id", "name", "email", "phone", "headline",
+            "current_designation", "designation", "current_employer",
+            "current_location", "location", "skills", "smart_tags",
+            "source", "created_at", "updated_at",
+            "ai_enrichment_source", "ai_enriched_at", "enrichment_status",
+            "bulk_import_restricted", "cv_attached", "resume_url", "is_active",
+        }
+        _fast_included = {k for k, v in _fast_proj.items() if v == 1}
+        _missing = _ui_required - _fast_included
+        if _missing:
+            logging.error(
+                f"[Lifespan] ⚠️  fast_search.LIST_PROJECTION is missing "
+                f"{len(_missing)} field(s) the UI reads: {sorted(_missing)}. "
+                f"Add them to services/fast_search.py or the fast path will "
+                f"silently strip them from API responses."
+            )
+        else:
+            logging.info(
+                f"[Lifespan] fast_search projection OK "
+                f"({len(_fast_included)} fields, covers all UI-required)"
+            )
+    except Exception as _e:
+        logging.warning(f"[Lifespan] fast_search projection check skipped: {_e}")
+
     yield  # ── App is running ──
 
     # ── Shutdown ──

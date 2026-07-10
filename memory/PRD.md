@@ -29,6 +29,26 @@ profile capture quality improvements.
 ## What's implemented (rolling changelog)
 
 ### Phase 55 — Feb 2026 (this fork)
+- **(2026-07-10) Phase 55.11h — Vite Phase B + dedupe polish + startup projection guard.**
+
+  **Vite Phase B (build flip):**
+  * `package.json` — `"build": "craco build"` → `"build": "vite build"`. Craco preserved as `"build:craco"` fallback for rollback.
+  * `yarn build` now runs Vite: ~33s (vs craco's ~57s), main bundle 184 kB gzip (parity).
+  * Craco still present for `yarn start` (dev server) until Phase C removal.
+
+  **Startup projection assertion** (`backend/server.py` lifespan):
+  * Compares `fast_search.LIST_PROJECTION` against the 22 fields the candidate-list UI reads. Logs an error at boot if any are missing.
+  * Would have caught the Phase 55.11g "Q" badge bug on day one. Guards against recurrence for any UI-required field.
+  * Verified locally: all 22 UI-required fields present; 33 total fast_search fields.
+
+  **Dedupe UX overhaul (v2):**
+  * Pin-as-master toggle — click the crown on any row to override the auto-picked survivor. Backend `merge-duplicates` endpoint now accepts optional `master_id`.
+  * Sort toggle — "Largest first" (default) vs "A → Z" for the group list.
+  * Filter input — live search across group ID, name, email, phone, employer, designation.
+  * Empty-state polish — separate copy for "bank is clean" vs "no matches for filter" with a Clear-filter shortcut.
+  * `mergeDuplicates(ids, masterId?)` client method updated for the new payload shape.
+
+
 - **(2026-07-07) Phase 55.11g — P0 Q badge root cause fixed + full delivery package.**
   * **Root cause:** `services/fast_search.py` `LIST_PROJECTION` (include-mode) omitted `ai_enrichment_source`, `bulk_import_restricted`, `cv_attached`, `resume_url`, `is_active`, `ai_enriched_at`, `enrichment_status`. When `FAST_SEARCH=1` (prod flag), the short-circuit path silently stripped these fields — the "Q" badge, "Admin" pill, resume-download icon and "Attach CV" button all disappeared without any error. Legacy path (exclude-mode) was unaffected.
   * Fix: added the 7 missing fields to `LIST_PROJECTION`.

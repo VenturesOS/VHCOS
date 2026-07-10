@@ -3,6 +3,7 @@ import { candidateBankAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import { Input } from '../../components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +16,7 @@ import {
   AlertDialogTrigger,
 } from '../../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Loader2, Merge, Mail, Phone, RefreshCw, Crown, Info } from 'lucide-react';
+import { Loader2, Merge, Mail, Phone, RefreshCw, Crown, Info, Pin, Search } from 'lucide-react';
 import SEOHead from '../../components/shared/SEOHead';
 
 /**
@@ -23,8 +24,9 @@ import SEOHead from '../../components/shared/SEOHead';
  *
  * Reads GET /candidate-bank/find-all-duplicates (groups on lowercased email
  * and normalized phone, top 50 each) and POSTs to /merge-duplicates with the
- * selected IDs. Backend picks field-level survivorship: newest `updated_at`
- * wins, `completeness_score` as tiebreaker. Non-empty wins over empty.
+ * selected IDs. Backend picks field-level survivorship by default: newest
+ * `updated_at` wins, `completeness_score` as tiebreaker. Non-empty wins over
+ * empty. Pin-as-master (crown-click) overrides the automatic survivor.
  */
 
 const FIELDS = [
@@ -51,8 +53,8 @@ const displayValue = (c, k) => {
   return String(v);
 };
 
-// Mirrors backend `_merge_candidate_group`: newest updated_at wins, completeness_score
-// tie-breaker. This is a display-only preview — the backend has the final say.
+// Mirrors backend `_merge_candidate_group`: newest updated_at wins,
+// completeness_score tie-breaker. Preview only — backend has final say.
 const completenessScore = (d) => {
   let s = 0;
   for (const [k, v] of Object.entries(d || {})) {
@@ -74,10 +76,11 @@ const predictSurvivor = (candidates) => {
 };
 
 function DuplicateGroup({ group, kind, onMerged }) {
+  const autoSurvivor = useMemo(() => predictSurvivor(group.candidates), [group.candidates]);
+  const [pinnedMaster, setPinnedMaster] = useState(null);
+  const survivorId = pinnedMaster || autoSurvivor;
   const [selected, setSelected] = useState(new Set((group.candidates || []).map(c => c.id)));
   const [merging, setMerging] = useState(false);
-
-  const survivorId = useMemo(() => predictSurvivor(group.candidates), [group.candidates]);
 
   const toggle = (id) => {
     setSelected(prev => {
@@ -87,15 +90,21 @@ function DuplicateGroup({ group, kind, onMerged }) {
     });
   };
 
+  const togglePin = (id) => {
+    setPinnedMaster(prev => (prev === id ? null : id));
+  };
+
   const merge = async () => {
     const ids = Array.from(selected);
     if (ids.length < 2) {
       toast.error('Select at least 2 candidates to merge.');
       return;
     }
+    // Only send master_id if the admin explicitly pinned one AND it's in the selected set.
+    const masterId = pinnedMaster && selected.has(pinnedMaster) ? pinnedMaster : null;
     setMerging(true);
     try {
-      const res = await candidateBankAPI.mergeDuplicates(ids);
+      const res = await candidateBankAPI.mergeDuplicates(ids, masterId);
       const skipped = res?.data?.skipped?.length || 0;
       toast.success(res?.data?.message || 'Merge complete.');
       if (skipped > 0) {
@@ -118,6 +127,11 @@ function DuplicateGroup({ group, kind, onMerged }) {
           <KindIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
           <CardTitle className="text-base truncate">{group._id}</CardTitle>
           <Badge variant="secondary" className="ml-2">{group.count} records</Badge>
+          {pinnedMaster && (
+            <Badge className="ml-1 bg-amber-100 text-amber-800 border-amber-200">
+              <Pin className="w-3 h-3 mr-1" /> master pinned
+            </Badge>
+          )}
         </div>
         <Button
           onClick={merge}
@@ -143,6 +157,7 @@ function DuplicateGroup({ group, kind, onMerged }) {
             <tbody>
               {(group.candidates || []).map(c => {
                 const isSurvivor = c.id === survivorId;
+                const isPinned = c.id === pinnedMaster;
                 return (
                   <tr
                     key={c.id}
@@ -161,14 +176,26 @@ function DuplicateGroup({ group, kind, onMerged }) {
                       />
                     </td>
                     <td className="p-2 text-center">
-                      {isSurvivor && (
-                        <Crown
-                          className="w-4 h-4 text-amber-500 inline"
-                          aria-label="Predicted survivor"
-                          title="Predicted survivor (newest updated_at, richest data). Backend has final say."
-                          data-testid={`dedupe-survivor-${c.id}`}
-                        />
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => togglePin(c.id)}
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded transition ${
+                          isPinned
+                            ? 'bg-amber-100 dark:bg-amber-900/40 ring-1 ring-amber-400'
+                            : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                        title={isPinned
+                          ? 'Pinned as master — click to unpin (revert to auto-pick)'
+                          : (isSurvivor ? 'Predicted survivor — click to pin' : 'Pin this record as master')}
+                        aria-label={isPinned ? 'Unpin master' : 'Pin as master'}
+                        data-testid={`dedupe-pin-${c.id}`}
+                      >
+                        <Crown className={`w-4 h-4 ${
+                          isPinned ? 'text-amber-600 fill-amber-500'
+                          : isSurvivor ? 'text-amber-500'
+                          : 'text-slate-300 dark:text-slate-600'
+                        }`} />
+                      </button>
                     </td>
                     {FIELDS.map(f => (
                       <td key={f.key} className="p-2 whitespace-nowrap text-slate-700 dark:text-slate-200">
@@ -183,9 +210,10 @@ function DuplicateGroup({ group, kind, onMerged }) {
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
           <Crown className="w-3 h-3 text-amber-500" />
-          Row marked with a crown is the predicted survivor. Backend picks field-level
-          survivorship (newer wins, non-empty wins over empty) and enforces a 2-of-3
-          name/email/phone gate — donors that fail are flagged for manual review.
+          Row marked with a crown is the predicted survivor. Click the crown to
+          pin a different record as master. Backend applies field-level
+          survivorship (newer wins, non-empty wins over empty) and enforces a
+          2-of-3 name/email/phone gate — donors that fail are flagged.
         </p>
       </CardContent>
     </Card>
@@ -198,6 +226,8 @@ export default function DedupeMergePage() {
   const [phoneGroups, setPhoneGroups] = useState([]);
   const [merging, setMerging] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [sortBy, setSortBy] = useState('size'); // 'size' | 'alpha'
 
   const load = async () => {
     setLoading(true);
@@ -228,7 +258,31 @@ export default function DedupeMergePage() {
     }
   };
 
+  const applyFilterAndSort = (groups) => {
+    let out = groups;
+    if (filter.trim()) {
+      const needle = filter.trim().toLowerCase();
+      out = out.filter(g => {
+        if (String(g._id).toLowerCase().includes(needle)) return true;
+        return (g.candidates || []).some(c =>
+          [c.name, c.email, c.phone, c.current_employer, c.current_designation]
+            .some(v => v && String(v).toLowerCase().includes(needle))
+        );
+      });
+    }
+    if (sortBy === 'size') {
+      out = [...out].sort((a, b) => (b.count || 0) - (a.count || 0));
+    } else {
+      out = [...out].sort((a, b) => String(a._id).localeCompare(String(b._id)));
+    }
+    return out;
+  };
+
+  const displayedEmail = useMemo(() => applyFilterAndSort(emailGroups), [emailGroups, filter, sortBy]);
+  const displayedPhone = useMemo(() => applyFilterAndSort(phoneGroups), [phoneGroups, filter, sortBy]);
+
   const totalGroups = emailGroups.length + phoneGroups.length;
+  const displayedTotal = displayedEmail.length + displayedPhone.length;
   const totalDuplicateRecords = useMemo(
     () => [...emailGroups, ...phoneGroups].reduce((acc, g) => acc + (g.count || 0), 0),
     [emailGroups, phoneGroups],
@@ -290,7 +344,7 @@ export default function DedupeMergePage() {
 
       {!loading && totalGroups > 0 && (
         <div
-          className="mb-6 flex items-center gap-3 rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100"
+          className="mb-4 flex items-center gap-3 rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100"
           data-testid="dedupe-summary"
         >
           <Info className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -299,6 +353,48 @@ export default function DedupeMergePage() {
             <strong>{totalDuplicateRecords}</strong> records. Merging all will remove
             approximately <strong>{estimatedFolds}</strong> donor records.
           </span>
+        </div>
+      )}
+
+      {!loading && totalGroups > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-6" data-testid="dedupe-toolbar">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              type="text"
+              placeholder="Filter by email, phone, name, employer…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="pl-8"
+              data-testid="dedupe-filter-input"
+            />
+          </div>
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-slate-500 dark:text-slate-400 mr-1">Sort:</span>
+            <Button
+              variant={sortBy === 'size' ? 'default' : 'outline'}
+              size="sm"
+              className={sortBy === 'size' ? 'bg-slate-700 hover:bg-slate-800 text-white h-8' : 'h-8'}
+              onClick={() => setSortBy('size')}
+              data-testid="dedupe-sort-size"
+            >
+              Largest first
+            </Button>
+            <Button
+              variant={sortBy === 'alpha' ? 'default' : 'outline'}
+              size="sm"
+              className={sortBy === 'alpha' ? 'bg-slate-700 hover:bg-slate-800 text-white h-8' : 'h-8'}
+              onClick={() => setSortBy('alpha')}
+              data-testid="dedupe-sort-alpha"
+            >
+              A → Z
+            </Button>
+          </div>
+          {filter && (
+            <div className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
+              Showing <strong>{displayedTotal}</strong> of {totalGroups} groups
+            </div>
+          )}
         </div>
       )}
 
@@ -316,25 +412,33 @@ export default function DedupeMergePage() {
         </Card>
       )}
 
-      {!loading && emailGroups.length > 0 && (
+      {!loading && totalGroups > 0 && displayedTotal === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center text-slate-500 dark:text-slate-400">
+            No groups match “{filter}”. <button className="underline ml-1" onClick={() => setFilter('')}>Clear filter</button>.
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && displayedEmail.length > 0 && (
         <div className="mb-8">
           <h2 className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
             <Mail className="w-4 h-4" /> Email duplicates
-            <Badge variant="secondary">{emailGroups.length}</Badge>
+            <Badge variant="secondary">{displayedEmail.length}</Badge>
           </h2>
-          {emailGroups.map(g => (
+          {displayedEmail.map(g => (
             <DuplicateGroup key={`e-${g._id}`} group={g} kind="email" onMerged={load} />
           ))}
         </div>
       )}
 
-      {!loading && phoneGroups.length > 0 && (
+      {!loading && displayedPhone.length > 0 && (
         <div>
           <h2 className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
             <Phone className="w-4 h-4" /> Phone duplicates
-            <Badge variant="secondary">{phoneGroups.length}</Badge>
+            <Badge variant="secondary">{displayedPhone.length}</Badge>
           </h2>
-          {phoneGroups.map(g => (
+          {displayedPhone.map(g => (
             <DuplicateGroup key={`p-${g._id}`} group={g} kind="phone" onMerged={load} />
           ))}
         </div>

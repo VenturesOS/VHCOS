@@ -651,7 +651,10 @@ export const candidateBankAPI = {
   checkDuplicates: (data) => api.post('/candidate-bank/check-duplicates', data),
   delete: (id) => api.delete(`/candidate-bank/${id}`),
   findAllDuplicates: () => api.get('/candidate-bank/find-all-duplicates'),
-  mergeDuplicates: (candidateIds) => api.post('/candidate-bank/merge-duplicates', { candidate_ids: candidateIds }),
+  mergeDuplicates: (candidateIds, masterId = null) => api.post(
+    '/candidate-bank/merge-duplicates',
+    masterId ? { candidate_ids: candidateIds, master_id: masterId } : { candidate_ids: candidateIds },
+  ),
   mergeAllDuplicates: () => api.post('/candidate-bank/merge-all-duplicates'),
   // Data Quality
   dataQualityStats: () => api.get('/candidate-bank/data-quality/stats'),

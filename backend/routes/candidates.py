@@ -2424,12 +2424,22 @@ async def find_all_duplicates(
     }
 
 
-async def _merge_candidate_group(db, candidate_ids: list, user_email: str) -> dict:
+async def _merge_candidate_group(
+    db,
+    candidate_ids: list,
+    user_email: str,
+    master_id_override: str | None = None,
+) -> dict:
     """Merge a single group of duplicate candidate IDs into one master record.
 
     SEC-05 (Feb 2026): every donor must match the master on at least
     2 of (name_similar, email_exact, phone_normalized_exact). Donors
     that fail the gate are returned in `skipped` for manual review.
+
+    If `master_id_override` is provided AND it appears in `candidate_ids`,
+    that record becomes the master regardless of the automatic sort. Lets
+    the admin UI honor a "pin as master" toggle when they know a specific
+    record is richer than the newest one.
 
     Returns a dict with master_id, merged_count, merged_ids, skipped, message.
     Raises ValueError if fewer than 2 candidates resolved from DB.
@@ -2463,6 +2473,14 @@ async def _merge_candidate_group(db, candidate_ids: list, user_email: str) -> di
         d.get("updated_at") or d.get("created_at") or "",
         completeness_score(d),
     ), reverse=True)
+
+    # Admin can pin a specific record as master ("pin as master" UI toggle).
+    # We honour the override only if the ID is actually in this group;
+    # otherwise fall back to the automatic pick.
+    if master_id_override:
+        pinned = next((d for d in docs if d.get("id") == master_id_override), None)
+        if pinned is not None:
+            docs = [pinned] + [d for d in docs if d.get("id") != master_id_override]
 
     master = docs[0]
     master_id = master["id"]
@@ -2562,10 +2580,23 @@ async def merge_duplicates(
     db=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Merge a group of duplicate candidates into one master record."""
+    """Merge a group of duplicate candidates into one master record.
+
+    Payload:
+      {
+        "candidate_ids": ["id1", "id2", ...],   # required
+        "master_id":     "id2"                  # optional — pin as master
+      }
+    """
     candidate_ids = payload.get("candidate_ids", [])
+    master_id_override = payload.get("master_id")
     try:
-        return await _merge_candidate_group(db, candidate_ids, current_user.get("email", "unknown"))
+        return await _merge_candidate_group(
+            db,
+            candidate_ids,
+            current_user.get("email", "unknown"),
+            master_id_override=master_id_override,
+        )
     except ValueError as e:
         msg = str(e)
         status_code = 400 if "at least 2" in msg else 404
