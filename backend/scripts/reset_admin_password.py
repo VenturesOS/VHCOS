@@ -64,11 +64,14 @@ def reset_password(db, email: str, password: str) -> dict:
     salt = bcrypt.gensalt(rounds=12)
     new_hash = bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
-    # Write to both field names the codebase has used historically so any
-    # login route wins regardless of which field it consults.
+    # Write to all field names the codebase has used historically so any
+    # login route wins regardless of which field it consults. The canonical
+    # field is `password` (per routes/auth.py); `password_hash` and
+    # `hashed_password` are legacy names.
     update = {
-        "password_hash":   new_hash,
-        "hashed_password": new_hash,
+        "password":        new_hash,   # canonical — routes/auth.py reads this
+        "password_hash":   new_hash,   # legacy
+        "hashed_password": new_hash,   # legacy
         "updated_at":      datetime.now(timezone.utc).isoformat(),
         "is_active":       True,   # unlock in case it was disabled
     }

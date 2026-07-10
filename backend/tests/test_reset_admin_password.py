@@ -52,7 +52,9 @@ def db():
 
 
 def _seed_user(db, *, email_suffix: str, is_active: bool = True, password_hash_val: str = "") -> str:
-    email = f"RESET_TEST_{email_suffix}_{uuid.uuid4().hex[:6]}@example.com"
+    # Login route lowercases email via `normalize_email` — seed lowercase too
+    # so the login-flow assertion isn't a false negative.
+    email = f"reset_test_{email_suffix}_{uuid.uuid4().hex[:6]}@example.com"
     doc = {
         "id": str(uuid.uuid4()),
         "email": email,
