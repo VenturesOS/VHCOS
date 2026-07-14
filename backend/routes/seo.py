@@ -4,7 +4,7 @@ SEO Routes — Sitemap, robots.txt, SEO settings admin API
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 from xml.sax.saxutils import escape as xml_escape
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import Response, PlainTextResponse
@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from config import db
 from utils import require_role
+from services import indexnow, google_indexing
 
 router = APIRouter(tags=["seo"])
 logger = logging.getLogger(__name__)
@@ -186,3 +187,134 @@ async def delete_seo_setting(page_path: str, current_user: dict = Depends(requir
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="No setting found for this page")
     return {"message": f"SEO settings removed for {page_path}"}
+
+
+# ── IndexNow + Google Indexing API admin endpoints ─────────────────────────
+
+
+async def _collect_public_urls(limit: int = 5000) -> List[str]:
+    """Return every canonical public URL that belongs in our sitemap.
+    Shared by the sitemap generator (for pings) and the IndexNow admin
+    endpoint so the two never drift.
+    """
+    urls: List[str] = []
+
+    # 1. Static / evergreen pages.
+    for p in [
+        "/", "/about", "/services", "/industries", "/careers", "/contact",
+        "/global-hiring", "/recruitment-expertise",
+        "/industrial-hiring-insights", "/career-insights",
+        "/industrial-recruitment", "/hr-consulting-services",
+    ]:
+        urls.append(f"{BASE_URL}{p}")
+
+    # 2. Published blog posts.
+    blogs = await db.blog_posts.find(
+        {"status": "published"},
+        {"_id": 0, "slug": 1, "blog_type": 1},
+    ).to_list(1000)
+    for b in blogs:
+        path = "industrial-hiring-insights" if b.get("blog_type") == "employer" else "career-insights"
+        slug = b.get("slug", "")
+        if slug:
+            urls.append(f"{BASE_URL}/{path}/{slug}")
+
+    # 3. Active public jobs — same filter as list/sitemap endpoints.
+    jobs = await db.jobs.find(
+        {"status": "active", "career_page_status": {"$ne": "removed"}},
+        {"_id": 0, "id": 1},
+    ).to_list(limit)
+    for j in jobs:
+        jid = j.get("id")
+        if jid:
+            urls.append(f"{BASE_URL}/jobs/{jid}")
+
+    return urls
+
+
+class IndexNowSubmitRequest(BaseModel):
+    urls: Optional[List[str]] = None  # if None → submit the whole sitemap
+
+
+@router.post("/api/admin/seo/indexnow/submit")
+async def indexnow_submit(
+    req: IndexNowSubmitRequest,
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Push URLs to Bing / Yandex / Seznam / Naver via IndexNow.
+
+    - No body → submit every URL in the sitemap (careers page + all active jobs + blog posts + static pages).
+    - `{"urls": [...]}` → submit an explicit list (max 10,000).
+    """
+    urls = req.urls if req.urls else await _collect_public_urls()
+    if not urls:
+        return {"ok": True, "submitted": 0, "total": 0, "message": "no URLs to submit"}
+    result = await indexnow.submit_batch(urls)
+    result["initiated_by"] = current_user.get("email")
+    return result
+
+
+@router.get("/api/admin/seo/indexnow/status")
+async def indexnow_status(current_user: dict = Depends(require_role(["admin"]))):
+    """Verify IndexNow is configured and the key file is reachable."""
+    key = (os.environ.get("INDEXNOW_KEY") or "").strip()
+    if not key:
+        return {"configured": False, "reason": "INDEXNOW_KEY not set in backend .env"}
+    key_url = f"{BASE_URL}/{key}.txt"
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(key_url)
+        return {
+            "configured": True,
+            "key_prefix": key[:6] + "…",
+            "key_url": key_url,
+            "key_file_status": r.status_code,
+            "key_file_reachable": r.status_code == 200 and r.text.strip() == key,
+        }
+    except Exception as exc:
+        return {"configured": True, "key_url": key_url, "error": str(exc)}
+
+
+class GoogleIndexingRequest(BaseModel):
+    url: str
+    deleted: bool = False
+
+
+@router.post("/api/admin/seo/google-indexing/ping")
+async def google_indexing_ping(
+    req: GoogleIndexingRequest,
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Ping Google's Indexing API for a single URL (JobPosting URLs only).
+
+    Requires `GOOGLE_INDEXING_CREDENTIALS_JSON` in backend `.env`. See
+    `backend/services/google_indexing.py` docstring for setup.
+    """
+    if req.deleted:
+        result = await google_indexing.ping_url_deleted(req.url)
+    else:
+        result = await google_indexing.ping_url_updated(req.url)
+    result["initiated_by"] = current_user.get("email")
+    return result
+
+
+@router.get("/api/admin/seo/summary")
+async def seo_admin_summary(current_user: dict = Depends(require_role(["admin"]))):
+    """One-shot SEO dashboard payload — sitemap size, live jobs, published blogs."""
+    live_jobs = await db.jobs.count_documents({
+        "status": "active",
+        "career_page_status": {"$ne": "removed"},
+    })
+    published_blogs = await db.blog_posts.count_documents({"status": "published"})
+    return {
+        "sitemap_url":         f"{BASE_URL}/sitemap.xml",
+        "sitemap_api_url":     f"{BASE_URL}/api/sitemap.xml",
+        "gsc_submit_url":      f"https://search.google.com/search-console/sitemaps?resource_id={BASE_URL}",
+        "live_public_jobs":    live_jobs,
+        "published_blogs":     published_blogs,
+        "static_pages":        12,
+        "estimated_url_count": live_jobs + published_blogs + 12,
+        "indexnow_configured": bool((os.environ.get("INDEXNOW_KEY") or "").strip()),
+        "google_indexing_configured": bool((os.environ.get("GOOGLE_INDEXING_CREDENTIALS_JSON") or "").strip()),
+    }

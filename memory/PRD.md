@@ -28,6 +28,39 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11n — IndexNow + Google Indexing API auto-ping (2026-07-14)
+
+Follow-up to 55.11m. Now that 847 job URLs are public, we ping search engines
+to discover them within seconds instead of waiting for the next crawl sweep.
+
+Implemented:
+1. **IndexNow key file**: `frontend/public/3d53bd5f0748b6c810a244a64238d116.txt`
+   served at `https://ventureshrd.com/{key}.txt` after `yarn build` deploy.
+2. **IndexNow client** (`backend/services/indexnow.py`, existing) extended
+   with `submit_batch(urls, chunk_size=100)` for large URL sets.
+3. **Google Indexing API client** (`backend/services/google_indexing.py`, NEW):
+   service-account JWT → OAuth2 token → POST urlNotifications:publish.
+   Best-effort; silently skips if `GOOGLE_INDEXING_CREDENTIALS_JSON` unset.
+4. **Admin endpoints** (`backend/routes/seo.py`):
+   - `GET  /api/admin/seo/summary`               — 1-shot SEO dashboard
+   - `GET  /api/admin/seo/indexnow/status`       — verify key file reachable
+   - `POST /api/admin/seo/indexnow/submit`       — push URLs (or entire sitemap) to Bing/Yandex/Seznam/Naver
+   - `POST /api/admin/seo/google-indexing/ping`  — single-URL Google Indexing ping (URL_UPDATED / URL_DELETED)
+5. **Job-creation auto-ping** (`backend/routes/jobs.py`):
+   - When a job is created with `status='active'` OR transitions to `active`,
+     fire IndexNow + Google Indexing pings fire-and-forget with the job URL.
+
+Env additions (backend/.env):
+    INDEXNOW_KEY=3d53bd5f0748b6c810a244a64238d116
+    GOOGLE_INDEXING_CREDENTIALS_JSON=   # paste service-account JSON to enable
+
+Verified (preview + curl):
+- `GET /{key}.txt` → 200, exact key body
+- `POST /api/admin/seo/indexnow/submit` with 2 URLs → `{"ok":true,"submitted":2,"batches":1}`
+- `POST /api/admin/seo/google-indexing/ping` (no creds) → `{"ok":false,"skipped":true,"reason":"credentials missing or invalid"}`
+- `GET /api/admin/seo/summary` → `{"live_public_jobs":847,"published_blogs":121,"estimated_url_count":980,"indexnow_configured":true,"google_indexing_configured":false}`
+
+
 ### Phase 55.11m — All Active Jobs Auto-Post on `/careers` (2026-07-14)
 
 User request: "post all jobs on career page for SEO, even existing ones and

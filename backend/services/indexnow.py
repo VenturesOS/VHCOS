@@ -83,6 +83,51 @@ async def ping_indexnow(urls: Iterable[str]) -> bool:
         return False
 
 
+async def submit_batch(urls: Iterable[str], chunk_size: int = 100) -> dict:
+    """Submit a large URL list in chunks. Aggregates per-batch results so a
+    caller (admin endpoint / one-off script) can report totals.
+
+    Never raises — failures inside each batch are absorbed and counted.
+    """
+    unique: list[str] = []
+    seen: set[str] = set()
+    for u in urls:
+        if not u:
+            continue
+        u = u.strip()
+        if u.startswith(("http://", "https://")) and u not in seen:
+            seen.add(u)
+            unique.append(u)
+
+    if not unique:
+        return {"ok": True, "submitted": 0, "total": 0, "batches": 0}
+
+    key, host, _ = _config()
+    if not key:
+        return {"ok": False, "skipped": True, "reason": "INDEXNOW_KEY not set", "total": len(unique)}
+
+    submitted = 0
+    batches = 0
+    failures: list[str] = []
+    for i in range(0, len(unique), chunk_size):
+        chunk = unique[i : i + chunk_size]
+        batches += 1
+        ok = await ping_indexnow(chunk)
+        if ok:
+            submitted += len(chunk)
+        else:
+            failures.append(f"batch {batches} (starting {chunk[0]!r})")
+
+    return {
+        "ok": submitted == len(unique),
+        "submitted": submitted,
+        "total": len(unique),
+        "batches": batches,
+        "host": host,
+        "failures": failures,
+    }
+
+
 def fire_and_forget(urls: Iterable[str]) -> None:
     """Schedule a ping without awaiting. Safe to call from sync context
     within a running event loop (e.g. FastAPI handlers). If no loop is

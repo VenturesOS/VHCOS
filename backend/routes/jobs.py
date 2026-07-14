@@ -127,7 +127,20 @@ async def create_job(job_data: JobCreate, current_user: dict = Depends(require_r
     await db.jobs.insert_one(job_doc)
     
     logging.info(f"Job {job_public_id} ({job_id}) created by {current_user['name']} ({current_user['role']}) with status {initial_status}")
-    
+
+    # SEO auto-ping: when a job goes public (status='active'), tell IndexNow
+    # (Bing/Yandex/etc.) and Google's Indexing API to crawl it now. Both are
+    # best-effort fire-and-forget and never block job creation.
+    if initial_status == "active":
+        try:
+            site_url = os.environ.get("SITE_URL", "https://ventureshrd.com").rstrip("/")
+            job_url = f"{site_url}/jobs/{job_id}"
+            from services import indexnow as _indexnow, google_indexing as _gi
+            _indexnow.fire_and_forget([job_url])
+            _gi.fire_and_forget_updated(job_url)
+        except Exception as _seo_err:
+            logging.warning("SEO auto-ping failed for job %s: %s", job_id, _seo_err)
+
     # Trigger background auto-matching to generate system suggestions
     from services.job_suggestions import generate_job_suggestions
     asyncio.create_task(generate_job_suggestions(job_doc, db))
@@ -224,7 +237,19 @@ async def transition_job_status(
     )
     
     logging.info(f"Job {job_id} transitioned from {current_status} to {new_status} by {current_user['name']}")
-    
+
+    # SEO auto-ping when a job newly transitions into `active` (draft→active,
+    # pending_approval→active, on_hold→active). Best-effort fire-and-forget.
+    if new_status == "active" and current_status != "active":
+        try:
+            site_url = os.environ.get("SITE_URL", "https://ventureshrd.com").rstrip("/")
+            job_url = f"{site_url}/jobs/{job_id}"
+            from services import indexnow as _indexnow, google_indexing as _gi
+            _indexnow.fire_and_forget([job_url])
+            _gi.fire_and_forget_updated(job_url)
+        except Exception as _seo_err:
+            logging.warning("SEO auto-ping on transition failed for job %s: %s", job_id, _seo_err)
+
     updated_job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     return JobResponse(**updated_job)
 
