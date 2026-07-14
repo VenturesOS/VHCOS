@@ -10,8 +10,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Search, MapPin, Briefcase, Building2, Loader2, ArrowRight, X, SlidersHorizontal, Sparkles,
+  Search, MapPin, Briefcase, Building2, Loader2, ArrowRight, X, SlidersHorizontal, Sparkles, ChevronRight,
 } from 'lucide-react';
+import { breadcrumbLD } from '../../lib/structuredData';
 
 /**
  * CareersPage — public /careers listing of live job mandates.
@@ -185,10 +186,68 @@ export default function CareersPage() {
     return `Explore ${count} ${scope}open roles ${loc}in manufacturing, automotive, aerospace and OEM hiring. Plant Head, Operations, Quality, Design and Shopfloor engineering positions.`;
   }, [total, activeFn, activeLoc]);
 
+  // Human-readable filter summary used for the H2, breadcrumb crumb, and
+  // BreadcrumbList JSON-LD. Only shown when at least one meaningful filter
+  // is applied — otherwise the H1 alone drives the page.
+  //
+  // Composition: "<Seniority> <Function> jobs [in <Location>] [(<Experience>)]"
+  //   e.g. "Senior Quality jobs in Mumbai (3–7 yrs)"
+  const filterSummary = useMemo(() => {
+    const bits = [];
+    if (activeSen)  bits.push(activeSen);
+    if (activeFn)   bits.push(activeFn);
+    let s = bits.length ? `${bits.join(' ')} jobs` : (activeLoc || activeExp ? 'Jobs' : '');
+    if (activeLoc)  s += ` in ${titleCase(activeLoc)}`;
+    if (activeExp) {
+      const b = EXP_BUCKETS.find(x => x.key === activeExp);
+      if (b) s += ` (${b.label})`;
+    }
+    return s;
+  }, [activeFn, activeLoc, activeSen, activeExp]);
+
+  const hasFilters = activeFilters.length > 0;
+
+  // BreadcrumbList JSON-LD — only when filters are applied, so Google shows
+  // the specific facet (e.g. "Home › Careers › Quality jobs in Mumbai") in
+  // search results instead of a generic "Careers" crumb.
+  const breadcrumbJsonLd = useMemo(() => {
+    if (!hasFilters || !filterSummary) return null;
+    return JSON.stringify(breadcrumbLD([
+      { name: 'Home',    path: '/' },
+      { name: 'Careers', path: '/careers' },
+      { name: filterSummary, path: `/careers?${searchParams.toString()}` },
+    ]));
+  }, [hasFilters, filterSummary, searchParams]);
+
   return (
     <div className="min-h-screen bg-slate-50" data-testid="careers-page">
       <SEOHead title={seoTitle} description={seoDesc} canonical="https://ventureshrd.com/careers" />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      {breadcrumbJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbJsonLd }} />
+      )}
+
+      {/* Visible breadcrumb trail — only rendered when filters are applied,
+          so the default /careers view stays clean. Wrapping in <nav aria-label>
+          matches WCAG landmark expectations and helps SEO crawlers understand
+          the hierarchy. */}
+      {hasFilters && filterSummary && (
+        <nav aria-label="Breadcrumb" className="bg-slate-100 border-b border-slate-200">
+          <ol className="max-w-6xl mx-auto px-6 py-2.5 flex items-center gap-1.5 text-sm text-slate-600 flex-wrap" data-testid="careers-breadcrumb">
+            <li>
+              <Link to="/" className="hover:text-emerald-700 hover:underline">Home</Link>
+            </li>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+            <li>
+              <Link to="/careers" className="hover:text-emerald-700 hover:underline">Careers</Link>
+            </li>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+            <li aria-current="page" className="font-medium text-slate-900 truncate max-w-[60vw]">
+              {filterSummary}
+            </li>
+          </ol>
+        </nav>
+      )}
 
       {/* Hero */}
       <header className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 text-white">
@@ -332,6 +391,21 @@ export default function CareersPage() {
 
         {/* Job grid */}
         <div>
+          {/* Dynamic H2 with the filter summary — only rendered when at least
+              one filter is applied. Gives Google a strong long-tail keyword
+              signal ("Quality jobs in Mumbai (3–7 yrs)") without polluting the
+              default page's single-H1 hierarchy. */}
+          {hasFilters && filterSummary && (
+            <div className="mb-6 pb-4 border-b border-slate-200" data-testid="careers-filter-heading">
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                {filterSummary}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {total.toLocaleString()} matching {total === 1 ? 'role' : 'roles'} across our live mandates.
+              </p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-24 text-slate-500">
               <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading open roles…

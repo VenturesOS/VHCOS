@@ -28,6 +28,31 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11q — Breadcrumbs + dynamic H2 on filtered careers views (2026-07-14)
+
+Long-tail SEO boost — when users apply filters at `/careers?location=mumbai&exp=3-7`,
+we now render a proper crawlable heading hierarchy so Google can rank the URL
+for phrases like "quality jobs mumbai 3-7 years" instead of only the generic
+"industrial recruitment India".
+
+Added (`frontend/src/pages/public/CareersPage.jsx`):
+1. **Filter-summary generator** — composes a human-readable phrase from active
+   filters, e.g. "Senior Quality jobs in Mumbai (3–7 yrs)".
+2. **Visible breadcrumb trail** (`Home › Careers › <summary>`) rendered as
+   `<nav aria-label="Breadcrumb"><ol>...` for WCAG landmark compliance and
+   crawler hierarchy. Only shown when >=1 filter is active — default view
+   stays clean.
+3. **Dynamic H2 above the results grid** with the filter summary + match
+   count. H1 stays static (branded), so we don't fight ourselves for the
+   generic query while still ranking for long-tail.
+4. **BreadcrumbList JSON-LD** conditionally injected. Google will now display
+   the crumb path in the SERP snippet.
+
+Verified in preview:
+- `/careers?location=mumbai&exp=3-7` → breadcrumb + H2 render "Jobs in Mumbai (3–7 yrs)", BreadcrumbList JSON-LD present, 38 matching roles rendered.
+- `/careers` → no breadcrumb, no dynamic H2, single JSON-LD (ItemList only).
+
+
 ### Phase 55.11p — Careers page UX / routing overhaul (2026-07-14)
 
 Fixed dead links and rebuilt `/careers` with richer filters + URL-synced state
