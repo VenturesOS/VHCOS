@@ -45,12 +45,16 @@ HOT_INDEXES: list[dict] = [
 ]
 
 TTL_INDEXES: list[dict] = [
-    {
-        "collection":     "api_metrics",
-        "keys":           [("created_at", 1)],
-        "expire_seconds": 30 * 86400,   # 30 days
-        "name":           "api_metrics_ttl_30d",
-    },
+    # NOTE: api_metrics already has a TTL on `timestamp` (7 days) created by
+    # middleware/api_metrics.py::ensure_indexes(). We intentionally do NOT
+    # add another TTL here. If you need a longer/shorter retention window,
+    # edit the middleware — that's the single source of truth.
+]
+
+# One-off cleanup targets: named indexes that earlier runs of this script
+# created but which turned out to be wrong (see TTL note above). Idempotent.
+STALE_INDEXES_TO_DROP: list[dict] = [
+    {"collection": "api_metrics", "name": "api_metrics_ttl_30d"},
 ]
 
 
@@ -98,6 +102,8 @@ def apply_hot_indexes(db, dry_run: bool) -> None:
 
 def apply_ttl_indexes(db, dry_run: bool) -> None:
     print("\n=== TTL indexes ===")
+    if not TTL_INDEXES:
+        print("  (none configured — TTL for api_metrics lives in middleware/api_metrics.py)")
     for spec in TTL_INDEXES:
         coll = spec["collection"]
         existing = existing_index_names(db, coll)
@@ -116,6 +122,23 @@ def apply_ttl_indexes(db, dry_run: bool) -> None:
         print(f"  ✅ CREATED {coll}.{spec['name']} (docs older than {spec['expire_seconds']//86400}d will drop)")
 
 
+def drop_stale_indexes(db, dry_run: bool) -> None:
+    """Drop indexes that older versions of this script created by mistake."""
+    print("\n=== Stale index cleanup ===")
+    if not STALE_INDEXES_TO_DROP:
+        return
+    for spec in STALE_INDEXES_TO_DROP:
+        coll = spec["collection"]
+        name = spec["name"]
+        if name not in existing_index_names(db, coll):
+            continue
+        if dry_run:
+            print(f"  DRY  would drop {coll}.{name}")
+            continue
+        db[coll].drop_index(name)
+        print(f"  🗑️  DROPPED {coll}.{name}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--dry-run", action="store_true", help="Preview without creating")
@@ -124,6 +147,7 @@ def main() -> None:
     db = _get_db()
     apply_hot_indexes(db, args.dry_run)
     apply_ttl_indexes(db, args.dry_run)
+    drop_stale_indexes(db, args.dry_run)
     print("\nDone. Atlas CPU should drop within minutes as new queries use the indexes.")
 
 

@@ -65,28 +65,21 @@ class TestHotopAnalyzer:
 
 class TestAddHotIndexes:
     HOT = ("ai_enrichment_source_1", "enrichment_status_1")
-    TTL_NAME = "api_metrics_ttl_30d"
+    STALE_TTL_NAME = "api_metrics_ttl_30d"  # must NOT be present after run
 
-    def _cb_names(self, db):
-        return {i["name"] for i in db.candidate_bank.list_indexes()}
-
-    def _am_names(self, db):
-        return {i["name"] for i in db.api_metrics.list_indexes()}
-
-    def test_dry_run_does_not_create(self, db):
-        before_cb = len(list(db.candidate_bank.list_indexes()))
-        before_am = len(list(db.api_metrics.list_indexes()))
+    def test_dry_run_does_not_create_or_drop(self, db):
+        before_cb = {i["name"] for i in db.candidate_bank.list_indexes()}
+        before_am = {i["name"] for i in db.api_metrics.list_indexes()}
         code, out, err = _run(APPLY, "--dry-run")
         assert code == 0, err
-        # Either DRY or SKIP lines for each expected index — never CREATED
         assert "CREATED" not in out, out
-        after_cb = len(list(db.candidate_bank.list_indexes()))
-        after_am = len(list(db.api_metrics.list_indexes()))
+        assert "DROPPED" not in out, out
+        after_cb = {i["name"] for i in db.candidate_bank.list_indexes()}
+        after_am = {i["name"] for i in db.api_metrics.list_indexes()}
         assert before_cb == after_cb
         assert before_am == after_am
 
     def test_apply_indexes_exist_and_are_correct(self, db):
-        # Ensure they exist (either created by earlier run or by this call).
         code, out, err = _run(APPLY)
         assert code == 0, err
 
@@ -96,24 +89,33 @@ class TestAddHotIndexes:
         assert dict(cb_idx["ai_enrichment_source_1"]["key"]) == {"ai_enrichment_source": 1}
         assert dict(cb_idx["enrichment_status_1"]["key"]) == {"enrichment_status": 1}
 
+        # Stale TTL must be gone after this run
         am_idx = {i["name"]: i for i in db.api_metrics.list_indexes()}
-        assert self.TTL_NAME in am_idx
-        ttl = am_idx[self.TTL_NAME]
-        assert dict(ttl["key"]) == {"created_at": 1}
-        assert ttl.get("expireAfterSeconds") == 2592000
+        assert self.STALE_TTL_NAME not in am_idx, (
+            f"stale index {self.STALE_TTL_NAME} still present on api_metrics"
+        )
 
-    def test_idempotent_second_run_skips_all(self, db):
+        # Middleware-managed TTL on `timestamp` must remain untouched
+        ttl_on_timestamp = [
+            i for i in am_idx.values()
+            if dict(i.get("key", {})) == {"timestamp": 1}
+            and i.get("expireAfterSeconds") is not None
+        ]
+        assert ttl_on_timestamp, (
+            "middleware TTL on api_metrics.timestamp is missing — "
+            "this TTL is source-of-truth (middleware/api_metrics.py) and must persist"
+        )
+
+    def test_idempotent_second_run_skips_hot(self, db):
         code, out, err = _run(APPLY)
         assert code == 0, err
         assert "SKIP candidate_bank.ai_enrichment_source_1" in out
         assert "SKIP candidate_bank.enrichment_status_1" in out
-        assert f"SKIP api_metrics.{self.TTL_NAME}" in out
         assert "CREATED" not in out
+        # Stale-drop section is a no-op once the index is gone
+        assert "DROPPED" not in out
 
-    def test_no_duplicate_indexes_after_reruns(self, db):
-        # Names are unique keys in an index list; verify count of hot names.
+    def test_no_duplicate_hot_indexes_after_reruns(self, db):
         cb_names = [i["name"] for i in db.candidate_bank.list_indexes()]
         for name in self.HOT:
             assert cb_names.count(name) == 1
-        am_names = [i["name"] for i in db.api_metrics.list_indexes()]
-        assert am_names.count(self.TTL_NAME) == 1

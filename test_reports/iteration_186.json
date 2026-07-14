@@ -1,0 +1,23 @@
+{
+  "summary": "Phase 55.11k retest — all 7 pytest cases pass on live Atlas M20. Updated TestAddHotIndexes to reflect the new semantics (api_metrics TTL now lives in middleware/api_metrics.py on `timestamp`, and the stale api_metrics_ttl_30d index must NOT exist post-run). Spot checks confirmed: (1) hot indexes ai_enrichment_source_1 + enrichment_status_1 present on candidate_bank; (2) stale index api_metrics_ttl_30d NOT present on api_metrics; (3) middleware-managed TTL on api_metrics.timestamp (expireAfterSeconds != null) still present and untouched; (4) add_hot_indexes.py --dry-run creates/drops nothing; (5) second dry-run is a full no-op (stale-drop section empty as expected); (6) mongo_hotop_analyzer.py now shows green ✅ candidate_bank all hot fields indexed (no more 'missing on: ai_enrichment_source, enrichment_status').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_mongo_hotop_phase_55_11k.py",
+    "/app/test_reports/pytest/phase_55_11k_hotop_retest.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "add_hot_indexes.py cleanly documents that api_metrics TTL is owned by middleware — good single source of truth.",
+    "STALE_INDEXES_TO_DROP block is idempotent (only drops if present); safe to re-run indefinitely.",
+    "Analyzer still flags candidate_search_history missing indexes on user_id + created_at — out of scope for this phase but a valid follow-up."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mongo_hotop_phase_55_11k.py (updated TestAddHotIndexes: dry-run now also asserts no DROPPED, apply-run asserts stale ttl absent + middleware timestamp TTL present, idempotent-second-run drops TTL assertions and adds 'no DROPPED' check, duplicate-check simplified to hot indexes only)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "N/A"},
+  "seed_data_creation": "None. Live Atlas indexes untouched (hot indexes remain; stale index was already dropped in prior operator run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 55.11k is stable. The pytest module test_mongo_hotop_phase_55_11k.py is authoritative for regressions. add_hot_indexes.py has an empty TTL_INDEXES list and a STALE_INDEXES_TO_DROP list containing only api_metrics.api_metrics_ttl_30d — safe to keep running periodically."
+}
