@@ -1,0 +1,41 @@
+{
+  "summary": "Phase 55.11k — validated mongo_hotop_analyzer.py + add_hot_indexes.py against the live Atlas M20 (via mongo_production_override). All 7 pytest cases pass: analyzer prints the required 3 sections without traceback, filters out hello/isMaster/admin.$cmd heartbeats (regression test explicit), --min-secs 999 correctly prints '(nothing long-running right now)'; index script dry-run creates nothing, apply creates ai_enrichment_source_1 + enrichment_status_1 on candidate_bank and TTL api_metrics_ttl_30d (created_at, expireAfterSeconds=2592000) on api_metrics; second run is idempotent with all 3 marked SKIP; no duplicate indexes. Newly-created indexes were left in place per instructions.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "backend/scripts/mongo_hotop_analyzer.py",
+        "issue": "Original `client.admin.command('currentOp', {\"$or\":[...]})` passes the filter as the *value* of `currentOp` instead of at the top level, so MongoDB silently returns ALL in-flight ops regardless of --min-secs. Before this fix, `--min-secs 999` still listed 0.4s getmore ops. Fixed with a client-side secs_running >= min_secs filter (belt-and-suspenders, no server behaviour change)."
+      },
+      {
+        "endpoint": "backend/scripts/add_hot_indexes.py",
+        "issue": "TTL is created on `api_metrics.created_at` but the existing api_metrics documents appear to use `timestamp` (indexes: timestamp_1, timestamp_-1, endpoint_1_timestamp_-1) — there is no `created_at` field indexed pre-run. TTL index is created successfully but will only expire documents that DO have `created_at`. If writes still use `timestamp`, this TTL will be a no-op. Recommend either (a) switching the TTL key to `timestamp` or (b) confirming the writer sets `created_at`. Non-blocking for CPU-fix goals since the two hot-path candidate_bank indexes are the primary win."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_mongo_hotop_phase_55_11k.py",
+    "/app/test_reports/pytest/phase_55_11k_hotop.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Confirm api_metrics writer field name — TTL currently keys on `created_at` but pre-existing indexes are all on `timestamp`. If writer uses `timestamp`, either switch the TTL key or add a backfill.",
+    "REVIEW the small client-side --min-secs filter added to mongo_hotop_analyzer.py (post-noise-filter). Reason: the `admin.command('currentOp', {filter})` form is not honoured by MongoDB — filter must be at top level. Alternative long-term fix: use `client.admin.aggregate([{'$currentOp':{}}, {'$match':...}])` for server-side filtering."
+  ],
+  "critical_code_review_comments": [
+    "hotop_analyzer: server-side currentOp filter was a no-op — relied entirely on client-side hello/isMaster filter for noise removal. Now supplemented with client-side min_secs filter.",
+    "TTL field mismatch risk on api_metrics (created_at vs timestamp) — see minor issue above.",
+    "Both scripts do `sys.path.insert` for two absolute paths and fall back to env — clean, but the `tlsAllowInvalidCertificates=True` is fine for Atlas but should be documented as intentional.",
+    "Missing hot fields flagged by analyzer for candidate_search_history (user_id, created_at) — not in scope of this phase but worth a follow-up."
+  ],
+  "updated_files": [
+    "/app/backend/scripts/mongo_hotop_analyzer.py (added client-side min_secs filter; changed header glyph from ≥ to >= for ASCII match; kept hello/isMaster noise filter intact)",
+    "/app/backend/tests/test_mongo_hotop_phase_55_11k.py (new pytest module)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "N/A"},
+  "seed_data_creation": "None. Live indexes created on shared Atlas as intended (idempotent).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Live indexes ai_enrichment_source_1, enrichment_status_1 (candidate_bank) and api_metrics_ttl_30d (api_metrics) are now present on the shared Atlas — subsequent runs of add_hot_indexes.py will emit SKIP for all three. The pytest module test_mongo_hotop_phase_55_11k.py is authoritative for re-running Phase 55.11k regressions.",
+  "rca of the issue": "Original one-liner crashed with `'Collection' object is not callable` because `db.current_op()` treated the `current_op` collection attribute as callable — pymongo's Database class does not expose the shell `db.currentOp()` helper. Fix: `client.admin.command('currentOp')`. Separate secondary bug found and patched during testing: the shell-style filter argument to `admin.command('currentOp', {filter})` is ignored server-side (must be top-level), so --min-secs was previously ineffective; added a client-side min_secs filter."
+}
