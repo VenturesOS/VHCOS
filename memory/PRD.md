@@ -28,6 +28,17 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11o — Full production rollout verified (2026-07-14)
+
+End-to-end pipeline is live on prod:
+- `/careers` exposes 848 active jobs. Sitemap = 981 URLs.
+- IndexNow: 971 URLs submitted successfully (Bing/Yandex/Seznam/Naver ack'd, 0 failures across 10 batches of ≤100).
+- Google Indexing API: service account `vhc-indexing@vhc-indexing-api.iam.gserviceaccount.com` granted Owner in Search Console; `URL_UPDATED` returning HTTP 200 for both `/careers` and `/jobs/{id}` URLs. Response time ~1.7s (JWT sign + OAuth exchange + publish).
+- GSC sitemap submission: 981/981 URLs discovered.
+- Auto-ping (IndexNow + Google) verified firing on job create AND on `→active` status transitions.
+- Leaked service-account key rotated by user; old key deleted from GCP.
+
+
 ### Phase 55.11n — IndexNow + Google Indexing API auto-ping (2026-07-14)
 
 Follow-up to 55.11m. Now that 847 job URLs are public, we ping search engines
