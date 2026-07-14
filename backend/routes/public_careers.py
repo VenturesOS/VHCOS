@@ -6,10 +6,14 @@ Endpoints:
     GET  /api/public/careers/jobs/{job_id}        Single public job (bonus)
     GET  /api/public/careers/filters              Filter facets (function/location)
 
-A "public" job is one where either:
-    - `career_page_status == 'live'` (recruiter/employer marked it live), OR
-    - `shareable_link_enabled == True` (direct-share URL enabled)
-AND `status == 'active'` (not on_hold/closed/archived/draft).
+A "public" job is any `status == 'active'` role whose `career_page_status`
+has not been explicitly set to `'removed'` (recruiter takedown). This gives
+maximum SEO coverage — all live mandates surface on `/careers` the moment
+they are created, without requiring an explicit "publish" toggle.
+
+To hide a specific role from the public careers page, either:
+    - set `status` to something other than `'active'` (e.g. `'archived'`), OR
+    - set `career_page_status` to `'removed'`.
 
 We intentionally return `public_company_alias` (a masked name) rather than the
 real client company on the list endpoint — recruiters use that to hide the
@@ -32,11 +36,8 @@ logger = logging.getLogger(__name__)
 # ── Query ─────────────────────────────────────────────────────────────────
 
 _PUBLIC_FILTER = {
-    "status": {"$in": ["active", None]},
-    "$or": [
-        {"career_page_status": "live"},
-        {"shareable_link_enabled": True},
-    ],
+    "status": "active",
+    "career_page_status": {"$ne": "removed"},
 }
 
 # Fields returned to the /careers page card grid. Deliberately narrow — we

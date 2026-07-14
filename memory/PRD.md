@@ -28,6 +28,29 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11m — All Active Jobs Auto-Post on `/careers` (2026-07-14)
+
+User request: "post all jobs on career page for SEO, even existing ones and
+new ones as they are created."
+
+Widened public visibility rule across the 4 code paths that gate career-page
+exposure. New rule: `status == 'active'` AND `career_page_status != 'removed'`.
+Effect: 847 active jobs surface publicly (was 115), and every new job is
+auto-listed on `/careers` at creation time without any manual "publish" toggle.
+Recruiters can still explicitly hide a role by setting `career_page_status =
+'removed'` or archiving the job.
+
+Files touched:
+- `backend/routes/public_careers.py` — `_PUBLIC_FILTER` widened.
+- `backend/routes/public.py` — `/api/public/jobs` list + `/api/public/jobs/{id}` detail widened (drives `/jobs/{id}` SPA page).
+- `backend/routes/seo.py` — `/api/sitemap.xml` widened, `to_list(500)` → `to_list(2000)`.
+
+Verified via curl:
+- `GET /api/public/careers/jobs?limit=1` → `{"total":847,...}`
+- `GET /api/sitemap.xml` → 980 `<url>` entries (was ~250)
+- `/careers` SPA renders "847 live mandates" in hero + 60 cards first paint.
+
+
 ### Phase 55 — Feb 2026 (this fork)
 - **(2026-07-10) Phase 55.11h — Vite Phase B + dedupe polish + startup projection guard.**
 

@@ -107,7 +107,7 @@ async def get_public_jobs(
     For careers page on public website.
 
     VISIBILITY RULES:
-    - Only jobs with career_page_status = "live" are visible
+    - Any job with status='active' is visible unless career_page_status='removed'
 
     CLIENT PRIVACY: Returns public_company_alias instead of real company name.
 
@@ -127,7 +127,7 @@ async def get_public_jobs(
 
     query = {
         "status": "active",
-        "career_page_status": "live",
+        "career_page_status": {"$ne": "removed"},
     }
     
     if search:
@@ -178,8 +178,8 @@ async def get_public_job_detail(job_id: str):
     Supports lookup by internal ID or job_public_id (VHC/YYYY/NNNN).
     
     VISIBILITY RULES:
-    - Only jobs with career_page_status = "live" are visible
-    
+    - Any job with status='active' is visible unless career_page_status='removed'
+
     CLIENT PRIVACY: Returns public_company_alias instead of real company name.
     """
     # Support lookup by either internal ID or job_public_id
@@ -189,7 +189,7 @@ async def get_public_job_detail(job_id: str):
             {"job_public_id": job_id}
         ],
         "status": "active",
-        "career_page_status": "live",
+        "career_page_status": {"$ne": "removed"},
     }, {"_id": 0})
     
     if not job:
