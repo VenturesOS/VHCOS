@@ -112,7 +112,7 @@ webpackConfig.devServer = (devServerConfig) => {
       '/about': 'about.html',
       '/services': 'services.html',
       '/industries': 'industries.html',
-      '/careers': 'careers.html',
+      // '/careers' handled by React (see App.js — dynamic CareersPage).
       '/contact': 'contact.html',
       '/global-hiring': 'global-hiring.html',
       '/recruitment-expertise': 'recruitment-expertise.html',

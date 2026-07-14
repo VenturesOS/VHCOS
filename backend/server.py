@@ -147,6 +147,7 @@ talent_feedback_router = _safe_import("routes.talent_feedback", "router")
 contact_router = _safe_import("routes.contact", "router")
 blog_router = _safe_import("routes.blog", "router")
 seo_router = _safe_import("routes.seo", "router")
+public_careers_router = _safe_import("routes.public_careers", "router")
 pillar_pages_router = _safe_import("routes.pillar_pages", "router")
 blog_digest_router = _safe_import("routes.blog_digest", "router")
 seo_dashboard_router = _safe_import("routes.seo_dashboard", "router")
@@ -335,7 +336,7 @@ _all_routers = [
     embed_admin_router,
     bug_reports_router, system_errors_router, profile_router, cv_upload_router,
     ai_search_router, extension_router, analytics_router, contact_router,
-    blog_router, seo_router, pillar_pages_router, blog_digest_router,
+    blog_router, seo_router, public_careers_router, pillar_pages_router, blog_digest_router,
     seo_dashboard_router, revenue_router, employer_router, linkedin_router,
     tracker_router, compliance_router, maintenance_router, attendance_router,
     attendance_analytics_router, resume_router, account_manager_router,

@@ -38,6 +38,7 @@ import CookieConsentBanner from "./components/compliance/CookieConsentBanner";
 
 // ── Public Pages (lazy — not always needed) ──
 const PublicJobPage = React.lazy(() => import("./pages/public/PublicJobPage"));
+const CareersPage = React.lazy(() => import("./pages/public/CareersPage"));
 const ApplicationSuccessPage = React.lazy(() => import("./pages/public/ApplicationSuccessPage"));
 const MandateApplyPage = React.lazy(() => import("./pages/public/MandateApplyPage"));
 const PillarPage = React.lazy(() => import("./pages/public/PillarPage"));
@@ -341,7 +342,11 @@ function App() {
           <Route path="/about" element={<StaticPageRedirect page="about.html" />} />
           <Route path="/services" element={<StaticPageRedirect page="services.html" />} />
           <Route path="/industries" element={<StaticPageRedirect page="industries.html" />} />
-          <Route path="/careers" element={<StaticPageRedirect page="careers.html" />} />
+          <Route path="/careers" element={
+            <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-500">Loading…</div>}>
+              <CareersPage />
+            </React.Suspense>
+          } />
           <Route path="/contact" element={<StaticPageRedirect page="contact.html" />} />
           <Route path="/global-hiring" element={<StaticPageRedirect page="global-hiring.html" />} />
 

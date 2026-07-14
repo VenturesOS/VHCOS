@@ -68,9 +68,18 @@ async def comprehensive_sitemap():
     <priority>0.7</priority>
   </url>""")
 
-    # Active job listings with shareable links
+    # Active job listings on the public careers page. Widened from just
+    # `shareable_link_enabled` (which is a recruiter-level toggle for direct
+    # share URLs) to also include jobs the employer has marked live on the
+    # careers page. Either mechanism means the URL is intended to be public.
     jobs = await db.jobs.find(
-        {"shareable_link_enabled": True},
+        {
+            "status": {"$in": ["active", None]},  # skip on_hold/closed/archived
+            "$or": [
+                {"career_page_status": "live"},
+                {"shareable_link_enabled": True},
+            ],
+        },
         {"_id": 0, "id": 1, "title": 1, "updated_at": 1, "created_at": 1}
     ).to_list(500)
 
