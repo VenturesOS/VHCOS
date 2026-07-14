@@ -115,7 +115,10 @@ async def list_public_jobs(
     function: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
     seniority: Optional[str] = Query(None),
-    limit: int = Query(60, ge=1, le=200),
+    experience_min: Optional[int] = Query(None, ge=0, description="Include jobs whose max exp >= this"),
+    experience_max: Optional[int] = Query(None, ge=0, description="Include jobs whose min exp <= this"),
+    sort: str = Query("recent", pattern="^(recent|oldest|title)$"),
+    limit: int = Query(24, ge=1, le=200),
     skip: int = Query(0, ge=0),
 ):
     """Public listing of live jobs for the careers page."""
@@ -133,8 +136,32 @@ async def list_public_jobs(
     if seniority:
         query["seniority"] = seniority
 
+    # Experience range: overlap semantics — return jobs whose [min,max] band
+    # intersects the user's filter band. Nulls are treated as "any".
+    exp_conditions = []
+    if experience_min is not None:
+        exp_conditions.append({"$or": [
+            {"experience_max": {"$gte": experience_min}},
+            {"experience_max": None},
+            {"experience_max": {"$exists": False}},
+        ]})
+    if experience_max is not None:
+        exp_conditions.append({"$or": [
+            {"experience_min": {"$lte": experience_max}},
+            {"experience_min": None},
+            {"experience_min": {"$exists": False}},
+        ]})
+    if exp_conditions:
+        query.setdefault("$and", []).extend(exp_conditions)
+
+    sort_spec = [("updated_at", -1)]
+    if sort == "oldest":
+        sort_spec = [("created_at", 1)]
+    elif sort == "title":
+        sort_spec = [("title", 1)]
+
     total = await db.jobs.count_documents(query)
-    cursor = db.jobs.find(query, _LIST_PROJECTION).sort("updated_at", -1).skip(skip).limit(limit)
+    cursor = db.jobs.find(query, _LIST_PROJECTION).sort(sort_spec).skip(skip).limit(limit)
     docs = await cursor.to_list(limit)
     return {
         "total": total,

@@ -41,7 +41,7 @@ export default function ApplicationSuccessPage() {
           </p>
 
           {/* View More Jobs Button */}
-          <Link to="/website/careers.html">
+          <Link to="/careers">
             <Button size="lg" className="w-full md:w-auto" data-testid="view-more-jobs-btn">
               View more jobs
               <ArrowRight className="h-4 w-4 ml-2" />

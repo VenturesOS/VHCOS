@@ -187,7 +187,7 @@ export default function PublicJobPage() {
             <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Job Not Found</h2>
             <p className="text-gray-600 mb-6">{error}</p>
-            <Link to="/website/careers.html">
+            <Link to="/careers">
               <Button variant="outline">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 View All Jobs
@@ -210,7 +210,7 @@ export default function PublicJobPage() {
         jsonLd={job ? [
           jobPostingLD(job),
           breadcrumbLD([
-            { name: 'Careers', path: '/website/careers.html' },
+            { name: 'Careers', path: '/careers' },
             { name: job.title || 'Job', path: `/jobs/${job.id}` },
           ]),
         ] : null}
@@ -218,16 +218,13 @@ export default function PublicJobPage() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/website/careers.html" className="flex items-center text-gray-600 hover:text-gray-900">
+          <Link to="/careers" className="flex items-center text-gray-600 hover:text-gray-900" data-testid="back-to-jobs-link">
             <ArrowLeft className="h-5 w-5 mr-2" />
             Back to Jobs
           </Link>
-          <img 
-            src="/website/images/logo.svg" 
-            alt="Ventures HRD" 
-            className="h-8"
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
+          <Link to="/" className="text-sm font-semibold tracking-tight text-emerald-700 hover:text-emerald-800">
+            Ventures HRD Centre
+          </Link>
         </div>
       </header>
 

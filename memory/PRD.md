@@ -28,6 +28,37 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11p — Careers page UX / routing overhaul (2026-07-14)
+
+Fixed dead links and rebuilt `/careers` with richer filters + URL-synced state
+for shareability and SEO facet coverage.
+
+Routing fixes (dead `/website/careers.html` links):
+- `frontend/src/pages/public/PublicJobPage.jsx` — Back to Jobs link, error-state link, breadcrumb JSON-LD.
+- `frontend/src/pages/public/ApplicationSuccessPage.jsx` — "View more jobs" link.
+- Removed stale `<img src="/website/images/logo.svg">` from job header; replaced with text link back to homepage.
+
+Backend (`backend/routes/public_careers.py::list_public_jobs`):
+- New query params: `sort` (recent/oldest/title), `experience_min`, `experience_max` (with intersection semantics — job's [min,max] band must overlap the user's filter band, nulls treated as "any").
+- Default page size dropped from 60 → 24 for pagination via "load more".
+
+Frontend (`frontend/src/pages/public/CareersPage.jsx` — full rewrite):
+- Sidebar with 4 persistent filters: Function / Location / Seniority / Experience-buckets (0–3, 3–7, 7–15, 15+).
+- Sticky toolbar with search + sort dropdown + mobile filter drawer toggle.
+- Active-filter chips row above results with one-click remove per chip + "Clear all" link.
+- URL-synced filters (`?q=…&function=…&location=…&seniority=…&exp=…&sort=…`) via `useSearchParams`, debounced 250ms — enables shareable/bookmarkable/crawlable filtered views (Google can index `?function=Quality` as a separate facet landing page).
+- "Load more" pagination — appends the next 24 in-place, shows "Showing X of 848 roles".
+- "New" badge (Sparkles icon) on jobs updated in the last 7 days — drives clicks + freshness signal for Google Jobs.
+- Title-case location display ("delhi" → "Delhi", "PAN INDIA" → "Pan India").
+- SEO title/description now dynamic per filter combo — `"Quality jobs in Mumbai — …"` instead of static.
+
+Verified via screenshot + curl:
+- `GET /api/public/careers/jobs?experience_min=3&experience_max=7` → 648 matching jobs (was 0 before).
+- `/careers` → 24 cards, "Load more" visible, "Showing 24 of 848 roles".
+- `/careers?function=Sales&exp=3-7` → filter chips render from URL, page fully shareable.
+- `/jobs/{id}` → "Back to Jobs" now correctly navigates to `/careers` (was 404 on `/website/careers.html`).
+
+
 ### Phase 55.11o — Full production rollout verified (2026-07-14)
 
 End-to-end pipeline is live on prod:
