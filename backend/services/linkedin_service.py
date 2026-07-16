@@ -190,3 +190,126 @@ async def auto_post_on_publish(blog: dict):
             logger.warning(f"[LinkedIn] Auto-post failed: {result.get('error')}")
     except Exception as e:
         logger.error(f"[LinkedIn] Auto-post exception: {e}")
+
+
+# ── Job → LinkedIn draft generator ─────────────────────────────────────────
+# LinkedIn Marketing Developer Platform approval for `w_organization_social`
+# is a multi-week process. Until it lands, this generator produces a ready-to-
+# copy narrative post text for each active job that an admin pastes into
+# LinkedIn manually. Once the scope is approved we can pipe the same text into
+# `post_job_to_linkedin()` and flip a switch — no template rewrites needed.
+
+_DEFAULT_HASHTAGS = ["#Hiring", "#IndustrialRecruitment", "#Careers", "#VenturesHRD"]
+
+
+def _fmt_experience(job: dict) -> str:
+    """Return e.g. '3–7 yrs', '10+ yrs', or '' if no range on the job."""
+    lo = job.get("experience_min")
+    hi = job.get("experience_max")
+    if lo is None and hi is None:
+        return ""
+    if lo is not None and hi is not None:
+        return f"{lo}–{hi} yrs" if lo != hi else f"{lo} yrs"
+    if lo is not None:
+        return f"{lo}+ yrs"
+    return f"up to {hi} yrs"
+
+
+def _title_case_loc(loc: str | None) -> str:
+    if not loc:
+        return ""
+    return " ".join(w.capitalize() if w.isalpha() else w for w in loc.split())
+
+
+def generate_job_linkedin_draft(job: dict) -> dict:
+    """
+    Build a narrative-style "We're hiring" LinkedIn post for a job. Returns
+    a dict with both the composed `text` and structured metadata that the
+    admin UI can display alongside (title, location, url, etc.).
+
+    Template (Option B — long narrative):
+        🚀 New opportunity in {Location}!
+
+        We're partnering with a leading {industry|"industrial"} client to hire
+        a {Title} ({seniority}, {experience} yrs).
+
+        Key focus:
+        • {skill 1}
+        • {skill 2}
+        • {skill 3}
+
+        Apply now → {job_url}
+
+        {hashtags}
+
+    Every optional field degrades gracefully — missing seniority just drops the
+    parenthetical, missing skills drops the bullet section, etc. Never emits
+    "None" or empty lines back-to-back.
+    """
+    site_url = os.environ.get("SITE_URL", "https://ventureshrd.com").rstrip("/")
+    job_id = job.get("id") or job.get("job_public_id") or ""
+    job_url = f"{site_url}/jobs/{job_id}"
+
+    title = (job.get("title") or "").strip() or "an exciting new role"
+    location = _title_case_loc(job.get("location"))
+    industry = (job.get("industry") or "").strip().lower() or "industrial"
+    seniority = (job.get("seniority") or "").strip()
+    experience = _fmt_experience(job)
+    function = (job.get("function") or "").strip()
+
+    # Line 1: hook
+    if location:
+        line_hook = f"🚀 New opportunity in {location}!"
+    else:
+        line_hook = "🚀 We're hiring."
+
+    # Line 2: role + industry
+    parenthetical_bits = [b for b in [seniority, experience] if b]
+    parenthetical = f" ({', '.join(parenthetical_bits)})" if parenthetical_bits else ""
+    line_role = f"We're partnering with a leading {industry} client to hire a {title}{parenthetical}."
+
+    # Skills bullets — from `skills` array if present, else fall back to
+    # `key_responsibilities` (array or newline-separated string), else omit.
+    skills_bullets: list[str] = []
+    raw_skills = job.get("skills") or job.get("key_skills") or []
+    if isinstance(raw_skills, str):
+        raw_skills = [s.strip() for s in raw_skills.replace("\n", ",").split(",") if s.strip()]
+    if not raw_skills:
+        raw_kr = job.get("key_responsibilities") or job.get("responsibilities") or []
+        if isinstance(raw_kr, str):
+            raw_kr = [s.strip() for s in raw_kr.split("\n") if s.strip()]
+        raw_skills = raw_kr
+    for s in raw_skills[:3]:
+        if isinstance(s, str) and s.strip():
+            skills_bullets.append(f"• {s.strip()}")
+
+    # Compose. Blank lines between blocks; skip the skills block entirely if empty.
+    blocks = [line_hook, line_role]
+    if skills_bullets:
+        blocks.append("Key focus:\n" + "\n".join(skills_bullets))
+    blocks.append(f"Apply now → {job_url}")
+
+    # Hashtags — include function as its own tag if we have one.
+    tags = list(_DEFAULT_HASHTAGS)
+    if function:
+        # `Plant Head` → `#PlantHead`
+        fn_tag = "#" + "".join(w.capitalize() for w in function.replace("&", "").split())
+        if fn_tag not in tags and len(fn_tag) > 1:
+            tags.insert(1, fn_tag)
+    blocks.append(" ".join(tags))
+
+    text = "\n\n".join(blocks)
+
+    return {
+        "job_id":       job.get("id"),
+        "title":        title,
+        "location":     location,
+        "function":     function,
+        "seniority":    seniority,
+        "experience":   experience,
+        "url":          job_url,
+        "text":         text,
+        "char_count":   len(text),
+        "posted_at":    job.get("linkedin_posted_at"),  # None if not yet posted
+        "updated_at":   job.get("updated_at"),
+    }

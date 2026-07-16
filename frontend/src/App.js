@@ -126,6 +126,7 @@ const ActivityFeedPage = React.lazy(() => import("./pages/shared/ActivityFeedPag
 
 // ── Pages shared across multiple roles (used by recruiter/employer/accounts) ──
 const LinkedInSettingsPage = React.lazy(() => import("./pages/admin/LinkedInSettingsPage"));
+const LinkedInJobDraftsPage = React.lazy(() => import("./pages/admin/LinkedInJobDraftsPage"));
 const AttendanceInsightsPage = React.lazy(() => import("./pages/admin/AttendanceInsightsPage"));
 const AdminAttendancePage = React.lazy(() => import("./pages/admin/AdminAttendancePage"));
 const AdminLeaveManagementPage = React.lazy(() => import("./pages/admin/AdminLeaveManagementPage"));
@@ -235,6 +236,7 @@ function App() {
             <Route path="attendance" element={<AttendanceTabsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
             <Route path="activity-monitor" element={<ActivityTabsPage />} />
+            <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
           </Route>
 
@@ -260,6 +262,7 @@ function App() {
             <Route path="resume-builder" element={<ResumeBuilderPage />} />
             <Route path="activity-feed" element={<ActivityFeedPage />} />
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
+            <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             {/* Account Manager Routes (for recruiters with is_account_manager flag) */}
             <Route path="account-manager" element={<AccountManagerDashboard />} />
@@ -296,6 +299,7 @@ function App() {
             <Route path="resume-builder" element={<ResumeBuilderPage />} />
             <Route path="activity-feed" element={<ActivityFeedPage />} />
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
+            <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
             {/* Account Manager Routes (for employers) */}

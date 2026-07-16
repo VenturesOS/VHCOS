@@ -20,6 +20,7 @@ from services.linkedin_service import (
     save_linkedin_settings,
     post_blog_to_linkedin,
     get_linkedin_token,
+    generate_job_linkedin_draft,
 )
 
 logger = logging.getLogger(__name__)
@@ -244,3 +245,102 @@ async def disconnect_linkedin(user=Depends(require_role(LINKEDIN_ROLES))):
     """Disconnect LinkedIn integration."""
     await db.social_integrations.delete_one({"platform": "linkedin"})
     return {"message": "LinkedIn disconnected"}
+
+
+# ── Job → LinkedIn Draft endpoints ─────────────────────────────────────────
+# Stopgap manual-copy flow. Once `w_organization_social` is approved by
+# LinkedIn Marketing Developer Platform we can wire these drafts into an
+# auto-post path — the template and endpoint contract stay identical.
+
+@router.get("/job-drafts")
+async def list_job_drafts(
+    status: str = "unposted",   # "unposted" | "posted" | "all"
+    q: Optional[str] = None,
+    limit: int = 20,
+    skip: int = 0,
+    user=Depends(require_role(LINKEDIN_ROLES)),
+):
+    """List LinkedIn draft posts for active jobs.
+
+    Uses the same visibility rule as the public /careers page so recruiters
+    only see drafts for roles that are actually live on the site (avoids
+    accidentally sharing internal / removed mandates).
+    """
+    query = {
+        "status": "active",
+        "career_page_status": {"$ne": "removed"},
+    }
+    if status == "unposted":
+        query["linkedin_posted_at"] = {"$in": [None, ""]}
+    elif status == "posted":
+        query["linkedin_posted_at"] = {"$nin": [None, ""]}
+    if q:
+        query["$or"] = [
+            {"title":    {"$regex": q, "$options": "i"}},
+            {"function": {"$regex": q, "$options": "i"}},
+            {"location": {"$regex": q, "$options": "i"}},
+        ]
+
+    proj = {
+        "_id": 0,
+        "id": 1, "title": 1, "location": 1, "industry": 1,
+        "function": 1, "seniority": 1,
+        "experience_min": 1, "experience_max": 1,
+        "skills": 1, "key_skills": 1,
+        "key_responsibilities": 1, "responsibilities": 1,
+        "job_public_id": 1, "updated_at": 1,
+        "linkedin_posted_at": 1,
+    }
+
+    total = await db.jobs.count_documents(query)
+    cursor = db.jobs.find(query, proj).sort("updated_at", -1).skip(skip).limit(limit)
+    jobs = await cursor.to_list(limit)
+
+    return {
+        "total":  total,
+        "count":  len(jobs),
+        "skip":   skip,
+        "limit":  limit,
+        "drafts": [generate_job_linkedin_draft(j) for j in jobs],
+    }
+
+
+@router.get("/job-drafts/{job_id}")
+async def get_single_job_draft(
+    job_id: str,
+    user=Depends(require_role(LINKEDIN_ROLES)),
+):
+    """Fetch a single job's LinkedIn draft — used when the admin regenerates
+    or previews before pasting."""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return generate_job_linkedin_draft(job)
+
+
+class TogglePostedRequest(BaseModel):
+    posted: bool
+
+
+@router.post("/job-drafts/{job_id}/toggle-posted")
+async def toggle_job_draft_posted(
+    job_id: str,
+    req: TogglePostedRequest,
+    user=Depends(require_role(LINKEDIN_ROLES)),
+):
+    """Mark a job's LinkedIn draft as posted (or un-posted).
+
+    Persists `linkedin_posted_at` on the job document so the admin UI can
+    filter drafts they've already shared. This is bookkeeping only — we do
+    not verify LinkedIn actually received the post (user-driven copy/paste).
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0, "id": 1})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    now_iso = datetime.now(timezone.utc).isoformat() if req.posted else None
+    await db.jobs.update_one(
+        {"id": job_id},
+        {"$set": {"linkedin_posted_at": now_iso}},
+    )
+    return {"job_id": job_id, "linkedin_posted_at": now_iso}
+

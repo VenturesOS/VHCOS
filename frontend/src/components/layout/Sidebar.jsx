@@ -81,6 +81,7 @@ const navItems = {
     { icon: ShieldCheck, label: 'Security Audit', path: '/admin/security-audit' },
     { icon: Clock, label: 'Attendance', path: '/admin/attendance' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
+    { icon: Linkedin, label: 'LinkedIn Drafts', path: '/admin/linkedin-drafts' },
   ],
   recruiter: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/recruiter' },
@@ -100,6 +101,7 @@ const navItems = {
     { icon: Activity, label: 'Activity Feed', path: '/recruiter/activity-feed' },
     { icon: IndianRupee, label: 'Salary Benchmark', path: '/recruiter/salary-benchmark' },
     { icon: Linkedin, label: 'LinkedIn', path: '/recruiter/linkedin-settings' },
+    { icon: Linkedin, label: 'LinkedIn Drafts', path: '/recruiter/linkedin-drafts' },
   ],
   employer: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/employer' },
@@ -125,6 +127,7 @@ const navItems = {
     { icon: Activity, label: 'Activity Feed', path: '/employer/activity-feed' },
     { icon: IndianRupee, label: 'Salary Benchmark', path: '/employer/salary-benchmark' },
     { icon: Linkedin, label: 'LinkedIn', path: '/employer/linkedin-settings' },
+    { icon: Linkedin, label: 'LinkedIn Drafts', path: '/employer/linkedin-drafts' },
   ],
   candidate: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/candidate' },

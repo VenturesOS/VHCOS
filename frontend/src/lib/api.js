@@ -364,6 +364,11 @@ export const linkedinAPI = {
   testPost: () => api.post('/linkedin/test-post'),
   getPostHistory: (limit = 20) => api.get(`/linkedin/post-history?limit=${limit}`),
   disconnect: () => api.delete('/linkedin/disconnect'),
+  // Job draft flow — stopgap until w_organization_social scope approval.
+  listJobDrafts: (params) => api.get('/linkedin/job-drafts', { params }),
+  getJobDraft: (jobId) => api.get(`/linkedin/job-drafts/${jobId}`),
+  toggleJobDraftPosted: (jobId, posted) =>
+    api.post(`/linkedin/job-drafts/${jobId}/toggle-posted`, { posted }),
 };
 
 // Tracker APIs

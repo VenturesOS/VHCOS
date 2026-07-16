@@ -28,6 +28,35 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11r — LinkedIn Job-Post Drafts (stopgap until org-post approval) (2026-07-16)
+
+Auto-generated "We're hiring" narrative drafts for every live mandate. Copy-
+paste flow while `w_organization_social` LinkedIn Marketing Developer
+Platform approval is pending — same template will plug into an auto-post
+pipeline once the scope lands (no template rewrite needed).
+
+Backend (`backend/services/linkedin_service.py::generate_job_linkedin_draft`,
+`backend/routes/linkedin.py`):
+- Draft generator composes the Option B narrative template. Every optional
+  field degrades gracefully (missing seniority drops the parenthetical,
+  missing skills drops the bullet block, etc). Hashtag list auto-includes a
+  function-based tag (`#PlantHead`, `#Sales`, …) when available.
+- `GET /api/linkedin/job-drafts?status=unposted|posted|all&q=&limit=&skip=` — lists drafts using same visibility rule as the public careers page (active + not-removed).
+- `GET /api/linkedin/job-drafts/{job_id}` — single-draft fetch.
+- `POST /api/linkedin/job-drafts/{job_id}/toggle-posted` — persists `linkedin_posted_at` on the job doc so admin UI can filter already-shared drafts.
+
+Frontend (`frontend/src/pages/admin/LinkedInJobDraftsPage.jsx`, new page):
+- Route: `/(admin|recruiter|employer)/linkedin-drafts`.
+- Sidebar nav link added for all 3 roles.
+- Search + status filter (unposted / posted / all) + load-more pagination (20/page).
+- Each card: job title, location, experience, function/seniority badges, "View job" external link, full draft in readonly `<textarea>`, character counter, "Copy draft" (LinkedIn brand blue) + "Mark as posted" / "Mark as unposted" buttons.
+
+Verified:
+- `GET /api/linkedin/job-drafts?status=all` → 871 drafts.
+- Toggle-posted round-trip: mark posted → appears in `?status=posted` → unmark → removed.
+- UI: 20 cards render on first paint, "Refresh" + "Load more" work, "Copy draft" writes text to clipboard.
+
+
 ### Phase 55.11q — Breadcrumbs + dynamic H2 on filtered careers views (2026-07-14)
 
 Long-tail SEO boost — when users apply filters at `/careers?location=mumbai&exp=3-7`,
