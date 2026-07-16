@@ -269,8 +269,8 @@ function DraftCard({ draft, copied, toggling, onCopy, onTogglePosted }) {
         <Textarea
           value={draft.text}
           readOnly
-          rows={9}
-          className="font-mono text-xs bg-slate-50 border-slate-200 resize-none"
+          rows={16}
+          className="font-mono text-xs bg-slate-50 border-slate-200 resize-y whitespace-pre-wrap"
           data-testid={`linkedin-draft-text-${draft.job_id}`}
         />
         <div className="flex items-center justify-between flex-wrap gap-2">

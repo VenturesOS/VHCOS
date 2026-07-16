@@ -286,8 +286,13 @@ async def list_job_drafts(
         "id": 1, "title": 1, "location": 1, "industry": 1,
         "function": 1, "seniority": 1,
         "experience_min": 1, "experience_max": 1,
+        "salary_min": 1, "salary_max": 1, "salary_currency": 1,
+        "description": 1, "job_description": 1, "summary": 1,
+        "requirements": 1, "qualifications": 1,
         "skills": 1, "key_skills": 1,
         "key_responsibilities": 1, "responsibilities": 1,
+        "employment_type": 1, "department": 1,
+        "company_name": 1, "client_name": 1, "public_company_alias": 1,
         "job_public_id": 1, "updated_at": 1,
         "linkedin_posted_at": 1,
     }

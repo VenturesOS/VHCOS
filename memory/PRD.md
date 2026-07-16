@@ -28,6 +28,45 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11t — Long-narrative LinkedIn drafts + NDA scrubber (2026-07-16)
+
+Drafts jumped from a 325-char single-paragraph template to a 1,200-1,600 char
+narrative with:
+- Hook + industry-specific opener (per `_INDUSTRY_ADJECTIVE` map — 20+ industries).
+- **About the role**: uses the job's own `description` / `job_description`
+  / `summary` field. Falls back to a curated per-function hook
+  (`_FUNCTION_HOOK`, 17 functions) so the section never sits empty.
+- **What we're looking for**: up to 5 skills/responsibilities bullets, deduped
+  and cleaned. Generic 3-bullet fallback keyed to industry + function if the
+  job has no skills on file.
+- **The good stuff**: ownership + compensation (₹ LPA if salary_min/max present) + location.
+- **Apply**: CTA + confidential DM invitation.
+- **Firm boilerplate** — Ventures HRD 25-year credibility line.
+- Hashtags now include `#{Function}`, `#{Industry}`, `#{Location}Jobs`.
+
+**NDA safety** (`_scrub_client_names`): every draft passes the description
+through a scrubber that finds any variant of the job's `company_name` /
+`client_name` (upper/lower/nospace + each significant word ≥3 chars while
+ignoring corporate noise words like "Ltd", "Networks", "Systems", "India")
+and replaces it with `public_company_alias` (else "our client"). Adjacent-
+alias collapse prevents "our client. Our client…" pileups.
+
+New backend files touched:
+- `services/linkedin_service.py`: `_INDUSTRY_ADJECTIVE`, `_FUNCTION_HOOK`,
+  `_FIRM_BOILERPLATE` constants; `_fmt_salary`, `_clean_paragraph`,
+  `_bullet_list`, `_scrub_client_names` helpers; `generate_job_linkedin_draft`
+  rewritten to 6-block skeleton.
+- `routes/linkedin.py`: projection expanded to include description,
+  salary, company_name, client_name, public_company_alias.
+
+Frontend: `LinkedInJobDraftsPage.jsx` textarea rows 9 → 16, resize-y,
+`whitespace-pre-wrap`.
+
+Verified: 3 diverse job samples all render 1,300-1,500 char drafts. Client
+name `iBUS` (from `company_name="IBUS networks"`) correctly replaced with
+`public_company_alias="A telecom company"`.
+
+
 ### Phase 55.11s — MongoDB Query Targeting alert fix (2026-07-16)
 
 Atlas fired "Scanned Objects / Returned > 1000" alerts on the primary. Root
