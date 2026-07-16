@@ -28,6 +28,32 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11s — MongoDB Query Targeting alert fix (2026-07-16)
+
+Atlas fired "Scanned Objects / Returned > 1000" alerts on the primary. Root
+cause: the recently widened `_PUBLIC_FILTER` (status=active + career_page_status
+!= removed + sort updated_at) had a matching compound index for the WHERE
+but not for the ORDER BY, so every hit ran a residual in-memory SORT after a
+full 872-doc range scan.
+
+Fix — two indexes added directly on prod Atlas (no code deploy needed for
+the indexes themselves; `_PUBLIC_FILTER` code path unchanged):
+1. `jobs.jobs_public_hot_idx = {status:1, career_page_status:1, updated_at:-1}`
+   → `/careers`, `/api/public/jobs`, `/api/sitemap.xml`, `/api/linkedin/job-drafts`.
+2. `jobs.linkedin_posted_at_idx = {linkedin_posted_at:1}` (sparse) →
+   `/api/linkedin/job-drafts?status=posted|unposted` predicate.
+
+Before/after (explain on `/careers` query):
+- totalDocsExamined: 872 → 24 (36× reduction, ratio now 1:1)
+- executionTimeMillis: 31ms → 18ms
+- Alert metric "Scanned/Returned": 36 → 1.0 (well below 1000 threshold)
+
+Other hot collections audited & confirmed healthy:
+- `api_metrics` (358K docs): TTL + endpoint+timestamp + is_error+timestamp indexes present.
+- `candidate_bank` (150K docs): 34 indexes across all query paths.
+- `activity_logs`, `naukri_capture_logs`: covered.
+
+
 ### Phase 55.11r — LinkedIn Job-Post Drafts (stopgap until org-post approval) (2026-07-16)
 
 Auto-generated "We're hiring" narrative drafts for every live mandate. Copy-
