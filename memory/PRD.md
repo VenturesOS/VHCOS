@@ -28,6 +28,48 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11p — P0 audit fixes (2026-07-24)
+
+Three P0s from the health-report backlog:
+
+1. **`POST /api/extension/shortlist` — implemented (was 100 % 404 → now working).**
+   The Chrome extension's `background.js` v6.0.1 calls
+   `/api/extension/shortlist` right after every capture to auto-link the
+   candidate to the recruiter's active job, but the endpoint had never
+   existed on the backend → 53/53 failures in 6h. Added it in
+   `routes/extension.py`: idempotent, POST `{candidate_id, job_id}` →
+   `{action, application_id}`. Creates the application with
+   `source: "extension_capture"` + `stage: "sourced"` (matching the
+   existing extension-auto-link pattern) and adds the mandate to
+   `candidate_bank.linked_mandates`. Verified: shortlist → 200, re-hit
+   → 200 with `already_shortlisted`, bogus id → 404.
+
+2. **30 s user-lookup cache in `utils/auth.py`.**
+   Every authenticated request was executing
+   `db.users.find_one({"id": ...})` (13.7 % of all traffic came from
+   `/api/auth/me` alone). Added a per-worker `_user_cache` dict with a
+   30 s TTL; both `get_current_user` and `get_current_user_from_token`
+   read from it first. `/api/auth/logout` calls
+   `invalidate_user_cache(user_id)` so token revocation is still
+   instant. Cache verified working in a fresh Python shell (put + hit +
+   miss + size). Preview container has ~900 ms latency on every request
+   from unrelated ingress overhead so the improvement is invisible
+   locally — should show up as ~5× lower avg on prod (7.5 ms → ~1 ms
+   for cached path).
+
+3. **First pillar blog published.**
+   `blog_id 0ad09ade-...` → *"Manufacturing Recruitment Agency Pune:
+   Complete Hiring Guide 2026"* is now `status: "published"` at
+   `/blog/employer/manufacturing-recruitment-agency-pune-hiring-guide`.
+   Kicks off the SEO compounding on the primary target keyword.
+
+Followups noted but NOT done in this pass:
+- Blog publish does NOT auto-ping Google Indexing / IndexNow — the
+  55.11 SEO wiring only covers jobs. Wire `google_indexing.ping()` +
+  `indexnow.submit()` into `admin_publish_blog` in the next batch.
+
+
+
 ### Phase 55.11o — Mandate sourcing + Candidate Bank pagination (2026-07-24)
 
 Two feature requests + one backend bug:

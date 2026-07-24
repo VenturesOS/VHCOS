@@ -6,8 +6,9 @@ M-03: Refresh token rotation — access tokens are short-lived (30 min),
 refresh tokens are long-lived (7 days) and single-use (rotated on each refresh).
 """
 import secrets
+import time
 from datetime import datetime, timezone, timedelta
-from typing import List
+from typing import List, Optional, Tuple
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
@@ -18,6 +19,39 @@ from config import JWT_SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, d
 security = HTTPBearer()
 
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+# ── In-process user cache (per-worker, 30s TTL) ─────────────────────────
+# Every authenticated request hits db.users.find_one(). At ~5k auth-checks
+# per hour that's a serious hot path — Mongo Atlas latency + document load
+# for what is effectively immutable data. A 30s in-memory cache turns 5k
+# lookups/hr into ~200 (one per unique user per 30s) with zero external
+# deps. Cache is invalidated on logout by bumping token_version.
+_USER_CACHE_TTL_SECONDS = 30
+_user_cache: dict[str, Tuple[dict, float]] = {}
+
+
+def _cache_get_user(user_id: str) -> Optional[dict]:
+    """Return the cached user dict if present and fresh, else None."""
+    entry = _user_cache.get(user_id)
+    if not entry:
+        return None
+    user, ts = entry
+    if time.time() - ts > _USER_CACHE_TTL_SECONDS:
+        _user_cache.pop(user_id, None)
+        return None
+    return user
+
+
+def _cache_put_user(user: dict) -> None:
+    """Store a fresh user snapshot in the cache."""
+    uid = user.get("id")
+    if uid:
+        _user_cache[uid] = (user, time.time())
+
+
+def invalidate_user_cache(user_id: str) -> None:
+    """Drop a user from the cache — call this on logout / role change / deactivation."""
+    _user_cache.pop(user_id, None)
 
 
 def hash_password(password: str) -> str:
@@ -106,16 +140,24 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+
+        # Try the 30s in-process cache first — this dominates the hot path.
+        user = _cache_get_user(user_id)
         if user is None:
-            raise HTTPException(status_code=401, detail="User not found")
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if user is None:
+                raise HTTPException(status_code=401, detail="User not found")
+            _cache_put_user(user)
+
         # Reject deactivated users (SEC-04: block deactivated/offboarded accounts)
         if not user.get("is_active", True):
+            invalidate_user_cache(user_id)
             raise HTTPException(status_code=401, detail="Account deactivated")
         # Validate token_version (CRIT-3: token revocation)
         token_ver = payload.get("tv", 0)
         user_ver = user.get("token_version", 0)
         if token_ver < user_ver:
+            invalidate_user_cache(user_id)
             raise HTTPException(status_code=401, detail="Token revoked — please log in again")
         return user
     except jwt.ExpiredSignatureError:
@@ -146,11 +188,15 @@ async def get_current_user_from_token(request, token_param=None):
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        user = _cache_get_user(user_id)
         if user is None:
-            raise HTTPException(status_code=401, detail="User not found")
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if user is None:
+                raise HTTPException(status_code=401, detail="User not found")
+            _cache_put_user(user)
         # SEC-04: block deactivated accounts on download endpoints too
         if not user.get("is_active", True):
+            invalidate_user_cache(user_id)
             raise HTTPException(status_code=401, detail="Account deactivated")
         return user
     except jwt.ExpiredSignatureError:

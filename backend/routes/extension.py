@@ -3155,6 +3155,93 @@ def _clean_skills(skills: list) -> list:
     return cleaned
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXTENSION AUTO-SHORTLIST (called by background.js after capture)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ShortlistRequest(_BaseModel):
+    candidate_id: str
+    job_id:       str
+
+
+@extension_router.post("/shortlist")
+async def extension_shortlist(
+    req: ShortlistRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Auto-shortlist a captured candidate against the recruiter's active job.
+
+    Fired by the Chrome extension's background.js right after a successful
+    capture when `item.active_job_id` is set. Idempotent — a re-hit for the
+    same (candidate, job) pair simply reports `already_shortlisted` instead
+    of erroring.
+
+    Response shape (contract with `background.js.shortlistCandidate`):
+        { action: "shortlisted" | "already_shortlisted", application_id: str }
+    """
+    # Verify both records exist. We use lightweight projections because this
+    # is called in the extension's hot path and we don't want to drag full
+    # documents across the wire.
+    candidate = await db.candidate_bank.find_one(
+        {"id": req.candidate_id},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1},
+    )
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    job = await db.jobs.find_one({"id": req.job_id}, {"_id": 0, "id": 1, "status": 1})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Idempotency: bail early if already linked.
+    existing = await db.applications.find_one(
+        {"candidate_id": req.candidate_id, "job_id": req.job_id},
+        {"_id": 0, "id": 1},
+    )
+    if existing:
+        # Also refresh linked_mandates (cheap upsert) so downstream filters see it.
+        await db.candidate_bank.update_one(
+            {"id": req.candidate_id},
+            {"$addToSet": {"linked_mandates": req.job_id}},
+        )
+        return {"action": "already_shortlisted", "application_id": existing["id"]}
+
+    now = datetime.now(timezone.utc).isoformat()
+    app_id = str(uuid.uuid4())
+    application = {
+        "id": app_id,
+        "job_id": req.job_id,
+        "candidate_id": req.candidate_id,
+        "candidate_name":  candidate.get("name", ""),
+        "candidate_email": candidate.get("email", ""),
+        "candidate_phone": candidate.get("phone", ""),
+        "stage": "sourced",
+        "status": "active",
+        "source": "extension_capture",
+        "created_by": current_user["id"],
+        "created_at": now,
+        "updated_at": now,
+        "stage_history": [{
+            "stage": "sourced",
+            "moved_by": current_user["id"],
+            "moved_by_name": current_user.get("name", ""),
+            "timestamp": now,
+        }],
+    }
+    await db.applications.insert_one(application)
+    await db.candidate_bank.update_one(
+        {"id": req.candidate_id},
+        {"$addToSet": {"linked_mandates": req.job_id}},
+    )
+    logger.info(
+        "[Extension] Shortlist %s → %s (app %s)",
+        req.candidate_id[:12], req.job_id[:12], app_id[:12],
+    )
+    return {"action": "shortlisted", "application_id": app_id}
+
+
+
 @extension_router.post("/re-enrich/{candidate_id}")
 async def re_enrich_candidate(
     candidate_id: str,

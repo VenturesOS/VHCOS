@@ -236,6 +236,9 @@ async def logout(current_user: dict = Depends(get_current_user)):
     )
     # Also clear all refresh tokens for this user
     await db.refresh_tokens.delete_many({"user_id": current_user["id"]})
+    # Drop the cached user snapshot so the next request re-reads the bumped token_version
+    from utils.auth import invalidate_user_cache
+    invalidate_user_cache(current_user["id"])
     return {"message": "Logged out successfully. All sessions invalidated."}
 
 
