@@ -111,6 +111,7 @@ class AttendanceSettingsUpdate(BaseModel):
     geo_fencing_enabled: Optional[bool] = None
     geo_fence_radius_meters: Optional[int] = None  # default 500
     offices: Optional[list] = None  # [{name: "HQ", latitude: 28.45, longitude: 77.02}, ...]
+    geo_fence_user_ids: Optional[list] = None  # Pilot rollout: when non-empty, ONLY these users are fenced
     is_paused: Optional[bool] = None
 
 class PreLaunchResetRequest(BaseModel):
@@ -158,6 +159,14 @@ async def _enforce_geo_fence(settings: dict, user: dict, latitude, longitude, wo
     """
     if not settings.get("geo_fencing_enabled") or work_mode != "office":
         return (None, None)
+
+    # Pilot-mode gate: when `geo_fence_user_ids` is non-empty, the fence
+    # ONLY applies to those specific users (e.g. "Delhi team pilot"). An
+    # empty list means "apply to everyone" — matches the pre-pilot behavior.
+    restricted_ids = settings.get("geo_fence_user_ids") or []
+    if restricted_ids and user.get("id") not in restricted_ids:
+        return (None, None)
+
     offices = settings.get("offices", [])
     if not offices:
         return (None, None)
@@ -1052,6 +1061,8 @@ async def update_attendance_settings(req: AttendanceSettingsUpdate, user=Depends
         updates["offices"] = req.offices
     if req.geo_fence_radius_meters is not None:
         updates["geo_fence_radius_meters"] = req.geo_fence_radius_meters
+    if req.geo_fence_user_ids is not None:
+        updates["geo_fence_user_ids"] = req.geo_fence_user_ids
 
     await db.attendance_settings.update_one(
         {"id": "global"}, {"$set": updates}, upsert=True

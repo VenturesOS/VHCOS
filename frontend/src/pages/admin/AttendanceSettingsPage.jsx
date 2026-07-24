@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { attendanceAPI } from '../../lib/api';
+import { attendanceAPI, userAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -17,13 +17,21 @@ export default function AttendanceSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await attendanceAPI.getSettings();
+        const [res, uRes] = await Promise.all([
+          attendanceAPI.getSettings(),
+          userAPI.getAll().catch(() => ({ data: [] })),
+        ]);
         setSettings(res.data);
         setDraft(res.data);
+        // Backend returns either an array or { users: [] } — normalize both.
+        const list = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.users || []);
+        setAllUsers(list.filter(u => u.is_active !== false));
       } catch { toast.error('Failed to load settings'); }
       finally { setLoading(false); }
     })();
@@ -242,6 +250,77 @@ export default function AttendanceSettingsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+              {/* Pilot rollout — restrict fence to specific users */}
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-2">
+                  <div>
+                    <Label className="text-sm font-medium">Pilot mode — restrict to specific users</Label>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      When any user is selected here, the fence applies <em>only</em> to them. Everyone
+                      else clocks in / out with no location check. Leave empty to fence <em>everyone</em>.
+                    </p>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0" data-testid="geo-restricted-count">
+                    {(draft?.geo_fence_user_ids || []).length} fenced
+                  </span>
+                </div>
+                <Input
+                  placeholder="Search users by name or email…"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="text-sm mb-2"
+                  data-testid="geo-user-search"
+                />
+                <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100 bg-white">
+                  {allUsers
+                    .filter(u => {
+                      if (!userSearch.trim()) return true;
+                      const q = userSearch.toLowerCase();
+                      return (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+                    })
+                    .slice(0, 200)
+                    .map(u => {
+                      const checked = (draft?.geo_fence_user_ids || []).includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm"
+                          data-testid={`geo-user-row-${u.id}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const ids = new Set(draft?.geo_fence_user_ids || []);
+                              if (e.target.checked) ids.add(u.id); else ids.delete(u.id);
+                              update('geo_fence_user_ids', Array.from(ids));
+                            }}
+                            className="rounded border-slate-300 text-green-600 focus:ring-green-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate font-medium text-slate-800">{u.name || '—'}</div>
+                            <div className="truncate text-[11px] text-slate-500">{u.email} · {u.role}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  {allUsers.length === 0 && (
+                    <div className="text-center text-xs text-slate-500 py-4">No users loaded.</div>
+                  )}
+                </div>
+                {(draft?.geo_fence_user_ids || []).length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="mt-2 text-xs text-slate-500 hover:text-red-600"
+                    onClick={() => update('geo_fence_user_ids', [])}
+                    data-testid="geo-clear-users"
+                  >
+                    Clear all — fence everyone
+                  </Button>
+                )}
               </div>
             </div>
           )}

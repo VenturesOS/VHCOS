@@ -28,6 +28,43 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11s — Pilot rollout for geo-fence (2026-07-24)
+
+Real-world rollout constraint: only the Delhi team is ready to be
+fenced; everyone else keeps clocking in with no location check while we
+prove the mechanism works. Added a **user-scoped opt-in list** on top
+of the existing global toggle so admin can flip the switch without
+disrupting the rest of the org.
+
+* **Backend** (`routes/attendance.py`): added
+  `geo_fence_user_ids: List[str]` to `AttendanceSettingsUpdate` and the
+  settings persistence path. `_enforce_geo_fence()` now short-circuits
+  with `return (None, None)` when the list is non-empty AND the current
+  user isn't in it — meaning "no fence for this user." Empty list keeps
+  the pre-pilot behavior of fencing everyone (backwards compatible).
+
+* **Frontend** (`admin/AttendanceSettingsPage.jsx`): new "Pilot mode —
+  restrict to specific users" section under the offices list. Includes:
+    - Live count badge (e.g. "3 fenced")
+    - Search box (name or email)
+    - Scrollable checkbox list of all active users (up to 200)
+    - "Clear all — fence everyone" quick-action
+  Loads users via `userAPI.getAll()` on mount.
+
+* Verified end-to-end:
+    - Only OTHER user in list → admin checks in from anywhere (200)
+    - Admin added to list → same coords → 403 blocked
+    - Empty list + fencing enabled → falls back to "fence everyone"
+
+Rollout guide for Delhi pilot:
+  1. `/admin/attendance-settings` → enable geo-fencing → add Delhi
+     office (map picker → 50m radius)
+  2. In the new pilot section, tick every Delhi team member
+  3. Save → only they will hit the fence; the rest of the org is
+     unaffected
+
+
+
 ### Phase 55.11r — Map picker + auto-nudge + field-visit override (2026-07-24)
 
 Three feature requests on top of the fresh geo-fence:
