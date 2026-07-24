@@ -39,6 +39,10 @@ export default function AttendancePage() {
   const [checking, setChecking] = useState(false);
   const [workMode, setWorkMode] = useState('office');
   const [isPaused, setIsPaused] = useState(false);
+  // Field-visit escape hatch: recruiters clocking out from a client site.
+  // Fence is skipped when checked, but backend requires a non-empty reason.
+  const [fieldVisit, setFieldVisit] = useState(false);
+  const [fieldVisitReason, setFieldVisitReason] = useState('');
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -99,19 +103,26 @@ export default function AttendancePage() {
   };
 
   const handleCheckOut = async () => {
+    // Guard: force a reason when the user opts for a field-visit override.
+    if (fieldVisit && !fieldVisitReason.trim()) {
+      toast.error('Please add a reason for the field-visit check-out.');
+      return;
+    }
     setChecking(true);
     try {
-      // Send the same work_mode we checked in with — server also falls back
-      // to the record's mode if this is missing, but sending it keeps the
-      // client honest and lets us skip GPS for wfh/field check-outs.
       const checkedInMode = todayRecord?.work_mode || workMode;
       const payload = { work_mode: checkedInMode };
-      if (checkedInMode === 'office') {
+      if (fieldVisit) {
+        payload.field_visit = true;
+        payload.field_visit_reason = fieldVisitReason.trim();
+      } else if (checkedInMode === 'office') {
         Object.assign(payload, await grabGeoLocation());
       }
       const res = await attendanceAPI.checkOut(payload);
       setTodayRecord(res.data);
-      toast.success('Checked out successfully!');
+      toast.success(fieldVisit ? 'Field-visit check-out recorded.' : 'Checked out successfully!');
+      setFieldVisit(false);
+      setFieldVisitReason('');
       loadData();
     } catch (e) { toast.error(e.response?.data?.detail || 'Check-out failed'); }
     finally { setChecking(false); }
@@ -190,10 +201,33 @@ export default function AttendancePage() {
                 </>
               )}
               {hasCheckedIn && !hasCheckedOut && (
-                <Button onClick={handleCheckOut} disabled={checking || isPaused} variant="destructive" data-testid="check-out-btn">
-                  {checking ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <LogOut className="h-4 w-4 mr-1" />}
-                  Check Out
-                </Button>
+                <div className="flex flex-col gap-2 items-end w-full sm:w-auto">
+                  <label className="flex items-center gap-2 text-sm text-slate-600 select-none" data-testid="field-visit-toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={fieldVisit}
+                      onChange={(e) => setFieldVisit(e.target.checked)}
+                      className="rounded border-slate-300 text-green-600 focus:ring-green-500"
+                      data-testid="field-visit-toggle"
+                    />
+                    <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                    Field visit (off-site meeting)
+                  </label>
+                  {fieldVisit && (
+                    <textarea
+                      value={fieldVisitReason}
+                      onChange={(e) => setFieldVisitReason(e.target.value)}
+                      placeholder="Reason — e.g. Client meeting at ABC Motors Chakan, plant walk-through at Bharat Forge"
+                      rows={2}
+                      className="w-full sm:w-96 text-sm rounded-md border border-slate-300 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
+                      data-testid="field-visit-reason"
+                    />
+                  )}
+                  <Button onClick={handleCheckOut} disabled={checking || isPaused} variant="destructive" data-testid="check-out-btn">
+                    {checking ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <LogOut className="h-4 w-4 mr-1" />}
+                    Check Out
+                  </Button>
+                </div>
               )}
               {hasCheckedOut && <Badge className="bg-green-100 text-green-700 text-sm px-3 py-1">Day Complete</Badge>}
             </div>

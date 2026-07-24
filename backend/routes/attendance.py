@@ -56,6 +56,8 @@ class CheckOutRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     work_mode: str = "office"  # office|wfh|field — matches check-in
+    field_visit: bool = False  # Sales/recruiter off-site meeting override
+    field_visit_reason: Optional[str] = None  # required when field_visit=True
 
 class AdminMarkRequest(BaseModel):
     user_id: str
@@ -208,6 +210,37 @@ async def _enforce_geo_fence(settings: dict, user: dict, latitude, longitude, wo
             "created_at": _now_ist().isoformat(),
             "date":       _now_ist().strftime("%Y-%m-%d"),
         })
+        # Auto-nudge — surface an in-app notification so the user gets a
+        # persistent prompt (not just a toast that disappears) telling them
+        # to physically return to the office. Non-blocking: nudge failures
+        # never break the fence rejection itself.
+        try:
+            from routes.notifications import create_notification
+            uid = user.get("id")
+            if uid:
+                await create_notification(
+                    user_id=uid,
+                    notification_type="attendance",
+                    title=f"Geo-fence blocked your {action}",
+                    message=(
+                        f"You attempted to {action} from {int(nearest_distance)}m "
+                        f"away from {nearest_office}. Only within-{radius}m "
+                        f"{action}s are recorded. Please return to the office "
+                        f"and try again — or contact your manager if this is a "
+                        f"legitimate field visit."
+                    ),
+                    link="/attendance",
+                    metadata={
+                        "action":     action,
+                        "distance_m": int(nearest_distance),
+                        "office":     nearest_office,
+                        "radius_m":   radius,
+                    },
+                )
+        except Exception:
+            # Notification failures MUST NOT block the fence rejection.
+            pass
+
         raise HTTPException(
             status_code=403,
             detail=(
@@ -343,11 +376,20 @@ async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "r
 
     # Geo-fencing check on check-out — inherits `work_mode` from the check-in
     # record so someone who checked in "wfh" isn't suddenly forced to be at
-    # the office to clock out (and vice versa).
-    effective_mode = record.get("work_mode") or req.work_mode
-    fenced_office, fenced_distance = await _enforce_geo_fence(
-        settings, user, req.latitude, req.longitude, effective_mode, "check-out",
-    )
+    # the office to clock out (and vice versa). Field-visit mode ALSO skips
+    # the fence, but requires a mandatory reason so admins can audit later.
+    if req.field_visit:
+        if not req.field_visit_reason or not req.field_visit_reason.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Field visit check-out requires a reason (e.g. client meeting, plant visit).",
+            )
+        fenced_office, fenced_distance = (None, None)
+    else:
+        effective_mode = record.get("work_mode") or req.work_mode
+        fenced_office, fenced_distance = await _enforce_geo_fence(
+            settings, user, req.latitude, req.longitude, effective_mode, "check-out",
+        )
 
     now_time = _now_ist().strftime("%H:%M")
     hours = _calc_hours(record["check_in"], now_time)
@@ -369,6 +411,8 @@ async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "r
             "check_out_longitude":  req.longitude,
             "check_out_office":     fenced_office,
             "check_out_distance_m": fenced_distance,
+            "field_visit":          bool(req.field_visit),
+            "field_visit_reason":   (req.field_visit_reason or "").strip() if req.field_visit else None,
             "updated_at": _now_ist().isoformat(),
         }}
     )

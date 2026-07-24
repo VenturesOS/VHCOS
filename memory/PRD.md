@@ -28,6 +28,53 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11r — Map picker + auto-nudge + field-visit override (2026-07-24)
+
+Three feature requests on top of the fresh geo-fence:
+
+1. **Interactive office map picker (Leaflet + OpenStreetMap)**
+   `components/attendance/OfficeMapPicker.jsx` — new reusable component
+   using `react-leaflet@5` and OSM tiles (no API key, no billing). Admins
+   click anywhere on the map to drop a pin OR hit "Use my current
+   location" to snap the pin to their device GPS. Coords display with 6-
+   decimal precision and stream straight into the parent form. Wired
+   into `AttendanceSettingsPage.jsx` — the three raw lat/long/name text
+   inputs are gone; each office row now shows one Name input + one
+   embedded map. New deps: `leaflet@1.9.4`, `react-leaflet@5.0.0`.
+
+2. **Auto-nudge on every fence rejection**
+   `_enforce_geo_fence()` now calls `create_notification()` immediately
+   after logging the violation. The user gets a persistent in-app
+   notification titled *"Geo-fence blocked your check-out"* (or
+   check-in) with the exact distance, office name, and radius —
+   surviving the toast that disappears in 4 s. Notification link points
+   to `/attendance`; metadata carries `{action, distance_m, office,
+   radius_m}` for future analytics. Failure to create the notification
+   is swallowed so it never blocks the fence rejection itself.
+
+3. **Field-visit escape hatch**
+   `CheckOutRequest` gained `field_visit: bool` +
+   `field_visit_reason: str`. When `field_visit=True`:
+     - Fence check is **skipped** entirely (still validates the reason
+       is non-empty, else 400).
+     - `field_visit` + `field_visit_reason` are persisted on the
+       attendance record for admin audit.
+   Frontend (`shared/AttendancePage.jsx`) shows a checkbox above the
+   Check Out button — checking it reveals a mandatory reason textarea
+   ("Client meeting at ABC Motors Chakan, plant walk-through at Bharat
+   Forge"). Reason placeholder is opinionated to match VHC's real use
+   case (recruiter/AM off-site meetings).
+
+Verified end-to-end with curl:
+  • Office check-in → 200
+  • Home check-out → 403 + auto-nudge notification created
+    (attendance type, correct metadata)
+  • Field-visit without reason → 400 with clear detail
+  • Field-visit WITH reason → 200, fence skipped, reason stored
+  • Attendance record shows `field_visit=True` + reason for audit
+
+
+
 ### Phase 55.11q — Attendance geo-fence on both check-in AND check-out (2026-07-24)
 
 Real-world problem: staff were checking in "on the way" and checking out

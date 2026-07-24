@@ -7,6 +7,7 @@ import { Label } from '../../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 import { Settings, Clock, AlertTriangle, Calendar, Timer, Save, Loader2, RotateCcw, PauseCircle, PlayCircle, Trash2, ShieldAlert, MapPin } from 'lucide-react';
+import { OfficeMapPicker } from '../../components/attendance/OfficeMapPicker';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -222,22 +223,21 @@ export default function AttendanceSettingsPage() {
                           update('offices', offices);
                         }}>x</Button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="space-y-2">
                         <Input placeholder="Office name (e.g. HQ, Branch-2)" value={office.name || ''} onChange={e => {
                           const offices = [...(draft?.offices || [])];
                           offices[i] = { ...offices[i], name: e.target.value };
                           update('offices', offices);
                         }} className="text-sm" data-testid={`office-name-${i}`} />
-                        <Input type="number" step="0.0001" placeholder="Latitude" value={office.latitude || ''} onChange={e => {
-                          const offices = [...(draft?.offices || [])];
-                          offices[i] = { ...offices[i], latitude: parseFloat(e.target.value) || '' };
-                          update('offices', offices);
-                        }} className="text-sm" data-testid={`office-lat-${i}`} />
-                        <Input type="number" step="0.0001" placeholder="Longitude" value={office.longitude || ''} onChange={e => {
-                          const offices = [...(draft?.offices || [])];
-                          offices[i] = { ...offices[i], longitude: parseFloat(e.target.value) || '' };
-                          update('offices', offices);
-                        }} className="text-sm" data-testid={`office-lon-${i}`} />
+                        <OfficeMapPicker
+                          latitude={office.latitude}
+                          longitude={office.longitude}
+                          onChange={(lat, lon) => {
+                            const offices = [...(draft?.offices || [])];
+                            offices[i] = { ...offices[i], latitude: lat, longitude: lon };
+                            update('offices', offices);
+                          }}
+                        />
                       </div>
                     </div>
                   ))}
