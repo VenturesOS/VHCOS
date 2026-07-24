@@ -106,7 +106,18 @@ async def comprehensive_sitemap():
                     headers={"Cache-Control": "public, max-age=3600"})
 
 
-# ── robots.txt (served from backend for dynamic control) ──
+# ── robots.txt for API subdomain (api.ventureshrd.com/robots.txt) ──
+# Search engines were hitting api.ventureshrd.com/robots.txt and getting 404s
+# from Nginx logs. This tells crawlers to stay off the API subdomain entirely.
+
+@router.get("/robots.txt")
+async def api_subdomain_robots_txt():
+    """Disallow all crawling on the API subdomain."""
+    content = "User-agent: *\nDisallow: /\n"
+    return PlainTextResponse(content=content, headers={"Cache-Control": "public, max-age=86400"})
+
+
+# ── robots.txt (served from backend for dynamic control on marketing site) ──
 
 @router.get("/api/robots.txt")
 async def robots_txt():

@@ -45,12 +45,15 @@ export default function NotificationBell() {
     }
   }, []);
 
-  // Poll unread count every 60s with backoff on failure.
+  // Poll unread count every 120s with backoff on failure.
   // Hidden tabs skip the fetch entirely (recruiters keep many portal tabs
   // open — idle tabs were generating ~40% of all API traffic) and refresh
   // immediately when the tab becomes visible again.
+  // Phase 55.11.n: bumped 60s → 120s to cut notifications polling load in half
+  // (was ~13% of all traffic, now ~6.5%). Users still see fresh counts on
+  // tab focus and after in-app actions.
   useEffect(() => {
-    let interval = 60000;
+    let interval = 120000;
     let failCount = 0;
     let timer;
     const poll = async () => {
@@ -61,10 +64,10 @@ export default function NotificationBell() {
       try {
         await fetchCount();
         failCount = 0;
-        interval = 60000;
+        interval = 120000;
       } catch {
         failCount++;
-        interval = Math.min(60000 * Math.pow(2, failCount), 300000);
+        interval = Math.min(120000 * Math.pow(2, failCount), 600000);
       }
       timer = setTimeout(poll, interval);
     };

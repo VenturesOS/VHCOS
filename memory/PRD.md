@@ -28,6 +28,32 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11n — Health monitoring + traffic trim (2026-07-24)
+
+Three autonomous cleanups from the Phase 55.11 audit backlog:
+
+1. **API subdomain `robots.txt`** — Nginx logs showed search engines hitting
+   `api.ventureshrd.com/robots.txt` and getting 404s. Added a root-level
+   `/robots.txt` route on the FastAPI app (`routes/seo.py`) that returns
+   `User-agent: *\nDisallow: /` (24h cache). Verified locally: HTTP 200
+   with correct body. No Nginx change required — FastAPI already handles
+   root paths for the API host.
+
+2. **Notification polling halved** — `NotificationBell.jsx` poll cadence
+   bumped 60s → 120s (backoff ceiling 300s → 600s). Users still see fresh
+   counts on tab focus + after in-app actions. Cuts `/api/notifications/
+   unread-count` from ~13% of all traffic down to ~6.5%.
+
+3. **Slow-endpoint diagnostic script** — Created
+   `backend/scripts/report_slow_endpoints.py`. Prior ad-hoc script returned
+   empty because it filtered on `timestamp` as a BSON `Date`, but the
+   middleware writes epoch `float`s from `time.time()`. New script matches
+   on numeric `$gte`, sorts by `duration_ms` (correct field name), and
+   prints three panels: top 15 slow endpoints, top 15 traffic hogs, top 15
+   error-prone endpoints. Usage: `python3 -m backend.scripts.report_slow_endpoints --hours 6`.
+
+
+
 ### Phase 55.11t — Long-narrative LinkedIn drafts + NDA scrubber (2026-07-16)
 
 Drafts jumped from a 325-char single-paragraph template to a 1,200-1,600 char
