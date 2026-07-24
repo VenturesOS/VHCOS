@@ -20,6 +20,8 @@ export default function EmployerCandidateBankPage() {
   const navigate = useNavigate();
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -161,29 +163,39 @@ export default function EmployerCandidateBankPage() {
     document.body.removeChild(link);
   };
 
-  const loadCandidates = async (page) => {
-    setLoading(true);
+  const loadCandidates = async (page, { append = false } = {}) => {
+    if (append) setLoadingMore(true); else setLoading(true);
     try {
       const params = getApiParams(page);
+      // When appending (Load More), use cursor-based pagination for O(1) speed
+      if (append && nextCursor) { params.cursor = nextCursor; delete params.page; }
 
       const res = await candidateBankAPI.getAll(params);
       const data = res.data;
       if (data && Array.isArray(data.candidates)) {
-        setCandidates(data.candidates);
+        setCandidates(prev => append ? [...prev, ...data.candidates] : data.candidates);
         setTotalCount(data.total || data.candidates.length);
         setCurrentPage(data.page || 1);
+        setNextCursor(data.next_cursor || null);
       } else if (Array.isArray(data)) {
-        setCandidates(data);
+        setCandidates(append ? prev => [...prev, ...data] : data);
         setTotalCount(data.length);
+        setNextCursor(null);
       } else {
-        setCandidates([]);
+        if (!append) setCandidates([]);
         setTotalCount(0);
+        setNextCursor(null);
       }
     } catch (error) {
       toast.error('Failed to load candidates');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    if (nextCursor && !loadingMore) loadCandidates(undefined, { append: true });
   };
 
   const handleUpload = async (e) => {
@@ -451,6 +463,19 @@ export default function EmployerCandidateBankPage() {
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+          {!loading && nextCursor && (
+            <div className="border-t border-slate-100 px-4 py-4 flex flex-col items-center gap-2 bg-slate-50/50">
+              <Button
+                variant="outline"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="w-full sm:w-auto border-[#7CB342] text-[#7CB342] hover:bg-green-50"
+                data-testid="load-more-btn"
+              >
+                {loadingMore ? 'Loading...' : `Load More (${candidates.length} of ${totalCount})`}
+              </Button>
             </div>
           )}
         </CardContent>

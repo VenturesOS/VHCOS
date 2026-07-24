@@ -2056,13 +2056,20 @@ async def list_candidates(
             )
             if fast is not None:
                 fast_docs, fast_total = fast
+                # Only expose a cursor when there are actually more rows to
+                # fetch (i.e. this page filled up AND more exist). Cursor is
+                # the id of the last row (list is sorted by created_at desc,
+                # matching the cursor logic at the top of this endpoint).
+                fast_next_cursor = None
+                if fast_docs and len(fast_docs) >= limit and (skip + len(fast_docs)) < fast_total:
+                    fast_next_cursor = fast_docs[-1].get("id")
                 return {
                     "candidates": fast_docs,
                     "total":      fast_total,
                     "page":       page,
                     "limit":      limit,
                     "pages":      (fast_total + limit - 1) // limit if limit else 0,
-                    "next_cursor": None,
+                    "next_cursor": fast_next_cursor,
                 }
         except Exception as _e:
             logger.warning(f"[list_candidates] fast_search unavailable, using legacy path: {_e}")
@@ -2113,8 +2120,12 @@ async def list_candidates(
             .to_list(limit)
         )
 
-    # Compute next_cursor from last document
-    next_cursor = docs[-1]["id"] if docs else None
+    # Compute next_cursor — but only if this page is full AND more rows exist
+    # after this page. Otherwise the client will show a bogus "Load More"
+    # button that just loads zero new candidates.
+    next_cursor = None
+    if docs and len(docs) >= limit and (skip + len(docs)) < total:
+        next_cursor = docs[-1].get("id")
 
     return {
         "candidates": docs,

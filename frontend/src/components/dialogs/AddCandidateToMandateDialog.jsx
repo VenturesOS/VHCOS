@@ -198,8 +198,21 @@ export function AddCandidateToMandateDialog({ open, onOpenChange, job, onCandida
     if (!job?.id) return;
     setLoadingSourced(true);
     try {
-      const res = await candidateBankAPI.getAll({ mandate_id: job.id, limit: 50 });
-      setSourcedCandidates(res.data.candidates || res.data || []);
+      // Load ALL candidates captured under this mandate — no cap.
+      // Backend limits each page to 100, so we loop the cursor until exhausted.
+      const acc = [];
+      let cursor = null;
+      let safety = 20; // hard stop at 2000 candidates just in case
+      do {
+        const params = { mandate_id: job.id, limit: 100 };
+        if (cursor) params.cursor = cursor;
+        const res = await candidateBankAPI.getAll(params);
+        const page = res.data?.candidates || res.data || [];
+        acc.push(...page);
+        cursor = res.data?.next_cursor || null;
+        safety -= 1;
+      } while (cursor && safety > 0);
+      setSourcedCandidates(acc);
     } catch {
       setSourcedCandidates([]);
     } finally {

@@ -32,6 +32,8 @@ export default function RecruiterCandidateBankPage() {
   const [uploadForm, setUploadForm] = useState({ email: '', name: '' });
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
 
   const filterHook = useCandidateBankFilters();
   const { currentPage, setCurrentPage, getApiParams, debouncedSearch, debouncedSkills } = filterHook;
@@ -60,31 +62,40 @@ export default function RecruiterCandidateBankPage() {
     designation: '', industry: ''
   });
 
-  const loadCandidates = useCallback(async (page) => {
-    setLoading(true);
+  const loadCandidates = useCallback(async (page, { append = false } = {}) => {
+    if (append) setLoadingMore(true); else setLoading(true);
     try {
       const params = getApiParams(page);
+      if (append && nextCursor) { params.cursor = nextCursor; delete params.page; }
 
       const res = await candidateBankAPI.getAll(params);
       const data = res.data;
       if (data && Array.isArray(data.candidates)) {
-        setCandidates(data.candidates);
+        setCandidates(prev => append ? [...prev, ...data.candidates] : data.candidates);
         setTotalCount(data.total || data.candidates.length);
         setTotalPages(data.pages || 1);
         setCurrentPage(data.page || 1);
+        setNextCursor(data.next_cursor || null);
       } else if (Array.isArray(data)) {
-        setCandidates(data);
+        setCandidates(prev => append ? [...prev, ...data] : data);
         setTotalCount(data.length);
+        setNextCursor(null);
       } else {
-        setCandidates([]);
+        if (!append) setCandidates([]);
         setTotalCount(0);
+        setNextCursor(null);
       }
     } catch (error) {
       toast.error('Failed to load candidates');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [getApiParams, setCurrentPage]);
+  }, [getApiParams, setCurrentPage, nextCursor]);
+
+  const handleLoadMore = () => {
+    if (nextCursor && !loadingMore) loadCandidates(undefined, { append: true });
+  };
 
   useEffect(() => {
     // Skip the heavy list fetch when opened via extension deep-link
@@ -383,17 +394,6 @@ export default function RecruiterCandidateBankPage() {
               <Database className="w-5 h-5 text-[#7CB342]" />
               Candidates ({totalCount})
             </CardTitle>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2 text-sm" data-testid="pagination">
-                <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => loadCandidates(currentPage - 1)} data-testid="prev-page">
-                  Prev
-                </Button>
-                <span className="text-slate-500">Page {currentPage} of {totalPages}</span>
-                <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => loadCandidates(currentPage + 1)} data-testid="next-page">
-                  Next
-                </Button>
-              </div>
-            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -518,6 +518,19 @@ export default function RecruiterCandidateBankPage() {
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+          {!loading && nextCursor && (
+            <div className="border-t border-slate-100 px-4 py-4 flex flex-col items-center gap-2 bg-slate-50/50">
+              <Button
+                variant="outline"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="w-full sm:w-auto border-[#7CB342] text-[#7CB342] hover:bg-green-50"
+                data-testid="load-more-btn"
+              >
+                {loadingMore ? 'Loading...' : `Load More (${candidates.length} of ${totalCount})`}
+              </Button>
             </div>
           )}
         </CardContent>

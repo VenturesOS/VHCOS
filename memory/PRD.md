@@ -28,7 +28,63 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11o — Mandate sourcing + Candidate Bank pagination (2026-07-24)
+
+Two feature requests + one backend bug:
+
+1. **"Add Candidate to Mandate" — Sourced tab now loads ALL candidates.**
+   Was capped at 50 (`limit: 50` in a single call). Some mandates have
+   1000+ extension-captured candidates. `AddCandidateToMandateDialog.jsx`
+   now loops the cursor pagination internally (100 per request, up to
+   2000 as a safety ceiling) so the dialog shows the complete list.
+   Verified: mandate `f5484ec0-...` returns all 1,026 rows in 11 pages.
+
+2. **Candidate Bank — "Load More (+50)" everywhere.**
+   Reintroduced the Load-More button on `EmployerCandidateBankPage.jsx`
+   (had no pagination at all — stuck at 50 forever) and
+   `RecruiterCandidateBankPage.jsx` (had prev/next which thrashed the
+   context on every click; now infinite-scroll style). Both use
+   cursor-based pagination for O(1) speed. `CandidateDataBankPage.jsx`
+   (admin) already had the button but was silently broken by bug #3.
+
+3. **Backend bug — `next_cursor` was always `None`.**
+   Both the fast-path (`quick_search`) and the legacy path returned
+   `next_cursor: None`, so Load More either flashed once or never
+   appeared. Now `next_cursor = docs[-1].id` whenever the page is
+   full AND `skip + returned < total`. File: `routes/candidates.py`.
+
+
+
 ### Phase 55.11n — Health monitoring + traffic trim + content sprint + SSE (2026-07-24)
+
+Two feature requests + one backend bug:
+
+1. **"Add Candidate to Mandate" — Sourced tab now loads ALL candidates**
+   Was capped at 50 (`limit: 50` in a single call). Some mandates have
+   1000+ extension-captured candidates. `AddCandidateToMandateDialog.jsx`
+   now loops the cursor pagination internally (100 per request, up to
+   2000 as a safety ceiling) so the dialog shows the complete list.
+   Verified: mandate `f5484ec0-...` returns all 1,026 rows in 11 pages
+   in under a second.
+
+2. **Candidate Bank — "Load More (+50)" everywhere**
+   Reintroduced the classic Load-More button on
+   `EmployerCandidateBankPage.jsx` (had no pagination at all — stuck at
+   50 forever) and `RecruiterCandidateBankPage.jsx` (had prev/next which
+   thrashed context on every click; now scrolls infinitely). Both use
+   cursor-based pagination for O(1) speed regardless of depth.
+   `CandidateDataBankPage.jsx` (admin) already had the button but was
+   silently broken due to bug #3 below — now works.
+
+3. **Backend fix — `next_cursor` was always `None`**
+   Both the fast-path (`quick_search`) and the legacy path returned
+   `next_cursor: None` for the offset mode, which meant Load More
+   buttons showed for exactly one click and then vanished (or never
+   showed). Now `next_cursor` is set to the last row's id whenever the
+   page is full AND `skip + returned < total`.
+   File: `routes/candidates.py`.
+
+
 
 Autonomous cleanups from the Phase 55.11 audit backlog:
 
