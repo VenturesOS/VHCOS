@@ -45,39 +45,57 @@ export default function NotificationBell() {
     }
   }, []);
 
-  // Poll unread count every 120s with backoff on failure.
-  // Hidden tabs skip the fetch entirely (recruiters keep many portal tabs
-  // open — idle tabs were generating ~40% of all API traffic) and refresh
-  // immediately when the tab becomes visible again.
-  // Phase 55.11.n: bumped 60s → 120s to cut notifications polling load in half
-  // (was ~13% of all traffic, now ~6.5%). Users still see fresh counts on
-  // tab focus and after in-app actions.
+  // SSE live stream — replaces the old 120s HTTP poll.
+  // Same-worker mutations reach us in ~100ms; cross-worker within 60s
+  // via the server-side heartbeat. Browser auto-reconnects on drop.
+  // EventSource can't set Authorization headers, so the JWT is passed
+  // as ?token=… (server accepts token via query param on this endpoint).
   useEffect(() => {
-    let interval = 120000;
-    let failCount = 0;
-    let timer;
-    const poll = async () => {
-      if (document.hidden) {
-        timer = setTimeout(poll, interval);
-        return;
-      }
-      try {
-        await fetchCount();
-        failCount = 0;
-        interval = 120000;
-      } catch {
-        failCount++;
-        interval = Math.min(120000 * Math.pow(2, failCount), 600000);
-      }
-      timer = setTimeout(poll, interval);
+    const backendUrl = process.env.REACT_APP_BACKEND_URL;
+    const token = localStorage.getItem('vhc_token');
+    if (!backendUrl || !token) {
+      // Not logged in / no backend URL — nothing to stream.
+      return undefined;
+    }
+
+    let es;
+    let reconnectTimer;
+    let closed = false;
+
+    const connect = () => {
+      if (closed) return;
+      const url = `${backendUrl}/api/notifications/stream?token=${encodeURIComponent(token)}`;
+      es = new EventSource(url);
+
+      es.addEventListener('count', (evt) => {
+        const n = parseInt(evt.data, 10);
+        if (!Number.isNaN(n)) setUnreadCount(n);
+      });
+
+      es.onerror = () => {
+        // EventSource auto-reconnects on transient errors. If the server
+        // closes us (auth expired, redeploy), the readyState goes to CLOSED
+        // and we must manually schedule a fresh connection with backoff.
+        if (es && es.readyState === 2 /* CLOSED */ && !closed) {
+          es.close();
+          reconnectTimer = setTimeout(connect, 15000);
+        }
+      };
     };
-    poll();
+
+    connect();
+
+    // Refresh count when the tab regains focus in case the SSE stream is
+    // silently stalled behind a broken proxy.
     const onVisible = () => {
       if (!document.hidden) fetchCount();
     };
     document.addEventListener('visibilitychange', onVisible);
+
     return () => {
-      clearTimeout(timer);
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (es) es.close();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [fetchCount]);

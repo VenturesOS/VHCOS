@@ -28,9 +28,9 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
-### Phase 55.11n — Health monitoring + traffic trim (2026-07-24)
+### Phase 55.11n — Health monitoring + traffic trim + content sprint + SSE (2026-07-24)
 
-Three autonomous cleanups from the Phase 55.11 audit backlog:
+Autonomous cleanups from the Phase 55.11 audit backlog:
 
 1. **API subdomain `robots.txt`** — Nginx logs showed search engines hitting
    `api.ventureshrd.com/robots.txt` and getting 404s. Added a root-level
@@ -39,18 +39,51 @@ Three autonomous cleanups from the Phase 55.11 audit backlog:
    with correct body. No Nginx change required — FastAPI already handles
    root paths for the API host.
 
-2. **Notification polling halved** — `NotificationBell.jsx` poll cadence
-   bumped 60s → 120s (backoff ceiling 300s → 600s). Users still see fresh
-   counts on tab focus + after in-app actions. Cuts `/api/notifications/
-   unread-count` from ~13% of all traffic down to ~6.5%.
+2. **Notification polling → SSE (100 % of poll traffic gone)** —
+   `NotificationBell.jsx` no longer polls `/api/notifications/unread-count`
+   at all. Replaced with an `EventSource` connected to a new SSE endpoint
+   `GET /api/notifications/stream?token=<jwt>` (JWT via query param
+   because `EventSource` cannot set headers). Design:
+     * In-process `asyncio.Queue` pub/sub, one queue per SSE subscriber.
+     * `create_notification()`, mark-as-read, mark-all-read and delete
+       endpoints call `_publish_unread_change(user_id)` after mutating.
+     * Same-worker events push to the browser in ~100 ms. Cross-worker
+       events are picked up by a 60 s server-side heartbeat that re-reads
+       `count_documents` and only emits when the value changed (else
+       sends a `:ping` comment to keep proxies from closing the stream).
+     * `X-Accel-Buffering: no` header stops nginx from buffering.
+     * Browser `EventSource` auto-reconnects on transient drops; on
+       explicit CLOSED (auth expired / redeploy) we retry after 15 s.
+   Verified: SSE emits `event: count` on connect (initial value) and
+   again within 100 ms of a same-worker mutation (`0 → 2` observed with
+   3 inserts + 1 delete). `/api/notifications/unread-count` remains only
+   as a fallback used by tab-focus refresh; steady-state HTTP polling
+   traffic to that endpoint is now zero.
 
-3. **Slow-endpoint diagnostic script** — Created
+3. **Content Sprint executed** — Ran
+   `python3 scripts/content_sprint_kickstart.py --base-url http://localhost:8001`.
+   All 20 blog drafts generated via Groq Llama-3.3-70b in ~13 min,
+   **0 failures**. 5 pillar articles + 15 clusters landed in the
+   `blog_posts` collection with `status = "draft"` for editor review at
+   `/admin/blog-engine`.
+
+4. **Slow-endpoint diagnostic script** — Created
    `backend/scripts/report_slow_endpoints.py`. Prior ad-hoc script returned
    empty because it filtered on `timestamp` as a BSON `Date`, but the
    middleware writes epoch `float`s from `time.time()`. New script matches
    on numeric `$gte`, sorts by `duration_ms` (correct field name), and
    prints three panels: top 15 slow endpoints, top 15 traffic hogs, top 15
    error-prone endpoints. Usage: `python3 -m backend.scripts.report_slow_endpoints --hours 6`.
+
+5. **Post-Vite `.js` → `.jsx` rename (partial)** — Ran
+   `bash frontend/scripts/post_vite_cleanup.sh --step rename`.
+   Renamed `src/App.js` and `src/lib/structuredData.js`. `src/index.js`
+   was intentionally kept because a Vite twin (`src/index.jsx`) already
+   exists during the CRA/Vite coexistence window. Env-var rename step
+   was **skipped** — `REACT_APP_BACKEND_URL` is a protected platform
+   variable per the container contract, and the Vite `define` block
+   already re-exposes it, so renaming would break the .env contract
+   for no benefit.
 
 
 
