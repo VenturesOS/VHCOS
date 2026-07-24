@@ -28,6 +28,48 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11q — Attendance geo-fence on both check-in AND check-out (2026-07-24)
+
+Real-world problem: staff were checking in "on the way" and checking out
+long after leaving the office (or from home entirely), inflating hours
+worked. Backend already fenced check-in, but check-out had no fence at
+all. Closed that hole with:
+
+1. **`_enforce_geo_fence(...)` shared helper** in `routes/attendance.py`
+   — takes settings + lat/long + `work_mode` + action label ("check-in"
+   / "check-out"), computes nearest-office Haversine distance, raises
+   HTTP 400 (no GPS) or 403 (outside fence) with a distance-aware error
+   ("You are 7873m from nearest office (VHC Pune HQ). Check-in allowed
+   within 50m radius only."). Both endpoints call the same helper.
+
+2. **`POST /check-out` now accepts `latitude`, `longitude`, `work_mode`**
+   and enforces the fence with the *check-in's* work-mode as fallback,
+   so someone who clocked in "wfh" isn't forced back to the office to
+   clock out. Fenced coords + office name + distance are persisted on
+   the attendance record (`check_out_latitude`, `check_out_office`,
+   `check_out_distance_m`) alongside the existing check-in coords.
+
+3. **`attendance_geo_violations` collection** captures every rejected
+   attempt — user, action (check-in/check-out), reason
+   (`outside_fence` / `gps_missing`), distance, timestamp. Exposed to
+   admins via `GET /api/attendance/geo-violations?days=7` which returns
+   both the raw rows AND a per-user rollup sorted by count so repeat
+   offenders surface at the top.
+
+4. **Frontend** (`shared/AttendancePage.jsx`): extracted the GPS grab
+   into a shared `grabGeoLocation()` helper and now calls it on
+   *both* check-in and check-out. The check-out payload carries the
+   same `work_mode` the user checked in with, so wfh check-outs still
+   skip GPS.
+
+Verified end-to-end with curl:
+  • Home coords → 403 with exact distance message (both actions)
+  • No GPS → 400 with "Location access required"
+  • Office coords → 200, office + distance stored on record
+  • Violation log returns 3 rows + rollup after the failed attempts
+
+
+
 ### Phase 55.11p — P0 audit fixes (2026-07-24)
 
 Three P0s from the health-report backlog:

@@ -61,21 +61,34 @@ export default function AttendancePage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Shared GPS grabber — used by both check-in and check-out so the same
+  // "Location access required" flow works on both actions. If the user has
+  // permanently denied location we silently omit the coords and let the
+  // server produce the correct error message.
+  const grabGeoLocation = async () => {
+    if (!navigator.geolocation) return {};
+    try {
+      const pos = await new Promise((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          timeout: 10000,
+          enableHighAccuracy: true,
+        })
+      );
+      return {
+        latitude:  pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      };
+    } catch {
+      return {};
+    }
+  };
+
   const handleCheckIn = async () => {
     setChecking(true);
     try {
       const payload = { work_mode: workMode };
-      // Get GPS location for geo-fencing (office mode)
-      if (workMode === 'office' && navigator.geolocation) {
-        try {
-          const pos = await new Promise((resolve, reject) =>
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true })
-          );
-          payload.latitude = pos.coords.latitude;
-          payload.longitude = pos.coords.longitude;
-        } catch {
-          // Location denied/unavailable — server will decide if it's required
-        }
+      if (workMode === 'office') {
+        Object.assign(payload, await grabGeoLocation());
       }
       const res = await attendanceAPI.checkIn(payload);
       setTodayRecord(res.data);
@@ -88,7 +101,15 @@ export default function AttendancePage() {
   const handleCheckOut = async () => {
     setChecking(true);
     try {
-      const res = await attendanceAPI.checkOut({});
+      // Send the same work_mode we checked in with — server also falls back
+      // to the record's mode if this is missing, but sending it keeps the
+      // client honest and lets us skip GPS for wfh/field check-outs.
+      const checkedInMode = todayRecord?.work_mode || workMode;
+      const payload = { work_mode: checkedInMode };
+      if (checkedInMode === 'office') {
+        Object.assign(payload, await grabGeoLocation());
+      }
+      const res = await attendanceAPI.checkOut(payload);
       setTodayRecord(res.data);
       toast.success('Checked out successfully!');
       loadData();

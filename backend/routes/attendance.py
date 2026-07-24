@@ -53,6 +53,9 @@ class CheckInRequest(BaseModel):
 
 class CheckOutRequest(BaseModel):
     notes: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    work_mode: str = "office"  # office|wfh|field — matches check-in
 
 class AdminMarkRequest(BaseModel):
     user_id: str
@@ -135,6 +138,86 @@ async def _get_settings():
         defaults.update(settings)
     return defaults
 
+
+async def _enforce_geo_fence(settings: dict, user: dict, latitude, longitude, work_mode: str, action: str):
+    """
+    Geo-fence guard for check-in AND check-out.
+
+    Called by both endpoints — returns `(nearest_office_name, distance_meters)`
+    tuple when the user IS inside the fence (so we can persist which office
+    they clocked in/out at). Raises `HTTPException` when outside.
+
+    Skips entirely when: geo-fencing disabled, work_mode != "office",
+    no offices configured, or no lat/long provided (server-side missing-coords
+    error is emitted here so the response wording matches for both actions).
+
+    Every rejection is written to `attendance_geo_violations` so admins get
+    visibility into people trying to clock in/out from home.
+    """
+    if not settings.get("geo_fencing_enabled") or work_mode != "office":
+        return (None, None)
+    offices = settings.get("offices", [])
+    if not offices:
+        return (None, None)
+
+    if latitude is None or longitude is None:
+        # Log even the "no GPS" attempts so admins can spot repeated denials.
+        await db.attendance_geo_violations.insert_one({
+            "id":         str(uuid.uuid4()),
+            "user_id":    user.get("id", ""),
+            "user_name":  user.get("name", ""),
+            "user_email": user.get("email", ""),
+            "action":     action,
+            "reason":     "gps_missing",
+            "latitude":   None,
+            "longitude":  None,
+            "distance_m": None,
+            "office":     None,
+            "created_at": _now_ist().isoformat(),
+            "date":       _now_ist().strftime("%Y-%m-%d"),
+        })
+        raise HTTPException(
+            status_code=400,
+            detail=f"Location access is required for office {action}. Please enable GPS.",
+        )
+
+    radius = settings.get("geo_fence_radius_meters", 50)
+    nearest_distance = float("inf")
+    nearest_office = None
+    for office in offices:
+        o_lat = office.get("latitude")
+        o_lon = office.get("longitude")
+        if o_lat is not None and o_lon is not None:
+            dist = _haversine_distance(latitude, longitude, o_lat, o_lon)
+            if dist < nearest_distance:
+                nearest_distance = dist
+                nearest_office = office.get("name", "Office")
+
+    if nearest_distance > radius:
+        await db.attendance_geo_violations.insert_one({
+            "id":         str(uuid.uuid4()),
+            "user_id":    user.get("id", ""),
+            "user_name":  user.get("name", ""),
+            "user_email": user.get("email", ""),
+            "action":     action,
+            "reason":     "outside_fence",
+            "latitude":   latitude,
+            "longitude":  longitude,
+            "distance_m": int(nearest_distance),
+            "office":     nearest_office,
+            "created_at": _now_ist().isoformat(),
+            "date":       _now_ist().strftime("%Y-%m-%d"),
+        })
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"You are {int(nearest_distance)}m from nearest office "
+                f"({nearest_office}). {action.capitalize()} allowed within "
+                f"{radius}m radius only."
+            ),
+        )
+    return (nearest_office, int(nearest_distance))
+
 def _calc_hours(check_in_str, check_out_str):
     """Calculate hours between check-in and check-out."""
     try:
@@ -180,26 +263,10 @@ async def check_in(req: CheckInRequest, request: Request, user=Depends(require_r
     if settings.get("is_paused"):
         raise HTTPException(status_code=403, detail="Attendance tracking is temporarily paused by admin.")
 
-    # Geo-fencing check (skip for WFH/field modes)
-    if settings.get("geo_fencing_enabled") and req.work_mode == "office":
-        offices = settings.get("offices", [])
-        radius = settings.get("geo_fence_radius_meters", 500)
-        if offices:
-            if req.latitude is None or req.longitude is None:
-                raise HTTPException(status_code=400, detail="Location access is required for office check-in. Please enable GPS.")
-            # Check if user is within radius of ANY office
-            nearest_distance = float('inf')
-            nearest_office = None
-            for office in offices:
-                o_lat = office.get("latitude")
-                o_lon = office.get("longitude")
-                if o_lat and o_lon:
-                    dist = _haversine_distance(req.latitude, req.longitude, o_lat, o_lon)
-                    if dist < nearest_distance:
-                        nearest_distance = dist
-                        nearest_office = office.get("name", "Office")
-            if nearest_distance > radius:
-                raise HTTPException(status_code=403, detail=f"You are {int(nearest_distance)}m from nearest office ({nearest_office}). Check-in allowed within {radius}m radius only.")
+    # Geo-fencing check (skip for WFH/field modes) — returns office they clocked in at
+    fenced_office, fenced_distance = await _enforce_geo_fence(
+        settings, user, req.latitude, req.longitude, req.work_mode, "check-in",
+    )
 
     today = _now_ist().strftime("%Y-%m-%d")
     user_id = user.get("id", "")
@@ -235,6 +302,8 @@ async def check_in(req: CheckInRequest, request: Request, user=Depends(require_r
         "ip_address": client_ip,
         "latitude": req.latitude,
         "longitude": req.longitude,
+        "check_in_office": fenced_office,
+        "check_in_distance_m": fenced_distance,
         "notes": req.notes or "",
         "marked_by": "self",
         "created_at": now_iso,
@@ -272,7 +341,14 @@ async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "r
     if record.get("check_out"):
         raise HTTPException(status_code=409, detail="Already checked out today")
 
-    settings = await _get_settings()
+    # Geo-fencing check on check-out — inherits `work_mode` from the check-in
+    # record so someone who checked in "wfh" isn't suddenly forced to be at
+    # the office to clock out (and vice versa).
+    effective_mode = record.get("work_mode") or req.work_mode
+    fenced_office, fenced_distance = await _enforce_geo_fence(
+        settings, user, req.latitude, req.longitude, effective_mode, "check-out",
+    )
+
     now_time = _now_ist().strftime("%H:%M")
     hours = _calc_hours(record["check_in"], now_time)
     overtime = _calc_overtime(now_time, settings.get("work_end_time", "18:00"))
@@ -289,6 +365,10 @@ async def check_out(req: CheckOutRequest, user=Depends(require_role(["admin", "r
             "overtime_minutes": overtime,
             "status": status,
             "notes": req.notes or record.get("notes", ""),
+            "check_out_latitude":   req.latitude,
+            "check_out_longitude":  req.longitude,
+            "check_out_office":     fenced_office,
+            "check_out_distance_m": fenced_distance,
             "updated_at": _now_ist().isoformat(),
         }}
     )
@@ -1589,4 +1669,57 @@ async def get_employer_team_today(user=Depends(require_role(["employer"]))):
         "wfh": wfh,
         "not_checked_in": not_checked_in,
         "members": member_statuses,
+    }
+
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Geo-fence violations — admin visibility into blocked check-in/out attempts.
+# ────────────────────────────────────────────────────────────────────────
+
+@router.get("/geo-violations")
+async def list_geo_violations(
+    days: int = 7,
+    limit: int = 200,
+    user=Depends(require_role(["admin"])),
+):
+    """List recent geo-fence rejections (both check-in and check-out).
+
+    Query params:
+      • `days`   look-back window in days (default 7)
+      • `limit`  max rows (default 200)
+
+    Returns the raw violation rows plus a per-user rollup so admins can
+    spot serial abusers at a glance.
+    """
+    cutoff = (_now_ist() - timedelta(days=days)).isoformat()
+    cur = db.attendance_geo_violations.find(
+        {"created_at": {"$gte": cutoff}}, {"_id": 0}
+    ).sort("created_at", -1).limit(limit)
+    violations = [row async for row in cur]
+
+    # Roll up by user so admins can act on the worst offenders first.
+    by_user: dict = {}
+    for v in violations:
+        uid = v.get("user_id") or "unknown"
+        entry = by_user.setdefault(uid, {
+            "user_id":    uid,
+            "user_name":  v.get("user_name", ""),
+            "user_email": v.get("user_email", ""),
+            "count":      0,
+            "last_at":    None,
+            "reasons":    {},
+        })
+        entry["count"] += 1
+        if not entry["last_at"] or v.get("created_at", "") > entry["last_at"]:
+            entry["last_at"] = v.get("created_at")
+        r = v.get("reason", "outside_fence")
+        entry["reasons"][r] = entry["reasons"].get(r, 0) + 1
+
+    rollup = sorted(by_user.values(), key=lambda x: x["count"], reverse=True)
+    return {
+        "days": days,
+        "total": len(violations),
+        "violations": violations,
+        "by_user": rollup,
     }
