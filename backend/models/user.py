@@ -37,6 +37,9 @@ class UserResponse(BaseModel):
     requires_password_reset: bool = False
     is_account_manager: bool = False
     assigned_companies: Optional[list] = None
+    # Team Lead — recruiter granted acting-employer access by their employer/admin
+    is_team_lead: bool = False
+    team_lead_employer_id: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -47,6 +50,8 @@ class UserUpdate(BaseModel):
     company_id: Optional[str] = None  # For assigning employer to recruiter
     is_account_manager: Optional[bool] = None
     assigned_companies: Optional[list] = None
+    is_team_lead: Optional[bool] = None
+    team_lead_employer_id: Optional[str] = None
 
 
 class AdminUserCreate(BaseModel):

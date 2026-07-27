@@ -1,0 +1,33 @@
+{
+  "summary": "Backend-only testing for new Team Lead role wiring + Asha Agent admin endpoints + regressions. Created /app/backend/tests/test_team_lead_and_agent.py with 20 pytest cases covering: login response fields, /api/team-lead/scope, grant/revoke lifecycle (admin path), permission checks (non-admin/non-employer 403, recruiter-not-in-team 400), post-grant Team Lead access to /api/employer/my-team (revenue masked), /api/employer/pipeline (acting_as_team_lead=true, confidential keys stripped), /api/employer/team-recruiters (200 for TL, 403 for plain recruiter), /api/jobs/{id}/assign-recruiters (allowed for TL, 403 for plain recruiter), /api/agent/config|sessions|analytics for admin + unauth check, /api/auth/refresh regression with garbage token (401), /api/auth/me contains is_team_lead. Final run: 20/20 passing (one intermittent 502 on public URL that passed on retry — infra flake, not a code bug).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "Intermittent 502 observed once during load; ingress-level flake, not reproducible on retry. Consider retry/backoff on client, but no server-side fix needed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_team_lead_and_agent.py",
+    "/app/test_reports/pytest/team_lead_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/team_lead.py revoke path: recruiter with is_team_lead=True but no team_lead_employer_id (data corruption edge) returns 403 only for non-admins — acceptable, but consider auto-unset the flag rather than blocking.",
+    "utils/team_lead.py mask_confidential scrubs keys anywhere in the payload; ensure UI-facing counters that also happen to be named 'cost' or 'revenue' outside financial context are not accidentally stripped (currently the CONFIDENTIAL_KEYS set is broad — worth double-checking product need)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_team_lead_and_agent.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "n/a"},
+  "seed_data_creation": "Test grants/revokes a team-lead flag on one active recruiter (discovered via /api/teams) — always revoked in class-scoped teardown.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024; hr6@vhc.in / 12345678; hr12@vhc.in / 12345678",
+  "context_for_next_testing_agent": "New pytest file at /app/backend/tests/test_team_lead_and_agent.py. It self-discovers an active team via GET /api/teams (admin) and uses hr6/hr12 recruiter credentials for negative/positive paths. Grant/revoke is idempotent-tested and torn down cleanly. If team roster changes, tests still adapt via /api/teams. Frontend not tested per request.",
+  "rca_of_the_issue": "No functional issue found. All spec items verified: (1) login response carries is_team_lead + team_lead_employer_id; (2) /api/team-lead/scope returns false for non-TL, true+employer_id for TL; (3) admin grant/revoke works, revoke is idempotent; (4) non-admin/non-employer 403 on grant, cross-team recruiter 400; (5) TL sees /employer/my-team with revenue stripped; (6) TL sees /employer/pipeline with acting_as_team_lead=true and confidential keys (billing_rate/invoice_amount/gross_margin/commission/contract_notes) removed; (7) TL passes role check on /jobs/{id}/assign-recruiters, plain recruiter gets 403; (8) TL accesses /employer/team-recruiters, plain recruiter 403; (9) Asha Agent endpoints all 200 for admin, 401/403 unauth; (10) regression: /auth/refresh with garbage token still 401 and /auth/me still exposes is_team_lead."
+}

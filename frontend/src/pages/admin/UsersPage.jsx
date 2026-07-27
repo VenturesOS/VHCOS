@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { userAPI, companyAPI, accountManagerAPI } from '../../lib/api';
+import { userAPI, companyAPI, accountManagerAPI, teamLeadAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Edit2, Trash2, Users, UserCircle, Plus, Key, UserCheck, Building2, Shield, AtSign } from 'lucide-react';
+import { Search, Edit2, Trash2, Users, UserCircle, Plus, Key, UserCheck, Building2, Shield, AtSign, Crown } from 'lucide-react';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -73,6 +73,27 @@ export default function UsersPage() {
       loadData();
     } catch (error) {
       toast.error('Failed to update user');
+    }
+  };
+
+  const handleToggleTeamLead = async (u) => {
+    try {
+      if (u.is_team_lead) {
+        if (!window.confirm(`Revoke Team Lead access for ${u.name}?`)) return;
+        await teamLeadAPI.revoke(u.id);
+        toast.success(`${u.name} is no longer a Team Lead`);
+      } else {
+        // Admin needs to pick which employer this recruiter is a Team Lead for.
+        const employerId = window.prompt(
+          `Promote ${u.name} to Team Lead for which employer?\nEnter the employer's user_id:`
+        );
+        if (!employerId) return;
+        await teamLeadAPI.grant(u.id, employerId.trim());
+        toast.success(`${u.name} is now a Team Lead`);
+      }
+      loadData();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Team Lead update failed');
     }
   };
 
@@ -349,6 +370,11 @@ export default function UsersPage() {
                             AM
                           </span>
                         )}
+                        {user.is_team_lead && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 flex items-center gap-1" data-testid={`tl-badge-${user.id}`}>
+                            <Crown className="w-3 h-3" /> Team Lead
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -401,6 +427,17 @@ export default function UsersPage() {
                             data-testid={`am-settings-${user.id}`}
                           >
                             <Shield className={`w-4 h-4 ${user.is_account_manager ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          </Button>
+                        )}
+                        {user.role === 'recruiter' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleTeamLead(user)}
+                            title={user.is_team_lead ? 'Revoke Team Lead access' : 'Grant Team Lead access'}
+                            data-testid={`tl-toggle-${user.id}`}
+                          >
+                            <Crown className={`w-4 h-4 ${user.is_team_lead ? 'text-amber-600' : 'text-slate-400'}`} />
                           </Button>
                         )}
                         <Button

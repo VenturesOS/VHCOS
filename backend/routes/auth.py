@@ -216,7 +216,9 @@ async def login(credentials: UserLogin, request: Request):
         created_at=user["created_at"],
         requires_password_reset=requires_reset,
         is_account_manager=user.get("is_account_manager", False),
-        assigned_companies=user.get("assigned_companies")
+        assigned_companies=user.get("assigned_companies"),
+        is_team_lead=user.get("is_team_lead", False),
+        team_lead_employer_id=user.get("team_lead_employer_id"),
     )
     
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user_response, requires_password_reset=requires_reset)
@@ -269,7 +271,9 @@ async def refresh_access_token(req: RefreshRequest):
         created_at=user["created_at"],
         requires_password_reset=user.get("requires_password_reset", False),
         is_account_manager=user.get("is_account_manager", False),
-        assigned_companies=user.get("assigned_companies")
+        assigned_companies=user.get("assigned_companies"),
+        is_team_lead=user.get("is_team_lead", False),
+        team_lead_employer_id=user.get("team_lead_employer_id"),
     )
     
     return TokenResponse(access_token=new_access, refresh_token=new_refresh, user=user_response)

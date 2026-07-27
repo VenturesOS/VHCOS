@@ -14,6 +14,7 @@ from config import db
 from models import CompanyResponse, CompanyUpdate
 from models.company import CompanyCreate, CommercialModel
 from utils import get_current_user, require_role
+from utils.team_lead import get_effective_employer_id, mask_confidential, is_team_lead
 
 employer_router = APIRouter(prefix="/api", tags=["Employer"])
 logger = logging.getLogger(__name__)
@@ -125,12 +126,16 @@ async def get_employer_companies(
 # ============== EMPLOYER: MY TEAM ==============
 
 @employer_router.get("/employer/my-team")
-async def get_employer_team_with_metrics(current_user: dict = Depends(require_role(["employer"]))):
+async def get_employer_team_with_metrics(current_user: dict = Depends(require_role(["employer", "recruiter"]))):
     """
     Get employer's team with detailed performance metrics.
     Shows: team members, mandates assigned, pipelines, revenue per stage, closed revenue.
+    Team Leads see the team of the employer they act for, with revenue/commercial masked.
     """
-    team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+    employer_id = get_effective_employer_id(current_user)
+    if not employer_id:
+        raise HTTPException(status_code=403, detail="Employer or Team Lead access required")
+    team = await db.teams.find_one({"employer_id": employer_id, "status": "active"}, {"_id": 0})
 
     if not team:
         return {
@@ -148,7 +153,7 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
     recruiter_ids = team.get("recruiter_ids", [])
     recruiters = await db.users.find(
         {"id": {"$in": recruiter_ids}},
-        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "is_active": 1, "created_at": 1}
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "is_active": 1, "created_at": 1, "is_team_lead": 1, "team_lead_employer_id": 1}
     ).to_list(100)
 
     company_ids = team.get("company_ids", [])
@@ -156,7 +161,7 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
         {"$or": [
             {"team_id": team["id"]},
             {"company_id": {"$in": company_ids}},
-            {"posted_by": {"$in": recruiter_ids + [current_user["id"]]}}
+            {"posted_by": {"$in": recruiter_ids + [employer_id]}}
         ]},
         {"_id": 0}
     ).to_list(1000)
@@ -217,6 +222,8 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
             "name": recruiter["name"],
             "email": recruiter["email"],
             "is_active": recruiter.get("is_active", True),
+            "is_team_lead": recruiter.get("is_team_lead", False),
+            "team_lead_employer_id": recruiter.get("team_lead_employer_id"),
             "joined_at": recruiter.get("created_at"),
             "mandates_assigned": len(recruiter_jobs),
             "mandates": [{"id": j["id"], "title": j["title"], "company_name": j.get("company_name")} for j in recruiter_jobs[:5]],
@@ -230,7 +237,13 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
     total_revenue_pipeline = sum(m["revenue_pipeline"] for m in members_with_metrics)
     total_revenue_closed = sum(m["revenue_closed"] for m in members_with_metrics)
 
-    return {
+    # Mask revenue fields for Team Leads (confidential financial data).
+    if is_team_lead(current_user):
+        for m in members_with_metrics:
+            m.pop("revenue_pipeline", None)
+            m.pop("revenue_closed", None)
+
+    response = {
         "team": {
             "id": team["id"],
             "name": team["name"],
@@ -244,8 +257,13 @@ async def get_employer_team_with_metrics(current_user: dict = Depends(require_ro
             "total_pipeline": total_pipeline,
             "total_revenue_pipeline": round(total_revenue_pipeline, 2),
             "total_revenue_closed": round(total_revenue_closed, 2)
-        }
+        },
+        "acting_as_team_lead": is_team_lead(current_user),
     }
+    if is_team_lead(current_user):
+        response["summary"].pop("total_revenue_pipeline", None)
+        response["summary"].pop("total_revenue_closed", None)
+    return response
 
 
 # ============== EMPLOYER: COMPANIES ==============
@@ -353,13 +371,17 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
 async def get_employer_pipeline(
     recruiter_id: Optional[str] = None,
     job_id: Optional[str] = None,
-    current_user: dict = Depends(require_role(["employer"]))
+    current_user: dict = Depends(require_role(["employer", "recruiter"]))
 ):
     """
     Employer pipeline view with stage control.
     Shows all applications for jobs under employer's teams/companies.
+    Team Leads see the same pipeline but with confidential financial fields masked.
     """
-    team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+    employer_id = get_effective_employer_id(current_user)
+    if not employer_id:
+        raise HTTPException(status_code=403, detail="Employer or Team Lead access required")
+    team = await db.teams.find_one({"employer_id": employer_id, "status": "active"}, {"_id": 0})
 
     if not team:
         _empty = ["sourced", "submitted_to_client", "shortlisted", "interview", "offered", "hired", "joined", "rejected", "on_hold"]
@@ -377,7 +399,7 @@ async def get_employer_pipeline(
         "$or": [
             {"team_id": team["id"]},
             {"company_id": {"$in": company_ids}} if company_ids else {"_id": None},
-            {"posted_by": {"$in": recruiter_ids + [current_user["id"]]}}
+            {"posted_by": {"$in": recruiter_ids + [employer_id]}}
         ]
     }
 
@@ -480,15 +502,17 @@ async def get_employer_pipeline(
         ).to_list(100)
         recruiters = recruiter_docs
 
-    return {
+    result = {
         "pipeline": pipeline_data,
         "stage_counts": stage_counts,
         "total_applications": len(applications),
         "filters": {
             "recruiters": recruiters,
             "jobs": [{"id": j["id"], "title": j.get("title", "Untitled"), "company_name": j.get("company_name")} for j in jobs]
-        }
+        },
+        "acting_as_team_lead": is_team_lead(current_user),
     }
+    return mask_confidential(result, current_user)
 
 
 # ============== ADMIN: ASSIGN EMPLOYER TO COMPANY ==============

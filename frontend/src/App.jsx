@@ -127,6 +127,7 @@ const ActivityFeedPage = React.lazy(() => import("./pages/shared/ActivityFeedPag
 // ── Pages shared across multiple roles (used by recruiter/employer/accounts) ──
 const LinkedInSettingsPage = React.lazy(() => import("./pages/admin/LinkedInSettingsPage"));
 const LinkedInJobDraftsPage = React.lazy(() => import("./pages/admin/LinkedInJobDraftsPage"));
+const AshaAgentPage = React.lazy(() => import("./pages/admin/AshaAgentPage"));
 const AttendanceInsightsPage = React.lazy(() => import("./pages/admin/AttendanceInsightsPage"));
 const AdminAttendancePage = React.lazy(() => import("./pages/admin/AdminAttendancePage"));
 const AdminLeaveManagementPage = React.lazy(() => import("./pages/admin/AdminLeaveManagementPage"));
@@ -238,6 +239,7 @@ function App() {
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
             <Route path="activity-monitor" element={<ActivityTabsPage />} />
             <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
+            <Route path="asha" element={<AshaAgentPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
           </Route>
 
@@ -269,6 +271,11 @@ function App() {
             <Route path="account-manager" element={<AccountManagerDashboard />} />
             <Route path="account-manager/company/:companyId" element={<CompanyDetailPage />} />
             <Route path="account-manager/company/:companyId/new-job" element={<AMCreateJobPage />} />
+            {/* Team Lead Routes — recruiter promoted to acting-employer by their employer/admin.
+                Reuses Employer team + pipeline pages. Confidential financial fields are masked
+                server-side and the sidebar hides billing/commission pages. */}
+            <Route path="team-lead/my-team" element={<EmployerMyTeamPage />} />
+            <Route path="team-lead/pipeline" element={<EmployerPipelinePage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
           </Route>
 

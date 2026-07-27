@@ -28,6 +28,7 @@ from models import (
 
 # Import utilities
 from utils import get_current_user, require_role
+from utils.team_lead import get_effective_employer_id, is_team_lead
 
 # Import cache service
 from services.cache import cache
@@ -1098,16 +1099,22 @@ Return ONLY valid JSON, no markdown or explanation."""
 # ============== MANDATE ASSIGNMENT ==============
 
 @jobs_router.get("/employer/team-recruiters")
-async def get_team_recruiters(current_user: dict = Depends(require_role(["admin", "employer"]))):
+async def get_team_recruiters(current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))):
     """
     Get list of recruiters in employer's team for mandate assignment.
     Returns recruiter details including their current mandate workload.
+    Team Leads see the recruiters under the employer they act for.
     """
-    if current_user["role"] == "employer":
-        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+    if current_user["role"] == "recruiter" and not is_team_lead(current_user):
+        raise HTTPException(status_code=403, detail="Team Lead access required")
+
+    if current_user["role"] in ("employer", "recruiter"):
+        employer_id = get_effective_employer_id(current_user)
+        if not employer_id:
+            raise HTTPException(status_code=403, detail="Employer or Team Lead access required")
+        team = await db.teams.find_one({"employer_id": employer_id, "status": "active"}, {"_id": 0})
         if not team:
             return {"recruiters": [], "team": None}
-        
         recruiter_ids = team.get("recruiter_ids", [])
     else:
         # Admin can see all recruiters
@@ -1165,17 +1172,21 @@ async def get_team_recruiters(current_user: dict = Depends(require_role(["admin"
 async def assign_recruiters_to_mandate(
     job_id: str,
     recruiter_ids: List[str],
-    current_user: dict = Depends(require_role(["admin", "employer"]))
+    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
     """
     Assign recruiters to a job mandate (Employer-led allocation).
     
     Rules:
-    - Only Employer or Admin can assign
-    - Recruiters cannot self-assign
+    - Only Employer, Admin, or a Team Lead of that employer can assign
+    - Recruiters cannot self-assign (unless promoted to Team Lead)
     - Only active/approved jobs can have recruiters assigned
     - Recruiters must be in employer's team
     """
+    # Recruiters need Team Lead promotion to assign mandates
+    if current_user["role"] == "recruiter" and not is_team_lead(current_user):
+        raise HTTPException(status_code=403, detail="Only employers, admins, or Team Leads can assign mandates")
+
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -1187,13 +1198,17 @@ async def assign_recruiters_to_mandate(
             detail=f"Cannot assign recruiters to jobs with status '{job.get('status')}'. Job must be Active or Pending Approval."
         )
     
-    # Employer access control
-    if current_user["role"] == "employer":
-        # Check if employer owns this job (via team or direct posting)
-        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
+    # Employer / Team Lead access control
+    if current_user["role"] in ("employer", "recruiter"):
+        # Resolve the effective employer scope (own for employer, delegated for team_lead)
+        employer_id = get_effective_employer_id(current_user)
+        if not employer_id:
+            raise HTTPException(status_code=403, detail="Employer or Team Lead access required")
+
+        team = await db.teams.find_one({"employer_id": employer_id, "status": "active"}, {"_id": 0})
         
         can_assign = (
-            job.get("posted_by") == current_user["id"] or
+            job.get("posted_by") == employer_id or
             (team and job.get("team_id") == team.get("id")) or
             (team and job.get("posted_by") in team.get("recruiter_ids", []))
         )

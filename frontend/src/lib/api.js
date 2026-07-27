@@ -331,6 +331,30 @@ export const mandateAPI = {
   getTeamRecruiters: () => api.get('/employer/team-recruiters'),
 };
 
+// Team Lead APIs — recruiter promoted to acting-employer by their employer/admin
+export const teamLeadAPI = {
+  grant: (recruiterId, employerId = null) =>
+    api.post('/team-lead/grant', { recruiter_id: recruiterId, ...(employerId ? { employer_id: employerId } : {}) }),
+  revoke: (recruiterId) => api.post('/team-lead/revoke', { recruiter_id: recruiterId }),
+  getScope: () => api.get('/team-lead/scope'),
+  listForEmployer: (employerId) => api.get(`/team-lead/list/${employerId}`),
+};
+
+// Asha Agent APIs — v2 virtual recruiter
+export const ashaAPI = {
+  getConfig: () => api.get('/agent/config'),
+  listSessions: (params) => api.get('/agent/sessions', { params }),
+  getSession: (id) => api.get(`/agent/sessions/${id}`),
+  reverse: (id) => api.post(`/agent/sessions/${id}/reverse`),
+  takeover: (id) => api.post(`/agent/sessions/${id}/takeover`),
+  send: (id, text) => api.post(`/agent/sessions/${id}/send`, { text }),
+  resume: (id) => api.post(`/agent/sessions/${id}/resume`),
+  analytics: (params) => api.get('/agent/analytics', { params }),
+  listSlots: (mandateId) => api.get('/agent/slots', { params: { mandate_id: mandateId } }),
+  addSlot: (payload) => api.post('/agent/slots', payload),
+  deleteSlot: (slotId) => api.delete(`/agent/slots/${slotId}`),
+};
+
 // Message APIs
 export const messageAPI = {
   send: (data) => api.post('/messages', data),

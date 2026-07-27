@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { employerPortalAPI, attendanceAPI } from '../../lib/api';
+import { employerPortalAPI, attendanceAPI, teamLeadAPI } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { formatSalaryINR } from '../../lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
 import {
   Users, Briefcase, TrendingUp, DollarSign, Mail, Calendar,
   ChevronRight, Clock, Target, UserCheck, UserX, AlertTriangle,
-  CircleDot, Home, Coffee
+  CircleDot, Home, Coffee, Crown
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -22,11 +24,36 @@ const STATUS_CONFIG = {
 };
 
 export default function EmployerMyTeamPage() {
+  const { user } = useAuth();
   const [teamData, setTeamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedMember, setSelectedMember] = useState(null);
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [monthlyReport, setMonthlyReport] = useState(null);
+  const [tlBusy, setTlBusy] = useState(null);  // recruiter id currently toggling
+
+  // Only the real employer (or admin viewing this page) can grant/revoke.
+  // Team Leads viewing this page cannot grant others.
+  const canManageTeamLead = user?.role === 'employer' || user?.role === 'admin';
+
+  const toggleTeamLead = async (member, event) => {
+    event.stopPropagation();
+    setTlBusy(member.id);
+    try {
+      if (member.is_team_lead) {
+        await teamLeadAPI.revoke(member.id);
+        toast.success(`${member.name} is no longer a Team Lead`);
+      } else {
+        await teamLeadAPI.grant(member.id);
+        toast.success(`${member.name} is now a Team Lead`);
+      }
+      await loadTeamData();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Could not update Team Lead');
+    } finally {
+      setTlBusy(null);
+    }
+  };
 
   useEffect(() => {
     loadTeamData();
@@ -342,6 +369,11 @@ export default function EmployerMyTeamPage() {
                         {statusCfg && (
                           <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${statusCfg.color}`}>{statusCfg.label}</Badge>
                         )}
+                        {member.is_team_lead && (
+                          <Badge className="text-[10px] px-1.5 py-0 h-5 bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-1" data-testid={`team-lead-badge-${member.id}`}>
+                            <Crown className="w-3 h-3" /> Team Lead
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-slate-500">{member.email}</p>
                     </div>
@@ -364,6 +396,20 @@ export default function EmployerMyTeamPage() {
                       <p className="text-lg font-semibold text-green-600">{formatSalaryINR(member.revenue_closed)}</p>
                       <p className="text-xs text-slate-500">Closed</p>
                     </div>
+                    {canManageTeamLead && (
+                      <Button
+                        size="sm"
+                        variant={member.is_team_lead ? 'outline' : 'secondary'}
+                        onClick={(e) => toggleTeamLead(member, e)}
+                        disabled={tlBusy === member.id}
+                        className="text-xs"
+                        data-testid={`team-lead-toggle-${member.id}`}
+                        title={member.is_team_lead ? 'Revoke Team Lead access' : 'Grant Team Lead access'}
+                      >
+                        <Crown className={`w-3.5 h-3.5 mr-1 ${member.is_team_lead ? 'text-amber-600' : ''}`} />
+                        {member.is_team_lead ? 'Revoke' : 'Promote'}
+                      </Button>
+                    )}
                     <ChevronRight className="w-5 h-5 text-slate-400" />
                   </div>
                 </div>

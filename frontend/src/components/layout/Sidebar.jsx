@@ -42,6 +42,7 @@ import {
   MessageCircle,
   Zap,
   Merge,
+  Bot,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -82,6 +83,7 @@ const navItems = {
     { icon: Clock, label: 'Attendance', path: '/admin/attendance' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
     { icon: Linkedin, label: 'LinkedIn Drafts', path: '/admin/linkedin-drafts' },
+    { icon: Bot, label: 'Asha Agent', path: '/admin/asha' },
   ],
   recruiter: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/recruiter' },
@@ -167,21 +169,31 @@ export const Sidebar = () => {
 
   let items = navItems[user?.role] || [];
   
-  // Add Account Manager menu item for recruiters with AM flag
+  // Legacy Account Manager menu (kept for backward compat with existing AM users)
   if (user?.role === 'recruiter' && user?.is_account_manager) {
     const amItem = { icon: Building2, label: 'My Accounts', path: '/recruiter/account-manager' };
-    // Insert after Dashboard
     const dashIdx = items.findIndex(i => i.label === 'Dashboard');
     items = [...items.slice(0, dashIdx + 1), amItem, ...items.slice(dashIdx + 1)];
   }
 
-  // Add Account Manager menu item for employers
   if (user?.role === 'employer') {
     const amItem = { icon: Building2, label: 'My Accounts', path: '/employer/account-manager' };
     const compIdx = items.findIndex(i => i.label === 'Companies');
     if (compIdx >= 0) {
       items = [...items.slice(0, compIdx + 1), amItem, ...items.slice(compIdx + 1)];
     }
+  }
+
+  // Team Lead — recruiter promoted by their employer. Grants them a subset of
+  // the employer sidebar (team, mandate assignment, pipeline) while keeping
+  // their recruiter items. Confidential financial pages are excluded.
+  if (user?.role === 'recruiter' && user?.is_team_lead) {
+    const teamLeadItems = [
+      { icon: UsersRound, label: 'Team (Lead)', path: '/recruiter/team-lead/my-team' },
+      { icon: ClipboardList, label: 'Employer Pipeline', path: '/recruiter/team-lead/pipeline' },
+    ];
+    const dashIdx = items.findIndex(i => i.label === 'Dashboard');
+    items = [...items.slice(0, dashIdx + 1), ...teamLeadItems, ...items.slice(dashIdx + 1)];
   }
 
   const SidebarContent = () => (

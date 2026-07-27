@@ -161,6 +161,7 @@ attendance_router = _safe_import("routes.attendance", "router")
 attendance_analytics_router = _safe_import("routes.attendance_analytics", "router")
 resume_router = _safe_import("routes.resume", "resume_router")
 account_manager_router = _safe_import("routes.account_manager", "account_manager_router")
+team_lead_router = _safe_import("routes.team_lead", "team_lead_router")
 finance_router = _safe_import("routes.finance", "finance_router")
 notification_router = _safe_import("routes.notifications", "notification_router")
 activity_router = _safe_import("routes.activity_log", "activity_router")
@@ -343,6 +344,7 @@ _all_routers = [
     seo_dashboard_router, revenue_router, employer_router, linkedin_router,
     tracker_router, compliance_router, maintenance_router, attendance_router,
     attendance_analytics_router, resume_router, account_manager_router,
+    team_lead_router,
     notification_router, activity_router, finance_router,
     activity_monitor_router,
     extraction_report_router,
