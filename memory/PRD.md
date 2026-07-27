@@ -28,6 +28,61 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11u — Asha agent v2.0.0 install (2026-07-24)
+
+Installed the Asha screening agent package (verbatim from `README §A–D`).
+**Ships DARK**: `AGENT_ENABLED=0`, `AGENT_DRY_RUN=1`. All schema,
+routes, and cron jobs are present but no outbound messages fire until
+the admin flips the flag.
+
+Files added (all fresh, zero collisions with existing code):
+  * `backend/models/neural_schema.py`
+  * `backend/services/` — 12 files (`screening_engine`, `screening_tasks`,
+    `screening_flows`, `screening_scheduling`, `screening_media`,
+    `screening_joining`, `screening_analytics`, `screening_forms`,
+    `screening_email`, `screening_llm`, `screening_script`,
+    `screening_whatsapp`, `submission_note`)
+  * `backend/routes/agent.py` (26 routes) + `extension_preview.py` (1 route)
+  * `backend/scripts/seed_ontology.py`, `export_ltr_labels.py`
+  * `backend/tests/fakedb.py`, `test_screening_logic.py`, `test_screening_v2.py`
+  * 4 React components under `frontend/src/components/agent/`
+  * `docs/*.md`, refreshed `extension/`
+
+Modifications (verbatim from README §B, with one prefix fix noted below):
+  * `server.py` — imported `agent_router` + `extension_preview_router`
+    via existing `_safe_import` helper; appended both to `_all_routers`.
+  * `routes/whatsapp_webhook.py` — added inbound-message loop with
+    `wa_processed_messages` idempotency + `screening_engine.route_inbound(...)`.
+  * `services/lifecycle.py` — appended AshaScheduler block that
+    registers 4 cron jobs (`asha_worklist`, `asha_sweeps`,
+    `asha_refresh`, `asha_report`) and calls `ensure_agent_indexes()`
+    on boot.
+
+**Packaging-bug fix**: both new routers shipped with bare prefixes
+(`/agent`, `/extension`), but VHCOS ingress requires `/api/*` for every
+backend route. Changed both to `/api/agent` and `/api/extension` so
+they reach the pod through the ingress.
+
+Env keys appended to `backend/.env` (16 keys, all with safe defaults —
+see README §C).
+
+Acceptance:
+  * `pytest tests/test_screening_logic.py tests/test_screening_v2.py` →
+    **28 passed** in 0.92s.
+  * `curl /api/agent/config` (admin auth) →
+    `{"enabled": false, "dry_run": true, "qualify_threshold": 55, ...}`.
+  * `wa_processed_messages` has `wamid_1` + `created_at_1` indexes
+    (proves `ensure_agent_indexes()` ran on boot).
+  * `/api/extension/candidate-preview/{id}` returns 403 without auth
+    (route registered, gate working).
+
+To turn on later:
+  1. Update `AGENT_ENABLED=1` and `AGENT_DRY_RUN=0` in prod `.env`
+  2. Restart backend
+  3. Verify `/api/agent/config` returns `enabled: true, dry_run: false`
+
+
+
 ### Phase 55.11t — Admin Geo-Violations dashboard (2026-07-24)
 
 New page: `/admin/attendance` → **Geo Violations** tab (5th tab in

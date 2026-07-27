@@ -23,6 +23,12 @@ from fastapi import APIRouter, HTTPException, Request
 from config import db
 from services.whatsapp_cloud_service import update_status_from_webhook
 
+# Asha agent v2 — inbound-message routing (webhook stays operational
+# even if AGENT_ENABLED=0; the router is a no-op in dry-run mode).
+from pymongo.errors import DuplicateKeyError
+from models.neural_schema import normalize_phone, utcnow
+from services import screening_engine
+
 logger = logging.getLogger(__name__)
 webhook_router = APIRouter(prefix="/api/webhooks", tags=["WhatsApp Webhooks"])
 
@@ -77,4 +83,17 @@ async def receive(request: Request) -> Dict[str, Any]:
             statuses = value.get("statuses") or []
             if statuses:
                 updates += await update_status_from_webhook(db, statuses)
+
+            # Asha v2 inbound-message loop (verbatim from README §B2).
+            for msg in value.get("messages", []):
+                # idempotency — Meta redelivers on slow ACKs
+                try:
+                    await db.wa_processed_messages.insert_one(
+                        {"wamid": msg.get("id"), "created_at": utcnow()})
+                except DuplicateKeyError:
+                    continue
+
+                phone = normalize_phone(msg.get("from", ""))
+                if phone:
+                    await screening_engine.route_inbound(db, phone, msg)
     return {"status": "ok", "updates": updates}

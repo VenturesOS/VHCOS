@@ -293,6 +293,22 @@ async def run_deferred_init(app):
     except Exception as e:
         logging.warning(f"[AttendanceScheduler] Failed to start: {e}")
 
+    # --- Asha agent v2 (screening) scheduler ---
+    # Ships DARK: AGENT_ENABLED=0 by default in .env; the jobs still register
+    # so the schema stays ready and admins can flip the switch without a
+    # backend restart. `ensure_agent_indexes` is idempotent.
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from services.screening_tasks import ensure_agent_indexes, register_agent_jobs
+        agent_scheduler = AsyncIOScheduler()
+        await ensure_agent_indexes(db)
+        register_agent_jobs(agent_scheduler, db)
+        agent_scheduler.start()
+        app.state.agent_scheduler = agent_scheduler
+        logging.info("[AshaScheduler] Registered agent cron jobs (asha_worklist, asha_sweeps, asha_refresh, asha_report)")
+    except Exception as e:
+        logging.warning(f"[AshaScheduler] Failed to start: {e}")
+
     # --- Badge auto-labeler (daily report; gated by sample size floor) ---
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
