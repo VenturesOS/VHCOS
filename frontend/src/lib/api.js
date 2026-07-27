@@ -745,6 +745,7 @@ export const attendanceAPI = {
   exportExcel: (params) => api.get('/attendance/report/export', { params, responseType: 'blob' }),
   getSettings: () => api.get('/attendance/settings'),
   updateSettings: (data) => api.put('/attendance/settings', data),
+  getGeoViolations: (params) => api.get('/attendance/geo-violations', { params }),
   // Leave
   requestLeave: (data) => api.post('/attendance/leave/request', data),
   getMyLeaveRequests: (params) => api.get('/attendance/leave/requests/my', { params }),

@@ -131,6 +131,7 @@ const AttendanceInsightsPage = React.lazy(() => import("./pages/admin/Attendance
 const AdminAttendancePage = React.lazy(() => import("./pages/admin/AdminAttendancePage"));
 const AdminLeaveManagementPage = React.lazy(() => import("./pages/admin/AdminLeaveManagementPage"));
 const AttendanceSettingsPage = React.lazy(() => import("./pages/admin/AttendanceSettingsPage"));
+const GeoViolationsPage = React.lazy(() => import("./pages/admin/GeoViolationsPage"));
 
 // ── Candidate Pages (lazy) ──
 const CandidateDashboard = React.lazy(() => import("./pages/candidate/CandidateDashboard"));
@@ -321,6 +322,7 @@ function App() {
             <Route path="leave-management" element={<AdminLeaveManagementPage />} />
             <Route path="attendance-insights" element={<AttendanceInsightsPage />} />
             <Route path="attendance-settings" element={<AttendanceSettingsPage />} />
+            <Route path="geo-violations" element={<GeoViolationsPage />} />
           </Route>
 
           {/* Candidate Routes */}

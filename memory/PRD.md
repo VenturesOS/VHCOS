@@ -28,6 +28,32 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11t — Admin Geo-Violations dashboard (2026-07-24)
+
+New page: `/admin/attendance` → **Geo Violations** tab (5th tab in
+`AttendanceTabsPage`). Reads `GET /api/attendance/geo-violations` and
+renders:
+  * 4 stat cards — total blocked, check-in attempts, check-out
+    attempts, GPS-missing events.
+  * **Worst offenders leaderboard** ranked by count (per user's ask):
+    top 3 get medal-style badges (red/orange/amber), each row shows
+    per-reason breakdown pills (`Outside fence · 3`, `GPS missing · 1`).
+  * Recent-events table with time (IST), user, action, reason,
+    distance in meters, and office name.
+  * Range toggle (Today / 7d / 30d) + refresh button — no auto-poll.
+
+Files added / touched:
+  * NEW `frontend/src/pages/admin/GeoViolationsPage.jsx`
+  * `App.jsx` — lazy import + `admin/geo-violations` route
+  * `AttendanceTabsPage.jsx` — added the fifth tab
+  * `lib/api.js` — `attendanceAPI.getGeoViolations()`
+
+Verified backend returns the expected shape:
+`total=5, violations=5, offenders=2` with per-user rollup and reason
+breakdown. No new deps.
+
+
+
 ### Phase 55.11s — Pilot rollout for geo-fence (2026-07-24)
 
 Real-world rollout constraint: only the Delhi team is ready to be
