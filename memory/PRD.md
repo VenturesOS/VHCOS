@@ -28,6 +28,51 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Phase 55.11v — Session-mixing hotfix (Madhuri → Nidhi) (2026-07-24)
+
+**Bug report**: Madhuri Singh (hr58@vhc.in) logs into her account but
+after some time her session flips to Nidhi Thakur (hr59@vhc.in).
+
+**Root cause** — `frontend/src/lib/auth.js` `login()`:
+On login, only `vhc_token` was overwritten unconditionally. The
+existing line `if (refresh_token) localStorage.setItem(...)` MEANT to
+guard against null server responses, but had a nastier side effect: on
+a shared device where a previous user closed the browser without
+clicking Logout, their `vhc_refresh_token` survived. When the new user
+logged in, the login response's fresh refresh_token DID overwrite
+it — *but if the axios 401 interceptor fired even once before login
+completed* (e.g., an in-flight request from the previous session), the
+STALE token got used against `/api/auth/refresh` and issued an access
+token for the OLD user. Then subsequent requests silently used the
+old-user identity.
+
+**Fix** — 5 lines in `frontend/src/lib/auth.js`:
+  1. On login entry, `removeItem` all four session keys FIRST
+     (`vhc_token`, `vhc_refresh_token`, `vhc_user`, `vhc_requires_reset`)
+     — kills every trace of the previous user before the network round
+     trip completes.
+  2. Changed `if (refresh_token) setItem(...)` to
+     `if (refresh_token) setItem else removeItem` so a null server
+     response also purges the stale token (defense in depth).
+
+**Testing (subagent iteration 188)**:
+  * 6/6 backend pytest — `test_session_mixing_hotfix.py` confirms
+    distinct refresh tokens per user, single-use rotation, and
+    identity-owner integrity of `/api/auth/refresh`. User A's refresh
+    can never yield User B's access token.
+  * Frontend Playwright reproduced the exact reported scenario:
+    logged in as hr6@vhc.in (Diya), simulated "closed browser without
+    logout" by removing vhc_token + vhc_user while keeping Diya's
+    vhc_refresh_token, then logged in as hr12@vhc.in (Sachin). Verified
+    Diya's stale refresh_token was purged before Sachin's session was
+    written, `/api/auth/refresh` on the current stored token returned
+    Sachin (never Diya), and the sidebar UI reflects Sachin
+    consistently. Regression re-login (Sachin → Diya) also rotates
+    cleanly.
+  * Result: `100% (6/6)` backend, `100%` frontend. Zero issues.
+
+
+
 ### Phase 55.11u — Asha agent v2.0.0 install (2026-07-24)
 
 Installed the Asha screening agent package (verbatim from `README §A–D`).
