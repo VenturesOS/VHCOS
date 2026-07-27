@@ -1,0 +1,22 @@
+{
+  "summary": "Verified the Madhuri→Nidhi session-mixing hotfix. Backend: 6/6 pytest cases pass (test_session_mixing_hotfix.py) confirming distinct refresh tokens per user, single-use rotation, and identity-owner integrity of /api/auth/refresh — user A's refresh never leaks user B's identity. Frontend: Playwright reproduced the exact reported scenario — logged in as User A (hr6@vhc.in Diya), simulated 'closed browser without logout' by removing only vhc_token + vhc_user while keeping A's vhc_refresh_token, then logged in as User B (hr12@vhc.in Sachin) on the same browser. Verified: (1) A's stale vhc_refresh_token was purged BEFORE B's session was written (new token differs from A's), (2) vhc_user is B, (3) using the current stored refresh_token against /api/auth/refresh returns hr12@vhc.in (never hr6). Sidebar UI also correctly reflects Sachin/hr12@vhc.in after the second login. Regression re-login (B→A) also rotates the refresh_token cleanly.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_session_mixing_hotfix.py",
+    "/app/test_reports/pytest/session_mixing_hotfix.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth.js login() correctly purges vhc_token/vhc_refresh_token/vhc_user/vhc_requires_reset BEFORE writing new session values, and uses removeItem() (not setItem(k, null)) when server response lacks refresh_token — fix is correct.",
+    "Defensive suggestion (non-blocking): the AuthProvider useEffect on mount could also verify localStorage vhc_user.id === /auth/me response id (if getMe returns a different id, force logout). This would add a second line of defense against any future regression that re-introduces token cross-contamination."
+  ],
+  "updated_files": ["/app/backend/tests/test_session_mixing_hotfix.py"],
+  "success_rate": { "backend": "100% (6/6)", "frontend": "100% (all assertions passed)" },
+  "seed_data_creation": "No new users created — used existing hr6@vhc.in (Diya) and hr12@vhc.in (Sachin) from /app/memory/test_credentials.md.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "hr6@vhc.in/12345678 (user A), hr12@vhc.in/12345678 (user B), admin@vhc.in/VhcAdmin@2024",
+  "context_for_next_testing_agent": "The frontend hotfix in /app/frontend/src/lib/auth.js login() is verified. Backend refresh endpoint behavior is unchanged (correctly returns owner identity per refresh_token). If regressing, use test_session_mixing_hotfix.py plus the Playwright scenario: login A → clear vhc_token+vhc_user (keep vhc_refresh_token) → login B → assert localStorage.vhc_refresh_token != A's original and that POST /api/auth/refresh with the stored token returns B.",
+  "rca_of_the_issue": "Root cause: previous login flow overwrote vhc_token but NOT vhc_refresh_token when a stale value from a prior user was still present in localStorage (typical scenario: previous user closed browser without clicking Logout). The axios 401 interceptor read the surviving stale refresh_token and hit /api/auth/refresh, which correctly issued an access token for the STALE token's owner — flipping the current session to the old user. Fix: auth.js login() now unconditionally removes vhc_token, vhc_refresh_token, vhc_user, and vhc_requires_reset BEFORE writing the new session's values, and explicitly removes vhc_refresh_token if the server response has no refresh_token (never leaves a stale value)."
+}
