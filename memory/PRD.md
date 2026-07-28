@@ -28,6 +28,16 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Feb 2026 — Team Lead role + Asha Agent admin page
+- **New Team Lead role**: recruiter promoted to acting-employer by their employer OR admin. Grants: view team, view pipeline, create/edit mandates, assign mandates to recruiters under the same employer. Masks: billing_rate, invoice_amount, gross_margin, net_margin, recruiter_commission, referral_payout, contract_notes, private_notes, commercials, financials. Candidate CTC remains visible.
+- **Backend files**: `backend/utils/team_lead.py` (helpers + CONFIDENTIAL_KEYS + mask_confidential), `backend/routes/team_lead.py` (POST /api/team-lead/grant, POST /api/team-lead/revoke, GET /api/team-lead/scope, GET /api/team-lead/list/{employer_id}).
+- **Backend endpoints upgraded**: `/api/employer/my-team`, `/api/employer/pipeline`, `/api/employer/team-recruiters`, `/api/jobs/{job_id}/assign-recruiters` now accept Team Lead identity via `get_effective_employer_id()`. Response fields `acting_as_team_lead` returned.
+- **User model**: added `is_team_lead: bool` + `team_lead_employer_id: Optional[str]`. Login/refresh responses now return both.
+- **Frontend**: Employer > My Team page has "Promote / Revoke" toggle per recruiter row. Admin > Users page has crown icon toggle for each recruiter. Sidebar shows Team Lead sub-menu (`Team (Lead)`, `Employer Pipeline`) to promoted recruiters. Routes `/recruiter/team-lead/my-team` and `/recruiter/team-lead/pipeline` reuse the employer components with server-side masking.
+- **Asha Agent admin page** at `/admin/asha` — Overview tab (live counts: qualified / not qualified / in progress / waiting / live takeover), Sessions tab (reuses AgentScreeningPanel across all mandates), How-it-works tab. Sidebar entry "Asha Agent" (admin only). API wrapper `ashaAPI` added to `frontend/src/lib/api.js`.
+- **Testing**: `/app/test_reports/iteration_189.json` — 20/20 backend tests passing covering grant/revoke lifecycle, permission checks, confidential-field masking, mandate assignment by Team Lead, Asha admin endpoints, session-mixing regression.
+
+
 ### Phase 55.11v — Session-mixing hotfix (Madhuri → Nidhi) (2026-07-24)
 
 **Bug report**: Madhuri Singh (hr58@vhc.in) logs into her account but
