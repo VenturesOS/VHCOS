@@ -295,6 +295,18 @@ async def get_jobs(
             ]
         else:
             query["posted_by"] = current_user["id"]
+    elif current_user["role"] == "recruiter" and is_team_lead(current_user):
+        # Team Lead sees all mandates under the employer they act for.
+        employer_id = get_effective_employer_id(current_user)
+        team = await db.teams.find_one({"employer_id": employer_id}, {"_id": 0, "id": 1, "recruiter_ids": 1})
+        team_ids = [team["id"]] if team else []
+        team_recruiter_ids = (team.get("recruiter_ids") if team else []) or []
+        query["$or"] = [
+            {"posted_by": employer_id},
+            {"team_id": {"$in": team_ids}} if team_ids else {"_id": None},
+            {"posted_by": {"$in": team_recruiter_ids}} if team_recruiter_ids else {"_id": None},
+            {"assigned_recruiters": current_user["id"]},
+        ]
     elif current_user["role"] == "recruiter":
         query["$or"] = [
             {"posted_by": current_user["id"]},

@@ -276,6 +276,7 @@ function App() {
                 server-side and the sidebar hides billing/commission pages. */}
             <Route path="team-lead/my-team" element={<EmployerMyTeamPage />} />
             <Route path="team-lead/pipeline" element={<EmployerPipelinePage />} />
+            <Route path="team-lead/jobs" element={<EmployerJobsPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
           </Route>
 

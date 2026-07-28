@@ -190,6 +190,7 @@ export const Sidebar = () => {
   if (user?.role === 'recruiter' && user?.is_team_lead) {
     const teamLeadItems = [
       { icon: UsersRound, label: 'Team (Lead)', path: '/recruiter/team-lead/my-team' },
+      { icon: Briefcase, label: 'Mandates (Assign)', path: '/recruiter/team-lead/jobs' },
       { icon: ClipboardList, label: 'Employer Pipeline', path: '/recruiter/team-lead/pipeline' },
     ];
     const dashIdx = items.findIndex(i => i.label === 'Dashboard');
