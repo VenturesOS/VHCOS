@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '7.0.0';
+const VERSION = '6.3.0';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we
@@ -1445,90 +1445,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch(e => sendResponse({ success: false, error: e.message }));
     return true;
   }
-
-  if (request.action === 'listLiveMandates') {
-    listLiveMandates()
-      .then(sendResponse)
-      .catch(e => sendResponse({ success: false, error: e.message }));
-    return true;
-  }
-
-  if (request.action === 'addToMandate') {
-    addCandidateToMandate(request.candidate_id, request.job_id)
-      .then(sendResponse)
-      .catch(e => sendResponse({ success: false, error: e.message }));
-    return true;
-  }
 });
-
-// ═══ v6.3.1 — live mandates + add-to-mandate (hover-card dropdown) ═══
-let _mandatesCache = { at: 0, data: null };
-
-async function listLiveMandates() {
-  if (_mandatesCache.data && Date.now() - _mandatesCache.at < 60000) {
-    return { success: true, mandates: _mandatesCache.data, cached: true };
-  }
-  let auth = await getAuth();
-  if (!auth) return { success: false, error: 'auth' };
-  const url = `${auth.apiUrl}/api/jobs?status=active`;
-  let r = await fetchPreview(url, auth);
-  if (r.status === 401) {
-    auth = await getAuth();
-    if (!auth) return { success: false, error: 'auth' };
-    r = await fetchPreview(url, auth);
-  }
-  if (!r.ok || !Array.isArray(r.json)) {
-    return { success: false, error: r.error || `HTTP ${r.status}` };
-  }
-  const mandates = r.json.map(j => ({
-    id: j.id,
-    title: j.title || j.job_title || 'Untitled',
-    location: j.location || '',
-    company: j.company_name || j.public_company_alias || '',
-  }));
-  _mandatesCache = { at: Date.now(), data: mandates };
-  console.log(`[VHC BG v${VERSION}] Live mandates: ${mandates.length}`);
-  return { success: true, mandates };
-}
-
-async function addCandidateToMandate(candidateId, jobId) {
-  if (!candidateId || !jobId) return { success: false, error: 'missing_ids' };
-  let auth = await getAuth();
-  if (!auth) return { success: false, error: 'auth' };
-  const doPost = async (a) => {
-    try {
-      const resp = await fetch(`${a.apiUrl}/api/matching/shortlist`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${a.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          candidate_id: candidateId,
-          job_id: jobId,
-          notes: 'Added via Naukri extension (hover card)',
-        }),
-      });
-      let json = null;
-      try { json = await resp.json(); } catch (_) {}
-      return { status: resp.status, ok: resp.ok, json };
-    } catch (e) {
-      return { status: 0, ok: false, json: null, netError: e.message };
-    }
-  };
-  let r = await doPost(auth);
-  if (r.status === 401) {
-    auth = await getAuth();
-    if (!auth) return { success: false, error: 'auth' };
-    r = await doPost(auth);
-  }
-  if (r.ok) {
-    console.log(`[VHC BG v${VERSION}] Shortlisted ${candidateId} → job ${jobId}`);
-    return { success: true };
-  }
-  const detail = (r.json && (r.json.detail || r.json.message)) || r.netError || `HTTP ${r.status}`;
-  return { success: false, status: r.status, error: detail };
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // QUEUE MANAGEMENT

@@ -168,7 +168,7 @@
 
     const fitBlock = fit && fit.score != null
       ? ring(fit.score)
-      : `<button type="button" class="vhc-hp-nomandate vhc-hp-mopen" title="Pick a live mandate — click to choose and add this candidate">Select a<br>mandate</button>`;
+      : `<span class="vhc-hp-nomandate" title="Pick a mandate in the extension popup to see match %">Select a<br>mandate</span>`;
 
     const mandateLine = fit
       ? `<div class="vhc-hp-mandate" title="${esc(fit.mandate_title || '')}">vs ${esc(fit.mandate_title || 'mandate')}${fit.mandate_code ? ` (${esc(fit.mandate_code)})` : ''}</div>`
@@ -198,11 +198,6 @@
       ${row('💼', 'experience', c.experience_years != null ? `${c.experience_years} yrs experience` : null)}
       ${factorDots}
       ${chips}
-      <button type="button" class="vhc-hp-addbtn vhc-hp-mopen" title="Add this candidate to a live mandate's pipeline">＋ Add to mandate</button>
-      <div class="vhc-hp-mpanel" hidden>
-        <input class="vhc-hp-msearch" type="text" placeholder="Search live mandates…" autocomplete="off">
-        <div class="vhc-hp-mlist"><div class="vhc-hp-mnote">Loading mandates…</div></div>
-      </div>
       <div class="vhc-hp-foot">
         <span class="vhc-hp-updated">${updated ? `Updated ${esc(updated)} · ` : ''}<span class="vhc-hp-ver">v${esc(EXT_VERSION)}</span></span>
         <a class="vhc-hp-open" href="${esc(badgeHref || '#')}" target="_blank" rel="noopener noreferrer">Open in VHC ↗</a>
@@ -247,105 +242,6 @@
     done();
   }
 
-  // ═══ v6.3.1 — add-to-mandate dropdown on the hover card ═══
-  let _mandates = null;
-
-  function _mrows(list, q) {
-    const needle = (q || '').trim().toLowerCase();
-    const rows = list.filter(m =>
-      !needle ||
-      (m.title || '').toLowerCase().includes(needle) ||
-      (m.location || '').toLowerCase().includes(needle) ||
-      (m.company || '').toLowerCase().includes(needle));
-    if (!rows.length) return '<div class="vhc-hp-mnote">No matching live mandates</div>';
-    return rows.map(m => `
-      <button type="button" class="vhc-hp-mrow" data-jid="${esc(m.id)}" data-jtitle="${esc(m.title)}">
-        <span class="vhc-hp-mtitle">${esc(m.title)}</span>
-        <span class="vhc-hp-mmeta">${esc([m.company, m.location].filter(Boolean).join(' · '))}</span>
-      </button>`).join('');
-  }
-
-  async function _openMandatePanel(card) {
-    const panel = card.querySelector('.vhc-hp-mpanel');
-    if (!panel) return;
-    if (!panel.hidden) { panel.hidden = true; return; }
-    panel.hidden = false;
-    const listEl = panel.querySelector('.vhc-hp-mlist');
-    if (!_mandates) {
-      listEl.innerHTML = '<div class="vhc-hp-mnote">Loading mandates…</div>';
-      const resp = await new Promise((resolve) => {
-        try {
-          chrome.runtime.sendMessage({ action: 'listLiveMandates' }, (r) => {
-            if (chrome.runtime.lastError) return resolve(null);
-            resolve(r);
-          });
-        } catch (_) { resolve(null); }
-      });
-      if (!resp || !resp.success) {
-        listEl.innerHTML = `<div class="vhc-hp-mnote vhc-hp-mwarn">${
-          resp && resp.error === 'auth'
-            ? 'Login in the extension popup first'
-            : 'Could not load mandates — ' + esc((resp && resp.error) || 'network')}</div>`;
-        return;
-      }
-      _mandates = resp.mandates || [];
-    }
-    listEl.innerHTML = _mrows(_mandates, panel.querySelector('.vhc-hp-msearch').value);
-    try { panel.querySelector('.vhc-hp-msearch').focus(); } catch (_) {}
-  }
-
-  async function _addToMandate(card, rowBtn) {
-    const cid = card.dataset.cid;
-    const jid = rowBtn.dataset.jid;
-    const title = rowBtn.dataset.jtitle || 'mandate';
-    if (!cid || !jid) return;
-    rowBtn.disabled = true;
-    rowBtn.classList.add('vhc-hp-mbusy');
-    const resp = await new Promise((resolve) => {
-      try {
-        chrome.runtime.sendMessage(
-          { action: 'addToMandate', candidate_id: cid, job_id: jid },
-          (r) => { if (chrome.runtime.lastError) return resolve(null); resolve(r); });
-      } catch (_) { resolve(null); }
-    });
-    const listEl = card.querySelector('.vhc-hp-mlist');
-    if (resp && resp.success) {
-      listEl.innerHTML = `<div class="vhc-hp-mnote vhc-hp-mok">✓ Added to ${esc(title)} — shortlisted</div>`;
-      setTimeout(() => {
-        const panel = card.querySelector('.vhc-hp-mpanel');
-        if (panel) panel.hidden = true;
-      }, 1600);
-    } else {
-      const msg = (resp && resp.error) || 'network error';
-      listEl.innerHTML = `<div class="vhc-hp-mnote vhc-hp-mwarn">${esc(msg)}</div>
-        <div class="vhc-hp-mnote"><button type="button" class="vhc-hp-mback">← back to list</button></div>`;
-    }
-  }
-
-  document.addEventListener('click', (ev) => {
-    const card = ev.target.closest && ev.target.closest('#vhc-hp-card');
-    if (!card) return;
-    const open = ev.target.closest('.vhc-hp-mopen');
-    if (open) { ev.preventDefault(); ev.stopPropagation(); _openMandatePanel(card); return; }
-    const row = ev.target.closest('.vhc-hp-mrow');
-    if (row) { ev.preventDefault(); ev.stopPropagation(); _addToMandate(card, row); return; }
-    const back = ev.target.closest('.vhc-hp-mback');
-    if (back) {
-      ev.preventDefault(); ev.stopPropagation();
-      const listEl = card.querySelector('.vhc-hp-mlist');
-      if (listEl && _mandates) listEl.innerHTML = _mrows(_mandates, card.querySelector('.vhc-hp-msearch').value);
-      return;
-    }
-  }, true);
-
-  document.addEventListener('input', (ev) => {
-    if (!ev.target.classList || !ev.target.classList.contains('vhc-hp-msearch')) return;
-    const card = ev.target.closest('#vhc-hp-card');
-    if (!card || !_mandates) return;
-    const listEl = card.querySelector('.vhc-hp-mlist');
-    if (listEl) listEl.innerHTML = _mrows(_mandates, ev.target.value);
-  }, true);
-
   function showFor(badge) {
     currentBadge = badge;
     const candidateId = badge.dataset.vhcCandidateId;
@@ -358,7 +254,6 @@
     }
 
     const el = ensureCard();
-    el.dataset.cid = candidateId;   // v6.3.1: add-to-mandate needs this
     el.innerHTML = renderLoading();
     el.classList.add('vhc-hp-visible');
     place(badge);

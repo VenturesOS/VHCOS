@@ -76,12 +76,12 @@ async def get_extension_version():
         "download_url": "/api/download/naukri-extension",
         "update_available": True,
         "changelog": [
-            "v7.0.0: Latest team-wide release — PDF vendor bundle for reliable resume parsing, background visibility shim, hover preview refinements",
+            "v7.0.0: Hover-card 'Add to Mandate' — from the 'Already in Database' cloud you can now pick a live mandate and shortlist the candidate in one click",
+            "v7.0.0: 'Select a Mandate' picker with search — no active mandate needed, dropdown lists all live mandates",
+            "v7.0.0: PDF vendor bundle for reliable resume parsing, background visibility shim, hover preview refinements",
             "v6.0.0: Async capture — no more stuck 'Processing' (job polling survives slow servers)",
             "v6.0.0: 'Already in Database' badge accuracy overhaul (server-side V2 scoring trusted)",
-            "v6.0.0: Badge recall fix — candidates in the bank now badge reliably on search pages",
             "v6.0.0: Update-available banner in popup with one-click update",
-            "v6.0.0: /v3/simcv page exclusion + ResDex preview-overlay capture fix",
         ],
     }
 
