@@ -29,6 +29,10 @@ export default function UsersPage() {
   const [showAMDialog, setShowAMDialog] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [selectedCompanies, setSelectedCompanies] = useState([]);
+  // Team Lead promotion dialog — pick an employer from a dropdown
+  const [tlDialog, setTlDialog] = useState(null);   // { recruiter } | null
+  const [tlEmployerId, setTlEmployerId] = useState('');
+  const [tlBusy, setTlBusy] = useState(false);
 
   // Phase 55.4 — migrate email dialog
   const [showMigrateDialog, setShowMigrateDialog] = useState(null);
@@ -77,23 +81,35 @@ export default function UsersPage() {
   };
 
   const handleToggleTeamLead = async (u) => {
-    try {
-      if (u.is_team_lead) {
-        if (!window.confirm(`Revoke Team Lead access for ${u.name}?`)) return;
+    if (u.is_team_lead) {
+      if (!window.confirm(`Revoke Team Lead access for ${u.name}?`)) return;
+      try {
         await teamLeadAPI.revoke(u.id);
         toast.success(`${u.name} is no longer a Team Lead`);
-      } else {
-        // Admin needs to pick which employer this recruiter is a Team Lead for.
-        const employerId = window.prompt(
-          `Promote ${u.name} to Team Lead for which employer?\nEnter the employer's user_id:`
-        );
-        if (!employerId) return;
-        await teamLeadAPI.grant(u.id, employerId.trim());
-        toast.success(`${u.name} is now a Team Lead`);
+        loadData();
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || 'Team Lead update failed');
       }
+      return;
+    }
+    // Open dropdown dialog to pick employer
+    setTlEmployerId('');
+    setTlDialog({ recruiter: u });
+  };
+
+  const confirmTeamLeadGrant = async () => {
+    if (!tlDialog?.recruiter || !tlEmployerId) return;
+    setTlBusy(true);
+    try {
+      await teamLeadAPI.grant(tlDialog.recruiter.id, tlEmployerId);
+      toast.success(`${tlDialog.recruiter.name} is now a Team Lead`);
+      setTlDialog(null);
+      setTlEmployerId('');
       loadData();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Team Lead update failed');
+      toast.error(e?.response?.data?.detail || 'Team Lead promotion failed');
+    } finally {
+      setTlBusy(false);
     }
   };
 
@@ -728,6 +744,58 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => setShowAMDialog(null)}>Cancel</Button>
             <Button onClick={handleSaveAM} className="bg-indigo-600 hover:bg-indigo-700" data-testid="save-am-btn">
               Save Account Manager
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Team Lead promotion dialog — pick an employer from a searchable dropdown */}
+      <Dialog open={!!tlDialog} onOpenChange={(open) => !open && setTlDialog(null)}>
+        <DialogContent data-testid="team-lead-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="w-5 h-5 text-amber-600" /> Promote to Team Lead
+            </DialogTitle>
+            <DialogDescription>
+              <b>{tlDialog?.recruiter?.name}</b> will act as an employer: view team, assign
+              mandates, and edit jobs. Financial data (billing, commissions, margins) stays hidden.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="text-sm font-medium text-slate-700">Which employer's team?</label>
+            <Select value={tlEmployerId} onValueChange={setTlEmployerId}>
+              <SelectTrigger data-testid="tl-employer-select">
+                <SelectValue placeholder="Select an employer…" />
+              </SelectTrigger>
+              <SelectContent>
+                {employers.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">No employers found</div>
+                ) : (
+                  employers.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id} data-testid={`tl-employer-opt-${emp.id}`}>
+                      <span className="font-medium">{emp.name}</span>
+                      <span className="text-slate-500 ml-2 text-xs">{emp.email}</span>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500">
+              The recruiter must already be a member of this employer's team. Only the employer
+              or an admin can revoke this later.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTlDialog(null)} disabled={tlBusy}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmTeamLeadGrant}
+              disabled={!tlEmployerId || tlBusy}
+              className="bg-amber-600 hover:bg-amber-700"
+              data-testid="tl-confirm-btn"
+            >
+              {tlBusy ? 'Promoting…' : 'Promote to Team Lead'}
             </Button>
           </DialogFooter>
         </DialogContent>
