@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '6.1.2';
+const VERSION = '6.3.0';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we
@@ -1139,11 +1139,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // ═══ CV IFRAME DATA RELAY (from content script running inside iframe) ═══
+  if (request.action === 'broadcastCVExtraction') {
+    // Parent page asks us to poke every frame's content script so late-
+    // loading CV iframes re-extract and relay (tabs.sendMessage without a
+    // frameId broadcasts to ALL frames in the tab).
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      try {
+        chrome.tabs.sendMessage(tabId, { action: 'requestCVExtraction' }, () => {
+          void chrome.runtime.lastError;
+        });
+      } catch (_) {}
+    }
+    sendResponse({ success: true });
+    return false;
+  }
+
   if (request.action === 'cvIframeData') {
     const tabId = sender.tab?.id;
     if (tabId && request.data) {
-      cvIframeDataByTab[tabId] = request.data;
-      console.log(`[VHC BG v${VERSION}] CV iframe data stored for tab ${tabId}: ${(request.data.text || '').length} chars`);
+      // v6.2.1: progressive CV renders relay multiple times — keep the
+      // BEST snapshot (longest text; contacts beat no-contacts).
+      const prev = cvIframeDataByTab[tabId];
+      const newLen = (request.data.text || '').length;
+      const prevLen = prev ? (prev.text || '').length : 0;
+      const newContacts = (request.data.phones?.length || 0) + (request.data.emails?.length || 0);
+      const prevContacts = prev ? (prev.phones?.length || 0) + (prev.emails?.length || 0) : 0;
+      if (!prev || newLen > prevLen || newContacts > prevContacts) {
+        cvIframeDataByTab[tabId] = request.data;
+        console.log(`[VHC BG v${VERSION}] CV iframe data stored for tab ${tabId}: ${newLen} chars (prev ${prevLen}), contacts ${newContacts}`);
+      }
     }
     sendResponse({ success: true });
     return false;
@@ -1159,6 +1184,74 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // ═══ FETCH IFRAME SRC (fallback: background fetches cross-origin iframe content) ═══
+  if (request.action === 'fetchCvBinary') {
+    // v6.3.0 — content-type-aware CV fetch. PDFs come back as base64 for
+    // client-side pdf.js text extraction; HTML comes back stripped as
+    // before; Office docs are flagged so the parent skips client parsing.
+    (async () => {
+      try {
+        const url = request.url;
+        if (!url) return sendResponse({ error: 'No URL' });
+        const resp = await fetch(url, {
+          credentials: 'include',
+          headers: { 'Accept': 'application/pdf,text/html,*/*' },
+        });
+        if (!resp.ok) return sendResponse({ error: `HTTP ${resp.status}` });
+        const ctype = (resp.headers.get('content-type') || '').toLowerCase();
+        const isPdf = ctype.includes('application/pdf') || /\.pdf(\?|$)/i.test(url);
+        if (isPdf) {
+          const buf = await resp.arrayBuffer();
+          if (buf.byteLength > 20 * 1024 * 1024) {
+            return sendResponse({ error: 'PDF too large' });
+          }
+          // chunked base64 — avoids call-stack limits on big files
+          const bytes = new Uint8Array(buf);
+          let bin = '';
+          const CHUNK = 0x8000;
+          for (let i = 0; i < bytes.length; i += CHUNK) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+          }
+          console.log(`[VHC BG v${VERSION}] CV PDF fetched: ${bytes.length} bytes (${url.substring(0, 80)})`);
+          return sendResponse({ isPdf: true, base64: btoa(bin), bytes: bytes.length });
+        }
+        if (/msword|officedocument/.test(ctype)) {
+          return sendResponse({ isDoc: true, contentType: ctype });
+        }
+        const html = await resp.text();
+        const text = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return sendResponse({ isPdf: false, text });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === 'injectPdfJs') {
+    // v6.3.0 — lazy-load pdf.js into the tab's isolated world only when a
+    // PDF CV actually needs parsing (keeps every normal page load light).
+    (async () => {
+      try {
+        const tabId = sender.tab?.id;
+        if (!tabId) return sendResponse({ ok: false, error: 'no tab' });
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['vendor/pdf.min.js'],
+        });
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    })();
+    return true;
+  }
+
   if (request.action === 'fetchIframeSrc') {
     (async () => {
       try {

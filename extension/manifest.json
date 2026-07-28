@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VHC Talent OS - Multi-Platform Capture",
-  "version": "6.1.2",
+  "version": "7.0.0",
   "description": "Capture candidate profiles from Naukri, LinkedIn, and Foundit to VHC Talent OS \u2014 AI extraction, offline queue, auto job-shortlisting",
   "update_url": "https://api.ventureshrd.com/api/extension/update.xml",
   "permissions": [
@@ -59,6 +59,20 @@
         "https://*.naukri.com/*"
       ],
       "js": [
+        "bg-visibility-shim.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "https://www.naukri.com/*",
+        "https://naukri.com/*",
+        "https://*.naukri.com/*"
+      ],
+      "js": [
         "content.js",
         "hover-preview.js"
       ],
@@ -67,7 +81,7 @@
       ],
       "run_at": "document_idle",
       "all_frames": true,
-      "match_about_blank": true
+      "match_origin_as_fallback": true
     },
     {
       "matches": [
@@ -115,5 +129,6 @@
         "https://*.foundit.in/*"
       ]
     }
-  ]
+  ],
+  "minimum_chrome_version": "111"
 }

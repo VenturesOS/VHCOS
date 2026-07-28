@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '6.3.0';
+const VERSION = '6.0.1';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we
@@ -1139,36 +1139,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // ═══ CV IFRAME DATA RELAY (from content script running inside iframe) ═══
-  if (request.action === 'broadcastCVExtraction') {
-    // Parent page asks us to poke every frame's content script so late-
-    // loading CV iframes re-extract and relay (tabs.sendMessage without a
-    // frameId broadcasts to ALL frames in the tab).
-    const tabId = sender.tab?.id;
-    if (tabId) {
-      try {
-        chrome.tabs.sendMessage(tabId, { action: 'requestCVExtraction' }, () => {
-          void chrome.runtime.lastError;
-        });
-      } catch (_) {}
-    }
-    sendResponse({ success: true });
-    return false;
-  }
-
   if (request.action === 'cvIframeData') {
     const tabId = sender.tab?.id;
     if (tabId && request.data) {
-      // v6.2.1: progressive CV renders relay multiple times — keep the
-      // BEST snapshot (longest text; contacts beat no-contacts).
-      const prev = cvIframeDataByTab[tabId];
-      const newLen = (request.data.text || '').length;
-      const prevLen = prev ? (prev.text || '').length : 0;
-      const newContacts = (request.data.phones?.length || 0) + (request.data.emails?.length || 0);
-      const prevContacts = prev ? (prev.phones?.length || 0) + (prev.emails?.length || 0) : 0;
-      if (!prev || newLen > prevLen || newContacts > prevContacts) {
-        cvIframeDataByTab[tabId] = request.data;
-        console.log(`[VHC BG v${VERSION}] CV iframe data stored for tab ${tabId}: ${newLen} chars (prev ${prevLen}), contacts ${newContacts}`);
-      }
+      cvIframeDataByTab[tabId] = request.data;
+      console.log(`[VHC BG v${VERSION}] CV iframe data stored for tab ${tabId}: ${(request.data.text || '').length} chars`);
     }
     sendResponse({ success: true });
     return false;
@@ -1184,74 +1159,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // ═══ FETCH IFRAME SRC (fallback: background fetches cross-origin iframe content) ═══
-  if (request.action === 'fetchCvBinary') {
-    // v6.3.0 — content-type-aware CV fetch. PDFs come back as base64 for
-    // client-side pdf.js text extraction; HTML comes back stripped as
-    // before; Office docs are flagged so the parent skips client parsing.
-    (async () => {
-      try {
-        const url = request.url;
-        if (!url) return sendResponse({ error: 'No URL' });
-        const resp = await fetch(url, {
-          credentials: 'include',
-          headers: { 'Accept': 'application/pdf,text/html,*/*' },
-        });
-        if (!resp.ok) return sendResponse({ error: `HTTP ${resp.status}` });
-        const ctype = (resp.headers.get('content-type') || '').toLowerCase();
-        const isPdf = ctype.includes('application/pdf') || /\.pdf(\?|$)/i.test(url);
-        if (isPdf) {
-          const buf = await resp.arrayBuffer();
-          if (buf.byteLength > 20 * 1024 * 1024) {
-            return sendResponse({ error: 'PDF too large' });
-          }
-          // chunked base64 — avoids call-stack limits on big files
-          const bytes = new Uint8Array(buf);
-          let bin = '';
-          const CHUNK = 0x8000;
-          for (let i = 0; i < bytes.length; i += CHUNK) {
-            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-          }
-          console.log(`[VHC BG v${VERSION}] CV PDF fetched: ${bytes.length} bytes (${url.substring(0, 80)})`);
-          return sendResponse({ isPdf: true, base64: btoa(bin), bytes: bytes.length });
-        }
-        if (/msword|officedocument/.test(ctype)) {
-          return sendResponse({ isDoc: true, contentType: ctype });
-        }
-        const html = await resp.text();
-        const text = html
-          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/&nbsp;/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        return sendResponse({ isPdf: false, text });
-      } catch (e) {
-        sendResponse({ error: e.message });
-      }
-    })();
-    return true;
-  }
-
-  if (request.action === 'injectPdfJs') {
-    // v6.3.0 — lazy-load pdf.js into the tab's isolated world only when a
-    // PDF CV actually needs parsing (keeps every normal page load light).
-    (async () => {
-      try {
-        const tabId = sender.tab?.id;
-        if (!tabId) return sendResponse({ ok: false, error: 'no tab' });
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ['vendor/pdf.min.js'],
-        });
-        sendResponse({ ok: true });
-      } catch (e) {
-        sendResponse({ ok: false, error: e.message });
-      }
-    })();
-    return true;
-  }
-
   if (request.action === 'fetchIframeSrc') {
     (async () => {
       try {
@@ -1432,15 +1339,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // ── Evaluate candidate fit against a mandate ──
   if (request.action === 'evaluateFit') {
     evaluateFit(request.data)
-      .then(sendResponse)
-      .catch(e => sendResponse({ success: false, error: e.message }));
-    return true;
-  }
-
-  // ── Hover-card preview: candidate snapshot + match vs active mandate ──
-  // (v6.1.0) Used by hover-preview.js on "Already in Database" badges.
-  if (request.action === 'getCandidatePreview') {
-    getCandidatePreview(request.candidate_id)
       .then(sendResponse)
       .catch(e => sendResponse({ success: false, error: e.message }));
     return true;
@@ -2578,129 +2476,6 @@ async function checkAuth() {
       resolve({ authenticated: true, user: result.vhc_user });
     });
   });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// HOVER PREVIEW (v6.1.0)
-// Fetches a compact candidate snapshot + match % vs the active mandate for
-// the badge hover card. 5-minute in-memory cache keyed on candidate+mandate
-// so repeated hovers on a results page cost zero network calls.
-// ═══════════════════════════════════════════════════════════════════════════
-const previewCache = new Map(); // key -> { at, data }
-const PREVIEW_TTL_MS = 5 * 60 * 1000;
-const PREVIEW_CACHE_MAX = 150;
-
-function getActiveMandateId() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(['vhc_active_mandate'], (r) => {
-      resolve(r.vhc_active_mandate || null);
-    });
-  });
-}
-
-async function getCandidatePreview(candidateId) {
-  if (!candidateId) return { success: false, error: 'missing_candidate_id' };
-
-  const mandateId = await getActiveMandateId();
-  const key = `${candidateId}:${mandateId || 'none'}`;
-
-  const hit = previewCache.get(key);
-  if (hit && Date.now() - hit.at < PREVIEW_TTL_MS) {
-    return { success: true, data: hit.data, cached: true };
-  }
-
-  let auth = await getAuth();
-  if (!auth) return { success: false, error: 'auth' };
-  const apiHost = (() => { try { return new URL(auth.apiUrl).host; } catch (_) { return auth.apiUrl; } })();
-
-  const primaryUrl = `${auth.apiUrl}/api/extension/candidate-preview/${encodeURIComponent(candidateId)}` +
-    (mandateId ? `?mandate_id=${encodeURIComponent(mandateId)}` : '');
-
-  let result = await fetchPreview(primaryUrl, auth);
-
-  // 401 → token may have rotated in another tab; re-read once and retry.
-  if (result.status === 401) {
-    auth = await getAuth();
-    if (!auth) return { success: false, error: 'auth' };
-    result = await fetchPreview(primaryUrl, auth);
-    if (result.status === 401) return { success: false, error: 'auth' };
-  }
-
-  // 404 → the Phase-8 preview endpoint isn't deployed on this backend yet.
-  // Fall back to the long-standing candidate detail endpoint so the card
-  // still shows contact / salary / notice. Match % lights up automatically
-  // once the backend ships — no extension update needed.
-  if (result.status === 404) {
-    console.warn(`[VHC BG v${VERSION}] Preview endpoint missing (404) — using /candidate-bank/{id} fallback`);
-    const fbUrl = `${auth.apiUrl}/api/candidate-bank/${encodeURIComponent(candidateId)}`;
-    const fb = await fetchPreview(fbUrl, auth);
-    if (fb.status === 401) return { success: false, error: 'auth' };
-    if (!fb.ok) {
-      console.warn(`[VHC BG v${VERSION}] Fallback failed: HTTP ${fb.status} for ${fbUrl}`);
-      return { success: false, error: fb.status ? `http_${fb.status}` : (fb.error || 'network'), api: apiHost };
-    }
-    const doc = (fb.json && (fb.json.candidate || fb.json)) || {};
-    const pick = (...vals) => {
-      for (const v of vals) if (v !== undefined && v !== null && v !== '') return v;
-      return null;
-    };
-    const data = {
-      success: true,
-      candidate: {
-        id: doc.id,
-        name: doc.name,
-        designation: pick(doc.current_designation, doc.designation, doc.headline),
-        employer: pick(doc.current_employer, doc.current_company, doc.company),
-        location: pick(doc.current_location, doc.location),
-        phone: doc.phone != null ? doc.phone : null,
-        email: doc.email != null ? doc.email : null,
-        current_salary: doc.current_salary != null ? doc.current_salary : null,
-        expected_salary: doc.expected_salary != null ? doc.expected_salary : null,
-        notice_period: pick(
-          doc.notice_period,
-          doc.notice_period_days != null ? `${doc.notice_period_days} days` : null
-        ),
-        experience_years: pick(doc.total_experience_years, doc.experience_years),
-        updated_at: pick(doc.updated_at, doc.created_at),
-      },
-      fit: null,
-      fit_error: 'preview_endpoint_missing',
-    };
-    previewSet(key, data);
-    return { success: true, data, fallback: true };
-  }
-
-  if (!result.ok) {
-    console.warn(`[VHC BG v${VERSION}] Preview failed: HTTP ${result.status || 0} (${result.error || 'server'})`);
-    return { success: false, error: result.status ? `http_${result.status}` : (result.error || 'network'), api: apiHost };
-  }
-
-  previewSet(key, result.json);
-  console.log(`[VHC BG v${VERSION}] Preview served for ${candidateId} (mandate: ${mandateId || 'none'})`);
-  return { success: true, data: result.json };
-}
-
-/** Single fetch wrapper so primary + fallback share error semantics. */
-async function fetchPreview(url, auth) {
-  try {
-    const r = await fetch(url, { headers: { 'Authorization': `Bearer ${auth.token}` } });
-    let json = null;
-    if (r.ok) {
-      try { json = await r.json(); }
-      catch (_) { return { ok: false, status: r.status, error: 'bad_json' }; }
-    }
-    return { ok: r.ok, status: r.status, json };
-  } catch (e) {
-    return { ok: false, status: 0, error: 'network' };
-  }
-}
-
-function previewSet(key, data) {
-  if (previewCache.size >= PREVIEW_CACHE_MAX) {
-    const oldest = previewCache.keys().next().value;
-    if (oldest) previewCache.delete(oldest);
-  }
-  previewCache.set(key, { at: Date.now(), data });
 }
 
 async function getAuth() {

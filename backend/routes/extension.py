@@ -76,6 +76,7 @@ async def get_extension_version():
         "download_url": "/api/download/naukri-extension",
         "update_available": True,
         "changelog": [
+            "v7.0.0: Latest team-wide release — PDF vendor bundle for reliable resume parsing, background visibility shim, hover preview refinements",
             "v6.0.0: Async capture — no more stuck 'Processing' (job polling survives slow servers)",
             "v6.0.0: 'Already in Database' badge accuracy overhaul (server-side V2 scoring trusted)",
             "v6.0.0: Badge recall fix — candidates in the bank now badge reliably on search pages",

@@ -28,17 +28,7 @@
       const _extractAndRelay = () => {
         try {
           if (!chrome || !chrome.runtime || !chrome.runtime.id) return;
-          let bodyText = document.body ? (document.body.innerText || document.body.textContent || '') : '';
-          // v6.3.0: viewer-in-viewer — pull text from same-origin CHILD
-          // frames as well (blob: children are same-origin with us here).
-          try {
-            document.querySelectorAll('iframe').forEach((child) => {
-              try {
-                const t = child.contentDocument?.body?.innerText || '';
-                if (t && t.length > 30) bodyText += '\n' + t;
-              } catch (_) {}
-            });
-          } catch (_) {}
+          const bodyText = document.body ? (document.body.innerText || document.body.textContent || '') : '';
           if (bodyText.length < 30) return; // Too short, probably not loaded yet
 
           // Extract emails from CV text
@@ -109,20 +99,10 @@
         }
       };
 
-      // v6.2.1 — PERSISTENT WATCHER. The old fire-and-forget retries
-      // (load +1.5s +4s) missed every CV that finished loading later —
-      // the exact slow-internet failure. Now a MutationObserver relays
-      // (debounced) EVERY time the document grows, until the CV is
-      // substantial and stable or the 90s watch window ends. Background
-      // keeps the best snapshot, so late paint = late relay = captured.
-      let _relayDebounce = null;
-      const _extractDebounced = () => {
-        if (_relayDebounce) clearTimeout(_relayDebounce);
-        _relayDebounce = setTimeout(_extractAndRelay, 400);
-      };
-
+      // Try extraction after load, with retries for lazy-loaded content
       const _tryExtract = () => {
         _extractAndRelay();
+        // Retry after a delay in case content loads lazily
         setTimeout(_extractAndRelay, 1500);
         setTimeout(_extractAndRelay, 4000);
       };
@@ -133,23 +113,7 @@
         window.addEventListener('load', () => setTimeout(_tryExtract, 300));
       }
 
-      try {
-        const _watchStart = Date.now();
-        const _mo = new MutationObserver(() => {
-          _extractDebounced();
-          if (Date.now() - _watchStart > 90000) { try { _mo.disconnect(); } catch (_) {} }
-        });
-        const _attachMO = () => {
-          try {
-            _mo.observe(document.documentElement || document,
-                        { subtree: true, childList: true, characterData: true });
-          } catch (_) {}
-        };
-        if (document.documentElement) _attachMO();
-        else window.addEventListener('DOMContentLoaded', _attachMO);
-      } catch (e) {}
-
-      // Explicit extraction requests: from background relay…
+      // Also listen for explicit extraction requests from the main page
       try {
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (request.action === 'requestCVExtraction') {
@@ -157,13 +121,6 @@
             sendResponse({ success: true });
           }
           return false;
-        });
-      } catch (e) {}
-      // …and from the parent page's postMessage nudge (previously had no
-      // listener at all — the nudge was dead code).
-      try {
-        window.addEventListener('message', (ev) => {
-          if (ev?.data?.action === 'vhc_extract_cv') _extractAndRelay();
         });
       } catch (e) {}
     }
@@ -175,7 +132,7 @@
   if (window.vhcExtensionLoaded) return;
   window.vhcExtensionLoaded = true;
 
-  const VERSION = '6.3.0';
+  const VERSION = '5.5.10';
   const CONFIG = {
     CAPTURE_DELAY: 2000,
     SCROLL_DELAY: 150,
@@ -774,85 +731,6 @@
    * The recruiter's phone (in the sidebar/nav) was already present before,
    * so it is always excluded from the diff — regardless of recruiterCreds.phone.
    */
-  /**
-   * v6.2.0 — resolve with newly-appeared phones in the candidate root.
-   * MutationObserver (never throttled in hidden tabs) + absolute
-   * wall-clock deadline + coarse interval backstop.
-   */
-  function waitForNewPhones(phonesBefore, timeoutMs) {
-    return new Promise((resolve) => {
-      const startedAt = Date.now();
-      let settled = false;
-      let observer = null;
-      let backstop = null;
-      const finish = (phones, via) => {
-        if (settled) return;
-        settled = true;
-        try { if (observer) observer.disconnect(); } catch (_) {}
-        if (backstop) clearInterval(backstop);
-        if (phones.length > 0) {
-          console.log(`[VHC v${VERSION}] ✅ New phone via ${via} after ${Date.now() - startedAt}ms: [${phones.join(', ')}]`);
-        } else {
-          console.log(`[VHC v${VERSION}] Timeout (${Date.now() - startedAt}ms) — no new phone appeared after click`);
-        }
-        resolve(phones);
-      };
-      const check = (via) => {
-        if (settled) return;
-        const fresh = diffPhoneSets(phonesBefore, snapshotPhonesInRoot());
-        if (fresh.length > 0) return finish(fresh, via);
-        if (Date.now() - startedAt >= timeoutMs) return finish([], via);
-      };
-      try {
-        observer = new MutationObserver(() => check('mutation'));
-        observer.observe(getCandidateRoot(), {
-          subtree: true, childList: true, characterData: true,
-          attributes: true, attributeFilter: ['class', 'style'],
-        });
-      } catch (_) {}
-      backstop = setInterval(() => check('poll'), 900);
-      check('immediate');
-    });
-  }
-
-  /**
-   * v6.2.0 — wait for a contact button / section to MOUNT (hidden tabs:
-   * lazy-mounted UI may appear late even with the visibility shim).
-   */
-  function waitForContactUI(timeoutMs) {
-    const present = () => !!(
-      document.querySelector('[class*="viewContact"], [class*="view-contact"], [class*="ViewContact"]') ||
-      document.querySelector('button[class*="contact" i]') ||
-      document.querySelector('[class*="contactInfo"], [class*="contact-info"]') ||
-      document.querySelector('i.naukri-icon-phone, i.naukri-icon-email')
-    );
-    return new Promise((resolve) => {
-      if (present()) return resolve(true);
-      const startedAt = Date.now();
-      let settled = false;
-      let observer = null;
-      let backstop = null;
-      const finish = (ok) => {
-        if (settled) return;
-        settled = true;
-        try { if (observer) observer.disconnect(); } catch (_) {}
-        if (backstop) clearInterval(backstop);
-        resolve(ok);
-      };
-      const check = () => {
-        if (settled) return;
-        if (present()) return finish(true);
-        if (Date.now() - startedAt >= timeoutMs) return finish(false);
-      };
-      try {
-        observer = new MutationObserver(check);
-        observer.observe(document.body || document.documentElement,
-                         { subtree: true, childList: true });
-      } catch (_) {}
-      backstop = setInterval(check, 900);
-    });
-  }
-
   async function clickViewContactButton() {
     // ── BEFORE snapshot: record all phones currently in candidate root ──
     const phonesBeforeClick = snapshotPhonesInRoot();
@@ -910,14 +788,25 @@
     }
 
     if (clicked) {
-      // v6.2.0: MutationObserver-driven wait. Chrome clamps timers in
-      // hidden tabs to ~1s ticks, but MutationObserver callbacks fire
-      // UNTHROTTLED the instant the reveal lands in the DOM — so this
-      // detects the number immediately in foreground AND background.
-      // A 900ms interval remains as a backstop, and the deadline is
-      // absolute wall-clock so throttling can't stretch it.
-      const revealedPhones = await waitForNewPhones(phonesBeforeClick,
-        document.hidden ? 9000 : 4500);
+      // Poll for a NEW phone to appear in candidate root (max 4s, check every 300ms)
+      const revealedPhones = await new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 14; // 4.2s max
+        const interval = setInterval(() => {
+          attempts++;
+          const phonesAfter = snapshotPhonesInRoot();
+          const newPhones = diffPhoneSets(phonesBeforeClick, phonesAfter);
+          if (newPhones.length > 0) {
+            clearInterval(interval);
+            console.log(`[VHC v${VERSION}] ✅ New phone revealed after ${attempts * 300}ms: [${newPhones.join(', ')}]`);
+            resolve(newPhones);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(interval);
+            console.log(`[VHC v${VERSION}] Timeout — no new phone appeared after click`);
+            resolve([]);
+          }
+        }, 300);
+      });
       return { clicked: true, revealedPhones };
     } else {
       // No button found — number may already be visible
@@ -1173,192 +1062,6 @@
    *   2. Background relay (cross-origin iframes via all_frames: true)
    *   3. Background fetch of iframe src URL (ultimate fallback)
    */
-  /**
-   * v6.2.1 — how long we're willing to wait for the CV to load, scaled
-   * by the real network. Slow connections get up to 30s; fast ones exit
-   * the moment data arrives (the loop below returns early).
-   */
-  function cvWaitBudget() {
-    let base = document.hidden ? 15000 : 10000;
-    try {
-      const conn = navigator.connection;
-      if (conn && (conn.saveData ||
-                   /(^|-)2g$|^3g$/.test(conn.effectiveType || '') ||
-                   (typeof conn.downlink === 'number' && conn.downlink > 0 && conn.downlink < 1.5))) {
-        console.log(`[VHC v${VERSION}] Slow network detected (${conn.effectiveType}, ${conn.downlink}Mbps) — doubling CV wait budget`);
-        base *= 2;
-      }
-    } catch (_) {}
-    return Math.min(base, 30000);
-  }
-
-  /**
-   * v6.2.1 — EVENT-DRIVEN CV ACQUISITION. Fixes the slow-internet race
-   * where the pipeline completed before the CV iframe (which carries the
-   * contact info) had loaded. Strategy: quick scan first; if the result
-   * is thin, keep nudging every frame to re-extract and keep re-scanning
-   * until the CV is substantial / has contacts, or the budget ends.
-   * Returns the BEST result seen. Fast connections are unaffected — the
-   * first scan already satisfies the exit condition.
-   */
-  async function acquireCVData(candidateName, budgetMs) {
-    const startedAt = Date.now();
-    const goodEnough = (d) => !!d && (
-      !!d.phone ||
-      (!!d.email && (d.text || '').length >= 300) ||
-      (d.text || '').length >= 1200
-    );
-    const better = (a, b) => {  // is a better than b?
-      const ac = (a.phone ? 2 : 0) + (a.email ? 1 : 0);
-      const bc = (b.phone ? 2 : 0) + (b.email ? 1 : 0);
-      if (ac !== bc) return ac > bc;
-      return (a.text || '').length > (b.text || '').length;
-    };
-
-    let best = await scanCVIframe(candidateName);
-    if (goodEnough(best)) return best;
-
-    console.log(`[VHC v${VERSION}] CV thin after first scan (${(best.text || '').length} chars) — waiting up to ${budgetMs}ms for it to load`);
-    let lastNudge = 0;
-    while (Date.now() - startedAt < budgetMs) {
-      const elapsed = Date.now() - startedAt;
-      updateProgress(50, `Waiting for CV to load… ${Math.round(elapsed / 1000)}s`);
-
-      if (Date.now() - lastNudge >= 3000) {
-        lastNudge = Date.now();
-        // background relays to every frame's content script…
-        try {
-          chrome.runtime.sendMessage({ action: 'broadcastCVExtraction' }, () => {
-            void chrome.runtime.lastError;
-          });
-        } catch (_) {}
-        // …and the direct postMessage path (now has a listener) as belt+braces
-        try {
-          document.querySelectorAll('iframe').forEach((f) => {
-            try { f.contentWindow?.postMessage({ action: 'vhc_extract_cv' }, '*'); } catch (_) {}
-          });
-        } catch (_) {}
-      }
-
-      await sleep(1200);
-      const again = await scanCVIframe(candidateName);
-      if (better(again, best)) {
-        best = again;
-        console.log(`[VHC v${VERSION}] CV improved: ${(best.text || '').length} chars, phone=${best.phone || 'none'}, email=${best.email || 'none'}`);
-      }
-      if (goodEnough(best)) break;
-    }
-    console.log(`[VHC v${VERSION}] CV acquisition done in ${Date.now() - startedAt}ms: ${(best.text || '').length} chars, phone=${best.phone || 'none'}`);
-    return best;
-  }
-
-  // ── v6.3.0 PDF CV support ──────────────────────────────────────────
-  const _pdfTextCache = {};   // url → extracted text (per page load)
-
-  function findCvPdfSource() {
-    // explicit pdf embeds first
-    const embedish = document.querySelector(
-      'iframe[src*=".pdf"], embed[src*=".pdf"], object[data*=".pdf"], embed[type="application/pdf"], object[type="application/pdf"]');
-    if (embedish) {
-      const u = embedish.src || embedish.getAttribute('data') || null;
-      if (u && u.startsWith('http')) return u;
-    }
-    // the download-CV link (authoritative source of the actual file)
-    const dl = extractNaukriCVUrl();
-    if (dl) return dl;
-    // any preview-ish iframe — background will sniff the content-type
-    const f = document.querySelector(
-      'iframe#cv-iframe, iframe[name="cv-iframe"], iframe[src*="cv"], iframe[src*="resume"], iframe[src*="preview"], iframe[src*="filepreview"]');
-    if (f && f.src && f.src.startsWith('http')) return f.src;
-    return null;
-  }
-
-  async function ensurePdfJs() {
-    if (window.pdfjsLib) return true;
-    const ok = await new Promise((resolve) => {
-      try {
-        chrome.runtime.sendMessage({ action: 'injectPdfJs' }, (r) => {
-          if (chrome.runtime.lastError) return resolve(false);
-          resolve(!!(r && r.ok));
-        });
-      } catch (_) { resolve(false); }
-    });
-    if (!ok) return false;
-    // pdf.js registers synchronously on injection; tiny settle for safety
-    await sleep(150);
-    return !!window.pdfjsLib;
-  }
-
-  async function extractPdfTextFromBase64(b64) {
-    if (!(await ensurePdfJs())) return '';
-    try {
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      // No workerSrc configured → pdf.js falls back to its main-thread
-      // "fake worker" automatically. Fine for 1–5 page CVs.
-      const doc = await window.pdfjsLib.getDocument({
-        data: bytes, isEvalSupported: false, disableFontFace: true, useSystemFonts: true,
-      }).promise;
-      const pages = Math.min(doc.numPages, 8);
-      let out = '';
-      for (let p = 1; p <= pages; p++) {
-        const page = await doc.getPage(p);
-        const tc = await page.getTextContent();
-        let last = null;
-        for (const item of tc.items) {
-          if (last && item.transform && last.transform &&
-              Math.abs(item.transform[5] - last.transform[5]) > 2) out += '\n';
-          else if (out && !out.endsWith('\n')) out += ' ';
-          out += item.str;
-          last = item;
-        }
-        out += '\n';
-      }
-      try { doc.destroy(); } catch (_) {}
-      return out.trim();
-    } catch (e) {
-      console.warn(`[VHC v${VERSION}] PDF parse failed: ${e.message}`);
-      return '';
-    }
-  }
-
-  async function tryPdfCvStrategy() {
-    const url = findCvPdfSource();
-    if (!url) return null;
-    if (_pdfTextCache[url] !== undefined) return _pdfTextCache[url] || null;
-    const resp = await new Promise((resolve) => {
-      try {
-        chrome.runtime.sendMessage({ action: 'fetchCvBinary', url }, (r) => {
-          if (chrome.runtime.lastError) return resolve(null);
-          resolve(r);
-        });
-      } catch (_) { resolve(null); }
-    });
-    if (!resp) return null;
-    if (resp.isPdf && resp.base64) {
-      console.log(`[VHC v${VERSION}] Strategy 4: PDF CV detected (${resp.bytes} bytes) — extracting text via pdf.js`);
-      const text = await extractPdfTextFromBase64(resp.base64);
-      _pdfTextCache[url] = text || '';
-      if (text && text.length > 50) {
-        console.log(`[VHC v${VERSION}] Strategy 4 SUCCESS: pdf.js extracted ${text.length} chars`);
-        return text;
-      }
-      return null;
-    }
-    if (resp.isDoc) {
-      console.log(`[VHC v${VERSION}] Strategy 4: CV is Word (${resp.contentType}) — leaving to page/iframe strategies`);
-      _pdfTextCache[url] = '';
-      return null;
-    }
-    if (resp.text && resp.text.length > 200) {
-      _pdfTextCache[url] = resp.text;
-      console.log(`[VHC v${VERSION}] Strategy 4: HTML CV via background fetch, ${resp.text.length} chars`);
-      return resp.text;
-    }
-    return null;
-  }
-
   async function scanCVIframe(candidateName) {
     const result = { email: null, phone: null, text: '', isValid: false, sections: {} };
 
@@ -1520,19 +1223,6 @@
         }
       } catch (err) {
         console.warn(`[VHC v${VERSION}] Strategy 3 error:`, err.message);
-      }
-    }
-
-    // ═══ STRATEGY 4 (v6.3.0): PDF CV → pdf.js text extraction ═══
-    if (!result.isValid || result.text.length < 50) {
-      try {
-        const pdfText = await tryPdfCvStrategy();
-        if (pdfText && pdfText.length > 50) {
-          result.text = pdfText.substring(0, 15000);
-          result.isValid = true;
-        }
-      } catch (err) {
-        console.warn(`[VHC v${VERSION}] Strategy 4 error:`, err.message);
       }
     }
 
@@ -2590,22 +2280,7 @@
     const MAX_SCROLL_TIME = 5000; // hard cap: never scroll for more than 5s total
     const startTime = Date.now();
 
-    // v6.2.2: native lazy-loading (loading="lazy") is IntersectionObserver-
-    // based inside the browser — dead in hidden tabs. Flipping the
-    // attribute to eager forces the load IMMEDIATELY, viewport be damned.
-    try {
-      let eagered = 0;
-      document.querySelectorAll('iframe[loading="lazy"]').forEach((f) => {
-        f.setAttribute('loading', 'eager'); eagered++;
-      });
-      if (eagered) console.log(`[VHC v${VERSION}] Forced ${eagered} lazy iframe(s) to eager-load`);
-    } catch (_) {}
-
-    if (false) { // v6.2.2: background tabs now use the REAL scroll path below.
-      // (Old belief: "window.scrollTo is throttled or ignored in background
-      // tabs" — wrong. Programmatic scrolling works in hidden tabs; it is
-      // RENDERING that stops. The old quietness-wait never scrolled, so
-      // scroll-gated lazy content — the CV iframe — never began loading.)
+    if (isBackground) {
       // In background tabs, window.scrollTo is throttled or ignored by browser layout engines.
       // Simply wait for DOM quietness using a MutationObserver.
       await new Promise((resolve) => {
@@ -2641,7 +2316,6 @@
 
     // Strategy 1: Jump to bottom instantly — triggers all lazy-load observers at once
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
-    try { window.dispatchEvent(new Event('scroll')); } catch (_) {}
     await sleep(400);
 
     // Strategy 2: Wait for content to settle using MutationObserver (instead of fixed sleeps)
@@ -2683,22 +2357,12 @@
     const thirds = [0.33, 0.66, 1.0];
     for (const fraction of thirds) {
       window.scrollTo({ top: heightAfter * fraction, behavior: 'instant' });
-      try { window.dispatchEvent(new Event('scroll')); } catch (_) {}
       await sleep(CONFIG.SCROLL_DELAY); // now 150ms each = 450ms total for 3 jumps
     }
 
-    // v6.2.2: park the viewport ON the CV iframe — keeps its load
-    // prioritized and satisfies any residual position-based gating.
-    try {
-      const cvEl = document.querySelector('iframe#cv-iframe, iframe[name="cv-iframe"], #cv-iframe iframe, .iframe-cv-iframe iframe, iframe[src*="cv"], iframe[src*="resume"], iframe[src*="preview"]');
-      if (cvEl) cvEl.scrollIntoView({ block: 'center', behavior: 'instant' });
-    } catch (_) {}
-    if (!document.hidden) {
-      // Foreground: restore the view for the human after a short beat.
-      await sleep(300);
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      await sleep(200);
-    }
+    // Return to top so UI looks normal
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    await sleep(200);
 
     const elapsed = Date.now() - startTime;
     console.log(`[VHC v${VERSION}] Scroll complete in ${elapsed}ms. text: ${(document.body.innerText || '').length} chars`);
@@ -3490,7 +3154,7 @@
 
     // Step 7: Scan CV iframe (async — tries 3 strategies)
     updateProgress(50, 'Scanning CV preview...');
-    const cvData = await acquireCVData(domName, cvWaitBudget());
+    const cvData = await scanCVIframe(domName);
     console.log(`[VHC v${VERSION}] CV: email=${cvData.email || 'none'}, phone=${cvData.phone || 'none'}, valid=${cvData.isValid}, text=${cvData.text.length}chars`);
 
     // Step 8: DOM selector fallback (recruiterCreds already fetched at start)
@@ -3509,33 +3173,7 @@
     // (it restores the user's previous tab right after), wait for render,
     // then re-run the reveal + extraction once.
     let mergedFinal = merged;
-
-    // Step 9.4 (v6.2.0): HIDDEN-TAB IN-PLACE RETRY — with the MAIN-world
-    // visibility shim, Naukri renders in background tabs; if the first
-    // reveal still missed (late lazy-mount), scroll-kick the page (scroll
-    // events fire fine in hidden tabs), wait for the contact UI to mount,
-    // and run the reveal once more — WITHOUT stealing the user's focus.
-    if (document.hidden && !mergedFinal.email && !mergedFinal.phone) {
-      console.log(`[VHC v${VERSION}] BG tab + no contacts — in-place retry (shim path)`);
-      updateProgress(56, 'Retrying contact reveal (background)...');
-      try { await scrollToLoadContent(); } catch (_) {}
-      const uiMounted = await waitForContactUI(4000);
-      console.log(`[VHC v${VERSION}] Contact UI mounted after kick: ${uiMounted}`);
-      const revealR = await clickViewContactButton();
-      const emailsR = [...snapshotPageEmails()].filter(e => !beforeEmails.has(e));
-      const diffR = { emails: emailsR, phones: revealR.revealedPhones };
-      const cvDataR = (cvData.phone || (cvData.text && cvData.text.length > 800))
-        ? cvData : await acquireCVData(domName, 8000);
-      const mergedR = mergeContacts(cvDataR, diffR, domSelectorData, recruiterCreds, { emails: beforeEmails, phones: new Set() });
-      if (mergedR.email || mergedR.phone) {
-        mergedFinal = mergedR;
-        console.log(`[VHC v${VERSION}] === AFTER IN-PLACE RETRY: email=${mergedFinal.email || 'NONE'}, phone=${mergedFinal.phone || 'NONE'} ===`);
-      }
-    }
-
-    // Step 9.5 (v6.0.1, now last resort): flash-activate parachute —
-    // should virtually never fire with the shim in place.
-    if (document.hidden && !mergedFinal.email && !mergedFinal.phone) {
+    if (document.hidden && !merged.email && !merged.phone) {
       console.log(`[VHC v${VERSION}] BG tab + no contacts — requesting visibility assist`);
       const assist = await new Promise((resolve) => {
         try {
@@ -3561,8 +3199,7 @@
         const reveal2 = await clickViewContactButton();
         const newEmails2 = [...snapshotPageEmails()].filter(e => !beforeEmails.has(e));
         const diff2 = { emails: newEmails2, phones: reveal2.revealedPhones };
-        const cvData2 = (cvData.phone || (cvData.text && cvData.text.length > 800))
-          ? cvData : await acquireCVData(domName, 6000);
+        const cvData2 = (cvData.text && cvData.text.length > 100) ? cvData : await scanCVIframe(domName);
         mergedFinal = mergeContacts(cvData2, diff2, domSelectorData, recruiterCreds, { emails: beforeEmails, phones: new Set() });
         console.log(`[VHC v${VERSION}] === AFTER ASSIST: email=${mergedFinal.email || 'NONE'}, phone=${mergedFinal.phone || 'NONE'} ===`);
         try { chrome.runtime.sendMessage({ action: 'visibilityAssistDone' }); } catch (_) {}
