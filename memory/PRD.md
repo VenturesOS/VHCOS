@@ -28,6 +28,28 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Feb 2026 — MongoDB cost + performance cleanup (Atlas "Query Targeting" alert fix)
+- **Root cause**: Atlas M10 was emitting "Scanned Objects / Returned > 1000" alerts because two hot collections had no indexes beyond `_id`:
+  - `extraction_tracking` (121K docs, hit by /api/admin/extraction-report/daily aggregate)
+  - `job_suggestions` (928 docs of 90KB LLM cache blobs, hit by /api/jobs/{id}/suggestions upsert)
+- **Fix** — `backend/scripts/mongo_cost_reduction.py` (v2 rewrite):
+  1. Created 4 missing hot-path indexes: `extraction_tracking.timestamp_-1`, `extraction_tracking.date_source_success`, `job_suggestions.job_id_1`, `job_suggestions.completed_at_1`.
+  2. Replaced `analytics_pageviews.ts_1` with `ts_ttl` (90-day auto-prune).
+  3. One-time prune with correct field names (previous script used `created_at` but actual field is `timestamp` / `completed_at` / `ts`).
+  4. **Result — 328,397 old telemetry rows deleted**:
+     - activity_logs 170K → 43K (−127K, >30d)
+     - naukri_capture_logs 147K → 39K (−108K, >30d)
+     - extraction_tracking 121K → 37K (−84K, >30d)
+     - security_events 6.7K → 11 (−6.7K, >90d)
+     - job_suggestions 928 → 86 (−842 huge LLM cache blobs, >14d)
+     - system_health_checks 44K → 42K, notifications −13.
+- **Verification** — `explain()` confirms all 3 previously-slow patterns now use indexes:
+  - `extraction_tracking.find({timestamp: {$gte}})` → uses `timestamp_-1`
+  - `extraction_tracking` aggregate group → uses `date_source_success`
+  - `job_suggestions.find_one({job_id})` → uses `job_id_1`
+- **Note on storage**: WiredTiger doesn't reclaim disk on compact-blocked primaries. Freed space is reused on subsequent writes. On-disk shrink will happen gradually or via Atlas support-triggered compact.
+- **Impact**: Atlas Query Targeting alerts should stop within 1 hour once query planner picks up the new indexes. RAM pressure on M10 significantly reduced.
+
 ### Feb 2026 — Team Lead role + Asha Agent admin page
 - **New Team Lead role**: recruiter promoted to acting-employer by their employer OR admin. Grants: view team, view pipeline, create/edit mandates, assign mandates to recruiters under the same employer. Masks: billing_rate, invoice_amount, gross_margin, net_margin, recruiter_commission, referral_payout, contract_notes, private_notes, commercials, financials. Candidate CTC remains visible.
 - **Backend files**: `backend/utils/team_lead.py` (helpers + CONFIDENTIAL_KEYS + mask_confidential), `backend/routes/team_lead.py` (POST /api/team-lead/grant, POST /api/team-lead/revoke, GET /api/team-lead/scope, GET /api/team-lead/list/{employer_id}).
