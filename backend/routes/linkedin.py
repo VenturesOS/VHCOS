@@ -198,10 +198,11 @@ async def list_admin_organizations(user=Depends(require_role(LINKEDIN_ROLES))):
     orgs = []
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            # 1) which orgs this user admins
+            # 1) which orgs this user admins. Query without role filter so we
+            # catch every page role (ADMINISTRATOR / CONTENT_ADMIN / CURATOR / etc.).
             acl_url = (
                 "https://api.linkedin.com/v2/organizationAcls"
-                "?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED&count=20"
+                "?q=roleAssignee&count=50"
             )
             acl_res = await client.get(acl_url, headers=headers)
             if acl_res.status_code != 200:
@@ -214,9 +215,23 @@ async def list_admin_organizations(user=Depends(require_role(LINKEDIN_ROLES))):
                     ),
                 )
             elements = acl_res.json().get("elements", [])
-            org_urns = [e.get("organization") for e in elements if e.get("organization")]
+            # Keep only those in APPROVED state; ignore REVOKED/REJECTED.
+            # (LinkedIn returns role + state per assignment.)
+            valid = [e for e in elements
+                     if e.get("state") in (None, "APPROVED")
+                     and e.get("organization")]
+            # De-dup by organization URN in case a user has multiple roles on one page
+            seen = set()
+            org_role_map = {}
+            for e in valid:
+                urn = e["organization"]
+                if urn in seen:
+                    continue
+                seen.add(urn)
+                org_role_map[urn] = e.get("role", "MEMBER")
+            org_urns = list(seen)
 
-            # 2) fetch each org's name in parallel-ish
+            # 2) fetch each org's name
             for urn in org_urns:
                 org_id = urn.split(":")[-1]
                 d = await client.get(
@@ -232,9 +247,12 @@ async def list_admin_organizations(user=Depends(require_role(LINKEDIN_ROLES))):
                                  or j.get("name", {}).get("localized", {}).get("en_US", "")
                                  or f"Org {org_id}"),
                         "vanity_name": j.get("vanityName", ""),
+                        "role": org_role_map.get(urn, ""),
                     })
                 else:
-                    orgs.append({"urn": urn, "id": org_id, "name": f"Org {org_id}", "vanity_name": ""})
+                    orgs.append({"urn": urn, "id": org_id,
+                                 "name": f"Org {org_id}", "vanity_name": "",
+                                 "role": org_role_map.get(urn, "")})
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail=f"Connection error: {e}")
 
