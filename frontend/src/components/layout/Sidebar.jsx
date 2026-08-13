@@ -82,6 +82,7 @@ const navItems = {
     { icon: ShieldCheck, label: 'Security Audit', path: '/admin/security-audit' },
     { icon: Clock, label: 'Attendance', path: '/admin/attendance' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
+    { icon: Linkedin, label: 'LinkedIn Settings', path: '/admin/linkedin-settings' },
     { icon: Linkedin, label: 'LinkedIn Drafts', path: '/admin/linkedin-drafts' },
     { icon: Bot, label: 'Asha Agent', path: '/admin/asha' },
   ],

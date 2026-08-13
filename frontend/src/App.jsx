@@ -239,6 +239,7 @@ function App() {
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
             <Route path="activity-monitor" element={<ActivityTabsPage />} />
             <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
+            <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
             <Route path="asha" element={<AshaAgentPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
           </Route>
