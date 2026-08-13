@@ -61,23 +61,19 @@ async def get_linkedin_profile_urn():
 async def post_blog_to_linkedin(blog: dict, is_test: bool = False):
     """
     Post a blog article link to LinkedIn.
-    Uses w_member_social to post as the authenticated admin user.
+    Posts to the connected admin's company page when settings.organization_id
+    is a valid org URN; otherwise falls back to the admin's personal wall.
     Returns dict with success status and post details.
     """
     settings = await get_linkedin_settings()
-    org_id = settings.get("organization_id", "")
-
-    if not org_id:
-        return {"success": False, "error": "LinkedIn Organization ID not configured"}
 
     access_token = await get_linkedin_token()
     if not access_token:
         return {"success": False, "error": "LinkedIn not connected. Please authorize first."}
 
-    # Get the member's profile URN for posting
-    token, profile_sub = await get_linkedin_profile_urn()
-    if not profile_sub:
-        return {"success": False, "error": "LinkedIn profile info missing. Please re-authorize."}
+    author_urn, author_type = await _resolve_author_urn(settings)
+    if not author_urn:
+        return {"success": False, "error": "No LinkedIn author available. Reconnect LinkedIn."}
 
     # Build the blog URL
     blog_type = blog.get("blog_type", "employer")
@@ -91,9 +87,6 @@ async def post_blog_to_linkedin(blog: dict, is_test: bool = False):
 
     if is_test:
         commentary = f"[Test Post] {commentary}"
-
-    # Post as the authenticated member (admin user)
-    author_urn = f"urn:li:person:{profile_sub}"
 
     payload = {
         "author": author_urn,
@@ -191,6 +184,160 @@ async def auto_post_on_publish(blog: dict):
             logger.warning(f"[LinkedIn] Auto-post failed: {result.get('error')}")
     except Exception as e:
         logger.error(f"[LinkedIn] Auto-post exception: {e}")
+
+
+# ── Org-page posting helpers ───────────────────────────────────────────────
+def _normalize_org_urn(value: str) -> str | None:
+    """Accept org_id in any format (URN / bare id / URL) and return the URN
+    LinkedIn expects: `urn:li:organization:{numeric_id}`. Returns None if the
+    value is a URL or unparseable (user must re-pick via /organizations)."""
+    if not value:
+        return None
+    v = str(value).strip()
+    if v.startswith("urn:li:organization:"):
+        return v
+    if v.isdigit():
+        return f"urn:li:organization:{v}"
+    return None  # URL/slug — needs re-selection via GET /api/linkedin/organizations
+
+
+async def _resolve_author_urn(settings: dict) -> tuple[str | None, str]:
+    """Return the author URN to use for a UGC post.
+
+    Preference order:
+      1. Company page (if settings.organization_id is a proper URN) → org URN
+      2. Personal wall of connected admin              → person URN
+
+    Returns (author_urn, author_type) where author_type is 'organization' or 'member'.
+    """
+    org_urn = _normalize_org_urn(settings.get("organization_id"))
+    if org_urn:
+        return org_urn, "organization"
+
+    _, profile_sub = await get_linkedin_profile_urn()
+    if profile_sub:
+        return f"urn:li:person:{profile_sub}", "member"
+    return None, ""
+
+
+async def post_job_to_linkedin(job: dict, is_test: bool = False) -> dict:
+    """
+    Publish a job opening to LinkedIn — company page if configured, else the
+    connected admin's personal wall. Reuses the same narrative template as
+    the copy-paste flow (`generate_job_linkedin_draft`) so posts look identical.
+    """
+    settings = await get_linkedin_settings()
+    access_token = await get_linkedin_token()
+    if not access_token:
+        return {"success": False, "error": "LinkedIn not connected. Please authorize first."}
+
+    author_urn, author_type = await _resolve_author_urn(settings)
+    if not author_urn:
+        return {"success": False, "error": "No LinkedIn author available (missing profile + org)."}
+
+    draft = generate_job_linkedin_draft(job)
+    commentary = draft.get("body", "") or f"New opening: {job.get('title', '')}"
+    job_url = draft.get("url", "")
+    title = draft.get("title", job.get("title", "New role"))
+
+    if is_test:
+        commentary = f"[Test Post] {commentary}"
+
+    payload = {
+        "author": author_urn,
+        "lifecycleState": "PUBLISHED",
+        "specificContent": {
+            "com.linkedin.ugc.ShareContent": {
+                "shareCommentary": {"text": commentary},
+                "shareMediaCategory": "ARTICLE" if job_url else "NONE",
+                **({"media": [{
+                    "status": "READY",
+                    "originalUrl": job_url,
+                    "title": {"text": title},
+                    "description": {"text": (job.get("description") or title)[:200]},
+                }]} if job_url else {}),
+            }
+        },
+        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
+    }
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+        "LinkedIn-Version": "202402",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(LINKEDIN_UGC_URL, json=payload, headers=headers)
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            if resp.status_code == 201:
+                post_id = resp.json().get("id", "")
+                logger.info(f"[LinkedIn] Posted job '{title}' as {author_type} -> {post_id}")
+
+                await db.linkedin_post_history.insert_one({
+                    "job_id": job.get("id", ""),
+                    "job_title": title,
+                    "linkedin_post_id": post_id,
+                    "job_url": job_url,
+                    "author_type": author_type,
+                    "is_test": is_test,
+                    "status": "success",
+                    "posted_at": now_iso,
+                })
+                # Persist linkedin_posted_at on the job so admin UI hides it from unposted list
+                if job.get("id") and not is_test:
+                    await db.jobs.update_one(
+                        {"id": job["id"]},
+                        {"$set": {"linkedin_posted_at": now_iso}},
+                    )
+                return {"success": True, "post_id": post_id, "job_url": job_url,
+                        "author_type": author_type}
+
+            error_text = resp.text
+            logger.error(f"[LinkedIn] Job post failed ({resp.status_code}): {error_text}")
+            await db.linkedin_post_history.insert_one({
+                "job_id": job.get("id", ""),
+                "job_title": title,
+                "linkedin_post_id": "",
+                "job_url": job_url,
+                "author_type": author_type,
+                "is_test": is_test,
+                "status": "failed",
+                "error": error_text[:500],
+                "status_code": resp.status_code,
+                "posted_at": now_iso,
+            })
+            return {"success": False, "error": f"LinkedIn API {resp.status_code}: {error_text[:200]}"}
+
+    except httpx.RequestError as e:
+        logger.error(f"[LinkedIn] Job post request error: {e}")
+        return {"success": False, "error": f"Connection error: {str(e)[:200]}"}
+
+
+async def auto_post_job_on_publish(job: dict):
+    """Fire-and-forget hook: called when a job is created or moved to active.
+    Only posts when settings.auto_post_enabled is True and the job hasn't
+    already been posted (linkedin_posted_at unset)."""
+    try:
+        settings = await get_linkedin_settings()
+        if not settings.get("auto_post_enabled", False):
+            return
+        if job.get("linkedin_posted_at"):
+            return
+        if (job.get("status") or "").lower() != "active":
+            return
+        if (job.get("career_page_status") or "").lower() == "removed":
+            return
+        result = await post_job_to_linkedin(job)
+        if result.get("success"):
+            logger.info(f"[LinkedIn] Auto-posted job: {job.get('title')}")
+        else:
+            logger.warning(f"[LinkedIn] Auto-post job failed: {result.get('error')}")
+    except Exception as e:
+        logger.error(f"[LinkedIn] Auto-post job exception: {e}")
 
 
 # ── Job → LinkedIn draft generator ─────────────────────────────────────────

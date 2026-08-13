@@ -385,6 +385,7 @@ export const linkedinAPI = {
   updateSettings: (data) => api.put('/linkedin/settings', data),
   getStatus: () => api.get('/linkedin/status'),
   authorize: () => api.get('/linkedin/authorize'),
+  listOrganizations: () => api.get('/linkedin/organizations'),
   testPost: () => api.post('/linkedin/test-post'),
   getPostHistory: (limit = 20) => api.get(`/linkedin/post-history?limit=${limit}`),
   disconnect: () => api.delete('/linkedin/disconnect'),

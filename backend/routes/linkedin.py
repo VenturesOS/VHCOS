@@ -37,7 +37,7 @@ LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/me"
 
-SCOPES = "w_member_social"
+SCOPES = "w_member_social w_organization_social r_organization_admin rw_organization_admin"
 
 
 # ── Pydantic Models ──
@@ -176,6 +176,70 @@ async def linkedin_status(user=Depends(require_role(LINKEDIN_ROLES))):
         "profile_email": integration.get("profile_email", ""),
         "connected_at": integration.get("connected_at", ""),
     }
+
+
+@router.get("/organizations")
+async def list_admin_organizations(user=Depends(require_role(LINKEDIN_ROLES))):
+    """
+    List LinkedIn Company Pages the connected user administrates.
+    Requires `rw_organization_admin` (Community Management API) — approved for
+    VHC Jobs app in Development Tier. The user must re-authorize after the
+    scope upgrade for this endpoint to return anything.
+    """
+    token = await get_linkedin_token()
+    if not token:
+        raise HTTPException(status_code=400, detail="LinkedIn not connected")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "LinkedIn-Version": "202402",
+        "X-Restli-Protocol-Version": "2.0.0",
+    }
+
+    orgs = []
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # 1) which orgs this user admins
+            acl_url = (
+                "https://api.linkedin.com/v2/organizationAcls"
+                "?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED&count=20"
+            )
+            acl_res = await client.get(acl_url, headers=headers)
+            if acl_res.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        f"LinkedIn returned {acl_res.status_code} — "
+                        "reconnect LinkedIn to grant the new org scopes. "
+                        f"Details: {acl_res.text[:200]}"
+                    ),
+                )
+            elements = acl_res.json().get("elements", [])
+            org_urns = [e.get("organization") for e in elements if e.get("organization")]
+
+            # 2) fetch each org's name in parallel-ish
+            for urn in org_urns:
+                org_id = urn.split(":")[-1]
+                d = await client.get(
+                    f"https://api.linkedin.com/v2/organizations/{org_id}",
+                    headers=headers,
+                )
+                if d.status_code == 200:
+                    j = d.json()
+                    orgs.append({
+                        "urn": urn,
+                        "id": org_id,
+                        "name": (j.get("localizedName")
+                                 or j.get("name", {}).get("localized", {}).get("en_US", "")
+                                 or f"Org {org_id}"),
+                        "vanity_name": j.get("vanityName", ""),
+                    })
+                else:
+                    orgs.append({"urn": urn, "id": org_id, "name": f"Org {org_id}", "vanity_name": ""})
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Connection error: {e}")
+
+    return {"organizations": orgs, "count": len(orgs)}
 
 
 # ── Settings Endpoints ──

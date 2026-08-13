@@ -142,6 +142,14 @@ async def create_job(job_data: JobCreate, current_user: dict = Depends(require_r
         except Exception as _seo_err:
             logging.warning("SEO auto-ping failed for job %s: %s", job_id, _seo_err)
 
+        # LinkedIn auto-post (fire-and-forget). Guarded internally by
+        # settings.auto_post_enabled + linkedin_posted_at check.
+        try:
+            from services.linkedin_service import auto_post_job_on_publish
+            asyncio.create_task(auto_post_job_on_publish(job_doc))
+        except Exception as _li_err:
+            logging.warning("LinkedIn auto-post enqueue failed for job %s: %s", job_id, _li_err)
+
     # Trigger background auto-matching to generate system suggestions
     from services.job_suggestions import generate_job_suggestions
     asyncio.create_task(generate_job_suggestions(job_doc, db))
@@ -250,6 +258,15 @@ async def transition_job_status(
             _gi.fire_and_forget_updated(job_url)
         except Exception as _seo_err:
             logging.warning("SEO auto-ping on transition failed for job %s: %s", job_id, _seo_err)
+
+        # LinkedIn auto-post on activation (fire-and-forget)
+        try:
+            from services.linkedin_service import auto_post_job_on_publish
+            fresh_job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+            if fresh_job:
+                asyncio.create_task(auto_post_job_on_publish(fresh_job))
+        except Exception as _li_err:
+            logging.warning("LinkedIn auto-post enqueue on transition failed for job %s: %s", job_id, _li_err)
 
     updated_job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     return JobResponse(**updated_job)

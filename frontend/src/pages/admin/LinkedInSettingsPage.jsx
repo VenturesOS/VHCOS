@@ -12,10 +12,28 @@ import { Linkedin, Link2, Send, History, Unplug, ExternalLink, CheckCircle2, XCi
 export default function LinkedInSettingsPage() {
   const [settings, setSettings] = useState({ auto_post_enabled: false, organization_id: '', connection: { connected: false } });
   const [postHistory, setPostHistory] = useState([]);
+  const [organizations, setOrganizations] = useState([]);
+  const [orgLoadError, setOrgLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+
+  const loadOrganizations = useCallback(async () => {
+    setOrgLoadError('');
+    try {
+      const res = await linkedinAPI.listOrganizations();
+      setOrganizations(res.data.organizations || []);
+    } catch (err) {
+      const detail = err.response?.data?.detail || '';
+      if (detail.includes('reconnect') || detail.includes('EXPIRED') || detail.includes('401')) {
+        setOrgLoadError('Your LinkedIn token needs to be refreshed. Click Disconnect, then Connect LinkedIn again to grant the new company-page permissions.');
+      } else {
+        setOrgLoadError(detail || 'Could not fetch your LinkedIn Pages. Reconnect LinkedIn and try again.');
+      }
+      setOrganizations([]);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -25,12 +43,15 @@ export default function LinkedInSettingsPage() {
       ]);
       setSettings(settingsRes.data);
       setPostHistory(historyRes.data.posts || []);
+      if (settingsRes.data.connection?.connected) {
+        loadOrganizations();
+      }
     } catch {
       toast.error('Failed to load LinkedIn settings');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadOrganizations]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -100,7 +121,7 @@ export default function LinkedInSettingsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="page-title">LinkedIn Auto-Posting</h1>
-          <p className="text-sm text-muted-foreground">Automatically share blog posts to your LinkedIn company page</p>
+          <p className="text-sm text-muted-foreground">Automatically share new blogs and job openings to your LinkedIn company page</p>
         </div>
       </div>
 
@@ -159,8 +180,8 @@ export default function LinkedInSettingsPage() {
         <CardContent className="space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <Label className="font-medium">Auto-post when blog is published</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">New blogs will be shared on your company page automatically</p>
+              <Label className="font-medium">Auto-post when a blog or job is published</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">New blogs and newly-activated jobs will be shared on your company page automatically</p>
             </div>
             <Switch
               checked={settings.auto_post_enabled}
@@ -170,17 +191,39 @@ export default function LinkedInSettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="org-id" className="font-medium">LinkedIn Organization ID</Label>
+            <Label htmlFor="org-id" className="font-medium">LinkedIn Company Page</Label>
             <p className="text-xs text-muted-foreground">
-              Find this in your LinkedIn Company Page URL: linkedin.com/company/<strong>YOUR_ID</strong>/admin
+              Choose the Page to post to. Only Pages you administrate are listed.
             </p>
-            <Input
-              id="org-id"
-              placeholder="e.g. 12345678"
-              value={settings.organization_id || ''}
-              onChange={(e) => setSettings(prev => ({ ...prev, organization_id: e.target.value }))}
-              data-testid="org-id-input"
-            />
+
+            {orgLoadError ? (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2" data-testid="org-load-error">
+                {orgLoadError}
+              </div>
+            ) : organizations.length > 0 ? (
+              <select
+                id="org-id"
+                value={settings.organization_id || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, organization_id: e.target.value }))}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                data-testid="org-id-select"
+              >
+                <option value="">— Select a Page —</option>
+                {organizations.map((o) => (
+                  <option key={o.urn} value={o.urn}>
+                    {o.name}{o.vanity_name ? ` (@${o.vanity_name})` : ''} · id {o.id}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input
+                id="org-id"
+                placeholder="urn:li:organization:12345678 or bare numeric ID"
+                value={settings.organization_id || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, organization_id: e.target.value }))}
+                data-testid="org-id-input"
+              />
+            )}
           </div>
 
           <div className="flex items-center gap-3 pt-2">
@@ -250,9 +293,10 @@ export default function LinkedInSettingsPage() {
               {postHistory.map((post, i) => (
                 <div key={i} className="flex items-start justify-between border rounded-lg px-4 py-3" data-testid={`history-item-${i}`}>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm truncate">{post.blog_title}</p>
+                    <p className="font-medium text-sm truncate">{post.job_title || post.blog_title || 'Untitled'}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {post.blog_type} · {new Date(post.posted_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                      {post.job_id ? 'Job' : (post.blog_type || 'Blog')} · {new Date(post.posted_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                      {post.author_type ? ` · ${post.author_type}` : ''}
                       {post.is_test && ' · Test'}
                     </p>
                   </div>
