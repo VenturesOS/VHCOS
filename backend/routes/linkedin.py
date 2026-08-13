@@ -35,9 +35,9 @@ if not LINKEDIN_REDIRECT_URI:
 
 LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
-LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/me"
+LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/userinfo"
 
-SCOPES = "w_member_social w_organization_social rw_organization_admin"
+SCOPES = "openid profile email w_member_social w_organization_social rw_organization_admin"
 
 
 # ── Pydantic Models ──
@@ -58,14 +58,15 @@ async def linkedin_authorize(user=Depends(require_role(LINKEDIN_ROLES))):
     if not LINKEDIN_CLIENT_ID:
         raise HTTPException(status_code=500, detail="LINKEDIN_CLIENT_ID not configured")
 
-    auth_url = (
-        f"{LINKEDIN_AUTH_URL}"
-        f"?response_type=code"
-        f"&client_id={LINKEDIN_CLIENT_ID}"
-        f"&redirect_uri={LINKEDIN_REDIRECT_URI}"
-        f"&scope={SCOPES}"
-        f"&state=vhc_linkedin_auth"
-    )
+    from urllib.parse import urlencode
+    params = {
+        "response_type": "code",
+        "client_id": LINKEDIN_CLIENT_ID,
+        "redirect_uri": LINKEDIN_REDIRECT_URI,
+        "scope": SCOPES,
+        "state": "vhc_linkedin_auth",
+    }
+    auth_url = f"{LINKEDIN_AUTH_URL}?{urlencode(params)}"
     return {"authorization_url": auth_url}
 
 
@@ -124,14 +125,16 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
         logger.error(f"LinkedIn API request error: {e}")
         raise HTTPException(status_code=502, detail="Failed to connect to LinkedIn API")
 
-    # /v2/me returns {id, localizedFirstName, localizedLastName}
+    # /v2/userinfo (OIDC) returns {sub, name, given_name, family_name, email, ...}
     profile_name = ""
     profile_sub = ""
+    profile_email = ""
     if profile:
-        first = profile.get("localizedFirstName", "")
-        last = profile.get("localizedLastName", "")
-        profile_name = f"{first} {last}".strip() or profile.get("name", "")
-        profile_sub = profile.get("id", profile.get("sub", ""))
+        profile_name = profile.get("name", "") or (
+            f"{profile.get('given_name','')} {profile.get('family_name','')}".strip()
+        )
+        profile_sub = profile.get("sub", "") or profile.get("id", "")
+        profile_email = profile.get("email", "")
 
     token_doc = {
         "platform": "linkedin",
@@ -139,6 +142,7 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
         "expires_in": expires_in,
         "profile_name": profile_name,
         "profile_sub": profile_sub,
+        "profile_email": profile_email,
         "connected_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
