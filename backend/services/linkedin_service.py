@@ -73,7 +73,7 @@ async def post_blog_to_linkedin(blog: dict, is_test: bool = False):
 
     author_urn, author_type = await _resolve_author_urn(settings)
     if not author_urn:
-        return {"success": False, "error": "No LinkedIn author available. Reconnect LinkedIn."}
+        return {"success": False, "error": "Select your LinkedIn Company Page in Settings before posting."}
 
     # Build the blog URL
     blog_type = blog.get("blog_type", "employer")
@@ -204,19 +204,16 @@ def _normalize_org_urn(value: str) -> str | None:
 async def _resolve_author_urn(settings: dict) -> tuple[str | None, str]:
     """Return the author URN to use for a UGC post.
 
-    Preference order:
-      1. Company page (if settings.organization_id is a proper URN) → org URN
-      2. Personal wall of connected admin              → person URN
+    Community Management API requires posts be authored as an organization.
+    Personal-wall fallback is no longer possible (OIDC / r_liteprofile is
+    mutually exclusive with Community Management on the same LinkedIn app).
 
-    Returns (author_urn, author_type) where author_type is 'organization' or 'member'.
+    Returns (author_urn, 'organization') on success, or (None, '') if the
+    admin hasn't selected a Company Page yet.
     """
     org_urn = _normalize_org_urn(settings.get("organization_id"))
     if org_urn:
         return org_urn, "organization"
-
-    _, profile_sub = await get_linkedin_profile_urn()
-    if profile_sub:
-        return f"urn:li:person:{profile_sub}", "member"
     return None, ""
 
 
@@ -233,7 +230,7 @@ async def post_job_to_linkedin(job: dict, is_test: bool = False) -> dict:
 
     author_urn, author_type = await _resolve_author_urn(settings)
     if not author_urn:
-        return {"success": False, "error": "No LinkedIn author available (missing profile + org)."}
+        return {"success": False, "error": "Select your LinkedIn Company Page in Settings before posting."}
 
     draft = generate_job_linkedin_draft(job)
     commentary = draft.get("body", "") or f"New opening: {job.get('title', '')}"

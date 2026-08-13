@@ -35,9 +35,12 @@ if not LINKEDIN_REDIRECT_URI:
 
 LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
-LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/userinfo"
+# NOTE: Community Management API does NOT grant OIDC/r_liteprofile scopes,
+# and the two products are mutually exclusive on the same LinkedIn app.
+# We skip person-profile fetch entirely; posting is always to an org page.
+LINKEDIN_PROFILE_URL = ""
 
-SCOPES = "openid profile email w_member_social w_organization_social rw_organization_admin"
+SCOPES = "w_member_social w_organization_social rw_organization_admin"
 
 
 # ── Pydantic Models ──
@@ -115,26 +118,18 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
             if not access_token:
                 raise HTTPException(status_code=502, detail="No access token received")
 
-            profile_response = await client.get(
-                LINKEDIN_PROFILE_URL,
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-            profile = profile_response.json() if profile_response.status_code == 200 else {}
+            # Skip profile fetch — Community Management API doesn't grant profile scopes
+            # (OIDC/r_liteprofile are mutually exclusive with Community Management on
+            # the same app). Post authorship happens via organizationAcls lookup instead.
+            profile = {}
 
     except httpx.RequestError as e:
         logger.error(f"LinkedIn API request error: {e}")
         raise HTTPException(status_code=502, detail="Failed to connect to LinkedIn API")
 
-    # /v2/userinfo (OIDC) returns {sub, name, given_name, family_name, email, ...}
     profile_name = ""
     profile_sub = ""
     profile_email = ""
-    if profile:
-        profile_name = profile.get("name", "") or (
-            f"{profile.get('given_name','')} {profile.get('family_name','')}".strip()
-        )
-        profile_sub = profile.get("sub", "") or profile.get("id", "")
-        profile_email = profile.get("email", "")
 
     token_doc = {
         "platform": "linkedin",
@@ -153,7 +148,7 @@ async def linkedin_callback(code: str = None, state: str = None, error: str = No
         upsert=True,
     )
 
-    logger.info(f"LinkedIn connected successfully for {profile.get('name', 'unknown')}")
+    logger.info(f"LinkedIn connected successfully (Community Management token stored)")
 
     return HTMLResponse(content="""
         <html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;background:#111827;">
