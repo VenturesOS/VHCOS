@@ -444,11 +444,12 @@ async def public_apply(
             application_source = "mandate_link"
     
     if not job:
-        # Try career page access — any live job accepts applications
+        # Try career page access — any active, non-removed job accepts applications
+        # (matches the /api/public/jobs/{id} read filter — if visible, applyable)
         job = await db.jobs.find_one({
             "$or": [{"id": job_id}, {"job_public_id": job_id}],
             "status": "active",
-            "career_page_status": "live",
+            "career_page_status": {"$ne": "removed"},
         }, {"_id": 0})
         application_source = "career_page"
     
