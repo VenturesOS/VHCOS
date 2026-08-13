@@ -37,7 +37,7 @@ LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 LINKEDIN_PROFILE_URL = "https://api.linkedin.com/v2/me"
 
-SCOPES = "w_member_social w_organization_social r_organization_admin rw_organization_admin"
+SCOPES = "w_member_social w_organization_social rw_organization_admin"
 
 
 # ── Pydantic Models ──
