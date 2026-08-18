@@ -168,6 +168,7 @@ activity_router = _safe_import("routes.activity_log", "activity_router")
 activity_monitor_router = _safe_import("routes.activity_monitor", "router")
 extraction_report_router = _safe_import("routes.extraction_report", "router")
 extraction_trace_router = _safe_import("routes.extraction_trace", "router")
+capture_diagnostics_router = _safe_import("routes.capture_diagnostics", "router")
 admin_monitoring_router = _safe_import("routes.admin_monitoring", "router")
 extension_updates_router = _safe_import("routes.extension_updates", "router")
 reports_router = _safe_import("routes.reports", "router")
@@ -349,6 +350,7 @@ _all_routers = [
     activity_monitor_router,
     extraction_report_router,
     extraction_trace_router,
+    capture_diagnostics_router,
     admin_monitoring_router,
     extension_updates_router,
     reports_router,

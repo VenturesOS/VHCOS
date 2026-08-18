@@ -28,6 +28,13 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Feb 2026 — Capture Diagnostics (extension root-cause dashboard)
+- New tab under `/admin/system-health` → "Capture Diagnostics" surfaces WHY the Naukri extension misses fields, not just which.
+- `backend/routes/capture_diagnostics.py`: 3 endpoints under `/api/admin/capture-diagnostics/*` — summary, drilldown by field/cause, raw log inspector (admin@vhc.in only for candidate-data privacy).
+- Aggregates `naukri_capture_logs`, classifies each capture into 10 root-cause buckets: `timeout`, `selector_not_found`, `contact_section_collapsed`, `page_not_fully_loaded`, `search_result_variant_dom`, `auth_or_login_wall`, `network_error`, `parse_error`, `field_absent_on_profile`, `partial_capture_unknown`. Each bucket has a plain-English fix hint.
+- Frontend `CaptureDiagnosticsPage.jsx`: KPI tiles (total, clean rate, missing count), ranked cause list with fix hints, field-miss ranking table with co-failure column, drilldown table linking to live Naukri URLs + raw JSON modal.
+- First-pass insights on 7 days of data: 85% clean rate, 73 captures show contact-section-collapsed pattern → highest-impact fix for next extension update.
+
 ### Feb 2026 — MongoDB cost + performance cleanup (Atlas "Query Targeting" alert fix)
 - **Root cause**: Atlas M10 was emitting "Scanned Objects / Returned > 1000" alerts because two hot collections had no indexes beyond `_id`:
   - `extraction_tracking` (121K docs, hit by /api/admin/extraction-report/daily aggregate)
