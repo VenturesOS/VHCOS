@@ -983,7 +983,20 @@ async def check_existing(
             naukri_id_to_idx.setdefault(c.naukri_id, []).append(i)
 
     if naukri_id_to_idx:
-        nids = list(naukri_id_to_idx.keys())
+        # Canonicalization fix: legacy candidate_bank records store the id
+        # as `naukri_<raw>` while the extension sends raw. Include both
+        # forms in the $in list so the fast-path matches either shape.
+        raw_ids = list(naukri_id_to_idx.keys())
+        prefixed_ids = [f"naukri_{n}" if not n.startswith("naukri_") else n for n in raw_ids]
+        stripped_ids = [n[len("naukri_"):] if n.startswith("naukri_") else n for n in raw_ids]
+        nids = list(set(raw_ids + prefixed_ids + stripped_ids))
+
+        # Reverse-map every stored form back to the extension's raw form
+        # so `naukri_id_to_idx[doc_nid]` still resolves.
+        for pid in prefixed_ids + stripped_ids:
+            base = pid[len("naukri_"):] if pid.startswith("naukri_") else pid
+            if base in naukri_id_to_idx:
+                naukri_id_to_idx.setdefault(pid, []).extend(naukri_id_to_idx[base])
         projection = {
             "_id": 0, "id": 1, "name": 1, "name_lower": 1,
             "current_employer": 1, "designation": 1,

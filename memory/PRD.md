@@ -28,6 +28,13 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Feb 2026 — Badge "ALREADY IN DATABASE" canonicalization fix
+- **Root cause**: `candidate_bank.naukri_profile_id` for many legacy records stored as `naukri_<raw>` while the extension's Naukri Resdex card exposes the raw ID (no prefix). Fast-path exact `$in` match at `extension_check.py:999` missed → fell to slow-path fuzzy scoring → threshold not always met → **no badge on candidates that ARE in the DB**.
+- **Fix**: `backend/routes/extension_check.py` — before the `$in` lookup, expand candidate IDs to include raw + `naukri_`-prefixed + stripped forms, and back-map every stored variant to the extension's original raw form so `naukri_id_to_idx[doc_nid]` still resolves.
+- **Confirmed live**: Test with the exact bug-report candidate (PRITAM KUMAR @ Kirloskar Brothers, raw ID from Naukri card) now returns `exists: true, match_confidence: high, matched_signals: [name, employer, naukri_id]`. Was returning empty before fix.
+- **Blast radius**: ~59K candidates with prefixed IDs (36% of `candidate_bank`) become fast-path-matchable immediately. No DB migration needed.
+- **Credit**: ChatGPT flagged this hypothesis in the second-opinion round; my initial "system working correctly, don't ship" recommendation was wrong.
+
 ### Feb 2026 — Capture Diagnostics (extension root-cause dashboard)
 - New tab under `/admin/system-health` → "Capture Diagnostics" surfaces WHY the Naukri extension misses fields, not just which.
 - `backend/routes/capture_diagnostics.py`: 3 endpoints under `/api/admin/capture-diagnostics/*` — summary, drilldown by field/cause, raw log inspector (admin@vhc.in only for candidate-data privacy).
