@@ -2306,17 +2306,58 @@ async def capture_profile(
     else:
         logger.warning(f"[Extension] SKIP MATCH: naukri_profile_id is null/empty for '{profile.name}' -> will force insert if no name/email/phone match")
     
-    # HIGH PRIORITY: Check by name + source (prevents duplicates from same person captured multiple times)
+    # HIGH PRIORITY: Check by name + source
+    # SAFETY (Feb 2026): Never merge on name+source alone — 3-different-people-
+    # named-"Pritam Kumar" all landed on the same candidate_id via this shortcut
+    # and each recapture overwrote the previous person's employer/phone/summary.
+    # Require ONE corroborating signal before treating as the same person:
+    #   • phone matches (normalized), OR
+    #   • email matches (case-insensitive), OR
+    #   • current_employer matches (case-insensitive substring, ≥4 chars overlap)
     if not existing and profile.name:
         import re
         name_regex = re.compile(f"^{re.escape(profile.name.strip())}$", re.IGNORECASE)
         source_pattern = f"{profile.source_platform or 'naukri'}_extension"
-        existing = await db.candidate_bank.find_one(
+        candidates_same_name = await db.candidate_bank.find(
             {"name": name_regex, "source": {"$in": [source_pattern, "naukri_extension"]}},
             {"_id": 0}
-        )
-        if existing:
-            logger.warning(f"[Extension] Dedup: name+source match for '{profile.name}' -> updating {existing.get('id','?')[:12]}")
+        ).to_list(20)
+
+        def _employer_ok(a: str, b: str) -> bool:
+            if not a or not b:
+                return False
+            a_l, b_l = a.lower().strip(), b.lower().strip()
+            if a_l == b_l:
+                return True
+            # Require ≥4 chars overlap of meaningful tokens (skip legal suffixes)
+            _strip = lambda s: re.sub(r"\b(ltd|limited|pvt|private|inc|llp|llc|corp|group|company|india|the)\b", "", s, flags=re.I).strip()
+            a_core, b_core = _strip(a_l), _strip(b_l)
+            if not a_core or not b_core:
+                return False
+            return len(a_core) >= 4 and (a_core in b_core or b_core in a_core)
+
+        incoming_phone = normalize_phone(profile.phone) if profile.phone else ""
+        incoming_email = (profile.email or "").lower().strip()
+        incoming_emp = (profile.current_employer or "").strip()
+
+        for cand in candidates_same_name:
+            phone_hit = bool(incoming_phone) and normalize_phone(cand.get("phone", "")) == incoming_phone
+            email_hit = bool(incoming_email) and (cand.get("email") or "").lower().strip() == incoming_email
+            emp_hit = _employer_ok(incoming_emp, cand.get("current_employer", ""))
+            if phone_hit or email_hit or emp_hit:
+                existing = cand
+                logger.warning(
+                    f"[Extension] Dedup: name+source+({'phone' if phone_hit else 'email' if email_hit else 'employer'}) "
+                    f"match for '{profile.name}' -> updating {cand.get('id','?')[:12]}"
+                )
+                break
+
+        if not existing and candidates_same_name:
+            logger.warning(
+                f"[Extension] Dedup BLOCKED: {len(candidates_same_name)} same-name record(s) exist for "
+                f"'{profile.name}' but no phone/email/employer corroboration — treating incoming as NEW person "
+                f"(prevents cross-contamination of same-name candidates)"
+            )
 
     # ═══ DOUBLE-MATCH EARLY EXIT (Phase 56.1, Feb 2026) ═══
     # If both email AND phone independently match the SAME existing record,

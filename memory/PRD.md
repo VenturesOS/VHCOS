@@ -28,6 +28,15 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Feb 2026 — Dedupe catastrophic-merge fix (cross-contamination bug)
+- **Root cause**: `backend/routes/extension.py:2309-2319` treated `name + source_platform` as sufficient identity → 3 different real humans named "PRITAM KUMAR" all collapsed into candidate_id `b1eda752...`, each recapture overwriting the previous person's employer/summary/skills.
+- **Evidence**: extraction_traces for that one candidate_id show emails `pkumarpaul524@...` (Ramkrishna Forgings), someone at Sudisa Foundry (past AI summary), and `pritamsingh008@...` (Kirloskar Brothers today) — 3 distinct humans in one record.
+- **Fix**: name+source shortcut now requires ONE corroborating signal (phone / email / employer overlap ≥4 chars, with legal-suffix stripping). No corroboration → treat incoming as a NEW person and force insert. Logged as `[Extension] Dedup BLOCKED` for observability.
+- **Blast radius**: prevents future contamination. Does not repair the existing 3-way merged records (those need manual split).
+
+### Feb 2026 — Team Lead "View Pipeline" 404 fix
+- `frontend/src/pages/employer/EmployerJobsPage.jsx`: click on "View Pipeline" from a team-lead's Jobs page now routes to `/employer/team-lead/pipeline?job_id=...` when path starts with `/employer/team-lead`, else falls back to `/employer/pipeline` for regular employers. Detected via `useLocation()`.
+
 ### Feb 2026 — Badge "ALREADY IN DATABASE" canonicalization fix
 - **Root cause**: `candidate_bank.naukri_profile_id` for many legacy records stored as `naukri_<raw>` while the extension's Naukri Resdex card exposes the raw ID (no prefix). Fast-path exact `$in` match at `extension_check.py:999` missed → fell to slow-path fuzzy scoring → threshold not always met → **no badge on candidates that ARE in the DB**.
 - **Fix**: `backend/routes/extension_check.py` — before the `$in` lookup, expand candidate IDs to include raw + `naukri_`-prefixed + stripped forms, and back-map every stored variant to the extension's original raw form so `naukri_id_to_idx[doc_nid]` still resolves.

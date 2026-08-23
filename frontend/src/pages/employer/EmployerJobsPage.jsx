@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { jobAPI, mandateAPI } from '../../lib/api';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -23,6 +23,10 @@ export default function EmployerJobsPage() {
   const [search, setSearch] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
   const navigate = useNavigate();
+  const location = useLocation();
+  // When mounted under /employer/team-lead/*, route View Pipeline to the team-lead variant
+  const isTeamLeadRoute = location.pathname.startsWith('/employer/team-lead');
+  const pipelinePath = isTeamLeadRoute ? '/employer/team-lead/pipeline' : '/employer/pipeline';
   
   // Career Page Status Control
   const [showCareerPageDialog, setShowCareerPageDialog] = useState(false);
@@ -457,7 +461,7 @@ export default function EmployerJobsPage() {
                     variant="outline"
                     size="sm"
                     className="text-[#7CB342] border-[#7CB342]/40 hover:bg-[#DCFCE7]"
-                    onClick={() => navigate(`/employer/pipeline?job_id=${job.id}`)}
+                    onClick={() => navigate(`${pipelinePath}?job_id=${job.id}`)}
                     data-testid={`view-pipeline-${job.id}`}
                     title="View pipeline filtered to this job"
                   >
