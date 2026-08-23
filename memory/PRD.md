@@ -28,6 +28,16 @@ profile capture quality improvements.
 
 ## What's implemented (rolling changelog)
 
+### Feb 2026 — Candidate Hygiene (permanent cross-contamination detection + repair)
+- **Impact**: Live scan found **2,249 contaminated candidate records** in candidate_bank. Worst: "Amit Kumar" = 67 distinct real humans merged into one candidate_id across 139 captures. Rahul Kumar: 49, Manish Kumar: 48.
+- **Backend** `backend/routes/candidate_hygiene.py`:
+  - `GET /api/admin/candidate-hygiene/conflicts` — full list of merged records with distinct-identity counts
+  - `GET /api/admin/candidate-hygiene/detail/{cid}` — identity-bucket breakdown per candidate
+  - `POST /api/admin/candidate-hygiene/split/{cid}?dry_run=true|false` — safe split by email bucket. Keeps original candidate_id for winner (bucket with most recent capture), creates new candidate_id per other bucket, re-points capture logs, archives original in `merged_conflicts_backup`.
+  - `POST /api/admin/candidate-hygiene/undo-split/{backup_id}` — admin@vhc.in-only revert.
+- **Frontend** `pages/admin/CandidateHygienePage.jsx` — new tab under System Health with sortable conflict list + modal drilldown + dry-run/execute/undo actions with confirmation.
+- **Root fix already shipped**: same-day dedupe change requires phone/email/employer corroboration before name+source shortcut fires — no NEW contamination from now on.
+
 ### Feb 2026 — Dedupe catastrophic-merge fix (cross-contamination bug)
 - **Root cause**: `backend/routes/extension.py:2309-2319` treated `name + source_platform` as sufficient identity → 3 different real humans named "PRITAM KUMAR" all collapsed into candidate_id `b1eda752...`, each recapture overwriting the previous person's employer/summary/skills.
 - **Evidence**: extraction_traces for that one candidate_id show emails `pkumarpaul524@...` (Ramkrishna Forgings), someone at Sudisa Foundry (past AI summary), and `pritamsingh008@...` (Kirloskar Brothers today) — 3 distinct humans in one record.
