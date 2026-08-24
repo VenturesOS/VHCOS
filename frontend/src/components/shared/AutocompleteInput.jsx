@@ -7,6 +7,7 @@ export function AutocompleteInput({ value, onChange, placeholder, field = 'all',
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const debounceRef = useRef(null);
+  const requestSeqRef = useRef(0);
   const wrapperRef = useRef(null);
 
   useEffect(() => {
@@ -28,16 +29,26 @@ export function AutocompleteInput({ value, onChange, placeholder, field = 'all',
     if (lastPart.length < 2) { setSuggestions([]); return; }
 
     debounceRef.current = setTimeout(async () => {
+      // Stale-response guard: only the newest request may update state —
+      // a slower response for an earlier keystroke is discarded.
+      const seq = ++requestSeqRef.current;
       try {
         const res = await candidateBankAPI.autocomplete({ q: lastPart, field, limit: 10 });
+        if (seq !== requestSeqRef.current) return;
         setSuggestions(res.data || []);
         setShowSuggestions((res.data || []).length > 0);
         setActiveIndex(-1);
       } catch {
-        setSuggestions([]);
+        if (seq === requestSeqRef.current) setSuggestions([]);
       }
     }, 200);
   };
+
+  useEffect(() => () => {
+    // Unmount: cancel pending debounce and invalidate in-flight requests.
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    requestSeqRef.current += 1;
+  }, []);
 
   const handleSelect = (suggestion) => {
     // For comma-separated inputs, append to existing value

@@ -1,0 +1,51 @@
+{
+  "summary": "READ-ONLY regression test of the Aug-2026 platform audit fixes against the LIVE Atlas production DB. No mutations performed (only the login POST). Backend: created /app/backend/tests/test_audit_regression_readonly.py — 17/17 tests PASS covering candidate-bank list/search/legacy-filter, new vocab autocomplete, NEW /api/extension/job-info (200 + 404), analytics/admin 5-min cache, system-health/env-info admin guard, employers/{id}/companies (admin.py route serving), analytics/employer (no 500), merge-history, notifications/unread-count, /api/health import_failures=0, employer/my-team 403 role guard, unauthenticated 401. Verified 0 duplicate route registrations across 610 routes and zero code references to CommercialsPage / HierarchyPage / EmployerTrackerPage / commercialAPI / governanceAPI.getHierarchy. Frontend (Playwright, admin login): every admin page tested renders real data with ZERO console errors, ZERO pageerrors and ZERO 4xx/5xx API responses — Dashboard, Analytics, Analytics Hub, Jobs, Teams, Users, Companies, Pipeline, Revenue, Settings, Bills, Advanced Search, Candidate Bank (169,638 rows, 50 rendered), System Health > Merge History (2,215 splits + table). Notification bell opens without crash and the SSE stream connects exactly once (no rapid reconnect loop) — the new backoff logic holds. ONE real new bug found: an out-of-order-response race in AutocompleteInput.jsx makes the dropdown show suggestions for an earlier keystroke.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/candidate-bank/autocomplete", "issue": "Vocab lookup uses an UNANCHORED regex ({'value_lower': {'$regex': re.escape(q)}} in services/autocomplete_vocab.py:42). Two consequences: (a) relevance — q='pun' returns 'Welspun India' / 'Industrial Sale in Paint Company - Mumbai, Pune...'; (b) an unanchored regex cannot use the (field, value_lower) index prefix, so it COLLSCANs the vocab collection (first hit measured 6.37s). Anchor it ('^' + re.escape(q), or a word-boundary prefix match) to fix both."},
+      {"endpoint": "GET /api/notifications/stream", "issue": "Backend log noise: repeated h11._util.LocalProtocolError \"Can't send data when our state is ERROR\" tracebacks in backend.err.log whenever a browser aborts the SSE connection on route change. Benign but pollutes logs / masks real errors. Catch asyncio.CancelledError / ClientDisconnect in the stream generator."},
+      {"endpoint": "GET /api/candidate-bank?limit=50&location=pune", "issue": "Legacy filter path returns 200 with total>0 but took 12.45s (vs 3.9s for the unfiltered list and 1.9s for the $text search path). The location filter still falls to an unindexed scan — consider an index on location / routing it through the fast_search path."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AutocompleteInput (src/components/shared/AutocompleteInput.jsx)", "issue": "OUT-OF-ORDER RESPONSE RACE. fetchSuggestions() debounces the timer but does not cancel/sequence the in-flight XHR. Typing 'weld' fires 3 requests (q=we, q=wel, q=weld); the slower broad 'we' response resolves last and overwrites the correct one, so the dropdown displays 'Power BI / PowerPoint / Manpower Handling / Selenium Webdriver' for the query 'weld'. VERIFIED the API itself is correct — GET /api/candidate-bank/autocomplete?q=weld returns Welding(462), Robotic Welding(413), Weld Shop(356), MIG Welding(326). Fix: AbortController per request, or a monotonically increasing requestId and discard stale results.", "selector": "[data-testid=\"autocomplete-dropdown\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin cold-load latency (the original 'platform lag' complaint)", "issues": ["Admin Dashboard /admin shows a bare full-page spinner for 22s before any KPI renders (12 API calls, none failing).", "Admin Teams 16s, Pipeline 21s, Analytics Hub 20s, Candidate Bank 11s to first row.", "These screens render only a centered spinner with no skeletons/progressive reveal, so a 20s wait looks like a hang. Recommend skeleton placeholders + rendering each KPI card as its call resolves instead of gating the whole page."]},
+      {"screen": "/admin/revenue vs /admin/bills", "issues": ["Revenue Dashboard reports JOINED REVENUE ₹0, JOINED 0, TOTAL RECORDS 0 (all revenue entries), while /admin/bills lists multiple 'paid' GST invoices (e.g. VHC/26-27/15 ₹49,147 Volvo). Possible revenue_records write gap — worth a data check (outside the audit-fix scope, reported as an observation, no HTTP error involved)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_audit_regression_readonly.py",
+    "/app/test_reports/pytest/audit_readonly.xml"
+  ],
+  "action_items": [
+    "HIGH: Add an AbortController (or requestId staleness guard) to AutocompleteInput.jsx fetchSuggestions so a slow earlier-keystroke response cannot overwrite the newest suggestions.",
+    "MEDIUM: Anchor the autocomplete vocab regex in services/autocomplete_vocab.py:42 ('^' + re.escape(q_lower)) — fixes both the 'pun' -> 'Welspun India' relevance bug and lets the (field, value_lower) index be used (6.4s first hit today).",
+    "MEDIUM: Add loading skeletons / progressive KPI rendering to Admin Dashboard, Teams, Pipeline and Analytics Hub — they show a bare spinner for 16-22s on cold Atlas cache.",
+    "LOW: Swallow client-disconnect in the /api/notifications/stream generator to stop the h11 LocalProtocolError tracebacks in backend.err.log.",
+    "LOW: Investigate the /admin/revenue all-zeros vs paid bills discrepancy.",
+    "LOW (maintainability): routes/candidates.py is 3,372 lines and routes/extension.py is 3,466 lines — split into focused modules."
+  ],
+  "critical_code_review_comments": [
+    "services/autocomplete_vocab.py:42 — unanchored $regex defeats the create_index([('field',1),('value_lower',1)]) built two lines above in _rebuild(); the index is only usable for a prefix-anchored pattern. Currently every keystroke scans the whole vocab collection.",
+    "services/autocomplete_vocab.py:39 — asyncio.ensure_future(_maybe_rebuild(db)) fires on EVERY request; the module-level `_rebuilding` flag is per-process only, so with multiple uvicorn workers the 900s `building_since` claim in Mongo is the only real guard. It works, but the full rebuild aggregates 6 fields over 170K docs with allowDiskUse — confirm it is genuinely off the request path (it is fire-and-forget, so a rebuild can still contend with foreground queries on M10).",
+    "routes/analytics.py:19 — module-level _summary_cache dict is per-worker, so with N uvicorn workers a user can see up to N different 5-minute-stale snapshots and the 'first call is slow' penalty is paid N times. Acceptable for now; note it if analytics consistency matters.",
+    "routes/candidates.py:2054 — the `if not use_cursor and _fast_text_query:` gate is correct and the browse-mode regression is confirmed fixed (3.9s vs the reported 20-22s).",
+    "routes/extension.py:189 get_job_info — correctly excludes _id and 404s on miss; matches on both id and job_code. Verified 200 + 404.",
+    "AutocompleteInput.jsx:30-39 — async setState inside a debounced timeout with no cleanup on unmount either; the same effect will also warn/leak if the component unmounts mid-flight."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_audit_regression_readonly.py"
+  ],
+  "success_rate": {"backend": "100% (17/17 tests passed)", "frontend": "92% (13/13 admin pages render with no console/HTTP errors; 1 autocomplete race-condition bug)"},
+  "seed_data_creation": "NONE. Strictly read-only against the production Atlas cluster — every request was a GET except the admin login POST. No records created, updated or deleted.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 (from /app/memory/test_credentials.md) — valid, login returns access_token, role admin.",
+  "context_for_next_testing_agent": "New read-only suite: /app/backend/tests/test_audit_regression_readonly.py (17 tests, all pass, ~90s runtime — dominated by cold Atlas latency). It is SAFE to re-run against production. Run: cd /app/backend && python -m pytest tests/test_audit_regression_readonly.py -v -s. Notes for whoever comes next: (1) /api/users (not /api/admin/users) is the admin user-list route — /api/admin/users is POST-only, a GET there returns 405. (2) Login response key is `access_token`. (3) Cold Atlas M10 first-hit latencies are real: analytics/admin 21s cold -> 1.2s cached; admin UI pages take 10-22s to first paint. Always allow 25-60s waits in Playwright or you will get false 'blank page' failures. (4) ERR_ABORTED entries on /api/notifications/stream and other calls are just in-flight requests cancelled by navigation, NOT failures. (5) NOT TESTED: GET /api/matching/jobs-for-candidate (candidate-role only; no candidate credentials available and creating an account was forbidden) and every POST/PUT/DELETE endpoint. (6) The frontend autocomplete race bug reproduces by typing 'weld' at ~180ms/char into the Keywords field on /admin/advanced-search.",
+  "rca_of_the_issue": "Autocomplete showing wrong suggestions: AutocompleteInput.jsx debounces the 200ms timer but never aborts or sequences the resulting HTTP request. When keystrokes arrive at ~the debounce interval, multiple requests go out concurrently (observed q=we, q=wel, q=weld). Because the backend cost is inversely proportional to prefix length (the unanchored regex in autocomplete_vocab.py scans the whole vocab collection and 'we' matches far more rows than 'weld'), the OLDEST request is also the SLOWEST and resolves last, so its setSuggestions() call clobbers the correct 'weld' result set. Two independent fixes each mitigate it: (a) frontend AbortController/requestId guard (correctness), (b) anchoring the backend regex so all prefixes are index-backed and fast (removes the latency inversion). Both are recommended."
+}

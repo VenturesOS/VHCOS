@@ -290,18 +290,8 @@ export const referralAPI = {
 
 // Admin Governance APIs (Phase A)
 export const governanceAPI = {
-  getHierarchy: () => api.get('/admin/hierarchy'),
   getPendingJobs: () => api.get('/jobs/pending-approval'),
   transitionJob: (jobId, newStatus, reason) => api.post(`/jobs/${jobId}/transition`, { new_status: newStatus, reason }),
-};
-
-// Commercial Intelligence APIs
-export const commercialAPI = {
-  create: (data) => api.post('/commercials', data),
-  getAll: (params) => api.get('/commercials', { params }),
-  getById: (id) => api.get(`/commercials/${id}`),
-  update: (id, data) => api.put(`/commercials/${id}`, data),
-  delete: (id) => api.delete(`/commercials/${id}`),
 };
 
 // Analytics APIs

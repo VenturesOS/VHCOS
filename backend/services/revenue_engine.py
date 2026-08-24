@@ -9,6 +9,15 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def calculate_revenue_amount(salary: float, commercial: dict) -> float:
+    """Tolerant wrapper: returns the revenue amount or 0.0 on failure.
+    Used by pipeline forecasts where a bad commercial config must not 500."""
+    try:
+        return calculate_revenue(salary, commercial)["revenue_amount"]
+    except Exception:
+        return 0.0
+
+
 class RevenueCalculationError(Exception):
     """Raised when revenue cannot be calculated due to invalid inputs."""
     pass

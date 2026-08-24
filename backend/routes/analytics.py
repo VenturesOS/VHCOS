@@ -3,6 +3,7 @@ VHC Talent OS - Analytics Routes
 Admin-only analytics dashboard API + Pipeline conversion + Revenue intelligence.
 """
 import io
+import time
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
@@ -14,6 +15,9 @@ from config import db
 
 analytics_router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
+# In-process cache for the heavy admin summary (key = filter tuple).
+_summary_cache: dict = {}
+
 
 @analytics_router.get("/admin")
 async def admin_analytics(
@@ -24,14 +28,27 @@ async def admin_analytics(
     date_to: Optional[str] = None,
     current_user: dict = Depends(require_role(["admin"])),
 ):
-    """Advanced analytics dashboard data — admin only."""
-    return await get_analytics_summary(
+    """Advanced analytics dashboard data — admin only.
+
+    PERF (2026-08): full summary needs several full-collection $group
+    scans on candidate_bank (~20s on Atlas M10 cold cache). Results are
+    cached in-process for 5 minutes per filter combo so repeat loads and
+    tab switches are instant."""
+    _key = (employer_id, team_id, recruiter_id, date_from, date_to)
+    _hit = _summary_cache.get(_key)
+    if _hit and (time.time() - _hit[0]) < 300:
+        return _hit[1]
+    result = await get_analytics_summary(
         employer_id=employer_id,
         team_id=team_id,
         recruiter_id=recruiter_id,
         date_from=date_from,
         date_to=date_to,
     )
+    _summary_cache[_key] = (time.time(), result)
+    if len(_summary_cache) > 50:
+        _summary_cache.pop(next(iter(_summary_cache)))
+    return result
 
 
 @analytics_router.get("/admin/export-pdf")

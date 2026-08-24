@@ -1,4 +1,10 @@
-# VHC Talent OS — Product Requirements Document
+# VHC Talent OS
+
+> **2026-08 Platform Audit session**: full system audit + auto-fixes shipped (Candidate Bank
+> 20s→1-4s, autocomplete 219s→ms, SSE 401 storm fixed, /api/extension/job-info added,
+> jobs-for-candidate 15min→seconds warm, 3 duplicate routes + commercials/hierarchy dead code
+> removed, analytics cache, env-info guard). Details: `/app/memory/PLATFORM_AUDIT_2026_08.md`.
+> Keep/remove decisions pending from user (Revenue Dashboard, Resources tiles, Career Blog). — Product Requirements Document
 
 **Last updated:** Feb 2026 (Phase 55.x)
 

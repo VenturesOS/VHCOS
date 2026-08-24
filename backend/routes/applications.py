@@ -2000,35 +2000,78 @@ async def get_matching_jobs_for_candidate(
             return []
         candidate = profile
     
-    # Get active jobs
-    jobs = await db.jobs.find({"status": "active"}, {"_id": 0}).to_list(100)
-    
-    results = []
-    for job in jobs:
-        # Parse job requirements
-        jd_text = f"{job.get('title', '')} {job.get('description', '')} {job.get('requirements', '')}"
-        jd_result = await parse_job_description_with_ai(jd_text)
+    # PERF FIX (2026-08): the old loop made 2 sequential LLM calls per
+    # active job (1,077 active jobs → 15-minute responses in prod metrics).
+    # Now: newest 60 jobs → cheap lexical pre-filter to 25 plausible ones
+    # → JD parse cached per job in `jd_parse_cache` → LLM match runs 5-way
+    # concurrent. First call ~20-30s, warm calls a few seconds.
+    import asyncio as _aio
+    import hashlib as _hashlib
 
-        if not jd_result["success"]:
-            continue
+    jobs = await db.jobs.find(
+        {"status": "active"},
+        {"_id": 0, "id": 1, "title": 1, "description": 1, "requirements": 1,
+         "company_name": 1, "location": 1},
+    ).sort("updated_at", -1).to_list(60)
 
-        job_data = jd_result["data"]
-        match_result = await calculate_candidate_job_match(candidate, job_data)
-        
-        if match_result.get("score", 0) >= 30:  # Only show relevant matches
-            results.append(JobMatchForCandidate(
-                job_id=job["id"],
-                job_title=job["title"],
-                company_name=job.get("company_name"),
-                location=job.get("location", ""),
-                score=match_result.get("score", 0),
-                explanation=match_result.get("explanation", ""),
-                matched_skills=match_result.get("matched_skills", [])
-            ))
-    
+    # Lexical pre-filter: token overlap between candidate skills/designation
+    # and the job text. Only the top 25 go to the LLM.
+    cand_tokens = set()
+    raw_skills = candidate.get("skills") or candidate.get("key_skills") or []
+    if isinstance(raw_skills, str):
+        raw_skills = raw_skills.split(",")
+    for s in raw_skills:
+        cand_tokens.update(w for w in str(s).lower().split() if len(w) > 2)
+    for f in ("designation", "current_designation", "headline"):
+        cand_tokens.update(w for w in str(candidate.get(f) or "").lower().split() if len(w) > 2)
+
+    def _overlap(job):
+        text = f"{job.get('title', '')} {job.get('description', '')} {job.get('requirements', '')}".lower()
+        return sum(1 for t in cand_tokens if t in text)
+
+    if cand_tokens:
+        jobs.sort(key=_overlap, reverse=True)
+    jobs = jobs[:25]
+
+    sem = _aio.Semaphore(5)
+
+    async def _score(job):
+        async with sem:
+            jd_text = f"{job.get('title', '')} {job.get('description', '')} {job.get('requirements', '')}"
+            jd_hash = _hashlib.md5(jd_text.encode()).hexdigest()
+            cached = await db.jd_parse_cache.find_one({"job_id": job["id"]}, {"_id": 0})
+            if cached and cached.get("hash") == jd_hash:
+                job_data = cached["data"]
+            else:
+                jd_result = await parse_job_description_with_ai(jd_text)
+                if not jd_result["success"]:
+                    return None
+                job_data = jd_result["data"]
+                await db.jd_parse_cache.update_one(
+                    {"job_id": job["id"]},
+                    {"$set": {"hash": jd_hash, "data": job_data,
+                              "updated_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+            match_result = await calculate_candidate_job_match(candidate, job_data)
+            if match_result.get("score", 0) >= 30:
+                return JobMatchForCandidate(
+                    job_id=job["id"],
+                    job_title=job["title"],
+                    company_name=job.get("company_name"),
+                    location=job.get("location", ""),
+                    score=match_result.get("score", 0),
+                    explanation=match_result.get("explanation", ""),
+                    matched_skills=match_result.get("matched_skills", []),
+                )
+            return None
+
+    scored = await _aio.gather(*[_score(j) for j in jobs], return_exceptions=True)
+    results = [r for r in scored if r is not None and not isinstance(r, Exception)]
+
     # Sort by score
     results.sort(key=lambda x: x.score, reverse=True)
-    
+
     return results[:20]  # Return top 20 matches
 
 

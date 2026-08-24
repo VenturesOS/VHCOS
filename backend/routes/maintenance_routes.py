@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from fastapi.responses import Response
 from utils import require_role
+from utils.auth import get_current_user
 from services.maintenance_report_generator import generate_maintenance_report
 from services.maintenance_bot import get_bot_status, run_maintenance_cycle, run_diagnostic_self_test
 from services.health_monitor import run_all_checks, compute_health_score
@@ -22,8 +23,12 @@ maintenance_router = APIRouter(prefix="/api/system-health", tags=["maintenance"]
 
 
 @maintenance_router.get("/env-info")
-async def env_info(user=Depends(require_role(["admin", "recruiter", "employer"]))):
-    """Return non-sensitive environment metadata for the frontend badge."""
+async def env_info(user=Depends(get_current_user)):
+    """Return non-sensitive environment metadata for the frontend badge.
+
+    FIX (2026-08): was admin/recruiter/employer-only → candidates and
+    account-manager sessions got 403 (22x/week in prod metrics). The
+    payload is non-sensitive, so any authenticated user may read it."""
     from fastapi.responses import JSONResponse
     info = get_environment_info()
     return JSONResponse(

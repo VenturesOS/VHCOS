@@ -110,12 +110,12 @@ def _safe_import(module_path, attr_name):
 
 # Core routes
 try:
-    from routes import auth_router, public_router, files_router, admin_router, jobs_router, candidates_router, applications_router, settings_router, background_jobs_router, teams_router, referrals_router, commercials_router, analytics_router, revenue_router, employer_router, linkedin_router
+    from routes import auth_router, public_router, files_router, admin_router, jobs_router, candidates_router, applications_router, settings_router, background_jobs_router, teams_router, referrals_router, analytics_router, revenue_router, employer_router, linkedin_router
 except Exception as e:
     logging.error(f"[IMPORT FAIL] Core routes: {e}")
     auth_router = public_router = files_router = admin_router = jobs_router = None
     candidates_router = applications_router = settings_router = background_jobs_router = None
-    teams_router = referrals_router = commercials_router = analytics_router = None
+    teams_router = referrals_router = analytics_router = None
     revenue_router = employer_router = linkedin_router = None
 
 bulk_import_router = _safe_import("routes.bulk_import", "bulk_import_router")
@@ -335,7 +335,7 @@ _all_routers = [
     health_router,
     auth_router, public_router, files_router, admin_router, jobs_router,
     candidates_router, applications_router, settings_router, background_jobs_router,
-    bulk_import_router, teams_router, referrals_router, commercials_router,
+    bulk_import_router, teams_router, referrals_router,
     bills_router,
     tally_router,
     ext_check_router,

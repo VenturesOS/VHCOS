@@ -52,8 +52,7 @@ export default function NotificationBell() {
   // as ?token=… (server accepts token via query param on this endpoint).
   useEffect(() => {
     const backendUrl = process.env.REACT_APP_BACKEND_URL;
-    const token = localStorage.getItem('vhc_token');
-    if (!backendUrl || !token) {
+    if (!backendUrl || !localStorage.getItem('vhc_token')) {
       // Not logged in / no backend URL — nothing to stream.
       return undefined;
     }
@@ -61,13 +60,34 @@ export default function NotificationBell() {
     let es;
     let reconnectTimer;
     let closed = false;
+    // FIX (2026-08): the old code captured the JWT once at mount and
+    // retried every 15s forever with that same (eventually expired)
+    // token — prod metrics showed 21K+ 401s/week from idle tabs. Now the
+    // token is re-read from localStorage on EVERY connect attempt and
+    // failures back off exponentially (15s → 10min cap).
+    let backoffMs = 15000;
+    const MAX_BACKOFF_MS = 600000;
+
+    const scheduleReconnect = () => {
+      if (closed) return;
+      reconnectTimer = setTimeout(() => {
+        backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+        connect();
+      }, backoffMs);
+    };
 
     const connect = () => {
       if (closed) return;
+      const token = localStorage.getItem('vhc_token');
+      if (!token) {
+        scheduleReconnect();
+        return;
+      }
       const url = `${backendUrl}/api/notifications/stream?token=${encodeURIComponent(token)}`;
       es = new EventSource(url);
 
       es.addEventListener('count', (evt) => {
+        backoffMs = 15000; // healthy stream — reset backoff
         const n = parseInt(evt.data, 10);
         if (!Number.isNaN(n)) setUnreadCount(n);
       });
@@ -78,7 +98,7 @@ export default function NotificationBell() {
         // and we must manually schedule a fresh connection with backoff.
         if (es && es.readyState === 2 /* CLOSED */ && !closed) {
           es.close();
-          reconnectTimer = setTimeout(connect, 15000);
+          scheduleReconnect();
         }
       };
     };
@@ -86,9 +106,16 @@ export default function NotificationBell() {
     connect();
 
     // Refresh count when the tab regains focus in case the SSE stream is
-    // silently stalled behind a broken proxy.
+    // silently stalled behind a broken proxy. Also reconnect a dead
+    // stream immediately with a fresh token + reset backoff.
     const onVisible = () => {
-      if (!document.hidden) fetchCount();
+      if (document.hidden) return;
+      fetchCount();
+      if (!closed && (!es || es.readyState === 2)) {
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        backoffMs = 15000;
+        connect();
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
 

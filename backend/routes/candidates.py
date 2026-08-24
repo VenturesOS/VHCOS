@@ -2044,7 +2044,14 @@ async def list_candidates(
     # See services/fast_search.py + docs/SEARCH_INTEGRATION_PATCH.md.
     # Returns None on flag off / missing text index → falls through to
     # the legacy path below unchanged.
-    if not use_cursor:
+    #
+    # PERF FIX (2026-08): only take the fast path when there IS a text
+    # query. For browse mode (no search) the $facet pipeline cannot use
+    # any index — it fed all 170K full documents through an in-memory
+    # sort + count on every page load (measured 20-22s). The legacy path
+    # below uses estimated_document_count + an indexed find and returns
+    # in milliseconds for the same request.
+    if not use_cursor and _fast_text_query:
         try:
             from services.fast_search import quick_search
             fast = await quick_search(
@@ -2747,62 +2754,17 @@ async def autocomplete_suggestions(
 ):
     """Predictive autocomplete suggestions based on existing candidate data.
 
-    FIX (Phase 55, 2026-02): added `headline` + `industry` fields (93%+ coverage)
-    so keyword suggestions are rich. Switched from strict `^prefix` to
-    substring match so "react" surfaces "Reactive Programming" + "React Native"
-    not just "ReactJS".
+    PERF FIX (2026-08): the old implementation ran 6 unanchored
+    case-insensitive $regex aggregations on the full candidate_bank per
+    keystroke — 219s avg response in prod metrics. Suggestions now come
+    from the precomputed `autocomplete_vocab` collection (rebuilt in the
+    background daily by services/autocomplete_vocab.py) → milliseconds.
     """
     from services.synonym_service import expand_query
+    from services.autocomplete_vocab import get_suggestions
 
     q_lower = q.lower().strip()
-    import re as _re_ac
-    safe = _re_ac.escape(q_lower)
-    regex_pattern = safe   # substring (case-insensitive via $options)
-    suggestions = []
-
-    field_map = {
-        "skills":      {"field": "skills",           "unwind": True},
-        "designation": {"field": "designation",      "unwind": False},
-        "company":     {"field": "current_employer", "unwind": False},
-        "location":    {"field": "location",         "unwind": False},
-        "industry":    {"field": "industry",         "unwind": False},
-        "smart_tags":  {"field": "smart_tags",       "unwind": True},
-    }
-
-    fields_to_search = field_map.keys() if field == "all" else [field] if field in field_map else ["skills"]
-
-    for f_key in fields_to_search:
-        f_config = field_map[f_key]
-        f_name = f_config["field"]
-
-        pipeline = []
-        if f_config["unwind"]:
-            pipeline.append({"$unwind": f"${f_name}"})
-
-        pipeline.extend([
-            {"$match": {f_name: {"$regex": regex_pattern, "$options": "i"}}},
-            {"$group": {"_id": f"${f_name}", "count": {"$sum": 1}}},
-            {"$match": {"_id": {"$ne": None}}},
-            {"$sort": {"count": -1}},
-            {"$limit": limit},
-        ])
-
-        results = await db.candidate_bank.aggregate(pipeline).to_list(limit)
-        for r in results:
-            if r["_id"]:
-                suggestions.append({
-                    "text": r["_id"],
-                    "count": r["count"],
-                    "type": f_key,
-                })
-
-    # Deduplicate and sort by count
-    seen = set()
-    unique = []
-    for s in sorted(suggestions, key=lambda x: x["count"], reverse=True):
-        if s["text"].lower() not in seen:
-            seen.add(s["text"].lower())
-            unique.append(s)
+    unique, seen = await get_suggestions(db, q_lower, field=field, limit=limit)
 
     # Also expand with synonyms
     expanded = expand_query(q_lower)

@@ -186,6 +186,32 @@ async def get_extension_mandates(current_user: dict = Depends(get_current_user))
 
 # ============== SOURCE MIGRATION ==============
 
+@extension_router.get("/job-info")
+async def get_job_info(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Lightweight job lookup for the extension's active-mandate banner.
+
+    background.js v6+ calls this after detecting a job id in the current
+    VHC tab URL. Endpoint was never implemented → 135x 404/week in prod
+    metrics (extension fell back to 'Job #<id>' labels). Added 2026-08.
+    """
+    job = await db.jobs.find_one(
+        {"$or": [{"id": job_id}, {"job_code": job_id}]},
+        {"_id": 0, "id": 1, "title": 1, "job_code": 1, "company_name": 1, "location": 1},
+    )
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {
+        "job_id": job.get("id"),
+        "title": job.get("title"),
+        "code": job.get("job_code"),
+        "company_name": job.get("company_name"),
+        "location": job.get("location"),
+    }
+
+
 @extension_router.post("/migrate-linkedin-sources")
 async def migrate_linkedin_sources(
     current_user: dict = Depends(require_role("admin")),

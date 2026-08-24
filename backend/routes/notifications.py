@@ -222,6 +222,11 @@ async def notification_stream(
                     # Heartbeat comment — keeps proxies (nginx, cloudflare)
                     # from closing an idle connection. Clients ignore it.
                     yield ": ping\n\n"
+        except (asyncio.CancelledError, GeneratorExit):
+            # Browser aborted the connection (tab close / route change).
+            # Swallowing here stops the h11 "state is ERROR" tracebacks
+            # from polluting backend.err.log.
+            return
         finally:
             _user_events[user_id].discard(queue)
             if not _user_events[user_id]:

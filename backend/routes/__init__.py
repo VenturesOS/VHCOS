@@ -12,7 +12,6 @@ from .settings import settings_router
 from .background_jobs import jobs_router as background_jobs_router
 from .teams import teams_router
 from .referrals import referrals_router
-from .commercials import commercials_router
 from .analytics import analytics_router
 from .revenue import revenue_router
 from .employer_routes import employer_router
