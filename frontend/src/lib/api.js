@@ -552,11 +552,7 @@ export const revenueAPI = {
   offered: (appId, data) => api.post(`/revenue/offered/${appId}`, data),
   hired: (appId, data) => api.post(`/revenue/hired/${appId}`, data),
   joined: (appId, data) => api.post(`/revenue/joined/${appId}`, data),
-  records: (params) => api.get('/revenue/records', { params }),
   byApplication: (appId) => api.get(`/revenue/by-application/${appId}`),
-  aggregateByCompany: (from, to) => api.get('/revenue/aggregate/by-company', { params: { from_date: from, to_date: to } }),
-  aggregateByJob: (from, to) => api.get('/revenue/aggregate/by-job', { params: { from_date: from, to_date: to } }),
-  aggregateByRecruiter: (from, to) => api.get('/revenue/aggregate/by-recruiter', { params: { from_date: from, to_date: to } }),
 };
 
 export const blogAPI = {

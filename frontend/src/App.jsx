@@ -71,7 +71,6 @@ const DedupeMergePage = React.lazy(() => import("./pages/admin/DedupeMergePage")
 const TallyHealthPage = React.lazy(() => import("./pages/admin/TallyHealthPage"));
 const DigestEmailPage = React.lazy(() => import("./pages/admin/DigestEmailPage"));
 const DailyDigestPage = React.lazy(() => import("./pages/admin/DailyDigestPage"));
-const RevenueDashboardPage = React.lazy(() => import("./pages/admin/RevenueDashboardPage"));
 const SalaryBenchmarkPage = React.lazy(() => import("./pages/admin/SalaryBenchmarkPage"));
 const ContactSubmissionsPage = React.lazy(() => import("./pages/admin/ContactSubmissionsPage"));
 const SubmissionTrackerPage = React.lazy(() => import("./pages/admin/SubmissionTrackerPage"));
@@ -156,7 +155,6 @@ const AccountsDashboard = React.lazy(() => import("./pages/accounts/AccountsDash
 const InvoicePage = React.lazy(() => import("./pages/accounts/InvoicePage"));
 const ClientBillingPage = React.lazy(() => import("./pages/accounts/ClientBillingPage"));
 const ExpenseTrackingPage = React.lazy(() => import("./pages/accounts/ExpenseTrackingPage"));
-const AccountsRevenueDashboard = React.lazy(() => import("./pages/accounts/RevenueDashboardPage"));
 const FinancialReportsPage = React.lazy(() => import("./pages/accounts/FinancialReportsPage"));
 
 // ── Role-aware redirector for extension deep-links ──
@@ -224,7 +222,6 @@ function App() {
             <Route path="teams" element={<TeamsTabsPage />} />
             <Route path="bills" element={<BillsPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
-            <Route path="revenue" element={<RevenueDashboardPage />} />
             <Route path="settings" element={<SettingsTabsPage />} />
             <Route path="bulk-import" element={<NaukriImportTabsPage />} />
             <Route path="system-health" element={<SystemHealthTabsPage />} />
@@ -324,7 +321,6 @@ function App() {
             <Route path="invoices" element={<InvoicePage />} />
             <Route path="clients" element={<ClientBillingPage />} />
             <Route path="expenses" element={<ExpenseTrackingPage />} />
-            <Route path="revenue" element={<AccountsRevenueDashboard />} />
             <Route path="reports" element={<FinancialReportsPage />} />
             <Route path="my-attendance" element={<AttendancePage />} />
             <Route path="attendance" element={<AdminAttendancePage />} />

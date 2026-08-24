@@ -4,7 +4,11 @@
 > 20s→1-4s, autocomplete 219s→ms, SSE 401 storm fixed, /api/extension/job-info added,
 > jobs-for-candidate 15min→seconds warm, 3 duplicate routes + commercials/hierarchy dead code
 > removed, analytics cache, env-info guard). Details: `/app/memory/PLATFORM_AUDIT_2026_08.md`.
-> Keep/remove decisions pending from user (Revenue Dashboard, Resources tiles, Career Blog). — Product Requirements Document
+>
+> **2026-08 follow-up cleanup**: Revenue Dashboards (admin + accounts) removed — 0 usage in 90d
+> and always showed ₹0 while Bills has real paid invoices (data pipe was never wired). Admin
+> Resources "Coming soon" placeholder tiles removed. Career Blog left as-is per user (SEO pillar).
+> Atlas M10 → Flex migration runbook written: `/app/memory/ATLAS_FLEX_MIGRATION_RUNBOOK.md`. — Product Requirements Document
 
 **Last updated:** Feb 2026 (Phase 55.x)
 
@@ -147,6 +151,45 @@ old-user identity.
     consistently. Regression re-login (Sachin → Diya) also rotates
     cleanly.
   * Result: `100% (6/6)` backend, `100%` frontend. Zero issues.
+
+
+### Phase 55.12 — Post-audit cleanup + Flex runbook (2026-08)
+
+Follow-up to 2026-08 Platform Audit. User picked keep/remove decisions.
+
+- **Revenue Dashboards removed** (admin + accounts): 0 traffic in 90d, always
+  ₹0 while Bills has real paid invoices (finance pipe never wired to the
+  offered/hired/joined revenue-forecast records). Deleted files:
+    - `frontend/src/pages/admin/RevenueDashboardPage.jsx`
+    - `frontend/src/pages/accounts/RevenueDashboardPage.jsx`
+  Removed `/admin/revenue` and `/accounts/revenue` from `App.jsx`. Removed
+  "Revenue" nav items from `layout/Sidebar.jsx` (admin + accounts sections).
+  Trimmed unused `revenueAPI.records / aggregateByCompany / aggregateByJob /
+  aggregateByRecruiter` helpers from `lib/api.js` (only used by the deleted
+  pages). Kept `forecast/offered/hired/joined/byApplication` — still used by
+  `AdminPipelinePage`. Backend `/api/revenue/*` endpoints kept intact — the
+  offered/hired/joined write path is still used from pipeline; only the
+  aggregate read endpoints are now dead and can be pruned later if desired.
+- **Admin Resources "Coming soon" tiles removed**: Quick-Start Cheat Sheet
+  and Troubleshooting Guide placeholder cards deleted from
+  `AdminResourcesPage.jsx`. Training Manual card (the only real feature)
+  retained.
+- **Career Blog `/career-insights` kept as-is** per user — public SEO pillar
+  target; empty-state message stays until candidate blog content is
+  published. Sitemap entry retained.
+- **Atlas M10 → Flex migration runbook written**:
+  `/app/memory/ATLAS_FLEX_MIGRATION_RUNBOOK.md` — 15-step playbook covering
+  pre-checks (index audit, working-set size, latency baselines), snapshot,
+  Flex provisioning, Live Migration vs mongodump/mongorestore paths,
+  cutover procedure with 2-5 min downtime target, post-cutover validation
+  matrix, rollback plan, and 7-day decommission. Aim: kill the 44s cold
+  `/api/analytics/admin` cache-miss lag by keeping working set resident in
+  Flex's adaptive RAM.
+
+**Verification**: frontend build clean (9.73s), lint clean on all touched
+files, screenshot smoke-test confirms Revenue nav removed and Resources
+page has 0 "Coming soon" occurrences. No backend changes → no supervisor
+restart needed.
 
 
 

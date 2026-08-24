@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { Download, FileText, BookOpen, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Download, BookOpen, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { useAuth } from "../../lib/auth";
 import { toast } from "sonner";
 
 export default function AdminResourcesPage() {
-  const { user } = useAuth();
   const [downloading, setDownloading] = useState(false);
 
   const handleDownloadManual = async () => {
@@ -95,22 +93,7 @@ export default function AdminResourcesPage() {
           </Button>
         </div>
 
-        {/* Placeholder cards for future resources */}
-        <div className="bg-white border border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center text-center opacity-60">
-          <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center mb-4">
-            <FileText className="w-6 h-6 text-slate-400" />
-          </div>
-          <h3 className="text-sm font-semibold text-slate-500">Quick-Start Cheat Sheet</h3>
-          <p className="text-xs text-slate-400 mt-1">Coming soon</p>
-        </div>
-
-        <div className="bg-white border border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center text-center opacity-60">
-          <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center mb-4">
-            <AlertCircle className="w-6 h-6 text-slate-400" />
-          </div>
-          <h3 className="text-sm font-semibold text-slate-500">Troubleshooting Guide</h3>
-          <p className="text-xs text-slate-400 mt-1">Coming soon</p>
-        </div>
+        {/* Placeholder cards removed — add real resources here as they're built */}
       </div>
     </div>
   );
