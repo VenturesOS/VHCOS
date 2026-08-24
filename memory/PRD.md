@@ -153,6 +153,81 @@ old-user identity.
   * Result: `100% (6/6)` backend, `100%` frontend. Zero issues.
 
 
+### Phase 55.13 — server.py quirk fixes + LLM consolidation prep (2026-08)
+
+Follow-up to Phase 55.12. Fixed the 4 pre-existing quirks that the regression
+testing agent flagged (carried over unchanged from the pre-split server.py),
+and began LLM provider consolidation groundwork.
+
+**Server.py quirk fixes (all verified via backend restart)**:
+- `bootstrap/middleware.py:113` — HTTPException in global handler now
+  delegates to `fastapi.exception_handlers.http_exception_handler` instead of
+  `raise exc`, so HTTPExceptions raised from middleware get proper JSON
+  responses instead of escaping as raw 500s from uvicorn.
+- `bootstrap/middleware.py:79` — security-headers middleware `except
+  RuntimeError` now narrows to the specific "No response returned" message;
+  any other RuntimeError propagates to the global exception handler so
+  system_errors captures it.
+- `bootstrap/routers.py:37-49` — core-route batch import replaced with 15
+  individual `_safe_import("routes", "auth_router")` etc. calls. A single
+  broken route file now degrades only that one surface and shows up in
+  `route_import_failures` (previously silent — `/api/health` would still
+  report 0 failures). Also broadened the guard to accept the bare `"routes"`
+  module path.
+- `server.py` logging — replaced `logging.basicConfig(level=INFO)` (no-op
+  under uvicorn's existing handlers) with explicit root-logger `setLevel`
+  + a stream handler when none exists. Lifespan `logger.info(...)` lines
+  now visible in supervisor logs (`[Lifespan] BGE model + cluster cache
+  preload kicked off`, `[Lifespan] fast_search projection OK`, etc.).
+
+**LLM consolidation groundwork — user goal is RunPod Serverless primary
++ Emergent LLM fallback only, removing OpenAI (text-LLM only), Anthropic
+direct, Groq, and Gemini**:
+- Deleted dead files:
+    - `services/llm_service_backup_claude.py` (0 imports)
+    - `services/bedrock_service.py` (referenced only in comments and the
+      deleted backup)
+- Removed dead `.env` keys:
+    - `GEMINI_API_KEY` (0 code refs — Gemini was never actually wired)
+    - `ANTHROPIC_API_KEY_2/3/4` (Phase 51 removed direct Anthropic; only
+      referenced in the deleted bedrock_service)
+    - Removed the duplicate `ANTHROPIC_API_KEY` line (was defined twice)
+- Kept intentionally: `OPENAI_API_KEY` — used by
+  `services/embeddings.py` for `text-embedding-3-small` (semantic search
+  vectors); Emergent LLM key does NOT provide embeddings. Migration to
+  self-hosted BGE-M3 on RunPod pending endpoint deployment.
+- Backend restarted and verified healthy after each change; no
+  `[IMPORT FAIL]` or crash traces.
+
+**Deferred pending user action — RunPod Serverless deployment**:
+Received integration playbook (`integration_playbook_expert_v2`) covering
+two-endpoint deploy (Qwen 2.5-14B via vLLM Worker + BGE-M3 via TEI Worker),
+env variable format, OpenAI-compatible URL pattern
+`https://api.runpod.ai/v2/<ENDPOINT_ID>/openai/v1`, cold-start behavior,
+and gotchas. User to deploy both endpoints on their RunPod account and
+paste the two endpoint URLs + RUNPOD_API_KEY, after which:
+1. `services/llm_fallback_service.py` refactored to hit the serverless URL
+   pattern (~3-line change since OpenAI-compat API stays the same)
+2. `services/embeddings.py` refactored to call BGE-M3 TEI instead of OpenAI
+3. All 170K candidate embeddings + all job embeddings re-generated
+   (1536-dim OpenAI → 1024-dim BGE-M3 — dimension change requires re-embed
+   of every doc; will be a background batch job)
+4. Remove Groq code paths (5 files); remove OpenAI text-LLM code paths
+   (~15 refs, keep embeddings only until BGE-M3 endpoint is live)
+5. Remove remaining unused `.env` keys: `GROQ_API_KEY`, `GROQ_MODEL`,
+   `OPENROUTER_API_KEY`, `OPENROUTER_FREE_MODEL`, `LOCAL_LLM_URL`,
+   `LOCAL_LLM_MODEL`, `USE_GROQ_ENRICHMENT`
+
+**RunPod 401 daemon** — user chose to accept the retry noise until the
+serverless migration is done (`runpod_sync_service.py` still polls the
+old persistent-pod URL every 120s and gets 401 from
+`RUNPOD_ACCOUNT_API_KEY=rpa_7S975Y57...`). Will be removed entirely once
+serverless endpoints replace the persistent pod.
+
+**Verification**: `/api/health` = healthy, 0 route import failures,
+lifespan INFO logs visible, all core endpoints responding 200.
+
+
 ### Phase 55.12 — Post-audit cleanup + Flex runbook (2026-08)
 
 Follow-up to 2026-08 Platform Audit. User picked keep/remove decisions.

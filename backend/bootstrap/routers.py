@@ -15,13 +15,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_ROUTE_PREFIXES = ("routes.",)
+_ALLOWED_ROUTE_PREFIXES = ("routes.", "routes")
 route_import_failures: list[str] = []
 
 
 def _safe_import(module_path: str, attr_name: str):
     """Import a router safely; return None on failure so the server can still start."""
-    if not any(module_path.startswith(p) for p in _ALLOWED_ROUTE_PREFIXES):
+    # Guard: only allow imports from the routes package (defence-in-depth
+    # against a future refactor accidentally pulling from anywhere else).
+    if module_path != "routes" and not module_path.startswith("routes."):
         logger.error(f"[IMPORT BLOCKED] {module_path} not in allowed prefixes")
         return None
     try:
@@ -34,19 +36,26 @@ def _safe_import(module_path: str, attr_name: str):
 
 
 # ── Core routes (batch import; failure here degrades many surfaces) ──
-try:
-    from routes import (
-        auth_router, public_router, files_router, admin_router, jobs_router,
-        candidates_router, applications_router, settings_router, background_jobs_router,
-        teams_router, referrals_router, analytics_router, revenue_router,
-        employer_router, linkedin_router,
-    )
-except Exception as e:
-    logger.error(f"[IMPORT FAIL] Core routes: {e}")
-    auth_router = public_router = files_router = admin_router = jobs_router = None
-    candidates_router = applications_router = settings_router = background_jobs_router = None
-    teams_router = referrals_router = analytics_router = None
-    revenue_router = employer_router = linkedin_router = None
+# ── Core routes ──
+# Load each core router through _safe_import so a single broken file
+# degrades ONE surface (not 15) and shows up in route_import_failures
+# so /api/health can surface the actual failure instead of silently
+# reporting 0 failures.
+auth_router = _safe_import("routes", "auth_router")
+public_router = _safe_import("routes", "public_router")
+files_router = _safe_import("routes", "files_router")
+admin_router = _safe_import("routes", "admin_router")
+jobs_router = _safe_import("routes", "jobs_router")
+candidates_router = _safe_import("routes", "candidates_router")
+applications_router = _safe_import("routes", "applications_router")
+settings_router = _safe_import("routes", "settings_router")
+background_jobs_router = _safe_import("routes", "background_jobs_router")
+teams_router = _safe_import("routes", "teams_router")
+referrals_router = _safe_import("routes", "referrals_router")
+analytics_router = _safe_import("routes", "analytics_router")
+revenue_router = _safe_import("routes", "revenue_router")
+employer_router = _safe_import("routes", "employer_router")
+linkedin_router = _safe_import("routes", "linkedin_router")
 
 
 # ── Individually-loaded routers (one-at-a-time so failures are isolated) ──

@@ -15,6 +15,7 @@ import logging
 import os
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
@@ -76,7 +77,13 @@ def _register_security_headers(app: FastAPI) -> None:
     async def seo_security_headers(request: Request, call_next):
         try:
             response = await call_next(request)
-        except RuntimeError:
+        except RuntimeError as e:
+            # Only swallow the specific Starlette "No response returned" case
+            # (a downstream middleware/handler returned without producing a
+            # response). Any other RuntimeError should bubble up to the
+            # global exception handler so system_errors captures it.
+            if "No response returned" not in str(e):
+                raise
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -111,7 +118,10 @@ def register_exception_handler(app: FastAPI) -> None:
     async def global_exception_handler(request: Request, exc: Exception):
         import traceback as tb
         if isinstance(exc, HTTPException):
-            raise exc
+            # Delegate to Starlette's default HTTPException handler so it
+            # returns a proper JSON response even when raised from inside
+            # middleware (where `raise exc` would escape as a raw 500).
+            return await http_exception_handler(request, exc)
 
         error_msg = str(exc)
         stack_str = "".join(tb.format_exception(type(exc), exc, exc.__traceback__))

@@ -24,10 +24,17 @@ from bootstrap.routers import all_routers, route_import_failures
 
 
 # ── Logging (configure BEFORE app creation so lifespan logs are formatted) ──
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Uvicorn's default logging config claims the root logger, so a plain
+# logging.basicConfig(level=INFO) after uvicorn has booted has no effect
+# (basicConfig is a no-op if handlers already exist). Explicitly set the
+# root level and force-add a handler if none is present so our lifespan
+# logger.info(...) lines land in supervisor logs, not just WARNINGs.
+_root = logging.getLogger()
+_root.setLevel(logging.INFO)
+if not _root.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    _root.addHandler(_handler)
 logger = logging.getLogger(__name__)
 
 
