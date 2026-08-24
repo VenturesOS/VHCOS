@@ -384,6 +384,7 @@ async def _run_bulk_split(actor_email: str):
             {"$set": {
                 "id": BULK_JOB_ID, "status": "running",
                 "started_at": now, "started_by": actor_email,
+                "last_progress_at": now,
                 "total": total, "processed": 0, "succeeded": 0,
                 "failed": 0, "skipped": 0,
                 "errors": [], "finished_at": None,
@@ -418,6 +419,7 @@ async def _run_bulk_split(actor_email: str):
                         "processed": i, "succeeded": succeeded,
                         "failed": failed, "skipped": skipped,
                         "errors": errors,
+                        "last_progress_at": datetime.now(timezone.utc).isoformat(),
                     }},
                 )
             # Yield control so we don't starve the event loop
@@ -449,10 +451,30 @@ async def bulk_split_start(
     user=Depends(require_role(["admin"])),
 ):
     """Kick off the bulk auto-split. Safe mode only (≥2 distinct emails).
-    Only ONE job can run at a time — returns 409 if one is already running."""
+    Only ONE job can run at a time — returns 409 if one is already running.
+    Auto-recovers stale-running jobs (no heartbeat in >120s = backend was
+    restarted, worker is dead) by marking them as crashed and starting fresh."""
     existing = await db.bulk_split_jobs.find_one({"id": BULK_JOB_ID})
     if existing and existing.get("status") == "running":
-        raise HTTPException(409, "A bulk-split job is already running")
+        # Check heartbeat — if no progress update in 120s, the worker is dead
+        last_hb = existing.get("last_progress_at") or existing.get("started_at")
+        is_stale = False
+        try:
+            if last_hb:
+                last_dt = datetime.fromisoformat(last_hb.replace("Z", "+00:00"))
+                age = (datetime.now(timezone.utc) - last_dt).total_seconds()
+                is_stale = age > 120
+        except Exception:
+            is_stale = True
+        if not is_stale:
+            raise HTTPException(409, "A bulk-split job is already running")
+        # Auto-recover: mark stale job as crashed and continue with fresh start
+        await db.bulk_split_jobs.update_one(
+            {"id": BULK_JOB_ID},
+            {"$set": {"status": "crashed_stale",
+                      "finished_at": datetime.now(timezone.utc).isoformat(),
+                      "crash_reason": "no heartbeat for >120s (worker likely killed by restart)"}},
+        )
 
     # Pre-count so the UI can show 'about to split N records'
     idx = await _build_conflict_index(db)
@@ -463,7 +485,8 @@ async def bulk_split_start(
         {"id": BULK_JOB_ID},
         {"$set": {
             "id": BULK_JOB_ID, "status": "queued",
-            "started_at": now, "started_by": user.get("email", "?"),
+            "started_at": now, "last_progress_at": now,
+            "started_by": user.get("email", "?"),
             "total": total, "processed": 0, "succeeded": 0,
             "failed": 0, "skipped": 0, "errors": [], "finished_at": None,
             "mode": "safe_min2_emails",
