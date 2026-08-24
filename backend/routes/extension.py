@@ -2338,7 +2338,10 @@ async def capture_profile(
 
         incoming_phone = normalize_phone(profile.phone) if profile.phone else ""
         incoming_email = (profile.email or "").lower().strip()
-        incoming_emp = (profile.current_employer or "").strip()
+        # Pydantic input model uses `current_company` (not `current_employer`).
+        # The DB uses `current_employer`. Read from the input model, compare against DB.
+        incoming_emp = (getattr(profile, "current_company", None) or
+                        getattr(profile, "current_employer", None) or "").strip()
 
         for cand in candidates_same_name:
             phone_hit = bool(incoming_phone) and normalize_phone(cand.get("phone", "")) == incoming_phone
