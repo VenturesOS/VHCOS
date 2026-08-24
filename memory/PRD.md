@@ -35,7 +35,9 @@ profile capture quality improvements.
   - `GET /api/admin/candidate-hygiene/detail/{cid}` — identity-bucket breakdown per candidate
   - `POST /api/admin/candidate-hygiene/split/{cid}?dry_run=true|false` — safe split by email bucket. Keeps original candidate_id for winner (bucket with most recent capture), creates new candidate_id per other bucket, re-points capture logs, archives original in `merged_conflicts_backup`.
   - `POST /api/admin/candidate-hygiene/undo-split/{backup_id}` — admin@vhc.in-only revert.
-- **Frontend** `pages/admin/CandidateHygienePage.jsx` — new tab under System Health with sortable conflict list + modal drilldown + dry-run/execute/undo actions with confirmation.
+  - **[NEW Feb 2026]** `POST /api/admin/candidate-hygiene/bulk-split/start` — background job that runs the same email-bucket split logic across every conflict with ≥2 distinct emails (safe mode). Singleton (409 if already running). Every split is backed up + undoable.
+  - **[NEW Feb 2026]** `GET /api/admin/candidate-hygiene/bulk-split/status` — live progress (processed / succeeded / skipped / failed / errors), persisted in `bulk_split_jobs`. UI polls every 3s.
+- **Frontend** `pages/admin/CandidateHygienePage.jsx` — new tab under System Health with sortable conflict list + modal drilldown + dry-run/execute/undo actions with confirmation. **[NEW]** Auto-Bulk Split panel: one-click confirmation dialog, live progress bar + status badges, error/skipped drilldown, auto-refresh of conflicts list when the job finishes.
 - **Root fix already shipped**: same-day dedupe change requires phone/email/employer corroboration before name+source shortcut fires — no NEW contamination from now on.
 
 ### Feb 2026 — Dedupe catastrophic-merge fix (cross-contamination bug)
