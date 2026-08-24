@@ -365,6 +365,75 @@ async def undo_split(
 
 
 # ────────────────────────────────────────────────────────────
+# Merge history — audit trail of every split (with undo status)
+# ────────────────────────────────────────────────────────────
+@router.get("/merge-history")
+async def merge_history(
+    q: str = Query("", description="Search by candidate name (case-insensitive)"),
+    actor: Optional[str] = Query(None, description="Filter by admin email who ran the split"),
+    since: Optional[str] = Query(None, description="ISO datetime — only splits after this"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db=Depends(get_db),
+    user=Depends(require_role(["admin"])),
+):
+    """List every split (backup) with actor, timestamp, capture count,
+    and whether it's been undone. Sorted newest-first."""
+    match: dict = {}
+    if actor:
+        match["created_by"] = actor
+    if since:
+        match["created_at"] = {"$gte": since}
+    if q:
+        match["original_candidate.name"] = {"$regex": q, "$options": "i"}
+
+    total = await db.merged_conflicts_backup.count_documents(match)
+    cursor = db.merged_conflicts_backup.find(
+        match,
+        {"_id": 0, "id": 1, "created_at": 1, "created_by": 1,
+         "original_candidate_id": 1,
+         "original_candidate.name": 1, "original_candidate.email": 1,
+         "original_candidate.phone": 1,
+         "capture_log_ids": 1,
+         "plan.winner_bucket": 1, "plan.new_candidates_to_create": 1},
+    ).sort("created_at", -1).skip(offset).limit(limit)
+
+    rows = []
+    async for bk in cursor:
+        orig = bk.get("original_candidate") or {}
+        plan = bk.get("plan") or {}
+        new_c = plan.get("new_candidates_to_create") or []
+        rows.append({
+            "backup_id": bk.get("id"),
+            "created_at": bk.get("created_at"),
+            "created_by": bk.get("created_by"),
+            "candidate_id": bk.get("original_candidate_id"),
+            "candidate_name": orig.get("name"),
+            "original_email": orig.get("email"),
+            "original_phone": orig.get("phone"),
+            "captures_moved": sum(b.get("capture_count", 0) for b in new_c),
+            "new_candidates_created": len(new_c),
+            "winner_bucket": plan.get("winner_bucket"),
+            "new_buckets": [b.get("identity_key") for b in new_c],
+        })
+
+    # Determine which are still "active" (candidate_bank still has repair marker)
+    active_cids = set()
+    if rows:
+        cids = [r["candidate_id"] for r in rows]
+        async for c in db.candidate_bank.find(
+            {"id": {"$in": cids}, "repair_split_at": {"$exists": True}},
+            {"_id": 0, "id": 1}
+        ):
+            active_cids.add(c["id"])
+    for r in rows:
+        r["is_undone"] = r["candidate_id"] not in active_cids
+
+    return {"total": total, "limit": limit, "offset": offset, "rows": rows}
+
+
+
+# ────────────────────────────────────────────────────────────
 # Bulk auto-split — background job for the 2,249 legacy contaminated records
 # ────────────────────────────────────────────────────────────
 async def _run_bulk_split(actor_email: str):

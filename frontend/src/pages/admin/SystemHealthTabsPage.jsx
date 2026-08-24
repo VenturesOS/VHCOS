@@ -1,6 +1,6 @@
 import { Suspense, lazy, useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
-import { Activity, Bug, Cpu, FileSearch, Puzzle, Stethoscope, HeartPulse } from 'lucide-react';
+import { Activity, Bug, Cpu, FileSearch, Puzzle, Stethoscope, HeartPulse, History } from 'lucide-react';
 
 const SystemHealthContent = lazy(() => import('./SystemHealthPage'));
 const BugReportsContent = lazy(() => import('./BugReportsPage'));
@@ -9,6 +9,7 @@ const ExtractionAuditContent = lazy(() => import('./ExtractionAuditPage'));
 const ExtensionVersionsContent = lazy(() => import('./ExtensionVersionsPage'));
 const CaptureDiagnosticsContent = lazy(() => import('./CaptureDiagnosticsPage'));
 const CandidateHygieneContent = lazy(() => import('./CandidateHygienePage'));
+const MergeHistoryContent = lazy(() => import('./MergeHistoryPage'));
 
 const Loader = () => <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>;
 
@@ -30,6 +31,9 @@ export default function SystemHealthTabsPage() {
           <TabsTrigger value="hygiene" className="gap-1.5 text-xs" data-testid="tab-candidate-hygiene">
             <HeartPulse className="w-3.5 h-3.5" /> Candidate Hygiene
           </TabsTrigger>
+          <TabsTrigger value="merge-history" className="gap-1.5 text-xs" data-testid="tab-merge-history">
+            <History className="w-3.5 h-3.5" /> Merge History
+          </TabsTrigger>
           <TabsTrigger value="extension" className="gap-1.5 text-xs" data-testid="tab-extension-versions">
             <Puzzle className="w-3.5 h-3.5" /> Extension Versions
           </TabsTrigger>
@@ -44,6 +48,7 @@ export default function SystemHealthTabsPage() {
         <TabsContent value="audit"><Suspense fallback={<Loader />}><ExtractionAuditContent /></Suspense></TabsContent>
         <TabsContent value="diagnostics"><Suspense fallback={<Loader />}><CaptureDiagnosticsContent /></Suspense></TabsContent>
         <TabsContent value="hygiene"><Suspense fallback={<Loader />}><CandidateHygieneContent /></Suspense></TabsContent>
+        <TabsContent value="merge-history"><Suspense fallback={<Loader />}><MergeHistoryContent /></Suspense></TabsContent>
         <TabsContent value="extension"><Suspense fallback={<Loader />}><ExtensionVersionsContent /></Suspense></TabsContent>
         <TabsContent value="health"><Suspense fallback={<Loader />}><SystemHealthContent /></Suspense></TabsContent>
         <TabsContent value="bugs"><Suspense fallback={<Loader />}><BugReportsContent /></Suspense></TabsContent>
