@@ -167,9 +167,16 @@ Follow-up to 2026-08 Platform Audit. User picked keep/remove decisions.
   Trimmed unused `revenueAPI.records / aggregateByCompany / aggregateByJob /
   aggregateByRecruiter` helpers from `lib/api.js` (only used by the deleted
   pages). Kept `forecast/offered/hired/joined/byApplication` — still used by
-  `AdminPipelinePage`. Backend `/api/revenue/*` endpoints kept intact — the
-  offered/hired/joined write path is still used from pipeline; only the
-  aggregate read endpoints are now dead and can be pruned later if desired.
+  `AdminPipelinePage`.
+- **Dead revenue backend endpoints pruned** (verified 0 hits/90d in `api_metrics`):
+    - `GET /api/revenue/records`
+    - `GET /api/revenue/aggregate/by-company`
+    - `GET /api/revenue/aggregate/by-job`
+    - `GET /api/revenue/aggregate/by-recruiter`
+  Removed from `routes/revenue.py`. Write path (`/api/revenue/offered|hired|
+  joined/{app_id}` + `/api/revenue/forecast` + `/api/revenue/by-application/
+  {app_id}`) retained — still used from Pipeline. All 4 removed paths now
+  return 404 (verified via curl); `by-application` still 200.
 - **Admin Resources "Coming soon" tiles removed**: Quick-Start Cheat Sheet
   and Troubleshooting Guide placeholder cards deleted from
   `AdminResourcesPage.jsx`. Training Manual card (the only real feature)
@@ -177,6 +184,23 @@ Follow-up to 2026-08 Platform Audit. User picked keep/remove decisions.
 - **Career Blog `/career-insights` kept as-is** per user — public SEO pillar
   target; empty-state message stays until candidate blog content is
   published. Sitemap entry retained.
+- **`backend/server.py` split** from 517 lines → 51-line thin entry plus a
+  new `bootstrap/` package:
+    - `bootstrap/routers.py` (162 lines) — all `_safe_import` calls, the
+      `all_routers` list, and `log_system_error` fallback.
+    - `bootstrap/lifespan.py` (151 lines) — the full FastAPI lifespan
+      (httpx pool, DB init, deferred tasks, API metrics, RunPod sync loop,
+      Talent Graph indexes, BGE preload, fast_search projection guard).
+    - `bootstrap/middleware.py` (147 lines) — `register_middleware()` +
+      `register_exception_handler()`. Middleware add order preserved
+      exactly (gzip, correlation, rate limit, zero trust, api metrics,
+      CORS, then security-headers `@app.middleware`).
+  `server.py` is now just: barrel-import validation for `models/`,
+  `utils/`, `services/`; create `FastAPI(lifespan=lifespan)`; loop
+  `all_routers` into `include_router`; call `register_middleware` +
+  `register_exception_handler`. **41/41 backend regression tests passed**
+  (report: `/app/test_reports/iteration_191.json`). Deleted revenue
+  endpoints correctly 404; retained ones still gated by role.
 - **Atlas M10 → Flex migration runbook written**:
   `/app/memory/ATLAS_FLEX_MIGRATION_RUNBOOK.md` — 15-step playbook covering
   pre-checks (index audit, working-set size, latency baselines), snapshot,
@@ -186,10 +210,26 @@ Follow-up to 2026-08 Platform Audit. User picked keep/remove decisions.
   `/api/analytics/admin` cache-miss lag by keeping working set resident in
   Flex's adaptive RAM.
 
-**Verification**: frontend build clean (9.73s), lint clean on all touched
-files, screenshot smoke-test confirms Revenue nav removed and Resources
-page has 0 "Coming soon" occurrences. No backend changes → no supervisor
-restart needed.
+**Verification**: frontend build clean, backend health 200 with 0 route
+import failures, all 4 removed endpoints return 404, `server.py` and
+`bootstrap/*.py` all lint clean.
+
+**Pre-existing quirks noticed during regression (not blocking)**:
+1. `bootstrap/middleware.py:110-113` — `raise exc` for HTTPException inside
+   `@app.exception_handler(Exception)` works only because Starlette handles
+   HTTPException before this handler for normal routes; middleware-raised
+   HTTPExceptions would escape as raw 500s. Consider `http_exception_handler`.
+2. `bootstrap/middleware.py:79-80` — bare `except RuntimeError` in the
+   security-headers middleware swallows all RuntimeErrors (not just
+   "No response returned"). Narrow the match.
+3. `bootstrap/routers.py:37-49` — the core-route batch import sets 15
+   routers to None on a single failure and does NOT append to
+   `route_import_failures`, so `/api/health` would still report 0 failures.
+   Route core imports through `_safe_import` too.
+4. `server.py` `logging.basicConfig(level=INFO)` is not taking effect under
+   uvicorn's logging config, so lifespan `logger.info(...)` lines never
+   appear in supervisor logs (ERROR still surfaces). Fix with explicit
+   root-logger `setLevel` if lifespan diagnostics are needed.
 
 
 

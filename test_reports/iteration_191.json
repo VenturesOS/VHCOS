@@ -1,0 +1,33 @@
+{
+  "summary": "Backend-only regression test of the Phase 55.12 bootstrap split (server.py -> bootstrap/{routers,lifespan,middleware}.py) and the removal of 4 dead revenue endpoints. Created /app/backend/tests/test_bootstrap_split_regression.py with 41 tests: health/boot, removed-endpoint 404s (HTTP + OpenAPI), retained revenue endpoint registration + auth gating, 9 critical endpoint smoke tests, middleware chain (gzip / CORS / security headers), and global exception handling. RESULT: 41/41 PASSED. Also did a cold `supervisorctl restart backend` and confirmed lifespan startup completes, /api/health returns 200 with import_failures=0, and no [IMPORT FAIL] lines in logs. No regressions found from the split.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/analytics/admin", "issue": "FLAKY via public URL: returned a Cloudflare 502 HTML page once out of ~5 calls; 3 immediate retries and the in-process call (localhost:8001, 1.3s, 200) all succeeded. Appears to be preview-ingress flakiness, not app code. Test now retries once on 5xx. ~20% observed failure rate on first run."},
+      {"endpoint": "bootstrap/lifespan.py logging", "issue": "Observability nit (pre-existing pattern, not caused by the split): none of the lifespan logger.info() lines ('Global httpx.AsyncClient created', 'BGE model + cluster cache preload kicked off', 'fast_search projection OK') appear in /var/log/supervisor/backend.err.log. Root logger falls back to logging.lastResort (WARNING+ only, 'WARNING:root:' format), so logging.basicConfig(level=INFO) in server.py is not taking effect under uvicorn. The fast_search projection guard's ERROR branch would still surface, so impact is limited to boot diagnostics."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bootstrap_split_regression.py",
+    "/app/test_reports/pytest/bootstrap_split_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "bootstrap/middleware.py:110-113 — global_exception_handler does `raise exc` for HTTPException from inside an @app.exception_handler(Exception). This works today only because Starlette's ExceptionMiddleware handles HTTPException before this handler is ever reached for normal routes; if an HTTPException is raised from inside a middleware it will escape as a raw 500 from uvicorn instead of JSON. Prefer `return await http_exception_handler(request, exc)`. (Pre-existing, carried over from old server.py — not a split regression.)",
+    "bootstrap/middleware.py:79-80 — `except RuntimeError: return JSONResponse(500)` in the security-headers middleware swallows ALL RuntimeErrors (not just 'No response returned'), bypassing the global exception handler and losing the system_errors log entry for those. Narrow the match on the exception message. (Pre-existing.)",
+    "bootstrap/routers.py:37-49 — the core-route batch import sets 15 routers to None on a single failure, so one broken core file silently degrades 15 surfaces and, unlike _safe_import, does NOT append to route_import_failures, so /api/health would still report import_failures=0. Recommend routing core imports through _safe_import too, or appending to route_import_failures in the except block."
+  ],
+  "updated_files": ["/app/backend/tests/test_bootstrap_split_regression.py"],
+  "success_rate": {"backend": "100% (41/41)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "None. All tests are read-only or auth-rejected; no revenue records or candidates were created.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 (admin); hr6@vhc.in / 12345678 (recruiter, needed for /api/employer/companies)",
+  "context_for_next_testing_agent": "New regression file: /app/backend/tests/test_bootstrap_split_regression.py (run: cd /app/backend && python -m pytest tests/test_bootstrap_split_regression.py -v, ~3 min). Two environment gotchas encoded in it: (1) /openapi.json is NOT reachable through the preview ingress (not under /api/*, returns the SPA) so route-registration assertions hit http://localhost:8001/openapi.json; (2) the preview ingress answers OPTIONS itself with Access-Control-Allow-Origin: * before FastAPI sees it, so app-level CORS must also be asserted in-process. Also note two role-gate facts that look like failures but are by design: /api/notifications/history is require_role(['candidate']) (admin -> 403) and /api/employer/companies is require_role(['employer','recruiter']) (admin -> 403, recruiter -> 200).",
+  "rca_of_the_issue": "No regression. The 4 initial test failures were all test-harness/environment artifacts, not product defects: 2 were admin hitting non-admin role gates (notifications/history is candidate-only, employer/companies is employer|recruiter-only — both returned 403 not 404, proving the routers registered fine after the split), 1 was the ingress overriding the CORS preflight with Allow-Origin '*' (app returns the correct https://ventureshrd.com in-process), and 1 was a transient ingress 502 on /api/analytics/admin. Middleware order is verified intact: gzip compresses /api/candidates?limit=50 (Content-Encoding: gzip), all 5 security headers plus the /api/* no-store Cache-Control are present, CORS echoes only allow-listed origins with credentials=true, and unhandled/unknown paths return JSON bodies (never HTML or a raw stack)."
+}

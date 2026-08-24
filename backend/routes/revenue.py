@@ -6,8 +6,8 @@ import uuid
 import logging
 import copy
 from datetime import datetime, timezone
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from config import db
@@ -369,139 +369,10 @@ async def process_joined_stage(
     }
 
 
-# ── PART 5: Aggregation ──
-
-@revenue_router.get("/revenue/aggregate/by-company")
-async def aggregate_revenue_by_company(
-    from_date: str = Query(...),
-    to_date: str = Query(...),
-    current_user: dict = Depends(require_role(["admin", "employer"]))
-):
-    """Aggregate revenue by company for joined/invoiced records within date range."""
-    pipeline = [
-        {"$match": {
-            "revenue_status": {"$in": ["joined", "invoiced"]},
-            "join_date": {"$gte": from_date, "$lte": to_date},
-        }},
-        {"$group": {
-            "_id": "$company_id",
-            "company_name": {"$first": "$company_name"},
-            "total_revenue": {"$sum": "$final_revenue"},
-            "count": {"$sum": 1},
-            "avg_ctc": {"$avg": "$offered_ctc"},
-        }},
-        {"$sort": {"total_revenue": -1}},
-    ]
-    results = await db.revenue.aggregate(pipeline).to_list(1000)
-    for r in results:
-        r["company_id"] = r.pop("_id")
-        r["total_revenue"] = round(r["total_revenue"])
-        r["avg_ctc"] = round(r.get("avg_ctc") or 0)
-    return {"from_date": from_date, "to_date": to_date, "data": results}
-
-
-@revenue_router.get("/revenue/aggregate/by-job")
-async def aggregate_revenue_by_job(
-    from_date: str = Query(...),
-    to_date: str = Query(...),
-    current_user: dict = Depends(require_role(["admin", "employer"]))
-):
-    """Aggregate revenue by job/mandate for joined/invoiced records."""
-    pipeline = [
-        {"$match": {
-            "revenue_status": {"$in": ["joined", "invoiced"]},
-            "join_date": {"$gte": from_date, "$lte": to_date},
-        }},
-        {"$group": {
-            "_id": "$job_id",
-            "job_title": {"$first": "$job_title"},
-            "company_name": {"$first": "$company_name"},
-            "total_revenue": {"$sum": "$final_revenue"},
-            "count": {"$sum": 1},
-            "avg_ctc": {"$avg": "$offered_ctc"},
-        }},
-        {"$sort": {"total_revenue": -1}},
-    ]
-    results = await db.revenue.aggregate(pipeline).to_list(1000)
-    for r in results:
-        r["job_id"] = r.pop("_id")
-        r["total_revenue"] = round(r["total_revenue"])
-        r["avg_ctc"] = round(r.get("avg_ctc") or 0)
-    return {"from_date": from_date, "to_date": to_date, "data": results}
-
-
-@revenue_router.get("/revenue/aggregate/by-recruiter")
-async def aggregate_revenue_by_recruiter(
-    from_date: str = Query(...),
-    to_date: str = Query(...),
-    current_user: dict = Depends(require_role(["admin", "employer"]))
-):
-    """Aggregate revenue by recruiter for joined/invoiced records."""
-    pipeline = [
-        {"$match": {
-            "revenue_status": {"$in": ["joined", "invoiced"]},
-            "join_date": {"$gte": from_date, "$lte": to_date},
-        }},
-        {"$group": {
-            "_id": "$recruiter_id",
-            "total_revenue": {"$sum": "$final_revenue"},
-            "count": {"$sum": 1},
-            "avg_ctc": {"$avg": "$offered_ctc"},
-        }},
-        {"$sort": {"total_revenue": -1}},
-    ]
-    results = await db.revenue.aggregate(pipeline).to_list(1000)
-
-    # Enrich with recruiter names
-    recruiter_ids = [r["_id"] for r in results if r["_id"]]
-    if recruiter_ids:
-        recruiters = await db.users.find(
-            {"id": {"$in": recruiter_ids}}, {"_id": 0, "id": 1, "name": 1}
-        ).to_list(len(recruiter_ids))
-        name_map = {r["id"]: r["name"] for r in recruiters}
-    else:
-        name_map = {}
-
-    for r in results:
-        r["recruiter_id"] = r.pop("_id")
-        r["recruiter_name"] = name_map.get(r["recruiter_id"], "Unknown")
-        r["total_revenue"] = round(r["total_revenue"])
-        r["avg_ctc"] = round(r.get("avg_ctc") or 0)
-
-    return {"from_date": from_date, "to_date": to_date, "data": results}
-
-
-# ── PART 6: Revenue Records (role-filtered) ──
-
-@revenue_router.get("/revenue/records")
-async def get_revenue_records(
-    company_id: Optional[str] = None,
-    job_id: Optional[str] = None,
-    status: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get revenue records. Recruiter role gets empty response."""
-    if not _is_revenue_visible(current_user):
-        return {"records": [], "message": "Revenue data not available for your role"}
-
-    query = {}
-    if company_id:
-        query["company_id"] = company_id
-    if job_id:
-        query["job_id"] = job_id
-    if status:
-        query["revenue_status"] = status
-
-    # Employer: restrict to assigned companies
-    if current_user["role"] == "employer":
-        assigned = await db.companies.find(
-            {"assigned_employer_id": current_user["id"]},
-            {"_id": 0, "id": 1}
-        ).to_list(1000)
-        query["company_id"] = {"$in": [c["id"] for c in assigned]}
-
-    records = await db.revenue.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return {"records": records}
+# ── PART 5: Removed — aggregate/by-company, aggregate/by-job, aggregate/by-recruiter,
+#           and records endpoints. 0 traffic in 90d (only consumed by the deleted
+#           RevenueDashboardPage). Pipeline offered/hired/joined write path below
+#           is still used by AdminPipelinePage.
 
 
 # ── Get single revenue by application ──
