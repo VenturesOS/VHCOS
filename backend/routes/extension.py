@@ -47,9 +47,6 @@ from services.activity_log_service import log_activity, ACTION_CAPTURED, ACTION_
 # Phone + work-experience extraction — routes through RunPod Qwen serverless via llm_fallback_service
 from services.llm_fallback_service import extract_phone_and_work_experience_fallback as extract_phone_and_work_experience_groq
 
-# NEW: Local LLM service for admin testing
-from services.local_llm_service import extract_full_profile_local
-
 logger = logging.getLogger(__name__)
 
 # Test user for local LLM (DISABLED - quality too low on CPU)

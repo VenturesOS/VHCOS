@@ -153,6 +153,47 @@ old-user identity.
   * Result: `100% (6/6)` backend, `100%` frontend. Zero issues.
 
 
+### Phase 55.16 — Final env cleanup + 401 daemon silenced (2026-08)
+
+Follow-up to Phase 55.15. Backfill process was interrupted by pod recycle
+after ~73,472 candidates were embedded (from 1,879 at start). Resumed the
+backfill in background — the script's resume filter (missing-or-wrong-dim)
+picked up exactly where it left off. Then executed the safe env cleanup.
+
+**Files deleted:**
+- `services/local_llm_service.py` — imported by `routes/extension.py:51`
+  but function never called anywhere. Dead code.
+- Removed its import from `routes/extension.py`.
+
+**`.env` cleanup:**
+- Removed `LOCAL_LLM_URL`, `LOCAL_LLM_MODEL` (0 refs after local_llm_service delete).
+- Removed `OPENROUTER_API_KEY`, `OPENROUTER_FREE_MODEL` (0 refs after
+  `llm_service.py` rewrite in Phase 55.15).
+- Removed `RUNPOD_ACCOUNT_API_KEY` — killed the 401 daemon retry noise.
+  `runpod_sync_service.py:241` self-disables cleanly with:
+  `[RunPodSync] RUNPOD_ACCOUNT_API_KEY not set — auto-sync daemon DISABLED`.
+- **Retained**: `GROQ_API_KEY` (used by `services/screening_media.py` for
+  Whisper voice-STT; voice screening on hold not cancelled), `USE_GROQ_ENRICHMENT`
+  (extension.py logging label, harmless), `OPENAI_API_KEY` (loosely referenced
+  by health check reporting + mongo_production_override injection, harmless
+  without functional dependency).
+- **Retained** legacy `RUNPOD_VLLM_URL` + `RUNPOD_MODEL_NAME` — powers
+  `/api/admin/monitoring/runpod-sync` observability surface; not on the
+  hot inference path.
+
+**Backfill resumption:**
+- New process pid 1389 started at 07:57, resumed from 73,472 done.
+- Progress at Phase 55.16 close: 79,616 / 170,127 (46.8%) done at 18 docs/sec.
+- Projected finish: ~1.4 hours from resume.
+- Zero failures observed across both backfill runs.
+
+**Verified:**
+- `/api/health` = healthy, 0 route import failures.
+- `/api/candidates`, `/api/jobs`, `/api/bills` all return 200.
+- Backend logs no longer show hourly `[RunPodSync] API HTTP 401` retries
+  (previously fired every 120s = ~30/hr; now firing 0/hr).
+
+
 ### Phase 55.15 — LLM consolidation Part 2: cv_upload + extension migrated, legacy services removed (2026-08)
 
 Follow-up to Phase 55.14. Migrated the remaining LLM code paths off Groq /
