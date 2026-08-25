@@ -186,10 +186,6 @@ async def _do_parse_cv(task_id: str, content: bytes, filename: str):
             return
 
         raw_text_truncated = raw_text[:6000]
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            await fail_task(task_id, "AI service not configured")
-            return
 
         prompt = f"""You are a resume/CV parsing expert. Extract structured candidate data from this resume.
 
@@ -227,14 +223,17 @@ IMPORTANT:
 Resume text:
 {raw_text_truncated}"""
 
-        from services.llm_service import chat_completion
-        ai_content = await chat_completion(
+        from services.llm_fallback_service import _call_runpod_vllm
+        ai_result = await _call_runpod_vllm(
             system_prompt="You are a precise resume parser. Extract structured candidate data from resumes. Return only valid JSON.",
             user_prompt=prompt,
             temperature=0.1,
-            json_mode=True,
-            timeout=90.0,
+            disable_guided=True,  # generic JSON, not the profile-specific schema
         )
+        if not ai_result or not ai_result.get("content"):
+            await fail_task(task_id, "AI service temporarily unavailable. Please try again later.")
+            return
+        ai_content = ai_result["content"]
         
         # Resilient JSON extraction: strip markdown code fences if present
         cleaned = ai_content.strip()

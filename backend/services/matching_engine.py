@@ -106,32 +106,20 @@ async def _llm_chat(system_msg: str, user_msg: str, max_tokens: int = 1500) -> s
     """
     Unified LLM chat — NOW USING GROQ for cost optimization.
     
-    Groq Llama 3.3 70B: $0.59/M input + $0.79/M output (cheaper than Claude Haiku)
-    Falls back to llm_service waterfall if Groq fails.
+    Phase 55.14: routes directly through llm_service.chat_completion, which
+    itself uses RunPod Qwen 2.5-14B (primary) → Emergent Claude Haiku 4.5
+    (fallback). The old Groq-first path was removed with services/groq_ai_service.
     """
-    try:
-        # PRIMARY: Try Groq first
-        from services.groq_ai_service import groq_chat_completion
-        return await groq_chat_completion(
-            system_prompt=system_msg,
-            user_prompt=user_msg,
-            temperature=0.3,
-            max_tokens=max_tokens,
-            json_mode=True,
-        )
-    except Exception as e:
-        logger.warning(f"[LLM] Groq failed: {e}, falling back to llm_service...")
-        # FALLBACK: Use existing waterfall service
-        from services.llm_service import chat_completion
-        return await chat_completion(
-            system_prompt=system_msg,
-            user_prompt=user_msg,
-            json_mode=True,
-            temperature=0.3,
-            timeout=120.0,
-            max_tokens=max_tokens,
-            priority="high",
-        )
+    from services.llm_service import chat_completion
+    return await chat_completion(
+        system_prompt=system_msg,
+        user_prompt=user_msg,
+        json_mode=True,
+        temperature=0.3,
+        timeout=120.0,
+        max_tokens=max_tokens,
+        priority="high",
+    )
 
 
 def get_chat_client(system_msg: str = "You are an expert recruiter AI that extracts structured data from text."):

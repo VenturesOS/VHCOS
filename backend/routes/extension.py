@@ -44,8 +44,8 @@ from services.extension_service import (
 )
 from services.activity_log_service import log_activity, ACTION_CAPTURED, ACTION_UPDATED, ACTION_CV_UPLOADED
 
-# NEW: Groq service for cost-effective extraction
-from services.groq_service import extract_phone_and_work_experience_groq
+# Phone + work-experience extraction — routes through RunPod Qwen serverless via llm_fallback_service
+from services.llm_fallback_service import extract_phone_and_work_experience_fallback as extract_phone_and_work_experience_groq
 
 # NEW: Local LLM service for admin testing
 from services.local_llm_service import extract_full_profile_local
@@ -674,12 +674,10 @@ async def ai_extract_profile(
             pass
         return AIExtractResponse(success=True, profile_data=profile)
 
-    # ── Fallback: Groq for initial parse if DOM fields missing ─────────────
-    logger.info(f"[AI Extract] DOM fields insufficient (name={has_name}, contact={has_contact}) — using Groq")
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        return AIExtractResponse(success=False, error="OpenAI API key not configured")
-    
+    # ── Fallback: LLM extraction if regex not confident enough ─────────────
+    # Route: llm_fallback_service.extract_full_profile_fallback → RunPod Qwen serverless → Emergent LLM fallback
+    logger.info(f"[AI Extract] DOM fields insufficient (name={has_name}, contact={has_contact}) — using LLM fallback")
+
     # Truncate to ~6000 chars for faster LLM processing (profiles rarely exceed this)
     raw_text = request.raw_text[:6000]
     
@@ -837,24 +835,24 @@ IMPORTANT: The page text may also contain the logged-in RECRUITER's email/phone.
             logger.warning(f"[AI Extract] Regex parser failed ({regex_err}), using Groq")
 
         if profile_data is None:
-            # ── Groq Llama 3.3 70B fallback ──
+            # ── LLM fallback (RunPod Qwen serverless → Emergent LLM fallback) ──
             try:
-                from services.groq_service import extract_full_profile_groq
-                
-                groq_result = await extract_full_profile_groq(
+                from services.llm_fallback_service import extract_full_profile_fallback
+
+                llm_result = await extract_full_profile_fallback(
                     raw_text=raw_text,
                     candidate_name=None
                 )
-                
-                if groq_result and not groq_result.get('error'):
-                    profile_data = groq_result
-                    profile_data["_extraction_source"] = "groq_llama_3_3_70b"
-                    logger.info(f"[AI Extract] Groq extraction succeeded for: {profile_data.get('name')}")
+
+                if llm_result and not llm_result.get('error'):
+                    profile_data = llm_result
+                    profile_data["_extraction_source"] = f"llm_{llm_result.get('source', 'runpod_qwen')}"
+                    logger.info(f"[AI Extract] LLM extraction succeeded for: {profile_data.get('name')}")
                 else:
-                    logger.warning("[AI Extract] Groq returned error, falling back to DOM data")
+                    logger.warning("[AI Extract] LLM returned error, falling back to DOM data")
                     profile_data = None
-            except Exception as groq_err:
-                logger.warning(f"[AI Extract] Groq failed ({groq_err}), falling back to DOM data")
+            except Exception as llm_err:
+                logger.warning(f"[AI Extract] LLM failed ({llm_err}), falling back to DOM data")
                 profile_data = None
         
         # Initialize profile_data if Groq failed
@@ -3350,9 +3348,9 @@ async def re_enrich_candidate(
         if ai and regex_quality >= 0.5:
             logger.info(f"[Re-Enrich] Regex sufficient ({regex_quality:.0%}) for {candidate_name} — Groq SKIPPED")
         else:
-            logger.info(f"[Re-Enrich] Regex quality low ({regex_quality:.0%}) for {candidate_name} — calling Groq")
-            from services.groq_service import extract_full_profile_groq
-            ai = await extract_full_profile_groq(
+            logger.info(f"[Re-Enrich] Regex quality low ({regex_quality:.0%}) for {candidate_name} — calling LLM fallback")
+            from services.llm_fallback_service import extract_full_profile_fallback
+            ai = await extract_full_profile_fallback(
                 raw_text=raw_text,
                 candidate_name=candidate_name
             )

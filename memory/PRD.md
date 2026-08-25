@@ -153,6 +153,63 @@ old-user identity.
   * Result: `100% (6/6)` backend, `100%` frontend. Zero issues.
 
 
+### Phase 55.15 — LLM consolidation Part 2: cv_upload + extension migrated, legacy services removed (2026-08)
+
+Follow-up to Phase 55.14. Migrated the remaining LLM code paths off Groq /
+OpenAI-direct onto the new RunPod Qwen serverless pipeline, and started the
+BGE-M3 backfill.
+
+**Code changes:**
+- `routes/cv_upload.py:189` — removed misleading `OPENAI_API_KEY` preflight
+  check (the code was actually calling `services.llm_service.chat_completion`,
+  which never used OpenAI). Migrated to
+  `services.llm_fallback_service._call_runpod_vllm` with `disable_guided=True`
+  for generic JSON output.
+- `routes/extension.py:679` — removed misleading `OPENAI_API_KEY` preflight.
+  Migrated `services.groq_service.extract_full_profile_groq` →
+  `services.llm_fallback_service.extract_full_profile_fallback` (same
+  function, direct import). Same for the re-enrichment path at line 3352.
+- `routes/extension.py:48` — legacy `groq_service.extract_phone_and_work_experience_groq`
+  import aliased to `llm_fallback_service.extract_phone_and_work_experience_fallback`.
+- `services/matching_engine.py:113` — removed Groq-first primary path;
+  now calls `llm_service.chat_completion` directly (which itself routes
+  to RunPod Qwen → Emergent Claude Haiku).
+- `services/llm_service.py` — **rewrote as thin passthrough** to RunPod Qwen
+  serverless with Emergent Claude Haiku fallback. Removed ~280 lines of
+  Groq/OpenRouter/OpenAI/Claude waterfall code. `chat_completion` and
+  `get_model` signatures preserved so all 10 existing callers (matching_engine,
+  blog_scheduler, blog_digest, blog_generator, ai_search, extension_service,
+  resume, blog, cv_upload) work without individual refactors.
+
+**Files deleted:**
+- `services/groq_ai_service.py` (was calling Groq directly)
+- `services/groq_service.py` (was a thin passthrough wrapper)
+
+**BGE-M3 backfill kicked off:**
+- Command: `nohup python -m scripts.backfill_bge_embeddings > /tmp/bge_backfill.log 2>&1 &`
+- Live progress: ~9,700 / 169,914 (5.7%) at 20 docs/sec on 1 RunPod worker
+- Projected finish: ~2.3 hours from start
+- Zero failures observed so far
+- Cost tracking: ~$0.20-$0.40 based on observed throughput
+- Log at `/tmp/bge_backfill.log`; process pid captured for the user to monitor
+
+**Verified end-to-end (through backend interpreter):**
+- `chat_completion("Say: PONG")` returns `'PONG'` via Qwen serverless.
+- `extract_full_profile_fallback(...)` returns proper JSON profile with
+  `source: 'runpod_qwen14b'`.
+- Backend `/api/health` = healthy, 0 route import failures.
+
+**Still deferred until backfill finishes + user confirms:**
+- Remove `services/runpod_sync_service.py` (401 daemon).
+- Prune `.env` keys: `GROQ_API_KEY`, `LOCAL_LLM_URL`, `LOCAL_LLM_MODEL`,
+  `USE_GROQ_ENRICHMENT`, `OPENROUTER_API_KEY`, `OPENROUTER_FREE_MODEL`,
+  `RUNPOD_ACCOUNT_API_KEY`, and eventually `OPENAI_API_KEY` (still
+  loosely referenced by `routes/health.py` reporting + `mongo_production_override.py`
+  injection — harmless if key missing).
+- User to deploy to EC2 (`git pull && systemctl restart vhc-backend`) after
+  the backfill finishes and confirms `/api/health` clean in prod.
+
+
 ### Phase 55.14 — RunPod Serverless migration Part 1: embeddings + Qwen (2026-08)
 
 Deployed two RunPod Serverless endpoints replacing the legacy persistent-pod
