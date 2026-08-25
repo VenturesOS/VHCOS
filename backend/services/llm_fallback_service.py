@@ -28,15 +28,24 @@ EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 # Kept as `None` to preserve any downstream `if ANTHROPIC_API_KEY:` guards.
 ANTHROPIC_API_KEY = None
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+# ── RunPod configuration (Phase 55.13: serverless preferred over legacy pod) ──
+# Serverless (new, primary): uses /v2/{endpoint_id}/runsync — stable URL, per-second billing
+RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
+RUNPOD_QWEN_ENDPOINT_ID = os.environ.get("RUNPOD_QWEN_ENDPOINT_ID")
+RUNPOD_QWEN_MODEL = os.environ.get("RUNPOD_QWEN_MODEL", "Qwen/Qwen2.5-14B-Instruct-AWQ")
+
+# Legacy persistent pod (fallback): URL changes on restart, requires sync daemon.
+# Kept working during transition; will be removed once serverless is proven stable.
 RUNPOD_VLLM_URL = os.environ.get("RUNPOD_VLLM_URL")
 RUNPOD_MODEL_NAME = os.environ.get("RUNPOD_MODEL_NAME", "Qwen/Qwen2.5-14B-Instruct-AWQ")
-# Explicit API key — override if set; otherwise auto-derive from URL below
-RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY") or os.environ.get("VLLM_API_KEY") or os.environ.get("RUNPOD_VLLM_API_KEY")
+# Persistent-pod key auto-derives from URL when RUNPOD_API_KEY isn't set explicitly
+_LEGACY_POD_KEY = os.environ.get("VLLM_API_KEY") or os.environ.get("RUNPOD_VLLM_API_KEY")
 
-# Auto-derive API key from URL when not set explicitly.
-# RunPod pod template uses VLLM_API_KEY=sk-$RUNPOD_POD_ID and the URL format is
-# https://{POD_ID}-{PORT}.proxy.runpod.net, so we can extract POD_ID from the hostname.
-if not RUNPOD_API_KEY and RUNPOD_VLLM_URL:
+# Legacy persistent-pod path only: auto-derive its key from URL when RUNPOD_API_KEY
+# isn't set. Serverless never uses this — it uses the top-level RUNPOD_API_KEY.
+_LEGACY_POD_DERIVED_KEY = _LEGACY_POD_KEY
+if not _LEGACY_POD_DERIVED_KEY and RUNPOD_VLLM_URL:
     try:
         from urllib.parse import urlparse
         host = urlparse(RUNPOD_VLLM_URL).hostname or ""
@@ -46,14 +55,31 @@ if not RUNPOD_API_KEY and RUNPOD_VLLM_URL:
             if "-" in first_seg:
                 pod_id = first_seg.rsplit("-", 1)[0]
                 if pod_id:
-                    RUNPOD_API_KEY = f"sk-{pod_id}"
-                    # Use logger defined below — defer the log
+                    _LEGACY_POD_DERIVED_KEY = f"sk-{pod_id}"
                     import logging as _logging
                     _logging.getLogger(__name__).info(
-                        f"[RunPod] Auto-derived API key from URL (pod_id={pod_id})"
+                        f"[RunPod] Legacy pod key auto-derived (pod_id={pod_id})"
                     )
     except Exception:
         pass
+
+
+def _unwrap_runpod_response(data: Dict) -> Optional[Dict]:
+    """
+    Extract the inner OpenAI chat-completions response from a RunPod serverless
+    /runsync envelope. Returns None on non-COMPLETED status.
+
+    Envelope: {"output": [<openai_resp>], "status": "COMPLETED", ...}
+    Some workers return `output` as the response directly instead of a list.
+    """
+    if data.get("status") != "COMPLETED":
+        return None
+    output = data.get("output")
+    if isinstance(output, list) and output:
+        return output[0]
+    if isinstance(output, dict):
+        return output
+    return None
 
 
 def _extract_json_from_response(response_text: str) -> str:
@@ -199,16 +225,30 @@ async def _call_emergent_llm_haiku(system_prompt: str, user_prompt: str, tempera
 
 async def _call_runpod_vllm(system_prompt: str, user_prompt: str, temperature: float = 0, retry: bool = True, disable_guided: bool = False, text_mode: bool = False) -> Optional[Dict]:
     """
-    Call Qwen 14B via RunPod vLLM with guided JSON generation.
-    Uses response_format to force valid JSON output.
-    Auto-retries once on failure with truncated prompt.
+    Call Qwen 14B via RunPod with guided JSON generation.
+
+    Route selection (Phase 55.13):
+    - If RUNPOD_QWEN_ENDPOINT_ID is set → Serverless /runsync (stable URL, per-second billing)
+    - Else if RUNPOD_VLLM_URL is set → Legacy persistent pod /v1/chat/completions
+    - Else → returns None (caller falls back to Emergent LLM)
+
+    Both paths speak the OpenAI chat-completions payload shape. Serverless
+    wraps it in `{"input": <payload>}` and returns `{"output": [<openai_resp>]}`.
     """
-    if not RUNPOD_VLLM_URL:
-        logger.warning("[RunPod] RUNPOD_VLLM_URL not configured — skipping")
+    use_serverless = bool(RUNPOD_QWEN_ENDPOINT_ID and RUNPOD_API_KEY)
+    if not use_serverless and not RUNPOD_VLLM_URL:
+        logger.warning("[RunPod] Neither RUNPOD_QWEN_ENDPOINT_ID nor RUNPOD_VLLM_URL configured — skipping")
         return None
-    
+
     try:
-        url = f"{RUNPOD_VLLM_URL.rstrip('/')}/v1/chat/completions"
+        if use_serverless:
+            url = f"https://api.runpod.ai/v2/{RUNPOD_QWEN_ENDPOINT_ID}/runsync"
+            model_name = RUNPOD_QWEN_MODEL
+            auth_key = RUNPOD_API_KEY
+        else:
+            url = f"{RUNPOD_VLLM_URL.rstrip('/')}/v1/chat/completions"
+            model_name = RUNPOD_MODEL_NAME
+            auth_key = _LEGACY_POD_DERIVED_KEY
 
         # Strict JSON schema for vLLM's guided_json — eliminates malformed JSON
         # and forces Qwen-14B to emit every field (nullable where optional).
@@ -273,7 +313,7 @@ async def _call_runpod_vllm(system_prompt: str, user_prompt: str, temperature: f
         }
 
         payload = {
-            "model": RUNPOD_MODEL_NAME,
+            "model": model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -301,34 +341,47 @@ async def _call_runpod_vllm(system_prompt: str, user_prompt: str, temperature: f
         else:
             payload["response_format"] = {"type": "json_object"}
         
-        logger.info(f"[RunPod] Calling Qwen 14B (mode={'text' if text_mode else 'json'})...")
-        
+        logger.info(f"[RunPod] Calling Qwen 14B via {'serverless' if use_serverless else 'legacy pod'} (mode={'text' if text_mode else 'json'})...")
+
         headers = {"Content-Type": "application/json"}
-        if RUNPOD_API_KEY:
-            headers["Authorization"] = f"Bearer {RUNPOD_API_KEY}"
+        if auth_key:
+            headers["Authorization"] = f"Bearer {auth_key}"
+
+        # Serverless wraps the OpenAI payload in `{"input": <payload>}` and
+        # returns `{"output": [<openai_resp>], "status": "COMPLETED"}`.
+        request_body = {"input": payload} if use_serverless else payload
 
         async with httpx.AsyncClient(timeout=180.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
+            response = await client.post(url, json=request_body, headers=headers)
             response.raise_for_status()
-            
+
             data = response.json()
-            choice = data["choices"][0]
+            openai_resp = _unwrap_runpod_response(data) if use_serverless else data
+            if openai_resp is None:
+                logger.error(f"[RunPod] Serverless job did not complete: status={data.get('status')}, error={data.get('error')}")
+                return None
+            choice = openai_resp["choices"][0]
             content = choice["message"]["content"]
             finish_reason = choice.get("finish_reason", "")
-            
+
             # vLLM reports finish_reason="length" when the response was cut
             # at max_tokens mid-JSON. Detecting it here lets us auto-retry with
-            # a larger budget instead of failing over to Anthropic/Emergent.
+            # a larger budget instead of failing over to Emergent LLM.
             if finish_reason == "length" and retry and not text_mode:
                 logger.warning(
                     f"[RunPod] finish_reason=length at {payload['max_tokens']} tokens — "
                     f"retrying with 20000 tokens"
                 )
                 payload["max_tokens"] = 20000
-                response = await client.post(url, json=payload, headers=headers)
+                request_body = {"input": payload} if use_serverless else payload
+                response = await client.post(url, json=request_body, headers=headers)
                 response.raise_for_status()
                 data = response.json()
-                choice = data["choices"][0]
+                openai_resp = _unwrap_runpod_response(data) if use_serverless else data
+                if openai_resp is None:
+                    logger.error(f"[RunPod] Retry did not complete: status={data.get('status')}")
+                    return None
+                choice = openai_resp["choices"][0]
                 content = choice["message"]["content"]
                 finish_reason = choice.get("finish_reason", "")
             

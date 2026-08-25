@@ -1,27 +1,23 @@
 """
 Vector Embeddings Service for Semantic Search
 Generates and stores embeddings for candidates and jobs.
-Uses OpenAI text-embedding-3-small model.
 
-FIXED:
-- _prepare_candidate_text() reads BOTH canonical and alias field names
-  via schema_normalizer helpers — no more empty embedding text for
-  Type A (key_skills/profile_summary) candidates
-- Embedding cache backed by Redis (via CacheService) instead of a
-  module-level dict — process-safe across all Gunicorn workers
+Uses BAAI/bge-m3 via RunPod Serverless TEI worker (OpenAI-compatible API).
+Migrated from OpenAI text-embedding-3-small (1536-dim) → BGE-M3 (1024-dim) in
+Phase 55.13 to eliminate the OpenAI dependency. The OpenAI SDK client is
+retained because RunPod's TEI worker exposes the same OpenAI-compat surface.
 """
 import os
 import hashlib
 import logging
-import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL      = "text-embedding-3-small"
-EMBEDDING_DIMENSIONS = 1536
+EMBEDDING_MODEL      = os.environ.get("RUNPOD_EMBED_MODEL", "BAAI/bge-m3")
+EMBEDDING_DIMENSIONS = 1024  # BGE-M3 fixed output dimension
 
 
 class EmbeddingService:
@@ -32,18 +28,19 @@ class EmbeddingService:
         self._initialized = False
 
     async def initialize(self) -> bool:
-        """Initialize the OpenAI client."""
+        """Initialize the RunPod BGE-M3 OpenAI-compatible client."""
         if self._initialized:
             return True
 
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if api_key:
-            self.client       = AsyncOpenAI(api_key=api_key)
+        api_key  = os.environ.get("RUNPOD_API_KEY")
+        base_url = os.environ.get("RUNPOD_EMBED_URL")
+        if api_key and base_url:
+            self.client       = AsyncOpenAI(api_key=api_key, base_url=base_url)
             self._initialized = True
-            logger.info("Embedding service initialized with OpenAI API")
+            logger.info(f"Embedding service initialized with RunPod BGE-M3 ({base_url})")
             return True
         else:
-            logger.warning("OPENAI_API_KEY not set — embeddings disabled")
+            logger.warning("RUNPOD_API_KEY or RUNPOD_EMBED_URL not set — embeddings disabled")
             return False
 
     # ── Text preparation — schema-aware ──────────────────────────────────
@@ -164,7 +161,6 @@ class EmbeddingService:
             response  = await self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
                 input=text,
-                dimensions=EMBEDDING_DIMENSIONS,
             )
             embedding = response.data[0].embedding
 
@@ -188,7 +184,6 @@ class EmbeddingService:
             response   = await self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
                 input=texts,
-                dimensions=EMBEDDING_DIMENSIONS,
             )
             embeddings = [None] * len(texts)
             for item in response.data:
@@ -257,7 +252,7 @@ class EmbeddingService:
         try:
             if not self._initialized:
                 if not await self.initialize():
-                    return {"status": "disabled", "reason": "OPENAI_API_KEY not configured"}
+                    return {"status": "disabled", "reason": "RUNPOD_API_KEY or RUNPOD_EMBED_URL not configured"}
 
             test_embedding = await self.generate_embedding("test")
             if test_embedding and len(test_embedding) == EMBEDDING_DIMENSIONS:

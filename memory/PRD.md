@@ -153,6 +153,48 @@ old-user identity.
   * Result: `100% (6/6)` backend, `100%` frontend. Zero issues.
 
 
+### Phase 55.14 — RunPod Serverless migration Part 1: embeddings + Qwen (2026-08)
+
+Deployed two RunPod Serverless endpoints replacing the legacy persistent-pod
+architecture + the OpenAI embeddings dependency.
+
+**RunPod endpoints deployed (both verified):**
+- Qwen 2.5-14B-Instruct-AWQ via vLLM Worker → `35e0541j25dgd4`, 3 workers ready, 1.4s response via `/runsync`.
+- BAAI/bge-m3 via TEI Worker → `mhc1o1xgkkmkbj`, 1024-dim vectors via `/openai/v1/embeddings`, ~0.9s warm response.
+- First BGE-M3 deploy failed (raw HuggingFace TEI image doesn't work as a RunPod handler); user redeployed with proper RunPod-compatible embedding worker.
+
+**Code refactor:**
+- `services/embeddings.py` — swapped `OPENAI_API_KEY` + `text-embedding-3-small` (1536-dim) → `RUNPOD_API_KEY` + `RUNPOD_EMBED_URL` + `BAAI/bge-m3` (1024-dim). Same `AsyncOpenAI` client since RunPod TEI is OpenAI-compat. `dimensions` param removed (not supported by BGE-M3).
+- `services/llm_fallback_service.py` — added serverless route via `/v2/{endpoint_id}/runsync` with envelope-unwrap helper `_unwrap_runpod_response()`. Auto-selects serverless when `RUNPOD_QWEN_ENDPOINT_ID` is set, else falls back to legacy pod. Both paths speak identical OpenAI chat-completions payload.
+- `.env` — added `RUNPOD_API_KEY`, `RUNPOD_QWEN_ENDPOINT_ID`, `RUNPOD_QWEN_MODEL`, `RUNPOD_EMBED_URL`, `RUNPOD_EMBED_MODEL`. Legacy pod vars kept until sync daemon is removed.
+
+**Backfill script:**
+- New `/app/backend/scripts/backfill_bge_embeddings.py` — resumable, batched (32 texts/req), max 8 concurrent, filters docs by missing-or-wrong-dim vector, writes `embedding_model="BAAI/bge-m3"` + `embedding_updated_at` for future migrations.
+- Smoke test: 50 docs embedded in 4.6s = ~11 docs/sec on 1 RunPod worker. Full 170K backfill projection: ~4 hours single-worker, ~1 hour if user scales RunPod max_workers to 4.
+- Estimated cost: **$0.30-$0.50** one-time (single worker) or ~$1 (four workers).
+
+**Verified working end-to-end (via `python -c` against production DB):**
+- Single embed: 1024-dim, `first3=[-0.045, 0.019, -0.014]`.
+- Batch embed of 3 texts: all 1024 dims.
+- `check_health` returns `{status:healthy, model:BAAI/bge-m3, dimensions:1024}`.
+- Qwen chat via serverless: `_call_runpod_vllm(user_prompt="Reply: OK", text_mode=True)` → `{'content': 'OK'}` in 1.4s.
+- Backend `/api/health` returns 0 route import failures after restart.
+
+**Still on the OpenAI-key legacy path (not migrated this session):**
+- `routes/cv_upload.py:189` — CV parser LLM call.
+- `routes/extension.py:679` — extension fallback LLM parser (when DOM fields missing).
+- `services/llm_service.py` — Groq → OpenRouter → Claude fallback (unused legacy service, safe to delete in next pass).
+- `routes/health.py:74-138` — OpenAI health check reporting.
+- `config.py:37-44` + `mongo_production_override.py` — auto-injects `OPENAI_API_KEY` (still needed for the two direct-call routes above).
+
+**Deferred until backfill runs + legacy paths migrate:**
+- Run `python -m scripts.backfill_bge_embeddings` (est. 1-4 hours; can be run as background job).
+- Migrate `cv_upload.py` + `extension.py` LLM calls to `llm_fallback_service._call_runpod_vllm()`.
+- Delete `services/llm_service.py`, `services/groq_ai_service.py`, `services/groq_service.py` (all currently unused after migration).
+- Remove from `.env`: `OPENAI_API_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`, `OPENROUTER_API_KEY`, `OPENROUTER_FREE_MODEL`, `LOCAL_LLM_URL`, `LOCAL_LLM_MODEL`, `USE_GROQ_ENRICHMENT`, `RUNPOD_ACCOUNT_API_KEY` (401 daemon).
+- Remove `services/runpod_sync_service.py` entirely (serverless URLs are stable, no sync needed).
+
+
 ### Phase 55.13 — server.py quirk fixes + LLM consolidation prep (2026-08)
 
 Follow-up to Phase 55.12. Fixed the 4 pre-existing quirks that the regression
