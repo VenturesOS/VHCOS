@@ -907,50 +907,45 @@ async def extract_jd_text_from_file(
             detail=f"Unsupported file format '{file_ext}'. Use PDF, DOC, DOCX, or TXT"
         )
     
-    # Save file temporarily
-    file_path = UPLOAD_DIR / f"jd_{uuid.uuid4()}.{file_ext}"
+    # Read file bytes once — extract text in memory to avoid pod-local
+    # ephemeral storage. Only PDF/TXT/DOC/DOCX supported.
+    content = await jd_file.read()
     try:
-        async with aiofiles.open(file_path, "wb") as f:
-            content = await jd_file.read()
-            await f.write(content)
-        
         raw_text = ""
         extraction_method = ""
-        
+
         # Extract text based on file type
         if file_ext == "pdf":
             try:
-                doc = fitz.open(str(file_path))
+                doc = fitz.open(stream=content, filetype="pdf")
                 for page in doc:
                     raw_text += page.get_text()
                 doc.close()
                 extraction_method = "pdf_fitz"
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Failed to extract text from PDF: {str(e)}")
-                
+
         elif file_ext == "txt":
             try:
-                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                    raw_text = await f.read()
+                raw_text = content.decode("utf-8", errors="ignore")
                 extraction_method = "txt_read"
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Failed to read text file: {str(e)}")
-                
+
         elif file_ext in ["doc", "docx"]:
             try:
                 from utils.doc_extractor import extract_text_from_word
-                file_content = file_path.read_bytes()
-                raw_text = extract_text_from_word(file_content, jd_file.filename)
+                raw_text = extract_text_from_word(content, jd_file.filename)
                 extraction_method = "doc_extractor"
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Failed to extract text from DOC/DOCX: {str(e)}")
-        
+
         if not raw_text.strip():
             raise HTTPException(status_code=400, detail="No text could be extracted from the file. The file may be empty or contain only images.")
-        
+
         # Log extraction for audit
         logging.info(f"JD text extracted by {current_user['name']} ({current_user['role']}) - method: {extraction_method}, chars: {len(raw_text)}")
-        
+
         return {
             "success": True,
             "extracted_text": raw_text.strip(),
@@ -962,11 +957,9 @@ async def extract_jd_text_from_file(
             "extracted_by_role": current_user["role"],
             "extracted_at": datetime.now(timezone.utc).isoformat()
         }
-        
+
     finally:
-        # Clean up temp file
-        if file_path.exists():
-            file_path.unlink(missing_ok=True)
+        pass
 
 
 @jobs_router.post("/jobs/parse-jd")
@@ -988,50 +981,42 @@ async def parse_job_description(
         if file_ext not in ["pdf", "doc", "docx", "txt"]:
             raise HTTPException(status_code=400, detail="Unsupported file format. Use PDF, DOC, DOCX, or TXT")
         
-        # Save file temporarily
-        file_path = UPLOAD_DIR / f"jd_{uuid.uuid4()}.{file_ext}"
+        # Read file bytes once — extract text in memory (no pod-local temp).
+        content = await jd_file.read()
         try:
-            async with aiofiles.open(file_path, "wb") as f:
-                content = await jd_file.read()
-                await f.write(content)
-            
             # Extract text based on file type
             if file_ext == "pdf":
                 try:
-                    doc = fitz.open(str(file_path))
+                    doc = fitz.open(stream=content, filetype="pdf")
                     for page in doc:
                         raw_text += page.get_text()
                     doc.close()
                 except Exception as pdf_err:
                     logging.error(f"PDF extraction error: {pdf_err}")
                     raise HTTPException(status_code=400, detail=f"Failed to extract text from PDF: {str(pdf_err)}")
-                    
+
             elif file_ext == "txt":
                 try:
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        raw_text = await f.read()
+                    raw_text = content.decode("utf-8", errors="ignore")
                 except Exception as txt_err:
                     logging.error(f"TXT read error: {txt_err}")
                     raise HTTPException(status_code=400, detail=f"Failed to read text file: {str(txt_err)}")
-                    
+
             else:
                 # For DOC/DOCX, use robust multi-strategy extractor
                 try:
                     from utils.doc_extractor import extract_text_from_word
-                    file_content = file_path.read_bytes()
-                    raw_text = extract_text_from_word(file_content, jd_file.filename)
+                    raw_text = extract_text_from_word(content, jd_file.filename)
                 except Exception as docx_err:
                     logging.error(f"DOCX extraction error: {docx_err}")
                     raise HTTPException(status_code=400, detail=f"Failed to extract text from DOC/DOCX: {str(docx_err)}")
-            
+
             # Validate extracted text
             if not raw_text or not raw_text.strip():
                 raise HTTPException(status_code=400, detail="No text could be extracted from the file. The file may be empty or contain only images.")
-                
+
         finally:
-            # Clean up temp file
-            if file_path.exists():
-                file_path.unlink(missing_ok=True)
+            pass
     
     elif jd_text:
         raw_text = jd_text

@@ -83,17 +83,6 @@ class FakeCollection:
         return UpdateResult(1, 1, upserted)
 
 
-class FakeDB:
-    def __init__(self):
-        self.candidate_bank = FakeCollection()
-        self.jobs = FakeCollection()
-        self.screening_sessions = FakeCollection()
-        self.screening_tasks = FakeCollection()
-        self.edges = FakeCollection()
-
-
-
-
 class FakeCursor:
     def __init__(self, docs):
         self._docs = list(docs)

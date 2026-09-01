@@ -331,7 +331,7 @@ async def extension_checkin(
     if manifest_path and manifest_path.exists():
         import json
         try: latest = json.loads(manifest_path.read_text()).get("version")
-        except: pass
+        except Exception: pass
     return {
         "ok": True,
         "latest_version": latest,

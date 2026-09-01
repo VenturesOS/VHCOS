@@ -36,6 +36,11 @@ NEMOTRON_API_KEY = os.environ.get("NEMOTRON_API_KEY")
 NEMOTRON_BASE_URL = os.environ.get("NEMOTRON_BASE_URL", "https://integrate.api.nvidia.com/v1")
 NEMOTRON_MODEL = os.environ.get("NEMOTRON_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
 
+# ── OpenAI GPT-OSS-120B via NVIDIA NIM (Phase 55.18: Layer-1 fallback, 2026-08) ──
+# Same NVIDIA NIM account/key as Nemotron. Different model family = uncorrelated
+# failure mode when Nemotron's cluster is degraded. Free tier same as Nemotron.
+GPT_OSS_MODEL = os.environ.get("GPT_OSS_MODEL", "openai/gpt-oss-120b")
+
 # ── RunPod configuration (Phase 55.13: serverless preferred over legacy pod) ──
 # Serverless (new, primary): uses /v2/{endpoint_id}/runsync — stable URL, per-second billing
 RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
@@ -293,6 +298,73 @@ async def _call_nemotron(system_prompt: str, user_prompt: str, temperature: floa
         return None
     except Exception as e:
         logger.error(f"[Nemotron] Unexpected error: {e} — cascading to RunPod pod")
+        return None
+
+
+async def _call_gpt_oss(system_prompt: str, user_prompt: str, temperature: float = 0, text_mode: bool = False) -> Optional[Dict]:
+    """
+    Call OpenAI GPT-OSS-120B via build.nvidia.com NIM (Phase 55.18 Layer-1).
+
+    Same NVIDIA NIM endpoint as Nemotron — reuses NEMOTRON_API_KEY and
+    NEMOTRON_BASE_URL. Different model family (OpenAI) = uncorrelated
+    failure when Nemotron's Ultra-550B cluster is degraded.
+
+    Returns {"content": str} on success, None on any failure (rate limit,
+    timeout, network, HTTP 5xx) so the caller cascades to Layer 2 (RunPod).
+    """
+    if not NEMOTRON_API_KEY:
+        return None
+
+    url = f"{NEMOTRON_BASE_URL.rstrip('/')}/chat/completions"
+    payload = {
+        "model": GPT_OSS_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": 16000,
+        "stream": False,
+        # GPT-OSS supports reasoning-effort tuning. For pure JSON extraction
+        # we want direct output, not chain-of-thought — set to "low" to
+        # minimise token waste and latency.
+        "reasoning_effort": "low",
+    }
+    if not text_mode:
+        payload["response_format"] = {"type": "json_object"}
+
+    headers = {
+        "Authorization": f"Bearer {NEMOTRON_API_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    try:
+        logger.info(f"[GPT-OSS] Calling {GPT_OSS_MODEL} (mode={'text' if text_mode else 'json'})...")
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            if response.status_code == 429:
+                logger.warning("[GPT-OSS] Rate limit (429) — cascading to RunPod pod")
+                return None
+            if response.status_code >= 500:
+                logger.warning(f"[GPT-OSS] Server error {response.status_code} — cascading")
+                return None
+            response.raise_for_status()
+            data = response.json()
+
+        choice = data["choices"][0]
+        content = choice["message"]["content"]
+        finish_reason = choice.get("finish_reason", "")
+        logger.info(f"[GPT-OSS] Response received ({len(content)} chars, finish={finish_reason})")
+        return {"content": content, "finish_reason": finish_reason}
+    except httpx.TimeoutException:
+        logger.warning("[GPT-OSS] Request timeout — cascading to RunPod pod")
+        return None
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"[GPT-OSS] HTTP {e.response.status_code}: {e.response.text[:200]} — cascading")
+        return None
+    except Exception as e:
+        logger.error(f"[GPT-OSS] Unexpected error: {e} — cascading to RunPod pod")
         return None
 
 
@@ -1280,12 +1352,52 @@ GENERAL RULES:
                 await _log_extraction_event(None, candidate_name, "nvidia_nemotron_550b", True, fallback_chain, elapsed)
                 return result
             else:
-                logger.warning(f"[Layer0-Nemotron] Half-empty result for {candidate_name} — cascading to RunPod pod")
+                logger.warning(f"[Layer0-Nemotron] Half-empty result for {candidate_name} — cascading to GPT-OSS")
                 fallback_chain.append("nemotron_quality_fail")
         else:
             fallback_chain.append("nemotron_call_fail")
 
-    # LAYER 1: RunPod vLLM (Qwen 14B) — self-hosted
+    # ── LAYER 1: OpenAI GPT-OSS-120B via NVIDIA NIM (Phase 55.18) ──
+    # Free tier, same account as Nemotron. Different model family means an
+    # NVIDIA cluster degradation for Nemotron doesn't necessarily hit GPT-OSS.
+    # Same quality gate as Nemotron — half-empty results cascade to Qwen.
+    if NEMOTRON_API_KEY:
+        fallback_chain.append("openai_gpt_oss_120b")
+        gpt_oss_response = await _call_gpt_oss(system_prompt, user_prompt)
+        if gpt_oss_response:
+            content = _extract_json_from_response(gpt_oss_response["content"])
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                try:
+                    from json_repair import repair_json
+                    result = repair_json(content, return_objects=True)
+                    if not isinstance(result, dict):
+                        result = None
+                except Exception:
+                    result = None
+            if isinstance(result, dict) and result.get("name") and (
+                (isinstance(result.get("key_skills"), list) and len(result["key_skills"]) >= 1)
+                or (isinstance(result.get("work_experience"), list) and len(result["work_experience"]) >= 1)
+                or result.get("current_employer")
+                or result.get("experience_years") is not None
+            ):
+                result = _fix_experience_from_raw_text(result, raw_text)
+                result = _fix_work_experience_durations(result)
+                result = _regex_backfill_critical(result, raw_text)
+                result["_extraction_source"] = "openai_gpt_oss_120b"
+                result["source"] = "openai_gpt_oss_120b"
+                elapsed = int((time.time() - start_time) * 1000)
+                logger.info(f"[Layer1-GPT-OSS] SUCCESS for {candidate_name} ({elapsed}ms)")
+                await _log_extraction_event(None, candidate_name, "openai_gpt_oss_120b", True, fallback_chain, elapsed)
+                return result
+            else:
+                logger.warning(f"[Layer1-GPT-OSS] Half-empty result for {candidate_name} — cascading to RunPod pod")
+                fallback_chain.append("gpt_oss_quality_fail")
+        else:
+            fallback_chain.append("gpt_oss_call_fail")
+
+    # LAYER 2: RunPod vLLM (Qwen 14B) — self-hosted paid pod
     if RUNPOD_VLLM_URL and not runpod_skip:
         fallback_chain.append("runpod_qwen14b")
         llm_response = await _call_runpod_vllm(system_prompt, user_prompt)
@@ -1299,11 +1411,11 @@ GENERAL RULES:
                 result["_extraction_source"] = "runpod_qwen14b"
                 result["source"] = "runpod_qwen14b"
                 elapsed = int((time.time() - start_time) * 1000)
-                logger.info(f"[Layer1-RunPod] SUCCESS for {candidate_name} ({elapsed}ms)")
+                logger.info(f"[Layer2-RunPod] SUCCESS for {candidate_name} ({elapsed}ms)")
                 await _log_extraction_event(None, candidate_name, "runpod_qwen14b", True, fallback_chain, elapsed)
                 return result
             except json.JSONDecodeError as e:
-                logger.error(f"[Layer1-RunPod] JSON decode error: {e} (content length: {len(content)})")
+                logger.error(f"[Layer2-RunPod] JSON decode error: {e} (content length: {len(content)})")
                 # Use json_repair library as nuclear fallback
                 try:
                     from json_repair import repair_json
@@ -1320,13 +1432,13 @@ GENERAL RULES:
                         result["_extraction_source"] = "runpod_qwen14b"
                         result["source"] = "runpod_qwen14b"
                         elapsed = int((time.time() - start_time) * 1000)
-                        logger.info(f"[Layer1-RunPod] SUCCESS (json_repair) for {candidate_name} ({elapsed}ms)")
+                        logger.info(f"[Layer2-RunPod] SUCCESS (json_repair) for {candidate_name} ({elapsed}ms)")
                         await _log_extraction_event(None, candidate_name, "runpod_qwen14b", True, fallback_chain, elapsed)
                         return result
                     else:
-                        logger.warning(f"[Layer1-RunPod] json_repair returned empty/invalid dict for {candidate_name} — will attempt temp=0.1 retry")
+                        logger.warning(f"[Layer2-RunPod] json_repair returned empty/invalid dict for {candidate_name} — will attempt temp=0.1 retry")
                 except Exception as repair_err:
-                    logger.error(f"[Layer1-RunPod] json_repair also failed: {repair_err}")
+                    logger.error(f"[Layer2-RunPod] json_repair also failed: {repair_err}")
 
                 # ── Final retry at temperature=0.1 with truncated prompt ──
                 # Qwen occasionally emits malformed JSON mid-stream at temp=0 due to
@@ -1352,11 +1464,11 @@ GENERAL RULES:
                             result["_extraction_source"] = "runpod_qwen14b_retry"
                             result["source"] = "runpod_qwen14b_retry"
                             elapsed = int((time.time() - start_time) * 1000)
-                            logger.info(f"[Layer1-RunPod] SUCCESS (temp=0.1 retry) for {candidate_name} ({elapsed}ms)")
+                            logger.info(f"[Layer2-RunPod] SUCCESS (temp=0.1 retry) for {candidate_name} ({elapsed}ms)")
                             await _log_extraction_event(None, candidate_name, "runpod_qwen14b_retry", True, fallback_chain, elapsed)
                             return result
                 except Exception as retry_err:
-                    logger.error(f"[Layer1-RunPod] Temp-retry also failed: {retry_err}")
+                    logger.error(f"[Layer2-RunPod] Temp-retry also failed: {retry_err}")
 
                 # ── Third retry: text_mode (no response_format), shortest prompt ──
                 # Some vLLM 0.6+ builds garble JSON even at temp=0.1 when the
@@ -1378,15 +1490,15 @@ GENERAL RULES:
                             result["_extraction_source"] = "runpod_qwen14b_bare"
                             result["source"] = "runpod_qwen14b_bare"
                             elapsed = int((time.time() - start_time) * 1000)
-                            logger.info(f"[Layer1-RunPod] SUCCESS (bare-text retry) for {candidate_name} ({elapsed}ms)")
+                            logger.info(f"[Layer2-RunPod] SUCCESS (bare-text retry) for {candidate_name} ({elapsed}ms)")
                             await _log_extraction_event(None, candidate_name, "runpod_qwen14b_bare", True, fallback_chain, elapsed)
                             return result
                 except Exception as bare_err:
-                    logger.error(f"[Layer1-RunPod] Bare-text retry also failed: {bare_err}")
+                    logger.error(f"[Layer2-RunPod] Bare-text retry also failed: {bare_err}")
                 fallback_chain.append("runpod_json_fail")
         else:
             fallback_chain.append("runpod_call_fail")
-        logger.warning(f"[Layer1-RunPod] Failed for {candidate_name}, checking pod reachability before fallback...")
+        logger.warning(f"[Layer2-RunPod] Failed for {candidate_name}, checking pod reachability before fallback...")
 
     # ══════════════════════════════════════════════════════════════════════
     # STRICT QWEN-ONLY POLICY (requested 2026-05-01)
@@ -1436,11 +1548,11 @@ GENERAL RULES:
             result["_extraction_source"] = "emergent_haiku_4_5"
             result["source"] = "emergent_haiku_4_5"
             elapsed = int((time.time() - start_time) * 1000)
-            logger.info(f"[Layer2-Emergent] SUCCESS for {candidate_name} ({elapsed}ms)")
+            logger.info(f"[Layer3-Emergent] SUCCESS for {candidate_name} ({elapsed}ms)")
             await _log_extraction_event(None, candidate_name, "emergent_haiku_4_5", True, fallback_chain, elapsed)
             return result
         except json.JSONDecodeError as e:
-            logger.error(f"[Layer2-Emergent] JSON decode error: {e}")
+            logger.error(f"[Layer3-Emergent] JSON decode error: {e}")
             try:
                 from json_repair import repair_json
                 repaired = repair_json(content, return_objects=True)
@@ -1452,7 +1564,7 @@ GENERAL RULES:
                     result["_extraction_source"] = "emergent_haiku_4_5"
                     result["source"] = "emergent_haiku_4_5"
                     elapsed = int((time.time() - start_time) * 1000)
-                    logger.info(f"[Layer2-Emergent] SUCCESS (json_repair) for {candidate_name} ({elapsed}ms)")
+                    logger.info(f"[Layer3-Emergent] SUCCESS (json_repair) for {candidate_name} ({elapsed}ms)")
                     await _log_extraction_event(None, candidate_name, "emergent_haiku_4_5", True, fallback_chain, elapsed)
                     return result
             except Exception:

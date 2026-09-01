@@ -1,5 +1,12 @@
 # VHC Talent OS
 
+> **2026-08 Phase 55.18** — Layer-1 free-fallback added: `openai/gpt-oss-120b` via NVIDIA NIM.
+> Extraction chain is now `Nemotron-Ultra-550B → GPT-OSS-120B → RunPod Qwen 14B → Emergent Haiku`.
+> Two free NVIDIA-NIM tiers before any paid call. Same `NEMOTRON_API_KEY` reused (new env var:
+> `GPT_OSS_MODEL=openai/gpt-oss-120b`). Frontend badge "GO" (amber) added for the new source.
+> Pilot script `scripts/pilot_nemotron_embed_vs_bgem3.py` shipped to evaluate replacing BGE-M3
+> embeddings with `nvidia/nemotron-3-embed-1b` (2048-d) — migration criterion ≥95% top-20 overlap.
+>
 > **2026-08 Platform Audit session**: full system audit + auto-fixes shipped (Candidate Bank
 > 20s→1-4s, autocomplete 219s→ms, SSE 401 storm fixed, /api/extension/job-info added,
 > jobs-for-candidate 15min→seconds warm, 3 duplicate routes + commercials/hierarchy dead code

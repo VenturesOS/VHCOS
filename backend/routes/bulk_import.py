@@ -1813,7 +1813,6 @@ async def bulk_attach_cv(
     matched = 0
     failed = 0
     import asyncio as _aio
-    import re
     sem = _aio.Semaphore(3)  # Process 3 files concurrently
 
     async def process_file(cv_file):

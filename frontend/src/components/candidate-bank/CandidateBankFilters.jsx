@@ -106,7 +106,7 @@ export function CandidateBankFilters({
           {filters.capturedAfter && <FilterChip label={`After: ${filters.capturedAfter}`} onRemove={() => updateFilter('capturedAfter', '')} />}
           {filters.capturedBefore && <FilterChip label={`Before: ${filters.capturedBefore}`} onRemove={() => updateFilter('capturedBefore', '')} />}
           {filters.mandateId && <FilterChip label={`Mandate: ${mandateLabel}`} onRemove={() => updateFilter('mandateId', '')} />}
-          {filters.aiSource && <FilterChip label={`AI: ${filters.aiSource === 'nvidia' ? 'NVIDIA Nemotron' : filters.aiSource === 'runpod' ? 'RunPod' : filters.aiSource === 'anthropic' ? 'Anthropic' : filters.aiSource === 'emergent' ? 'Emergent' : filters.aiSource}`} onRemove={() => updateFilter('aiSource', '')} />}
+          {filters.aiSource && <FilterChip label={`AI: ${filters.aiSource === 'nvidia' ? 'NVIDIA Nemotron' : filters.aiSource === 'gpt_oss' ? 'GPT-OSS 120B' : filters.aiSource === 'runpod' ? 'RunPod' : filters.aiSource === 'anthropic' ? 'Anthropic' : filters.aiSource === 'emergent' ? 'Emergent' : filters.aiSource}`} onRemove={() => updateFilter('aiSource', '')} />}
           {filters.smartTags && <FilterChip label={`Tags: ${filters.smartTags}`} onRemove={() => updateFilter('smartTags', '')} />}
           <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 ml-1 underline" data-testid="clear-all-filters">Clear all</button>
         </div>
@@ -226,6 +226,7 @@ export function CandidateBankFilters({
                   <SelectContent>
                     <SelectItem value="_all">All Sources</SelectItem>
                     <SelectItem value="nvidia">N - NVIDIA Nemotron 550B</SelectItem>
+                    <SelectItem value="gpt_oss">GO - OpenAI GPT-OSS 120B</SelectItem>
                     <SelectItem value="runpod">Q - RunPod (Qwen)</SelectItem>
                     <SelectItem value="anthropic">AC - Anthropic Direct</SelectItem>
                     <SelectItem value="emergent">EC - Emergent Key</SelectItem>

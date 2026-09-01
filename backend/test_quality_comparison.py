@@ -121,7 +121,7 @@ async def test_single(profile, provider):
         data = json.loads(content)
         data["_time"] = elapsed
         return data
-    except:
+    except Exception:
         return {"error": True, "raw": resp["content"][:200], "time": elapsed}
 
 async def main():

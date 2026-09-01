@@ -306,29 +306,33 @@ async def public_parse_resume(
     if not check["valid"]:
         raise HTTPException(status_code=400, detail=check["reason"])
 
-    # Save resume file temporarily
-    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    filename = f"temp_{timestamp}_{resume.filename}"
-    upload_dir = ROOT_DIR / "uploads"
-    upload_dir.mkdir(exist_ok=True)
-    
-    file_path = upload_dir / filename
-    async with aiofiles.open(file_path, 'wb') as f:
-        await f.write(content)
-    
-    # Extract resume text
+    # Extract resume text in memory (no pod-local temp file).
     resume_text = ""
     try:
-        if filename.lower().endswith('.pdf'):
-            doc = fitz.open(str(file_path))
+        if resume.filename.lower().endswith('.pdf'):
+            doc = fitz.open(stream=content, filetype="pdf")
             for page in doc:
                 resume_text += page.get_text()
             doc.close()
-        elif filename.lower().endswith('.txt'):
-            async with aiofiles.open(file_path, 'r', errors='ignore') as f:
-                resume_text = await f.read()
+        elif resume.filename.lower().endswith('.txt'):
+            resume_text = content.decode("utf-8", errors="ignore")
     except Exception as e:
         logger.error(f"[PARSE] Resume text extraction failed: {e}")
+
+    # Persist for the two-step /apply flow — always via R2 (durable, deploy-safe).
+    # When R2 isn't configured, we return resume_filename=None and the client
+    # must re-upload the file to /public/apply as a single-step submission.
+    filename = None
+    resume_url = None
+    if R2_ENABLED:
+        try:
+            r2_key = generate_r2_key("public-parse", resume.filename)
+            r2_result = await upload_to_r2(content, r2_key, resume.content_type or "application/octet-stream")
+            if r2_result.get("storage") == "r2":
+                filename = r2_key
+                resume_url = r2_result.get("url")
+        except Exception as e:
+            logger.warning(f"[PARSE] R2 upload failed — client must re-upload at /apply: {e}")
     
     # Parse resume with AI
     parsed_data = {}
@@ -476,23 +480,15 @@ async def public_apply(
     }
     
     # Handle resume - either from parse step or new upload
-    upload_dir = ROOT_DIR / "uploads"
-    upload_dir.mkdir(exist_ok=True)
     filename = None
     resume_text = ""
     parsed_data = {}
     r2_metadata = None  # R2 storage metadata (populated if R2 upload succeeds)
-    
+
     if resume_filename:
-        # Two-step flow: resume was already parsed, use the existing file
-        file_path = (upload_dir / resume_filename).resolve()
-        if not str(file_path).startswith(str(upload_dir.resolve())):
-            raise HTTPException(status_code=400, detail="Invalid filename")
-        if not file_path.exists():
-            raise HTTPException(status_code=400, detail="Resume file not found. Please re-upload your resume.")
+        # Two-step flow: resume was already uploaded to R2 during /parse-resume.
+        # resume_filename here is the R2 key. Download bytes from R2 for text extraction.
         filename = resume_filename
-        
-        # Use candidate-provided data from review step (already corrected by candidate)
         parsed_data = {
             "name": name,
             "email": email,
@@ -502,25 +498,25 @@ async def public_apply(
             "experience_years": experience_years or 0,
             "location": location
         }
-        
-        # Extract resume text for storage
         try:
-            if filename.lower().endswith('.pdf'):
-                doc = fitz.open(str(file_path))
-                for page in doc:
-                    resume_text += page.get_text()
-                doc.close()
-            elif filename.lower().endswith('.txt'):
-                async with aiofiles.open(file_path, 'r', errors='ignore') as f:
-                    resume_text = await f.read()
+            from services.r2_storage import get_file_from_r2
+            content = await get_file_from_r2(resume_filename)
+            if content:
+                if resume_filename.lower().endswith('.pdf'):
+                    doc = fitz.open(stream=content, filetype="pdf")
+                    for page in doc:
+                        resume_text += page.get_text()
+                    doc.close()
+                elif resume_filename.lower().endswith('.txt'):
+                    resume_text = content.decode("utf-8", errors="ignore")
         except Exception as e:
-            logger.error(f"[PUBLIC APPLY] Resume text extraction failed: {e}")
+            logger.error(f"[PUBLIC APPLY] R2 download / text extraction failed: {e}")
     elif resume:
         # Single-step flow: new resume upload, parse it now
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         safe_email = email.replace('@', '_at_').replace('.', '_')
         filename = f"public_{safe_email}_{timestamp}_{resume.filename}"
-        
+
         # Read file content once
         content = await resume.read()
 
@@ -529,14 +525,8 @@ async def public_apply(
         check = await validate_upload(content, resume.filename, client_ip)
         if not check["valid"]:
             raise HTTPException(status_code=400, detail=check["reason"])
-        
-        # Save locally first (needed for text extraction)
-        file_path = upload_dir / filename
-        async with aiofiles.open(file_path, 'wb') as f:
-            await f.write(content)
-        
-        # Upload to R2 if enabled (async, for permanent storage)
-        r2_metadata = None
+
+        # Upload to R2 for permanent storage (deploy-safe, no pod-local write).
         if R2_ENABLED:
             try:
                 r2_key = generate_r2_key("applications", resume.filename)
@@ -553,21 +543,20 @@ async def public_apply(
                     }
                     logging.info(f"[R2] Resume uploaded to R2: {r2_key}")
             except Exception as e:
-                logging.error(f"[R2] Upload failed, using local storage: {e}")
-        
-        # Extract resume text
+                logging.error(f"[R2] Upload failed: {e}")
+
+        # Extract resume text in memory (no pod-local temp).
         try:
-            if filename.lower().endswith('.pdf'):
-                doc = fitz.open(str(file_path))
+            if resume.filename.lower().endswith('.pdf'):
+                doc = fitz.open(stream=content, filetype="pdf")
                 for page in doc:
                     resume_text += page.get_text()
                 doc.close()
-            elif filename.lower().endswith('.txt'):
-                async with aiofiles.open(file_path, 'r', errors='ignore') as f:
-                    resume_text = await f.read()
+            elif resume.filename.lower().endswith('.txt'):
+                resume_text = content.decode("utf-8", errors="ignore")
         except Exception as e:
             logger.error(f"[PUBLIC APPLY] Resume text extraction failed: {e}")
-        
+
         # Parse resume with AI
         try:
             from services.matching_engine import parse_resume_with_ai
@@ -757,31 +746,43 @@ async def public_upload_resume(
     if not check["valid"]:
         raise HTTPException(status_code=400, detail=check["reason"])
 
-    # Save and process similar to apply
+    # Upload to R2 (durable, deploy-safe). Text extraction in memory.
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     safe_email = email.replace('@', '_at_').replace('.', '_')
     filename = f"pool_{safe_email}_{timestamp}_{resume.filename}"
-    upload_dir = ROOT_DIR / "uploads"
-    upload_dir.mkdir(exist_ok=True)
-    
-    file_path = upload_dir / filename
-    async with aiofiles.open(file_path, 'wb') as f:
-        await f.write(content)
-    
-    # Extract and parse
+    resume_url = None
+    r2_metadata = None
+    if R2_ENABLED:
+        try:
+            r2_key = generate_r2_key("talent-pool", resume.filename)
+            r2_result = await upload_to_r2(content, r2_key, resume.content_type or "application/octet-stream")
+            if r2_result.get("storage") == "r2":
+                filename = r2_key
+                resume_url = r2_result.get("url")
+                r2_metadata = {
+                    "storage": "r2",
+                    "r2_key": r2_key,
+                    "original_filename": resume.filename,
+                    "content_type": resume.content_type,
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                    "uploaded_by_role": "public"
+                }
+        except Exception as e:
+            logging.error(f"[R2] Talent-pool upload failed: {e}")
+
+    # Extract and parse (in-memory)
     resume_text = ""
     try:
-        if filename.lower().endswith('.pdf'):
-            doc = fitz.open(str(file_path))
+        if resume.filename.lower().endswith('.pdf'):
+            doc = fitz.open(stream=content, filetype="pdf")
             for page in doc:
                 resume_text += page.get_text()
             doc.close()
-        elif filename.lower().endswith('.txt'):
-            async with aiofiles.open(file_path, 'r', errors='ignore') as f:
-                resume_text = await f.read()
+        elif resume.filename.lower().endswith('.txt'):
+            resume_text = content.decode("utf-8", errors="ignore")
     except Exception as e:
         logger.error(f"Resume extraction failed: {e}")
-    
+
     parsed_data = {}
     try:
         from services.matching_engine import parse_resume_with_ai
@@ -790,9 +791,9 @@ async def public_upload_resume(
             parsed_data = result.get("data", {})
     except Exception as e:
         logger.error(f"AI parsing failed: {e}")
-    
+
     now = datetime.now(timezone.utc).isoformat()
-    
+
     # Check existing
     existing = await db.candidate_bank.find_one({"email": email}, {"_id": 0})
     if existing:
@@ -803,7 +804,8 @@ async def public_upload_resume(
                 "name": parsed_data.get("name") or name,
                 "skills": parsed_data.get("skills", existing.get("skills", [])),
                 "experience_years": parsed_data.get("experience_years", existing.get("experience_years", 0)),
-                "resume_url": f"/api/uploads/{filename}",
+                "resume_url": resume_url,
+                "r2_metadata": r2_metadata,
                 "updated_at": now
             }}
         )
@@ -822,7 +824,8 @@ async def public_upload_resume(
             "education": parsed_data.get("education", []),
             "location": parsed_data.get("location"),
             "source": "talent_pool_upload",
-            "resume_url": f"/api/uploads/{filename}",
+            "resume_url": resume_url,
+            "r2_metadata": r2_metadata,
             "resume_text": resume_text[:5000],
             "is_active": True,
             "linked_user_id": None,

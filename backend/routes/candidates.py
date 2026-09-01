@@ -2847,6 +2847,28 @@ async def delete_candidate_note(
 
 
 
+@router.get("/smart-tag-options")
+async def get_smart_tag_options(
+    db=Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Get all unique smart tags currently in use, for filter dropdowns.
+
+    NOTE: This literal route MUST stay declared BEFORE `/{candidate_id}` —
+    FastAPI/Starlette dispatches on registration order, and the parameterized
+    route would otherwise swallow `/smart-tag-options` as a candidate_id lookup.
+    """
+    pipeline = [
+        {"$match": {"smart_tags": {"$exists": True, "$ne": []}}},
+        {"$unwind": "$smart_tags"},
+        {"$group": {"_id": "$smart_tags", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 50},
+    ]
+    results = await db.candidate_bank.aggregate(pipeline).to_list(50)
+    return [{"tag": r["_id"], "count": r["count"]} for r in results]
+
+
 @router.get("/{candidate_id}")
 async def get_candidate(
     candidate_id: str,
@@ -3350,23 +3372,4 @@ async def regenerate_smart_tags(
         updated += 1
 
     return {"message": f"Regenerated smart tags for {updated} candidates", "updated": updated}
-
-
-@router.get("/smart-tag-options")
-async def get_smart_tag_options(
-    db=Depends(get_db),
-    user=Depends(get_current_user),
-):
-    """Get all unique smart tags currently in use, for filter dropdowns."""
-    pipeline = [
-        {"$match": {"smart_tags": {"$exists": True, "$ne": []}}},
-        {"$unwind": "$smart_tags"},
-        {"$group": {"_id": "$smart_tags", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 50},
-    ]
-    results = await db.candidate_bank.aggregate(pipeline).to_list(50)
-    return [{"tag": r["_id"], "count": r["count"]} for r in results]
-
-
 

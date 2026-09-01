@@ -43,6 +43,7 @@ async def get_settings(current_user: dict = Depends(require_role(["admin"]))):
             "resume_size_limit_mb": 5
         }
         await db.settings.insert_one(settings)
+        settings.pop("_id", None)
     return settings
 
 
