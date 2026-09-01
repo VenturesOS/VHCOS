@@ -21,6 +21,7 @@ const SOURCE_STYLES = {
 };
 
 const AI_SOURCE_BADGES = {
+  nvidia_nemotron_550b: { label: 'N', bg: 'bg-emerald-100 text-emerald-700 border border-emerald-300', title: 'NVIDIA Nemotron 550B' },
   runpod_qwen14b: { label: 'Q', bg: 'bg-sky-100 text-sky-700 border border-sky-300', title: 'RunPod Qwen 14B' },
   anthropic_direct_haiku: { label: 'AC', bg: 'bg-violet-100 text-violet-700 border border-violet-300', title: 'Anthropic Direct (Haiku)' },
   claude_haiku_4_5_emergent: { label: 'EC', bg: 'bg-emerald-100 text-emerald-700 border border-emerald-300', title: 'Emergent Key (Haiku)' },

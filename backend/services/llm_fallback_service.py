@@ -29,6 +29,13 @@ EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 ANTHROPIC_API_KEY = None
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
+# ── NVIDIA Nemotron configuration (Phase 55.17: primary LLM, 2026-08) ──
+# 550B MoE via build.nvidia.com NIM. OpenAI-compatible. Free tier ~40 rpm;
+# rate-limit hits cascade to RunPod pod (Layer 1) → Emergent Haiku (Layer 2).
+NEMOTRON_API_KEY = os.environ.get("NEMOTRON_API_KEY")
+NEMOTRON_BASE_URL = os.environ.get("NEMOTRON_BASE_URL", "https://integrate.api.nvidia.com/v1")
+NEMOTRON_MODEL = os.environ.get("NEMOTRON_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
+
 # ── RunPod configuration (Phase 55.13: serverless preferred over legacy pod) ──
 # Serverless (new, primary): uses /v2/{endpoint_id}/runsync — stable URL, per-second billing
 RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
@@ -221,6 +228,74 @@ async def _call_emergent_llm_haiku(system_prompt: str, user_prompt: str, tempera
     except Exception as e:
         logger.error(f"[Haiku] Claude Haiku 4.5 error: {e}")
         return None
+
+
+async def _call_nemotron(system_prompt: str, user_prompt: str, temperature: float = 0, text_mode: bool = False) -> Optional[Dict]:
+    """
+    Call NVIDIA Nemotron-3-Ultra 550B (a55b MoE) via build.nvidia.com NIM.
+
+    OpenAI-compatible API — same payload shape as Qwen serverless, direct
+    POST to /chat/completions. Returns {"content": str} on success, None on
+    any failure (rate limit, timeout, network, HTTP 5xx) so the caller
+    cascades to Layer 1 (RunPod pod) without user impact.
+    """
+    if not NEMOTRON_API_KEY:
+        return None
+
+    url = f"{NEMOTRON_BASE_URL.rstrip('/')}/chat/completions"
+    payload = {
+        "model": NEMOTRON_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": 16000,
+        "stream": False,
+        # Nemotron-3-Ultra is a reasoning model — for pure extraction we don't
+        # want it burning tokens on chain-of-thought. Disable thinking so we
+        # get direct JSON output like Qwen does.
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    if not text_mode:
+        # Nemotron-3-Ultra supports OpenAI response_format
+        payload["response_format"] = {"type": "json_object"}
+
+    headers = {
+        "Authorization": f"Bearer {NEMOTRON_API_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    try:
+        logger.info(f"[Nemotron] Calling {NEMOTRON_MODEL} (mode={'text' if text_mode else 'json'})...")
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            if response.status_code == 429:
+                logger.warning("[Nemotron] Rate limit (429) — cascading to RunPod pod")
+                return None
+            if response.status_code >= 500:
+                logger.warning(f"[Nemotron] Server error {response.status_code} — cascading")
+                return None
+            response.raise_for_status()
+            data = response.json()
+
+        choice = data["choices"][0]
+        content = choice["message"]["content"]
+        finish_reason = choice.get("finish_reason", "")
+        logger.info(f"[Nemotron] Response received ({len(content)} chars, finish={finish_reason})")
+        return {"content": content, "finish_reason": finish_reason}
+    except httpx.TimeoutException:
+        logger.warning("[Nemotron] Request timeout — cascading to RunPod pod")
+        return None
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"[Nemotron] HTTP {e.response.status_code}: {e.response.text[:200]} — cascading")
+        return None
+    except Exception as e:
+        logger.error(f"[Nemotron] Unexpected error: {e} — cascading to RunPod pod")
+        return None
+
+
 
 
 async def _call_runpod_vllm(system_prompt: str, user_prompt: str, temperature: float = 0, retry: bool = True, disable_guided: bool = False, text_mode: bool = False) -> Optional[Dict]:
@@ -1166,6 +1241,49 @@ GENERAL RULES:
 
     # Runtime skip flag — set RUNPOD_SKIP=1 to bypass RunPod (e.g., when pod is known down)
     runpod_skip = os.environ.get("RUNPOD_SKIP", "").lower() in ("1", "true", "yes")
+
+    # ── LAYER 0: NVIDIA Nemotron-3-Ultra 550B (primary since Phase 55.17) ──
+    # Same system+user prompts as Qwen. Fails soft: rate-limit/timeout/parse
+    # errors cascade silently to Layer 1 (RunPod pod). Success is tagged
+    # `nvidia_nemotron_550b` — badge "N" (emerald) in the admin UI.
+    if NEMOTRON_API_KEY:
+        fallback_chain.append("nvidia_nemotron_550b")
+        nemo_response = await _call_nemotron(system_prompt, user_prompt)
+        if nemo_response:
+            content = _extract_json_from_response(nemo_response["content"])
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                # Try json_repair before cascading
+                try:
+                    from json_repair import repair_json
+                    result = repair_json(content, return_objects=True)
+                    if not isinstance(result, dict):
+                        result = None
+                except Exception:
+                    result = None
+            # Quality gate: must have name AND (skills or experience or current_employer)
+            # If Nemotron returns half-empty JSON, we cascade to Qwen just like a hard failure.
+            if isinstance(result, dict) and result.get("name") and (
+                (isinstance(result.get("key_skills"), list) and len(result["key_skills"]) >= 1)
+                or (isinstance(result.get("work_experience"), list) and len(result["work_experience"]) >= 1)
+                or result.get("current_employer")
+                or result.get("experience_years") is not None
+            ):
+                result = _fix_experience_from_raw_text(result, raw_text)
+                result = _fix_work_experience_durations(result)
+                result = _regex_backfill_critical(result, raw_text)
+                result["_extraction_source"] = "nvidia_nemotron_550b"
+                result["source"] = "nvidia_nemotron_550b"
+                elapsed = int((time.time() - start_time) * 1000)
+                logger.info(f"[Layer0-Nemotron] SUCCESS for {candidate_name} ({elapsed}ms)")
+                await _log_extraction_event(None, candidate_name, "nvidia_nemotron_550b", True, fallback_chain, elapsed)
+                return result
+            else:
+                logger.warning(f"[Layer0-Nemotron] Half-empty result for {candidate_name} — cascading to RunPod pod")
+                fallback_chain.append("nemotron_quality_fail")
+        else:
+            fallback_chain.append("nemotron_call_fail")
 
     # LAYER 1: RunPod vLLM (Qwen 14B) — self-hosted
     if RUNPOD_VLLM_URL and not runpod_skip:
