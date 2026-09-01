@@ -1,406 +1,410 @@
 /**
- * TalentSearchABPage — Hybrid vs Lexical side-by-side search.
+ * LLM Extraction A/B Testing — Nemotron vs RunPod Qwen quality comparison.
  *
- * One-week A/B validation surface for the new BGE+cross-encoder hybrid
- * retrieval. Powers `/talent-search` route. Once the team confirms
- * hybrid quality, we cut over Advanced Search to use the same endpoint
- * (`talentSearchAPI.search`) and retire the lexical-only path.
+ * Repurposed from the old Hybrid-vs-Lexical search page. Powers the
+ * `/(admin|recruiter|employer)/talent-search` route (kept the same URL to
+ * avoid breaking sidebar links, but the sidebar label is now "LLM A/B Testing").
  *
- * Design:
- *   - One search box (natural language, e.g. "senior react developer in bangalore")
- *   - Two result columns: hybrid (left, default) + lexical (right, current)
- *   - Per-column timing footer so we can compare latency too
- *   - Click "View profile" → opens candidate-bank deep-link
- *   - Click "Shortlist to mandate" → existing matching/shortlist flow
+ * Flow:
+ *   1. Admin clicks "Start comparison" — POST /api/admin/llm-ab/run
+ *   2. Backend spawns background task that runs first 100 extension-captured
+ *      candidates through Nemotron + Qwen in parallel
+ *   3. Frontend polls /status/{id} every 3s, shows progress
+ *   4. When done, renders extensive quality report + per-candidate diff table
  */
-import { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { talentSearchAPI, jobAPI, matchingAPI } from '../../lib/api';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Sparkles, FileText, Briefcase, MapPin, Clock, ExternalLink, Loader2, GitCompare, Zap, X } from 'lucide-react';
+import { Play, RefreshCw, Loader2, XCircle, Award, GitCompare, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
 
-const EXAMPLE_QUERIES = [
-  'senior react developer with AWS in Bangalore',
-  'machine learning engineer fintech 5 to 10 years',
-  'finance manager Mumbai CA qualified',
-  'devops engineer kubernetes terraform remote',
-  'product manager B2B SaaS Hyderabad',
-];
+const API = process.env.REACT_APP_BACKEND_URL;
 
-function ResultCard({ candidate, onShortlist, onView, columnVariant }) {
-  const isHybrid = columnVariant === 'hybrid';
+const api = axios.create({ baseURL: API });
+api.interceptors.request.use((cfg) => {
+  const t = localStorage.getItem('token');
+  if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  return cfg;
+});
+
+// ── Report renderers ────────────────────────────────────────────────────
+
+function MetricCard({ label, nemotron, qwen, better = 'higher', unit = '', testid }) {
+  const nemNum = Number(nemotron);
+  const qwNum = Number(qwen);
+  let nemWins = false, qwWins = false;
+  if (Number.isFinite(nemNum) && Number.isFinite(qwNum) && nemNum !== qwNum) {
+    if (better === 'higher') { nemWins = nemNum > qwNum; qwWins = qwNum > nemNum; }
+    else                     { nemWins = nemNum < qwNum; qwWins = qwNum < nemNum; }
+  }
   return (
-    <Card
-      className="mb-3 hover:shadow-md transition-shadow"
-      data-testid={`talent-search-${columnVariant}-result-${candidate.id}`}
-    >
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3
-                className="font-semibold text-base truncate"
-                data-testid={`talent-search-name-${candidate.id}`}
-              >
-                {candidate.name || '(unnamed)'}
-              </h3>
-              {isHybrid && candidate.score != null && (
-                <Badge variant="secondary" className="text-xs shrink-0">
-                  {Number(candidate.score).toFixed(3)}
-                </Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground truncate">
-              <Briefcase className="inline h-3 w-3 mr-1" />
-              {candidate.current_designation || '—'}
-              {candidate.current_employer ? ` @ ${candidate.current_employer}` : ''}
-            </p>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
-              {candidate.current_location && (
-                <span><MapPin className="inline h-3 w-3 mr-0.5" />{candidate.current_location}</span>
-              )}
-              {candidate.experience_years != null && (
-                <span><Clock className="inline h-3 w-3 mr-0.5" />{candidate.experience_years} yrs</span>
-              )}
-              {candidate.industry && (
-                <span className="truncate max-w-[160px]">{candidate.industry}</span>
-              )}
-            </div>
-            {Array.isArray(candidate.skills) && candidate.skills.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {candidate.skills.slice(0, 6).map((s, i) => (
-                  <span
-                    key={i}
-                    className="text-[10px] bg-muted px-1.5 py-0.5 rounded"
-                  >
-                    {typeof s === 'string' ? s : s?.name || ''}
-                  </span>
-                ))}
-              </div>
-            )}
-            {Array.isArray(candidate.match_reasons) && candidate.match_reasons.length > 0 && (
-              <div
-                className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-dashed border-muted-foreground/20"
-                data-testid={`talent-search-reasons-${candidate.id}`}
-                title="Why this candidate matched"
-              >
-                <span className="text-[10px] text-muted-foreground/80 font-medium mr-0.5">
-                  Why match:
-                </span>
-                {candidate.match_reasons.map((r, i) => {
-                  const palette = {
-                    semantic: 'bg-violet-50 text-violet-700 border-violet-200',
-                    filter:   'bg-emerald-50 text-emerald-700 border-emerald-200',
-                    keyword:  'bg-amber-50 text-amber-800 border-amber-200',
-                    model:    'bg-sky-50 text-sky-700 border-sky-200',
-                  };
-                  const cls = palette[r.kind] || 'bg-muted text-muted-foreground border-muted';
-                  return (
-                    <span
-                      key={i}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}
-                      data-testid={`talent-search-reason-${candidate.id}-${i}`}
-                    >
-                      {r.label}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-1 shrink-0">
-            <Button
-              size="sm" variant="outline"
-              onClick={() => onView(candidate)}
-              data-testid={`talent-search-view-${candidate.id}`}
-            >
-              <ExternalLink className="h-3 w-3 mr-1" />View
-            </Button>
-            <Button
-              size="sm" variant="ghost"
-              onClick={() => onShortlist(candidate)}
-              data-testid={`talent-search-shortlist-${candidate.id}`}
-            >
-              Shortlist
-            </Button>
-          </div>
+    <div className="p-3 rounded-md border bg-white" data-testid={testid}>
+      <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide">{label}</div>
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className={`flex flex-col p-2 rounded ${nemWins ? 'bg-emerald-50 border border-emerald-200' : ''}`}>
+          <span className="text-[10px] text-slate-500">Nemotron</span>
+          <span className="font-mono font-semibold text-slate-900">{nemotron}{unit}</span>
         </div>
-      </CardContent>
-    </Card>
+        <div className={`flex flex-col p-2 rounded ${qwWins ? 'bg-emerald-50 border border-emerald-200' : ''}`}>
+          <span className="text-[10px] text-slate-500">Qwen</span>
+          <span className="font-mono font-semibold text-slate-900">{qwen}{unit}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export default function TalentSearchABPage() {
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [jobs, setJobs] = useState([]);
-  const [shortlistJobId, setShortlistJobId] = useState('');
-  // Mandate-driven search — when set, sends `job_id` and lets the backend
-  // synthesise the query from title + skills + JD snippet. The shortlist
-  // target defaults to the same mandate so one click can ship a candidate.
-  const [mandateId, setMandateId] = useState('');
+function FieldFillTable({ data }) {
+  const rows = Object.entries(data);
+  return (
+    <div className="border rounded-md overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-100">
+          <tr>
+            <th className="text-left px-3 py-2">Field</th>
+            <th className="text-right px-3 py-2">Nemotron %</th>
+            <th className="text-right px-3 py-2">Qwen %</th>
+            <th className="text-right px-3 py-2 w-24">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([field, r]) => {
+            const delta = r.nemotron_pct - r.qwen_pct;
+            const winner = Math.abs(delta) < 0.5 ? '=' : delta > 0 ? 'N' : 'Q';
+            return (
+              <tr key={field} className="border-t hover:bg-slate-50" data-testid={`fill-row-${field}`}>
+                <td className="px-3 py-1.5 font-mono text-xs">{field}</td>
+                <td className={`text-right px-3 py-1.5 font-mono ${delta > 0.5 ? 'text-emerald-700 font-semibold' : ''}`}>{r.nemotron_pct}%</td>
+                <td className={`text-right px-3 py-1.5 font-mono ${delta < -0.5 ? 'text-emerald-700 font-semibold' : ''}`}>{r.qwen_pct}%</td>
+                <td className={`text-right px-3 py-1.5 font-mono ${winner === 'N' ? 'text-emerald-600' : winner === 'Q' ? 'text-sky-600' : 'text-slate-400'}`}>
+                  {winner === '=' ? '–' : `${winner} +${Math.abs(delta).toFixed(1)}`}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    jobAPI.getAll().then(r => setJobs(r.data || [])).catch(() => {});
-  }, []);
+function ArrayRichnessTable({ data }) {
+  return (
+    <div className="border rounded-md overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-100">
+          <tr>
+            <th className="text-left px-3 py-2">Array field</th>
+            <th className="text-right px-3 py-2">N avg</th>
+            <th className="text-right px-3 py-2">Q avg</th>
+            <th className="text-right px-3 py-2">N zero%</th>
+            <th className="text-right px-3 py-2">Q zero%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(data).map(([field, r]) => (
+            <tr key={field} className="border-t hover:bg-slate-50" data-testid={`richness-row-${field}`}>
+              <td className="px-3 py-1.5 font-mono text-xs">{field}</td>
+              <td className="text-right px-3 py-1.5 font-mono">{r.nemotron_avg}</td>
+              <td className="text-right px-3 py-1.5 font-mono">{r.qwen_avg}</td>
+              <td className="text-right px-3 py-1.5 font-mono text-xs text-slate-500">{r.nemotron_zero_pct}%</td>
+              <td className="text-right px-3 py-1.5 font-mono text-xs text-slate-500">{r.qwen_zero_pct}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-  const handleMandateSelect = useCallback((jobId) => {
-    setMandateId(jobId);
-    setShortlistJobId(jobId);  // pre-populate shortlist target
-    // Show the human-readable hint in the query box (the backend will
-    // overwrite this with the full JD-derived query). Helps recruiters
-    // remember which mandate they're working with.
-    const job = jobs.find(j => j.id === jobId);
-    if (job) {
-      setQuery(`Mandate: ${job.title}${job.company_name ? ` — ${job.company_name}` : ''}`);
-    }
-  }, [jobs]);
+function AgreementTable({ data }) {
+  return (
+    <div className="border rounded-md overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-100">
+          <tr>
+            <th className="text-left px-3 py-2">Field</th>
+            <th className="text-right px-3 py-2">Agree %</th>
+            <th className="text-right px-3 py-2 text-xs text-slate-500">Compared</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(data).map(([field, r]) => (
+            <tr key={field} className="border-t hover:bg-slate-50" data-testid={`agreement-row-${field}`}>
+              <td className="px-3 py-1.5 font-mono text-xs">{field}</td>
+              <td className={`text-right px-3 py-1.5 font-mono ${r.agree_pct >= 90 ? 'text-emerald-700' : r.agree_pct >= 70 ? 'text-amber-600' : 'text-red-600'} font-semibold`}>
+                {r.agree_pct}%
+              </td>
+              <td className="text-right px-3 py-1.5 text-xs text-slate-500">{r.agreed}/{r.compared}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-  const clearMandate = useCallback(() => {
-    setMandateId('');
-    setQuery('');
-  }, []);
-
-  const handleSearch = useCallback(async (e) => {
-    e?.preventDefault?.();
-    if (!mandateId && (!query.trim() || query.trim().length < 3)) {
-      toast.error('Pick a mandate or type a query (3+ chars)');
-      return;
-    }
-    setLoading(true);
-    setResult(null);
-    try {
-      const payload = {
-        limit: 25,
-        compare_lexical: true,
-      };
-      if (mandateId) {
-        payload.job_id = mandateId;
-      } else {
-        payload.query = query.trim();
-      }
-      const res = await talentSearchAPI.search(payload);
-      setResult(res.data);
-      // If backend synthesised a query from the mandate, show it.
-      if (mandateId && res.data?.query) {
-        setQuery(res.data.query.slice(0, 200) + (res.data.query.length > 200 ? '…' : ''));
-      }
-    } catch (err) {
-      console.error('[TalentSearch] failed', err);
-      toast.error(err?.response?.data?.detail || 'Search failed');
-    } finally {
-      setLoading(false);
-    }
-  }, [query, mandateId]);
-
-  const handleView = (c) => {
-    navigate(`/candidate-bank?candidateId=${c.id}`);
-  };
-
-  const handleShortlist = useCallback(async (c) => {
-    if (!shortlistJobId) {
-      toast.error('Pick a mandate above first');
-      return;
-    }
-    try {
-      await matchingAPI.shortlistCandidate(c.id, shortlistJobId);
-      toast.success(`Shortlisted ${c.name}`);
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Shortlist failed');
-    }
-  }, [shortlistJobId]);
-
-  const hybridCount = result?.hybrid?.length || 0;
-  const lexicalCount = result?.lexical?.length || 0;
+function Report({ report }) {
+  if (!report || report.error) {
+    return <p className="text-sm text-slate-500">{report?.error || 'No report'}</p>;
+  }
+  const { success, latency, response_size, field_fill_rate, array_richness,
+          agreement, winner_per_candidate, critical_missing, sample_size, verdict } = report;
 
   return (
-    <div className="space-y-4" data-testid="talent-search-page">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Sparkles className="h-7 w-7 text-primary" />
-          Talent Search <span className="text-sm font-normal text-muted-foreground">(A/B preview)</span>
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Hybrid (BGE semantic + cross-encoder rerank + LTR) vs the current
-          regex-only search. Side-by-side for 1 week — pick a query, see
-          which side surfaces the right candidates.
-        </p>
+    <div className="space-y-6">
+      {/* Verdict banner */}
+      <div className="p-4 rounded-md bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center gap-3" data-testid="ab-verdict-banner">
+        <Award className="h-6 w-6 text-emerald-400 shrink-0" />
+        <div>
+          <div className="text-xs uppercase tracking-wide text-slate-400 mb-0.5">Overall verdict — {sample_size} candidates</div>
+          <div className="font-semibold text-base">{verdict}</div>
+        </div>
       </div>
 
-      {/* Search box */}
+      {/* Top-line metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Success rate" nemotron={`${success.nemotron_success_pct}%`} qwen={`${success.qwen_success_pct}%`} testid="metric-success" />
+        <MetricCard label="Avg latency" nemotron={latency.nemotron.avg_ms} qwen={latency.qwen.avg_ms} unit="ms" better="lower" testid="metric-latency" />
+        <MetricCard label="p95 latency" nemotron={latency.nemotron.p95_ms} qwen={latency.qwen.p95_ms} unit="ms" better="lower" testid="metric-p95" />
+        <MetricCard label="JSON-repair fallback" nemotron={success.nemotron_json_repaired} qwen={success.qwen_json_repaired} better="lower" testid="metric-json-repair" />
+        <MetricCard label="Avg response chars" nemotron={response_size.nemotron.avg} qwen={response_size.qwen.avg} testid="metric-size" />
+        <MetricCard label="Critical-field missing" nemotron={`${critical_missing.nemotron_pct}%`} qwen={`${critical_missing.qwen_pct}%`} better="lower" testid="metric-missing" />
+        <MetricCard label="Winner: Nemotron" nemotron={winner_per_candidate.nemotron} qwen={winner_per_candidate.qwen} testid="metric-winner-nemo" />
+        <MetricCard label="Ties / Both-failed" nemotron={winner_per_candidate.tie} qwen={winner_per_candidate.both_failed} better="lower" testid="metric-ties" />
+      </div>
+
+      {/* Field-fill rate */}
+      <div>
+        <h3 className="font-semibold text-slate-900 mb-2 text-sm">Field coverage — % of successful extractions that populated each field</h3>
+        <FieldFillTable data={field_fill_rate} />
+      </div>
+
+      {/* Array richness */}
+      <div>
+        <h3 className="font-semibold text-slate-900 mb-2 text-sm">Array richness — avg count + % of records with zero items</h3>
+        <ArrayRichnessTable data={array_richness} />
+      </div>
+
+      {/* Agreement */}
+      <div>
+        <h3 className="font-semibold text-slate-900 mb-2 text-sm">Value agreement — % of candidates where both models returned the same value</h3>
+        <AgreementTable data={agreement} />
+      </div>
+    </div>
+  );
+}
+
+// ── Page ────────────────────────────────────────────────────────────────
+
+export default function TalentSearchABPage() {
+  const [sampleSize, setSampleSize] = useState(100);
+  const [sourceFilter, setSourceFilter] = useState('extension');
+  const [starting, setStarting] = useState(false);
+  const [run, setRun] = useState(null);           // full run doc from server
+  const [history, setHistory] = useState([]);
+  const [selectedRunId, setSelectedRunId] = useState(null);
+  const pollRef = useRef(null);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const r = await api.get('/api/admin/llm-ab/runs');
+      setHistory(r.data || []);
+    } catch (e) { /* silent */ }
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  const stopPoll = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
+  const pollStatus = useCallback((runId) => {
+    stopPoll();
+    const tick = async () => {
+      try {
+        const r = await api.get(`/api/admin/llm-ab/status/${runId}`);
+        setRun(r.data);
+        if (['completed', 'failed', 'cancelled'].includes(r.data?.status)) {
+          stopPoll();
+          loadHistory();
+          if (r.data.status === 'completed') toast.success('A/B run complete');
+          if (r.data.status === 'failed') toast.error(`A/B run failed: ${r.data.error || 'unknown'}`);
+        }
+      } catch (e) { /* keep trying */ }
+    };
+    tick();
+    pollRef.current = setInterval(tick, 3000);
+  }, [loadHistory]);
+
+  useEffect(() => () => stopPoll(), []);
+
+  const handleStart = useCallback(async () => {
+    if (sampleSize < 1 || sampleSize > 500) { toast.error('Sample size must be 1-500'); return; }
+    setStarting(true);
+    try {
+      const r = await api.post('/api/admin/llm-ab/run', null, {
+        params: { sample_size: sampleSize, source_filter: sourceFilter },
+      });
+      toast.success(`Run started — ${r.data.run_id.slice(0, 8)}`);
+      setSelectedRunId(r.data.run_id);
+      pollStatus(r.data.run_id);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to start run');
+    } finally { setStarting(false); }
+  }, [sampleSize, sourceFilter, pollStatus]);
+
+  const handleCancel = useCallback(async () => {
+    if (!selectedRunId) return;
+    try {
+      await api.post(`/api/admin/llm-ab/cancel/${selectedRunId}`);
+      toast.success('Cancellation requested');
+    } catch (e) { toast.error('Cancel failed'); }
+  }, [selectedRunId]);
+
+  const handleView = useCallback((runId) => {
+    setSelectedRunId(runId);
+    pollStatus(runId);
+  }, [pollStatus]);
+
+  const isRunning = run?.status === 'running' || run?.status === 'pending';
+  const progressPct = run?.progress?.total ? Math.round(100 * (run.progress.done || 0) / run.progress.total) : 0;
+
+  return (
+    <div className="max-w-7xl mx-auto p-6 space-y-6" data-testid="llm-ab-page">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-900">
+            <GitCompare className="h-6 w-6 text-emerald-600" />
+            LLM Extraction A/B
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Runs the first N extension-captured candidates through <b>Nemotron 550B</b> and <b>RunPod Qwen 14B</b> and generates a detailed quality report.
+          </p>
+        </div>
+      </div>
+
+      {/* Controls */}
       <Card>
-        <CardContent className="p-4">
-          {/* Mandate selector — when set, the backend builds the query from JD */}
-          <div className="flex items-center gap-2 mb-3 text-sm">
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Search for a mandate:</span>
-            <Select value={mandateId} onValueChange={handleMandateSelect}>
-              <SelectTrigger className="h-8 w-[340px]" data-testid="talent-search-mandate-select">
-                <SelectValue placeholder="Pick a running mandate (or type free-text below)" />
-              </SelectTrigger>
-              <SelectContent>
-                {jobs
-                  .filter(j => !j.status || ['open', 'active', 'in_progress', 'running'].includes(String(j.status).toLowerCase()))
-                  .map((j) => (
-                    <SelectItem key={j.id} value={j.id}>
-                      {j.title}{j.company_name ? ` — ${j.company_name}` : ''}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-            {mandateId && (
-              <Button
-                size="sm" variant="ghost"
-                onClick={clearMandate}
-                className="h-7 px-2"
-                data-testid="talent-search-clear-mandate"
-              >
-                <X className="h-3 w-3" />Clear
+        <CardHeader><CardTitle className="text-base">Start a new run</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Sample size</label>
+              <Input type="number" min={1} max={500} value={sampleSize}
+                     onChange={(e) => setSampleSize(parseInt(e.target.value || '0'))}
+                     className="w-32" data-testid="ab-sample-size" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Source filter (regex)</label>
+              <Input value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+                     placeholder="extension" className="w-64" data-testid="ab-source-filter" />
+            </div>
+            <Button onClick={handleStart} disabled={starting || isRunning}
+                    className="bg-slate-900 hover:bg-slate-800 text-white" data-testid="ab-start-btn">
+              {starting ? <Loader2 className="animate-spin h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+              Start comparison
+            </Button>
+            {isRunning && (
+              <Button variant="outline" onClick={handleCancel} data-testid="ab-cancel-btn">
+                <XCircle className="h-4 w-4 mr-1" /> Cancel
               </Button>
             )}
-          </div>
-
-          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
-            <Input
-              autoFocus
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); if (mandateId) setMandateId(''); }}
-              placeholder={mandateId
-                ? "Mandate query will be auto-built from the JD"
-                : "e.g. senior react developer with AWS in Bangalore"}
-              className="flex-1"
-              data-testid="talent-search-input"
-              disabled={!!mandateId && !!query.startsWith('Mandate: ')}
-            />
-            <Button
-              type="submit"
-              disabled={loading}
-              data-testid="talent-search-submit"
-            >
-              {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
-              Search
+            <Button variant="ghost" onClick={loadHistory} data-testid="ab-refresh-btn">
+              <RefreshCw className="h-4 w-4" />
             </Button>
-          </form>
-          <div className="flex flex-wrap gap-1 mt-2">
-            <span className="text-xs text-muted-foreground self-center mr-1">Try:</span>
-            {EXAMPLE_QUERIES.map((q, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => { setQuery(q); setMandateId(''); }}
-                className="text-xs px-2 py-0.5 rounded border hover:bg-muted"
-                data-testid={`talent-search-example-${i}`}
-              >
-                {q}
-              </button>
-            ))}
           </div>
-          <div className="flex items-center gap-2 mt-3 text-xs">
-            <span className="text-muted-foreground">Shortlist target mandate:</span>
-            <Select value={shortlistJobId} onValueChange={setShortlistJobId}>
-              <SelectTrigger className="h-8 w-[260px]" data-testid="talent-search-job-select">
-                <SelectValue placeholder="Pick a mandate to enable shortlisting…" />
-              </SelectTrigger>
-              <SelectContent>
-                {jobs.map((j) => (
-                  <SelectItem key={j.id} value={j.id}>
-                    {j.title}{j.company_name ? ` — ${j.company_name}` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <p className="text-xs text-slate-400 mt-3">
+            The run processes 5 candidates in parallel to stay under Nemotron's 40 rpm free tier.
+            Expect ~3–6 min for 100 candidates depending on Qwen pod cold-start.
+          </p>
         </CardContent>
       </Card>
 
-      {result && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* HYBRID column */}
-          <Card data-testid="talent-search-hybrid-column">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <span className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-amber-500" />
-                  Hybrid (new) — {hybridCount} results
-                </span>
-                <Badge variant="outline" className="text-xs">
-                  {result.took_ms?.hybrid || 0}ms
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 max-h-[70vh] overflow-y-auto">
-              {hybridCount === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">No hybrid matches.</p>
-              ) : (
-                result.hybrid.map((c) => (
-                  <ResultCard
-                    key={c.id || c.name}
-                    candidate={c}
-                    onShortlist={handleShortlist}
-                    onView={handleView}
-                    columnVariant="hybrid"
-                  />
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          {/* LEXICAL column */}
-          <Card data-testid="talent-search-lexical-column">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <span className="flex items-center gap-2">
-                  <GitCompare className="h-4 w-4 text-muted-foreground" />
-                  Lexical (current) — {lexicalCount} results
-                </span>
-                <Badge variant="outline" className="text-xs">
-                  {result.took_ms?.lexical || 0}ms
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 max-h-[70vh] overflow-y-auto">
-              {lexicalCount === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">No lexical matches.</p>
-              ) : (
-                (result.lexical || []).map((c) => (
-                  <ResultCard
-                    key={c.id || c.name}
-                    candidate={c}
-                    onShortlist={handleShortlist}
-                    onView={handleView}
-                    columnVariant="lexical"
-                  />
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Extracted-filters debug strip */}
-      {result?.filters && Object.values(result.filters).some(
-        (v) => v != null && (Array.isArray(v) ? v.length > 0 : true),
-      ) && (
+      {/* Active run / selected run */}
+      {run && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-              <FileText className="h-3 w-3" /> AI-extracted filters from your query
+          <CardHeader>
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>Run <span className="font-mono text-xs text-slate-500">{run.id?.slice(0, 8)}</span></span>
+              <Badge variant={
+                run.status === 'completed' ? 'default' :
+                run.status === 'failed' ? 'destructive' :
+                run.status === 'cancelled' ? 'secondary' : 'outline'
+              } data-testid="ab-status-badge">{run.status}</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <pre className="text-xs bg-muted/50 rounded p-2 overflow-x-auto">
-              {JSON.stringify(result.filters, null, 2)}
-            </pre>
+          <CardContent className="space-y-4">
+            {isRunning && (
+              <div>
+                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                  <span>Progress</span>
+                  <span data-testid="ab-progress-text">{run.progress?.done || 0} / {run.progress?.total || 0}</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div className="bg-emerald-500 h-full transition-all" style={{ width: `${progressPct}%` }} data-testid="ab-progress-bar" />
+                </div>
+              </div>
+            )}
+            {run.status === 'failed' && (
+              <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-semibold mb-0.5">Run failed</div>
+                  <div className="font-mono text-xs">{run.error}</div>
+                </div>
+              </div>
+            )}
+            {run.status === 'completed' && run.report && (
+              <Report report={run.report} />
+            )}
           </CardContent>
         </Card>
       )}
+
+      {/* History */}
+      <Card>
+        <CardHeader><CardTitle className="text-base">Recent runs</CardTitle></CardHeader>
+        <CardContent>
+          {history.length === 0 ? (
+            <p className="text-sm text-slate-500">No runs yet.</p>
+          ) : (
+            <div className="border rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="text-left px-3 py-2">Started</th>
+                    <th className="text-left px-3 py-2">By</th>
+                    <th className="text-left px-3 py-2">Status</th>
+                    <th className="text-right px-3 py-2">Sample</th>
+                    <th className="text-right px-3 py-2">Progress</th>
+                    <th className="text-left px-3 py-2">Verdict</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.id} className="border-t hover:bg-slate-50" data-testid={`ab-history-row-${h.id}`}>
+                      <td className="px-3 py-2 text-xs text-slate-500">{h.created_at?.slice(0, 19)?.replace('T', ' ')}</td>
+                      <td className="px-3 py-2 text-xs">{h.started_by_name || '—'}</td>
+                      <td className="px-3 py-2"><Badge variant="outline" className="text-xs">{h.status}</Badge></td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{h.sample_size}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{h.progress?.done ?? 0}/{h.progress?.total ?? 0}</td>
+                      <td className="px-3 py-2 text-xs">{h.report?.verdict?.slice(0, 60) || (h.error ? <span className="text-red-600">{h.error.slice(0, 60)}</span> : '—')}</td>
+                      <td className="px-3 py-2 text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleView(h.id)} data-testid={`ab-history-view-${h.id}`}>View</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

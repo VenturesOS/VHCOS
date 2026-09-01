@@ -92,6 +92,7 @@ talent_feedback_router = _safe_import("routes.talent_feedback", "router")
 # ── Asha agent v2.0.0 (2026-07-24) — ships DARK; controlled via AGENT_ENABLED env
 agent_router = _safe_import("routes.agent", "agent_router")
 extension_preview_router = _safe_import("routes.extension_preview", "extension_preview_router")
+llm_ab_router = _safe_import("routes.llm_ab", "llm_ab_router")
 contact_router = _safe_import("routes.contact", "router")
 blog_router = _safe_import("routes.blog", "router")
 seo_router = _safe_import("routes.seo", "router")
@@ -168,4 +169,5 @@ all_routers = [
     talent_feedback_router,
     agent_router,
     extension_preview_router,
+    llm_ab_router,
 ]

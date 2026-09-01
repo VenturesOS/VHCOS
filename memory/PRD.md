@@ -1,5 +1,13 @@
 # VHC Talent OS
 
+> **2026-08 Phase 55.19** — LLM Extraction A/B page shipped at `/admin/talent-search`
+> (repurposed from old Hybrid-vs-Lexical search comparison). Runs first N extension-captured
+> candidates through Nemotron + Qwen in parallel, generates extensive quality report
+> (success rate, latency p50/p95, per-field fill rate, array richness, value agreement,
+> per-candidate winner, verdict). Backend: `routes/llm_ab.py` + collection `llm_ab_runs`.
+> Sidebar renamed "Talent Search (A/B)" → "LLM A/B Testing". Nemotron badge restyled from
+> mint pill → solid black square with green `N`.
+>
 > **2026-08 Phase 55.18** — Layer-1 free-fallback added: `openai/gpt-oss-120b` via NVIDIA NIM.
 > Extraction chain is now `Nemotron-Ultra-550B → GPT-OSS-120B → RunPod Qwen 14B → Emergent Haiku`.
 > Two free NVIDIA-NIM tiers before any paid call. Same `NEMOTRON_API_KEY` reused (new env var:
