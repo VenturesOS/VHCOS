@@ -25,7 +25,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 const api = axios.create({ baseURL: API });
 api.interceptors.request.use((cfg) => {
-  const t = localStorage.getItem('token');
+  const t = localStorage.getItem('vhc_token');
   if (t) cfg.headers.Authorization = `Bearer ${t}`;
   return cfg;
 });
