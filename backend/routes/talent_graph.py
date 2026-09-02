@@ -51,6 +51,15 @@ async def similar_candidates(
     if role not in ("admin", "recruiter", "employer"):
         raise HTTPException(403, "Talent Graph requires recruiter/admin role")
 
+    # Fail-fast guard: if the seed has no embedding, skip the 168k-vector scan.
+    # Prevents worker exhaustion on unindexed candidates.
+    seed = await db.candidate_embeddings.find_one(
+        {"candidate_id": candidate_id},
+        {"_id": 0, "candidate_id": 1},
+    )
+    if not seed:
+        return {"seed": candidate_id, "matches": [], "count": 0, "reason": "no_embedding"}
+
     results = await find_similar_candidates(db, candidate_id, limit=limit)
     return {"seed": candidate_id, "matches": results, "count": len(results)}
 
@@ -121,6 +130,14 @@ async def match_job(
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
         raise HTTPException(404, f"Job {job_id} not found")
+
+    # Fail-fast: if the embedding coverage is zero we can't do semantic match.
+    # Cheap sanity check protects workers from the 168k-vector scan when nothing
+    # useful can come back anyway.
+    coverage = await db.candidate_embeddings.estimated_document_count()
+    if coverage == 0:
+        return {"job_id": job_id, "job_title": job.get("title") or job.get("job_title"),
+                "matches": [], "count": 0, "reason": "no_embeddings_indexed"}
 
     matches = await find_matching_candidates_for_job(db, job, limit=limit)
     return {
