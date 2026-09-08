@@ -1,3 +1,11 @@
+## Production verification completed — 2026-09-08
+
+- User successfully restarted **`vhc-backend`** (reported active) and copied the built frontend. New worker logs at 06:18 UTC confirm Super extraction success, enrichment metadata persistence, and normal extension capture processing. Ultra rate-limit HTTP429 correctly advances to the next provider.
+- Health-check command initially used the wrong hostname supplied by main: `app.ventureshrd.com` fails certificate hostname verification. No TLS configuration was modified and no insecure bypass used.
+- Main independently retrieved **`https://ventureshrd.com/api/health`** successfully: `status=healthy`, MongoDB OK, Redis OK with local backend, import_failures=0. Use this canonical root-domain health URL in future instructions.
+- Backend rollout is now verified in production. Frontend build/copy is confirmed by the user's guarded command completing before the curl error; actual badge appearance is left for user confirmation. No missed-profile bulk retries/backfills were initiated; normal capture/recapture processing continues.
+- `FULL GROQ` in this capture path is legacy log wording; the actual executed chain and saved source identify NVIDIA Ultra/Super/Emergent.
+
 ## Production terminal follow-up — 2026-09-08
 
 - Actual production systemd unit is **`vhc-backend.service`**, NOT `gunicorn.service`. Older runbooks naming gunicorn are obsolete for this host. Repo `/home/ubuntu/vhc-platform`, Python 3.12.3, frontend output `frontend/build/`, webroot `/var/www/html/`.
