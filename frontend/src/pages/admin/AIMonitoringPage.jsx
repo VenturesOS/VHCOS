@@ -6,6 +6,7 @@ import { Progress } from '../../components/ui/progress';
 import { Activity, Cpu, AlertTriangle, CheckCircle2, RefreshCw, PlayCircle, TrendingUp, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
+import { LLMProviderStatus } from '../../components/admin/LLMProviderStatus';
 
 const fmtTime = (iso) => {
   if (!iso) return '—';
@@ -42,7 +43,7 @@ export default function AIMonitoringPage() {
     try {
       const [b, h, s, j] = await Promise.all([
         api.get('/admin/llm/live-banner'),
-        api.get('/admin/runpod/health'),
+        api.get('/admin/llm/provider-status'),
         api.get('/admin/llm/failure-stats?hours=24'),
         api.get('/candidate-bank/data-quality/bulk-re-enrich/status'),
       ]);
@@ -85,9 +86,9 @@ export default function AIMonitoringPage() {
   const forceSync = async () => {
     setSyncing(true);
     try {
-      const r = await api.post('/admin/runpod/sync-now');
+      const r = await api.get('/admin/llm/provider-status');
       setHealth(r.data);
-      toast.success(`RunPod synced: ${r.data.vllm_reachable ? 'vLLM reachable' : 'unreachable'}`);
+      toast.success('Provider configuration refreshed');
     } catch (e) {
       toast.error('Sync failed — check backend logs');
     }
@@ -133,71 +134,15 @@ export default function AIMonitoringPage() {
           <div className="flex-1">
             <div className="font-semibold text-sm">{banner.message}</div>
             <div className="text-xs opacity-75 mt-0.5">
-              Pod: {banner.details?.pod_name || '—'} | Last sync: {fmtTime(banner.details?.last_sync_at)}
+              Pending: {banner.details?.pending || 0} | Failed: {banner.details?.failed || 0}
             </div>
           </div>
         </div>
       )}
 
-      {/* Top row — RunPod health + Qwen stats */}
+      {/* Top row — Provider configuration + routing stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* RunPod Health */}
-        <Card data-testid="runpod-health-card">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-indigo-600" /> RunPod vLLM
-            </CardTitle>
-            <Button size="sm" variant="outline" onClick={forceSync} disabled={syncing} data-testid="force-sync-btn">
-              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${syncing ? 'animate-spin' : ''}`} />
-              Sync Now
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Reachable</span>
-              {health?.vllm_reachable ? (
-                <Badge className="bg-green-100 text-green-800 border-green-300 gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> YES
-                </Badge>
-              ) : (
-                <Badge className="bg-red-100 text-red-800 border-red-300 gap-1">
-                  <AlertTriangle className="w-3 h-3" /> NO
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Pod</span>
-              <span className="font-mono text-xs truncate max-w-[200px]" title={health?.pod_id}>{health?.pod_id || '—'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">GPU</span>
-              <span className="font-medium">{health?.pod_machine_gpu || '—'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Status</span>
-              <Badge variant="outline" className="text-xs">{health?.pod_status || '—'}</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Model</span>
-              <span className="font-mono text-xs truncate max-w-[220px]">{health?.vllm_model || '—'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Auto-sync daemon</span>
-              <Badge variant={health?.auto_sync_enabled ? 'default' : 'secondary'}>
-                {health?.auto_sync_enabled ? 'ENABLED' : 'DISABLED (no API key)'}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t">
-              <span>Last sync</span>
-              <span>{fmtTime(health?.last_sync_at)}</span>
-            </div>
-            {health?.last_error && (
-              <div className="text-xs bg-red-50 text-red-700 rounded px-2 py-1.5" data-testid="runpod-error">
-                {health.last_error}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <LLMProviderStatus providers={health?.providers} refreshing={syncing} onRefresh={forceSync} />
 
         {/* LLM routing stats */}
         <Card data-testid="llm-stats-card">
@@ -213,22 +158,22 @@ export default function AIMonitoringPage() {
               <span className="font-semibold">{stats?.total_extractions?.toLocaleString() || 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Qwen 14B (primary)</span>
-              <span className="font-semibold text-green-700">{stats?.summary?.runpod_qwen14b_pct || 0}%</span>
+              <span className="text-slate-600">NVIDIA Nemotron (primary)</span>
+              <span className="font-semibold text-green-700">{stats?.summary?.nvidia_nemotron_pct || 0}%</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-600">Regex-only (cache)</span>
               <span className="font-semibold text-slate-700">{stats?.summary?.regex_only_pct || 0}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Anthropic (paid fallback)</span>
+              <span className="text-slate-600">Emergent Haiku (fallback)</span>
               <span className={`font-semibold ${stats?.summary?.anthropic_fallback_pct > 10 ? 'text-red-600' : 'text-slate-700'}`}>
                 {stats?.summary?.anthropic_fallback_pct || 0}% ({stats?.summary?.anthropic_fallback_count || 0})
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Qwen retry rescues</span>
-              <span className="font-semibold">{stats?.summary?.qwen_retry_rescues || 0}</span>
+              <span className="text-slate-600">Nemotron Super 120B fallback (%)</span>
+              <span className="font-semibold">{stats?.summary?.nemotron_super_pct || 0}</span>
             </div>
             <div className="pt-2 border-t">
               <div className="text-xs text-slate-500 mb-1.5">Full breakdown</div>
@@ -269,7 +214,7 @@ export default function AIMonitoringPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-slate-500 mb-3">
-            Re-runs the Qwen 14B pipeline on candidates with missing top-card fields (experience_years=0, CTC=null, notice_period=null). Dry-run first to see how many match.
+            Re-runs the NVIDIA → Nemotron Super 120B → Emergent pipeline on candidates with missing top-card fields (experience_years=0, CTC=null, notice_period=null). Dry-run first to see how many match.
           </p>
 
           {activeJob && (

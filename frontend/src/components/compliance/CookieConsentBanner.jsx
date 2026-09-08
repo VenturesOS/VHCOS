@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Shield, X, Settings2, Check } from 'lucide-react';
 import { Button } from '../ui/button';
 
-const API_URL = '';
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function CookieConsentBanner() {
   const [visible, setVisible] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const bannerRef = useRef(null);
+  const [bannerHeight, setBannerHeight] = useState(0);
   const [prefs, setPrefs] = useState({
     essential: true,
     analytics: false,
@@ -17,6 +19,15 @@ export default function CookieConsentBanner() {
     const stored = localStorage.getItem('vhc_cookie_consent');
     if (!stored) setVisible(true);
   }, []);
+
+  useEffect(() => {
+    if (!visible || !bannerRef.current) return;
+    const measure = () => setBannerHeight(bannerRef.current?.getBoundingClientRect().height || 0);
+    const observer = new ResizeObserver(measure);
+    observer.observe(bannerRef.current);
+    measure();
+    return () => observer.disconnect();
+  }, [visible, showSettings]);
 
   const save = async (action, preferences) => {
     localStorage.setItem('vhc_cookie_consent', JSON.stringify({ ...preferences, timestamp: new Date().toISOString() }));
@@ -37,8 +48,10 @@ export default function CookieConsentBanner() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-[100] p-4" data-testid="cookie-consent-banner">
-      <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+    <>
+    <div aria-hidden="true" style={{ height: bannerHeight }} data-testid="cookie-consent-scroll-space" />
+    <div ref={bannerRef} className="fixed bottom-0 inset-x-0 z-[100] p-4" data-testid="cookie-consent-banner">
+      <div className="max-w-3xl max-h-[60vh] overflow-y-auto mx-auto bg-white border border-slate-200 rounded-xl shadow-lg">
         {!showSettings ? (
           <div className="p-5">
             <div className="flex items-start gap-3 mb-4">
@@ -47,7 +60,7 @@ export default function CookieConsentBanner() {
                 <h3 className="text-sm font-semibold text-slate-900 mb-1">Cookie Preferences</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
                   We use essential cookies for platform functionality. Analytics and marketing cookies help us improve our services.
-                  Read our <a href="/cookie-policy" className="text-emerald-700 underline underline-offset-2">Cookie Policy</a>.
+                  Read our <a href="/cookie-policy" className="text-emerald-700 underline underline-offset-2" data-testid="cookie-policy-link">Cookie Policy</a>.
                 </p>
               </div>
             </div>
@@ -67,7 +80,7 @@ export default function CookieConsentBanner() {
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-slate-900">Cookie Settings</h3>
-              <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600" aria-label="Close cookie settings" data-testid="cookie-settings-close"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 mb-4">
               {[
@@ -98,5 +111,6 @@ export default function CookieConsentBanner() {
         )}
       </div>
     </div>
+    </>
   );
 }

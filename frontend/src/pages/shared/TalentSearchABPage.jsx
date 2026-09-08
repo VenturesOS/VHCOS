@@ -1,5 +1,5 @@
 /**
- * LLM Extraction A/B Testing — Nemotron vs RunPod Qwen quality comparison.
+ * LLM Extraction A/B Testing — Nemotron vs Nemotron Super 120B quality comparison.
  *
  * Repurposed from the old Hybrid-vs-Lexical search page. Powers the
  * `/(admin|recruiter|employer)/talent-search` route (kept the same URL to
@@ -8,7 +8,7 @@
  * Flow:
  *   1. Admin clicks "Start comparison" — POST /api/admin/llm-ab/run
  *   2. Backend spawns background task that runs first 100 extension-captured
- *      candidates through Nemotron + Qwen in parallel
+ *      candidates through Nemotron + Nemotron Super 120B in parallel
  *   3. Frontend polls /status/{id} every 3s, shows progress
  *   4. When done, renders extensive quality report + per-candidate diff table
  */
@@ -32,9 +32,9 @@ api.interceptors.request.use((cfg) => {
 
 // ── Report renderers ────────────────────────────────────────────────────
 
-function MetricCard({ label, nemotron, qwen, better = 'higher', unit = '', testid }) {
+function MetricCard({ label, nemotron, nemotron_super, better = 'higher', unit = '', testid }) {
   const nemNum = Number(nemotron);
-  const qwNum = Number(qwen);
+  const qwNum = Number(nemotron_super);
   let nemWins = false, qwWins = false;
   if (Number.isFinite(nemNum) && Number.isFinite(qwNum) && nemNum !== qwNum) {
     if (better === 'higher') { nemWins = nemNum > qwNum; qwWins = qwNum > nemNum; }
@@ -49,8 +49,8 @@ function MetricCard({ label, nemotron, qwen, better = 'higher', unit = '', testi
           <span className="font-mono font-semibold text-slate-900">{nemotron}{unit}</span>
         </div>
         <div className={`flex flex-col p-2 rounded ${qwWins ? 'bg-emerald-50 border border-emerald-200' : ''}`}>
-          <span className="text-[10px] text-slate-500">Qwen</span>
-          <span className="font-mono font-semibold text-slate-900">{qwen}{unit}</span>
+          <span className="text-[10px] text-slate-500">Nemotron Super 120B</span>
+          <span className="font-mono font-semibold text-slate-900">{nemotron_super}{unit}</span>
         </div>
       </div>
     </div>
@@ -66,19 +66,19 @@ function FieldFillTable({ data }) {
           <tr>
             <th className="text-left px-3 py-2">Field</th>
             <th className="text-right px-3 py-2">Nemotron %</th>
-            <th className="text-right px-3 py-2">Qwen %</th>
+            <th className="text-right px-3 py-2">Nemotron Super 120B %</th>
             <th className="text-right px-3 py-2 w-24">Δ</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(([field, r]) => {
-            const delta = r.nemotron_pct - r.qwen_pct;
+            const delta = r.nemotron_pct - r.nemotron_super_pct;
             const winner = Math.abs(delta) < 0.5 ? '=' : delta > 0 ? 'N' : 'Q';
             return (
               <tr key={field} className="border-t hover:bg-slate-50" data-testid={`fill-row-${field}`}>
                 <td className="px-3 py-1.5 font-mono text-xs">{field}</td>
                 <td className={`text-right px-3 py-1.5 font-mono ${delta > 0.5 ? 'text-emerald-700 font-semibold' : ''}`}>{r.nemotron_pct}%</td>
-                <td className={`text-right px-3 py-1.5 font-mono ${delta < -0.5 ? 'text-emerald-700 font-semibold' : ''}`}>{r.qwen_pct}%</td>
+                <td className={`text-right px-3 py-1.5 font-mono ${delta < -0.5 ? 'text-emerald-700 font-semibold' : ''}`}>{r.nemotron_super_pct}%</td>
                 <td className={`text-right px-3 py-1.5 font-mono ${winner === 'N' ? 'text-emerald-600' : winner === 'Q' ? 'text-sky-600' : 'text-slate-400'}`}>
                   {winner === '=' ? '–' : `${winner} +${Math.abs(delta).toFixed(1)}`}
                 </td>
@@ -109,9 +109,9 @@ function ArrayRichnessTable({ data }) {
             <tr key={field} className="border-t hover:bg-slate-50" data-testid={`richness-row-${field}`}>
               <td className="px-3 py-1.5 font-mono text-xs">{field}</td>
               <td className="text-right px-3 py-1.5 font-mono">{r.nemotron_avg}</td>
-              <td className="text-right px-3 py-1.5 font-mono">{r.qwen_avg}</td>
+              <td className="text-right px-3 py-1.5 font-mono">{r.nemotron_super_avg}</td>
               <td className="text-right px-3 py-1.5 font-mono text-xs text-slate-500">{r.nemotron_zero_pct}%</td>
-              <td className="text-right px-3 py-1.5 font-mono text-xs text-slate-500">{r.qwen_zero_pct}%</td>
+              <td className="text-right px-3 py-1.5 font-mono text-xs text-slate-500">{r.nemotron_super_zero_pct}%</td>
             </tr>
           ))}
         </tbody>
@@ -167,14 +167,14 @@ function Report({ report }) {
 
       {/* Top-line metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MetricCard label="Success rate" nemotron={`${success.nemotron_success_pct}%`} qwen={`${success.qwen_success_pct}%`} testid="metric-success" />
-        <MetricCard label="Avg latency" nemotron={latency.nemotron.avg_ms} qwen={latency.qwen.avg_ms} unit="ms" better="lower" testid="metric-latency" />
-        <MetricCard label="p95 latency" nemotron={latency.nemotron.p95_ms} qwen={latency.qwen.p95_ms} unit="ms" better="lower" testid="metric-p95" />
-        <MetricCard label="JSON-repair fallback" nemotron={success.nemotron_json_repaired} qwen={success.qwen_json_repaired} better="lower" testid="metric-json-repair" />
-        <MetricCard label="Avg response chars" nemotron={response_size.nemotron.avg} qwen={response_size.qwen.avg} testid="metric-size" />
-        <MetricCard label="Critical-field missing" nemotron={`${critical_missing.nemotron_pct}%`} qwen={`${critical_missing.qwen_pct}%`} better="lower" testid="metric-missing" />
-        <MetricCard label="Winner: Nemotron" nemotron={winner_per_candidate.nemotron} qwen={winner_per_candidate.qwen} testid="metric-winner-nemo" />
-        <MetricCard label="Ties / Both-failed" nemotron={winner_per_candidate.tie} qwen={winner_per_candidate.both_failed} better="lower" testid="metric-ties" />
+        <MetricCard label="Success rate" nemotron={`${success.nemotron_success_pct}%`} nemotron_super={`${success.nemotron_super_success_pct}%`} testid="metric-success" />
+        <MetricCard label="Avg latency" nemotron={latency.nemotron.avg_ms} nemotron_super={latency.nemotron_super.avg_ms} unit="ms" better="lower" testid="metric-latency" />
+        <MetricCard label="p95 latency" nemotron={latency.nemotron.p95_ms} nemotron_super={latency.nemotron_super.p95_ms} unit="ms" better="lower" testid="metric-p95" />
+        <MetricCard label="JSON-repair fallback" nemotron={success.nemotron_json_repaired} nemotron_super={success.nemotron_super_json_repaired} better="lower" testid="metric-json-repair" />
+        <MetricCard label="Avg response chars" nemotron={response_size.nemotron.avg} nemotron_super={response_size.nemotron_super.avg} testid="metric-size" />
+        <MetricCard label="Critical-field missing" nemotron={`${critical_missing.nemotron_pct}%`} nemotron_super={`${critical_missing.nemotron_super_pct}%`} better="lower" testid="metric-missing" />
+        <MetricCard label="Winner: Nemotron" nemotron={winner_per_candidate.nemotron} nemotron_super={winner_per_candidate.nemotron_super} testid="metric-winner-nemo" />
+        <MetricCard label="Ties / Both-failed" nemotron={winner_per_candidate.tie} nemotron_super={winner_per_candidate.both_failed} better="lower" testid="metric-ties" />
       </div>
 
       {/* Field-fill rate */}
@@ -282,7 +282,7 @@ export default function TalentSearchABPage() {
             LLM Extraction A/B
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Runs the first N extension-captured candidates through <b>Nemotron 550B</b> and <b>RunPod Qwen 14B</b> and generates a detailed quality report.
+            Runs the first N extension-captured candidates through <b>Nemotron 550B</b> and <b>Nemotron Super 120B</b> and generates a detailed quality report.
           </p>
         </div>
       </div>
@@ -318,8 +318,8 @@ export default function TalentSearchABPage() {
             </Button>
           </div>
           <p className="text-xs text-slate-400 mt-3">
-            The run processes 5 candidates in parallel to stay under Nemotron's 40 rpm free tier.
-            Expect ~3–6 min for 100 candidates depending on Qwen pod cold-start.
+            Two profiles are compared at a time.
+            Completion time depends on provider availability.
           </p>
         </CardContent>
       </Card>
@@ -358,8 +358,11 @@ export default function TalentSearchABPage() {
                 </div>
               </div>
             )}
-            {run.status === 'completed' && run.report && (
+            {run.status === 'completed' && run.report && run.comparison_model === 'nemotron_super' && (
               <Report report={run.report} />
+            )}
+            {run.report && !run.comparison_model && (
+              <p data-testid="ab-legacy-report-notice" className="text-sm text-slate-500">Archived comparison with a retired provider. New comparisons use Nemotron and Nemotron Super 120B.</p>
             )}
           </CardContent>
         </Card>

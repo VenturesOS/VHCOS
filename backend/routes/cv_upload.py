@@ -223,12 +223,12 @@ IMPORTANT:
 Resume text:
 {raw_text_truncated}"""
 
-        from services.llm_fallback_service import _call_runpod_vllm
-        ai_result = await _call_runpod_vllm(
+        from services.llm_fallback_service import call_llm_chain
+        ai_result = await call_llm_chain(
             system_prompt="You are a precise resume parser. Extract structured candidate data from resumes. Return only valid JSON.",
             user_prompt=prompt,
             temperature=0.1,
-            disable_guided=True,  # generic JSON, not the profile-specific schema
+            json_mode=True,
         )
         if not ai_result or not ai_result.get("content"):
             await fail_task(task_id, "AI service temporarily unavailable. Please try again later.")

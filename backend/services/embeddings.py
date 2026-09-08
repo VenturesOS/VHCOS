@@ -2,10 +2,8 @@
 Vector Embeddings Service for Semantic Search
 Generates and stores embeddings for candidates and jobs.
 
-Uses BAAI/bge-m3 via RunPod Serverless TEI worker (OpenAI-compatible API).
-Migrated from OpenAI text-embedding-3-small (1536-dim) → BGE-M3 (1024-dim) in
-Phase 55.13 to eliminate the OpenAI dependency. The OpenAI SDK client is
-retained because RunPod's TEI worker exposes the same OpenAI-compat surface.
+Legacy BGE-M3 (1024-dim) data utilities. The retired remote inference transport
+is disabled. Active BGE-small (384-dim) Talent Graph embeddings are unchanged.
 """
 import os
 import hashlib
@@ -16,7 +14,7 @@ from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL      = os.environ.get("RUNPOD_EMBED_MODEL", "BAAI/bge-m3")
+EMBEDDING_MODEL      = "BAAI/bge-m3"
 EMBEDDING_DIMENSIONS = 1024  # BGE-M3 fixed output dimension
 
 
@@ -28,20 +26,8 @@ class EmbeddingService:
         self._initialized = False
 
     async def initialize(self) -> bool:
-        """Initialize the RunPod BGE-M3 OpenAI-compatible client."""
-        if self._initialized:
-            return True
-
-        api_key  = os.environ.get("RUNPOD_API_KEY")
-        base_url = os.environ.get("RUNPOD_EMBED_URL")
-        if api_key and base_url:
-            self.client       = AsyncOpenAI(api_key=api_key, base_url=base_url)
-            self._initialized = True
-            logger.info(f"Embedding service initialized with RunPod BGE-M3 ({base_url})")
-            return True
-        else:
-            logger.warning("RUNPOD_API_KEY or RUNPOD_EMBED_URL not set — embeddings disabled")
-            return False
+        """Retired remote BGE-M3 transport; active BGE-small path is unchanged."""
+        return False
 
     # ── Text preparation — schema-aware ──────────────────────────────────
 
@@ -252,7 +238,7 @@ class EmbeddingService:
         try:
             if not self._initialized:
                 if not await self.initialize():
-                    return {"status": "disabled", "reason": "RUNPOD_API_KEY or RUNPOD_EMBED_URL not configured"}
+                    return {"status": "disabled", "reason": "Legacy remote embedding transport retired; use Talent Graph embeddings"}
 
             test_embedding = await self.generate_embedding("test")
             if test_embedding and len(test_embedding) == EMBEDDING_DIMENSIONS:

@@ -15,6 +15,7 @@ import { useAuth } from '../../lib/auth';
 
 // Extracted sub-components
 import { CandidateListItem } from '../../components/candidates/CandidateListItem';
+import { useEnrichmentPolling } from '../../hooks/useEnrichmentPolling';
 import { CandidateDetailDialog } from '../../components/candidates/CandidateDetailDialog';
 import { AddApplicantDialog } from '../../components/candidates/AddApplicantDialog';
 import { AttachCVDialog } from '../../components/candidates/AttachCVDialog';
@@ -109,6 +110,7 @@ export default function CandidateDataBankPage() {
   const handleLoadMore = () => {
     if (nextCursor && !loadingMore) loadCandidates({ cursor: nextCursor });
   };
+  useEnrichmentPolling(candidates, setCandidates);
 
   // ─── Detail loading ───
   const loadCandidateDetails = async (candidate) => {

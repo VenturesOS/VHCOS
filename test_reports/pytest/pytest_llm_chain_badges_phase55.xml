@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="19" time="9.487" timestamp="2026-09-08T05:12:28.545456+00:00" hostname="agent-env-cd0f4fa2-09a3-4d74-8a11-0788431b48fe"><testcase classname="tests.test_llm_chain_badges_phase55" name="test_live_nemotron_adapter_synthetic_json" time="0.638"><failure message="services.llm_providers.ProviderError: http_503">services/llm_providers.py:44: in _nvidia
+    response.raise_for_status()
+/root/.venv/lib/python3.11/site-packages/httpx/_models.py:829: in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+E   httpx.HTTPStatusError: Server error '503 Service Unavailable' for url 'https://integrate.api.nvidia.com/v1/chat/completions'
+E   For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+
+The above exception was the direct cause of the following exception:
+tests/test_llm_chain_badges_phase55.py:44: in test_live_nemotron_adapter_synthetic_json
+    response = asyncio.run(call_nemotron(
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+services/llm_providers.py:65: in call_nemotron
+    return await _nvidia("NEMOTRON_MODEL", system_prompt, user_prompt, temperature, max_tokens, text_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/llm_providers.py:57: in _nvidia
+    raise ProviderError(f"http_{exc.response.status_code}") from exc
+E   services.llm_providers.ProviderError: http_503</failure></testcase><testcase classname="tests.test_llm_chain_badges_phase55" name="test_live_gpt_oss_adapter_synthetic_json" time="0.123"><failure message="services.llm_providers.ProviderError: http_410">services/llm_providers.py:44: in _nvidia
+    response.raise_for_status()
+/root/.venv/lib/python3.11/site-packages/httpx/_models.py:829: in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+E   httpx.HTTPStatusError: Client error '410 Gone' for url 'https://integrate.api.nvidia.com/v1/chat/completions'
+E   For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/410
+
+The above exception was the direct cause of the following exception:
+tests/test_llm_chain_badges_phase55.py:52: in test_live_gpt_oss_adapter_synthetic_json
+    response = asyncio.run(call_gpt_oss(
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+services/llm_providers.py:69: in call_gpt_oss
+    return await _nvidia("GPT_OSS_MODEL", system_prompt, user_prompt, temperature, max_tokens, text_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/llm_providers.py:57: in _nvidia
+    raise ProviderError(f"http_{exc.response.status_code}") from exc
+E   services.llm_providers.ProviderError: http_410</failure></testcase><testcase classname="tests.test_llm_chain_badges_phase55" name="test_live_haiku_adapter_synthetic_json" time="3.144" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_fallback_forced_to_gpt_when_nemotron_fails" time="1.348"><failure message="AssertionError: {'_fallback_chain': ['nvidia_nemotron_550b', 'openai_gpt_oss_120b', 'emergent_haiku_4_5'], '_fallback_errors': [{'reason': 'mock_nemotron_failure', 'source': 'nvidia_nemotron_550b'}, {'reason': 'http_410', 'source': 'openai_gpt_oss_120b'}], 'content': '{&quot;name&quot;: &quot;Synthetic Candidate&quot;, &quot;key_skills&quot;: [&quot;Full Stack Web Development&quot;, &quot;Data Analysis and Visualization&quot;, &quot;Project Management&quot;, &quot;Cloud Architecture (AWS/Azure)&quot;, &quot;Machine Learning and Python&quot;]}', 'model': 'claude-haiku-4-5-20251001', ...}&#10;assert 'emergent_haiku_4_5' == 'openai_gpt_oss_120b'&#10;  &#10;  - openai_gpt_oss_120b&#10;  + emergent_haiku_4_5">tests/test_llm_chain_badges_phase55.py:87: in test_fallback_forced_to_gpt_when_nemotron_fails
+    assert out.get("source") == "openai_gpt_oss_120b", out
+E   AssertionError: {'_fallback_chain': ['nvidia_nemotron_550b', 'openai_gpt_oss_120b', 'emergent_haiku_4_5'], '_fallback_errors': [{'reason': 'mock_nemotron_failure', 'source': 'nvidia_nemotron_550b'}, {'reason': 'http_410', 'source': 'openai_gpt_oss_120b'}], 'content': '{"name": "Synthetic Candidate", "key_skills": ["Full Stack Web Development", "Data Analysis and Visualization", "Project Management", "Cloud Architecture (AWS/Azure)", "Machine Learning and Python"]}', 'model': 'claude-haiku-4-5-20251001', ...}
+E   assert 'emergent_haiku_4_5' == 'openai_gpt_oss_120b'
+E     
+E     - openai_gpt_oss_120b
+E     + emergent_haiku_4_5</failure></testcase><testcase classname="tests.test_llm_chain_badges_phase55" name="test_fallback_forced_to_haiku_when_nemo_and_gpt_fail" time="1.367" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[None]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[[]]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[123]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[{}]" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[{&quot;x&quot;:1}]" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_all_failed_contains_only_approved_chain_and_sanitized_reasons" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_returns_false_when_candidate_missing" time="0.827" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_returns_false_when_atomic_filter_does_not_match" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_marks_success_and_clears_stale_error" time="0.003" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_returns_false_when_write_match_fails" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_retry_script_readonly_but_no_qwen_chain_residue" time="0.001"><failure message="assert 'strict_qwen_no_fallback' not in '&quot;&quot;&quot;Read-onl....run(main())'&#10;  &#10;  'strict_qwen_no_fallback' is contained here:&#10;    &quot;&quot;&quot;Read-only inventory of missed enrichments. Backfill is NOT authorized.&#10;    &#10;    This former retry utility deliberately cannot call an LLM or change candidates.&#10;    &quot;&quot;&quot;&#10;    import argparse...&#10;  &#10;  ...Full output truncated (30 lines hidden), use '-vv' to show">tests/test_llm_chain_badges_phase55.py:308: in test_retry_script_readonly_but_no_qwen_chain_residue
+    assert "strict_qwen_no_fallback" not in text
+E   assert 'strict_qwen_no_fallback' not in '"""Read-onl....run(main())'
+E     
+E     'strict_qwen_no_fallback' is contained here:
+E       """Read-only inventory of missed enrichments. Backfill is NOT authorized.
+E       
+E       This former retry utility deliberately cannot call an LLM or change candidates.
+E       """
+E       import argparse...
+E     
+E     ...Full output truncated (30 lines hidden), use '-vv' to show</failure></testcase><testcase classname="tests.test_llm_chain_badges_phase55" name="test_llm_ab_comparison_model_is_gpt_oss_and_no_qwen_labeling" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_llm_ab_extract_one_uses_nemotron_and_gpt_oss_with_mocks" time="0.003" /></testsuite></testsuites>

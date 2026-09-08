@@ -1,21 +1,15 @@
 """LLM-generated mail body for bill / reminder emails — Phase 55.6.
 
-Tiny standalone wrapper around the RunPod vLLM (Qwen 14B). We don't want
+Small wrapper around the approved NVIDIA → Nemotron Super 120B → Emergent chain. We don't want
 the full guided-JSON path here — just a plain text completion.
 """
 from __future__ import annotations
 
 import logging
-import os
 from typing import Dict, Optional
 
-import httpx
 
 logger = logging.getLogger(__name__)
-
-RUNPOD_VLLM_URL = os.environ.get("RUNPOD_VLLM_URL", "").rstrip("/")
-RUNPOD_MODEL_NAME = os.environ.get("RUNPOD_MODEL_NAME", "Qwen/Qwen2.5-14B-Instruct-AWQ")
-RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY") or os.environ.get("RUNPOD_ACCOUNT_API_KEY") or ""
 
 
 # ── Prompt templates ─────────────────────────────────────────────────
@@ -65,32 +59,13 @@ def _fmt_inr(n: float) -> str:
         return str(n)
 
 
-async def _qwen(prompt: str, max_tokens: int = 600, temperature: float = 0.35) -> Optional[str]:
-    if not RUNPOD_VLLM_URL:
-        return None
-    headers = {"Content-Type": "application/json"}
-    if RUNPOD_API_KEY:
-        headers["Authorization"] = f"Bearer {RUNPOD_API_KEY}"
-    body = {
-        "model": RUNPOD_MODEL_NAME,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "messages": [
-            {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": prompt},
-        ],
-    }
+async def _generate_body(prompt: str, max_tokens: int = 600, temperature: float = 0.35) -> Optional[str]:
+    from services.llm_service import chat_completion
     try:
-        async with httpx.AsyncClient(timeout=45) as c:
-            r = await c.post(f"{RUNPOD_VLLM_URL}/v1/chat/completions", json=body, headers=headers)
-            r.raise_for_status()
-            data = r.json()
-            choices = data.get("choices") or []
-            if not choices:
-                return None
-            return (choices[0].get("message", {}).get("content") or "").strip()
+        return await chat_completion(_SYSTEM, prompt, temperature=temperature,
+                                     max_tokens=max_tokens, timeout=90)
     except Exception as e:  # noqa: BLE001
-        logger.warning("[Bill LLM] Qwen call failed: %s — using fallback template", e)
+        logger.warning("[Bill LLM] Providers unavailable: %s — using fallback template", e)
         return None
 
 
@@ -134,7 +109,7 @@ async def generate_send_body(bill: Dict) -> str:
         "candidates_block": candidates or "(see attached PDF)",
     }
     prompt = _SEND_TEMPLATE.format(**ctx)
-    body = await _qwen(prompt)
+    body = await _generate_body(prompt)
     return body or _fallback_send_body(ctx)
 
 
@@ -149,7 +124,7 @@ async def generate_reminder_body(bill: Dict, reminder_n: int, days_since: int) -
         "amount": _fmt_inr((bill.get("totals") or {}).get("grand_total", 0)),
     }
     prompt = _REMINDER_TEMPLATE.format(**ctx)
-    body = await _qwen(prompt)
+    body = await _generate_body(prompt)
     return body or _fallback_reminder_body(ctx)
 
 

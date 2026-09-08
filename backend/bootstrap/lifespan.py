@@ -6,7 +6,7 @@ Extracted from server.py in the 2026-08 split. Behaviour must remain identical:
     2. run_critical_init() — blocks until MongoDB is up
     3. run_deferred_init() — indexes / schedulers, in background
     4. start_metrics_flusher() + ensure_metrics_indexes()
-    5. runpod_sync_loop() — no-op if RUNPOD_API_KEY missing
+    5. Retired provider sync removed; inference uses the approved three-provider chain
     6. Talent Graph indexes (idempotent, safe every boot)
     7. BGE model + cluster cache preload (skipped when sidecar is configured)
     8. fast_search projection sanity check (warns if UI-required fields are missing)
@@ -46,10 +46,6 @@ async def lifespan(app: FastAPI):
     from middleware.api_metrics import start_metrics_flusher, ensure_metrics_indexes
     start_metrics_flusher()
     await ensure_metrics_indexes()
-
-    # 5. RunPod auto-sync daemon (no-op if RUNPOD_API_KEY not set)
-    from services.runpod_sync_service import runpod_sync_loop
-    asyncio.create_task(runpod_sync_loop())
 
     # 6. Talent Graph indexes — safe to run on every boot
     try:

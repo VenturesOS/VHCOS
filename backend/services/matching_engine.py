@@ -107,7 +107,7 @@ async def _llm_chat(system_msg: str, user_msg: str, max_tokens: int = 1500) -> s
     Unified LLM chat — NOW USING GROQ for cost optimization.
     
     Phase 55.14: routes directly through llm_service.chat_completion, which
-    itself uses RunPod Qwen 2.5-14B (primary) → Emergent Claude Haiku 4.5
+    itself uses NVIDIA Nemotron → Nemotron Super 120B (primary) → Emergent Claude Haiku 4.5
     (fallback). The old Groq-first path was removed with services/groq_ai_service.
     """
     from services.llm_service import chat_completion
@@ -222,7 +222,7 @@ Resume text:
         # malformed output. This prevents recurring "[RESUME PARSE] JSON parse
         # error: Expecting ',' delimiter" storms (May-05 incident: same
         # candidate retried >5 times → contributed to Anthropic credit drain
-        # and OOM cascade). json_repair already handles Qwen/Haiku truncation
+        # and OOM cascade). json_repair already handles LLM/Haiku truncation
         # in llm_fallback_service.py — we extend the same defence here.
         try:
             parsed = json.loads(json_str)
@@ -404,7 +404,7 @@ Return JSON:
         json_str = extract_json_from_llm_response(response_text)
         # Match-calc parser uses the same json_repair fallback as the
         # resume parser at line ~219 (Phase 51) and the resume-upload path
-        # below. Without this, Qwen truncation on long candidate profiles
+        # below. Without this, LLM truncation on long candidate profiles
         # causes "Expecting ',' delimiter" 500s on /api/applications +
         # /api/candidate-bank/upload (Phase 52 maintenance review fix).
         try:

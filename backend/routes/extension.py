@@ -44,7 +44,7 @@ from services.extension_service import (
 )
 from services.activity_log_service import log_activity, ACTION_CAPTURED, ACTION_UPDATED, ACTION_CV_UPLOADED
 
-# Phone + work-experience extraction — routes through RunPod Qwen serverless via llm_fallback_service
+# Phone + work-experience extraction — routes through Nemotron → Nemotron Super 120B → Emergent Haiku via llm_fallback_service
 from services.llm_fallback_service import extract_phone_and_work_experience_fallback as extract_phone_and_work_experience_groq
 
 logger = logging.getLogger(__name__)
@@ -672,7 +672,7 @@ async def ai_extract_profile(
         return AIExtractResponse(success=True, profile_data=profile)
 
     # ── Fallback: LLM extraction if regex not confident enough ─────────────
-    # Route: llm_fallback_service.extract_full_profile_fallback → RunPod Qwen serverless → Emergent LLM fallback
+    # Route: llm_fallback_service.extract_full_profile_fallback → Nemotron → Nemotron Super 120B → Emergent Haiku → Emergent LLM fallback
     logger.info(f"[AI Extract] DOM fields insufficient (name={has_name}, contact={has_contact}) — using LLM fallback")
 
     # Truncate to ~6000 chars for faster LLM processing (profiles rarely exceed this)
@@ -832,7 +832,7 @@ IMPORTANT: The page text may also contain the logged-in RECRUITER's email/phone.
             logger.warning(f"[AI Extract] Regex parser failed ({regex_err}), using Groq")
 
         if profile_data is None:
-            # ── LLM fallback (RunPod Qwen serverless → Emergent LLM fallback) ──
+            # ── LLM fallback (Nemotron → Nemotron Super 120B → Emergent Haiku → Emergent LLM fallback) ──
             try:
                 from services.llm_fallback_service import extract_full_profile_fallback
 
@@ -843,7 +843,7 @@ IMPORTANT: The page text may also contain the logged-in RECRUITER's email/phone.
 
                 if llm_result and not llm_result.get('error'):
                     profile_data = llm_result
-                    profile_data["_extraction_source"] = f"llm_{llm_result.get('source', 'runpod_qwen')}"
+                    profile_data["_extraction_source"] = f"llm_{llm_result.get('source', 'unknown')}"
                     logger.info(f"[AI Extract] LLM extraction succeeded for: {profile_data.get('name')}")
                 else:
                     logger.warning("[AI Extract] LLM returned error, falling back to DOM data")
@@ -1030,20 +1030,20 @@ _EMBED_THREAD_SEMAPHORE = threading.BoundedSemaphore(_EMBED_CONCURRENCY)
 
 
 # ── Capture deduplication (Phase 52, 2026-05-06) ───────────────────────────
-# Skip the expensive Qwen + embedding pipeline when:
+# Skip the expensive LLM + embedding pipeline when:
 #   1. The profile was successfully enriched within the last
 #      DEDUP_FRESH_DAYS days, AND
-#   2. The raw text we'd send to Qwen hashes to the same value as last time.
+#   2. The raw text we'd send to the LLM hashes to the same value as last time.
 # This catches the common pattern where a recruiter (or two recruiters in
 # the same team) re-captures the same Naukri profile within days.
-# NOTE: dedup ONLY skips Qwen+embedding. Mandate tagging, visibility updates,
+# NOTE: dedup ONLY skips LLM+embedding. Mandate tagging, visibility updates,
 # and the candidate_bank UPSERT all still run — the candidate ALWAYS shows
 # in "Add Candidate" tagged to the chosen job.
 DEDUP_FRESH_DAYS = int(os.environ.get("CAPTURE_DEDUP_FRESH_DAYS", "7"))
 
 
 def _should_skip_enrichment(existing_doc: Optional[dict], raw_text: str) -> tuple[bool, str]:
-    """Decide whether to skip Qwen + embedding for this capture.
+    """Decide whether to skip LLM + embedding for this capture.
 
     Returns:
         (skip: bool, reason: str)
@@ -1235,12 +1235,13 @@ async def _background_full_groq_enrich(
     if use_local_llm:
         logger.warning(f"[BG-Local-LLM] 🧪 ADMIN TEST: Using local Gemma 4 for {candidate_name}")
     else:
-        logger.info(f"[BG-LLM] ⚡ Starting extraction for {candidate_name} (chain: RunPod Qwen → Emergent Haiku)")
+        logger.info(f"[BG-LLM] ⚡ Starting extraction for {candidate_name} (chain: Nemotron → Nemotron Super 120B → Emergent Haiku)")
     
     try:
-        # Chain: Layer 1 = RunPod Qwen 14B (primary, self-hosted), Layer 2 = Emergent Haiku 4.5 (fallback)
+        # Chain: Nemotron → Nemotron Super 120B → Emergent Haiku
         from services.llm_fallback_service import extract_full_profile_fallback
         extraction_result = await extract_full_profile_fallback(raw_text=raw_text, candidate_name=candidate_name)
+        extraction_result = extraction_result or {"error": "Empty extraction result", "source": "all_failed"}
         source_label = extraction_result.get("source", extraction_result.get("_extraction_source", "unknown"))
         
         if extraction_result and not extraction_result.get('error'):
@@ -1250,34 +1251,23 @@ async def _background_full_groq_enrich(
                 logger.info(f"[BG-LLM] ✅ extraction succeeded for {candidate_name} (served by: {source_label})")
             
             # CRITICAL FIX: Pass recruiter phone/email to _apply_bg_enrichment
-            _apply_bg_enrichment(
+            applied = _apply_bg_enrichment(
                 candidate_id, 
                 candidate_name, 
                 extraction_result, 
                 raw_text, 
                 recruiter_phone, 
-                recruiter_email
+                recruiter_email,
+                write_filter={"raw_text_for_enrichment": raw_text},
             )
+            if not applied:
+                logger.info("[BG-LLM] Candidate changed during extraction; stale result discarded")
+                return
             
             # Update enrichment status
-            from config import mongodb_uri as _mongo_uri, db_name as _db_name
+            _mongo_uri, _db_name = os.environ["MONGO_URL"], os.environ["DB_NAME"]
             sync_client = MongoClient(_mongo_uri, tlsAllowInvalidCertificates=True)
             sync_db = sync_client[_db_name]
-            
-            sync_db.candidate_bank.update_one(
-                {"id": candidate_id},
-                {"$set": {
-                    "enrichment_status": "enriched",
-                    "ai_enriched_at": datetime.now(timezone.utc).isoformat(),
-                    "ai_enrichment_source": source_label,
-                    # Phase 52 (capture-dedup): store a hash of the raw text
-                    # we just enriched so future identical captures of the
-                    # same profile can short-circuit Qwen + embedding work.
-                    "raw_text_hash": hashlib.sha256(
-                        (raw_text or "").encode("utf-8")
-                    ).hexdigest(),
-                }}
-            )
             
             # Generate smart tags from enriched profile
             try:
@@ -1352,17 +1342,20 @@ async def _background_full_groq_enrich(
                 logger.warning(f"[BG-LLM] ❌ extraction failed for {candidate_name}: {extraction_result.get('error')} (source={source_label})")
             
             # Update status to failed
-            from config import mongodb_uri as _mongo_uri, db_name as _db_name
+            _mongo_uri, _db_name = os.environ["MONGO_URL"], os.environ["DB_NAME"]
             sync_client = MongoClient(_mongo_uri, tlsAllowInvalidCertificates=True)
             sync_db = sync_client[_db_name]
             
             sync_db.candidate_bank.update_one(
-                {"id": candidate_id},
+                {"id": candidate_id, "enrichment_status": {"$ne": "enriched"},
+                 "raw_text_for_enrichment": raw_text},
                 {"$set": {
                     "enrichment_status": "failed",
                     "ai_enrichment_source": "all_failed",
                     "ai_enrichment_error": str(extraction_result.get('error', 'Unknown error') if extraction_result else 'LLM returned None')[:500],
                     "ai_fallback_chain": (extraction_result or {}).get('_fallback_chain', []),
+                    "ai_fallback_errors": extraction_result.get('_fallback_errors', []),
+                    "ai_last_attempt_at": datetime.now(timezone.utc).isoformat(),
                 }}
             )
             sync_client.close()
@@ -1374,12 +1367,13 @@ async def _background_full_groq_enrich(
         
         # Mark enrichment as failed
         try:
-            from config import mongodb_uri as _mongo_uri, db_name as _db_name
+            _mongo_uri, _db_name = os.environ["MONGO_URL"], os.environ["DB_NAME"]
             sync_client = MongoClient(_mongo_uri, tlsAllowInvalidCertificates=True)
             sync_db = sync_client[_db_name]
             
             sync_db.candidate_bank.update_one(
-                {"id": candidate_id},
+                {"id": candidate_id, "enrichment_status": {"$ne": "enriched"},
+                 "raw_text_for_enrichment": raw_text},
                 {"$set": {
                     "enrichment_status": "failed",
                     "ai_enrichment_source": "exception",
@@ -1604,21 +1598,24 @@ async def _background_regex_enrich(
 
 
 def _apply_bg_enrichment(candidate_id: str, candidate_name: str, ai: dict,
-                          raw_text: str, recruiter_phone: str, recruiter_email: str):
+                          raw_text: str, recruiter_phone: str, recruiter_email: str,
+                          write_filter: Optional[dict] = None):
     """Apply extracted data (from spaCy or Groq) to candidate record. Sync pymongo."""
     import re as _re
     from pymongo import MongoClient
-    from config import mongodb_uri as _mongo_uri, db_name as _db_name
+    _mongo_uri, _db_name = os.environ["MONGO_URL"], os.environ["DB_NAME"]
+    query = {**(write_filter or {}), "id": candidate_id}
+    sync_client = None
 
     try:
         sync_client = MongoClient(_mongo_uri, tlsAllowInvalidCertificates=True)
         sync_db = sync_client[_db_name]
 
-        doc = sync_db.candidate_bank.find_one({"id": candidate_id}, {"_id": 0})
+        doc = sync_db.candidate_bank.find_one(query, {"_id": 0})
         if not doc:
             logger.warning(f"[BG-Apply] Candidate {candidate_id[:12]} not found")
             sync_client.close()
-            return
+            return False
 
         # ── Regex safety-net backfill ──
         # Before applying LLM output, run the full Naukri regex parser on raw_text
@@ -1649,7 +1646,7 @@ def _apply_bg_enrichment(candidate_id: str, candidate_name: str, ai: dict,
             logger.warning(f"[BG-Apply] Regex backfill failed: {_rx_err}")
 
         updates = {}
-        source = ai.get("_extraction_source", "unknown")
+        source = ai.get("source") or ai.get("_extraction_source", "unknown")
 
         # Skills
         if ai.get("key_skills"):
@@ -1743,12 +1740,32 @@ def _apply_bg_enrichment(candidate_id: str, candidate_name: str, ai: dict,
             updates["experience_years"] = _exp_ai_f
             updates["total_experience_years"] = _exp_ai_f
 
+        from services.llm_fallback_service import APPROVED_SOURCES
+        if source in APPROVED_SOURCES:
+            updates.update({
+                "enrichment_status": "enriched",
+                "ai_enriched_at": datetime.now(timezone.utc).isoformat(),
+                "ai_enrichment_source": source,
+                "ai_fallback_chain": ai.get("_fallback_chain", [source]),
+                "ai_fallback_errors": ai.get("_fallback_errors", []),
+                "raw_text_hash": hashlib.sha256((raw_text or "").encode("utf-8")).hexdigest(),
+            })
+            try:
+                from services.smart_tags_service import generate_smart_tags
+                updates["smart_tags"] = generate_smart_tags({**doc, **updates})
+            except Exception:
+                logger.warning("[BG-Apply] Smart tag refresh unavailable")
         if updates:
             updates["ai_enriched_at"] = datetime.now(timezone.utc).isoformat()
             updates["ai_enrichment_source"] = source
             if ai.get("_confidence"):
                 updates["ai_confidence_score"] = ai["_confidence"]
-            sync_db.candidate_bank.update_one({"id": candidate_id}, {"$set": updates})
+            operation = {"$set": updates}
+            if source in APPROVED_SOURCES:
+                operation["$unset"] = {"ai_enrichment_error": ""}
+            applied = sync_db.candidate_bank.update_one(query, operation)
+            if not applied.matched_count:
+                return False
             logger.info(f"[BG-Apply] Enriched {candidate_name} via {source}: {list(updates.keys())}")
         else:
             logger.info(f"[BG-Apply] No fields to update for {candidate_name}")
@@ -1769,9 +1786,13 @@ def _apply_bg_enrichment(candidate_id: str, candidate_name: str, ai: dict,
         except Exception:
             pass
 
-        sync_client.close()
+        return True
     except Exception as e:
         logger.error(f"[BG-Apply] Error for {candidate_name}: {e}")
+        raise
+    finally:
+        if sync_client is not None:
+            sync_client.close()
 
 
 
@@ -2544,13 +2565,13 @@ async def capture_profile(
         # Fire-and-forget background enrichment (non-blocking, separate thread)
         logger.warning(f"[Extension-UPDATE] Enrichment trigger: name={bool(profile.name)} ({profile.name}), ai_text_len={len(ai_enrichment_combined)}")
         if profile.name and ai_enrichment_combined:
-            # Phase 52: skip Qwen + embedding when this exact profile was
+            # Phase 52: skip LLM + embedding when this exact profile was
             # enriched in the last DEDUP_FRESH_DAYS days with identical text.
             # The candidate is ALREADY tagged to the chosen mandate above.
             _skip, _reason = _should_skip_enrichment(existing, ai_enrichment_combined)
             if _skip:
                 logger.warning(
-                    f"[Dedup] SKIP_QWEN '{profile.name}' "
+                    f"[Dedup] SKIP_LLM '{profile.name}' "
                     f"(reason={_reason}, candidate_id={existing['id'][:12]})"
                 )
             else:
@@ -2665,7 +2686,7 @@ async def capture_profile(
                     _skip, _reason = _should_skip_enrichment(merge_target, ai_enrichment_combined)
                     if _skip:
                         logger.warning(
-                            f"[Dedup] SKIP_QWEN '{profile.name}' "
+                            f"[Dedup] SKIP_LLM '{profile.name}' "
                             f"(reason={_reason}, candidate_id={merge_target['id'][:12]}, "
                             f"path=auto_merge)"
                         )

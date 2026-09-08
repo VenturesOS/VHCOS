@@ -1,5 +1,6 @@
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { EnrichmentBadge } from './EnrichmentBadge';
 import { Database, FileText, Briefcase, Download, Paperclip, ShieldAlert } from 'lucide-react';
 
 const SOURCE_STYLES = {
@@ -18,18 +19,6 @@ const SOURCE_STYLES = {
   employer: { bg: 'bg-indigo-50 text-indigo-600', label: 'Employer' },
   talent_pool_upload: { bg: 'bg-cyan-50 text-cyan-600', label: 'Pool Upload' },
   admin: { bg: 'bg-rose-50 text-rose-600', label: 'Admin' },
-};
-
-const AI_SOURCE_BADGES = {
-  nvidia_nemotron_550b: { label: 'N', bg: 'bg-slate-900 text-emerald-400 border border-emerald-500', title: 'NVIDIA Nemotron 550B' },
-  openai_gpt_oss_120b: { label: 'GO', bg: 'bg-amber-100 text-amber-700 border border-amber-300', title: 'OpenAI GPT-OSS 120B (via NVIDIA NIM)' },
-  runpod_qwen14b: { label: 'Q', bg: 'bg-sky-100 text-sky-700 border border-sky-300', title: 'RunPod Qwen 14B' },
-  anthropic_direct_haiku: { label: 'AC', bg: 'bg-violet-100 text-violet-700 border border-violet-300', title: 'Anthropic Direct (Haiku)' },
-  claude_haiku_4_5_emergent: { label: 'EC', bg: 'bg-emerald-100 text-emerald-700 border border-emerald-300', title: 'Emergent Key (Haiku)' },
-  emergent_haiku_4_5: { label: 'EC', bg: 'bg-emerald-100 text-emerald-700 border border-emerald-300', title: 'Emergent Key (Haiku)' },
-  regex_zero_cost: { label: 'RX', bg: 'bg-slate-100 text-slate-600 border border-slate-300', title: 'Regex (No AI)' },
-  regex_hybrid: { label: 'RX', bg: 'bg-slate-100 text-slate-600 border border-slate-300', title: 'Regex Hybrid' },
-  local_llm_gemma4: { label: 'Q', bg: 'bg-sky-100 text-sky-700 border border-sky-300', title: 'Local Gemma 4' },
 };
 
 export function CandidateListItem({ candidate, onSelect, onAddApplicant, onAttachCV, onDownloadResume, navigate, isAdmin = false }) {
@@ -81,19 +70,7 @@ export function CandidateListItem({ candidate, onSelect, onAddApplicant, onAttac
           <span className={`px-2 py-1 text-xs rounded-full font-medium ${sourceStyle.bg}`} data-testid={`source-badge-${candidate.id}`}>
             {sourceStyle.label}
           </span>
-          {isAdmin && candidate.ai_enrichment_source && (() => {
-            const aiStyle = AI_SOURCE_BADGES[candidate.ai_enrichment_source];
-            if (!aiStyle) return null;
-            return (
-              <span
-                className={`px-1.5 py-0.5 text-[10px] rounded font-bold ${aiStyle.bg}`}
-                title={aiStyle.title}
-                data-testid={`ai-source-badge-${candidate.id}`}
-              >
-                {aiStyle.label}
-              </span>
-            );
-          })()}
+          <EnrichmentBadge candidate={candidate} isAdmin={isAdmin} />
           <Button
             variant="outline"
             size="sm"

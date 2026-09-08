@@ -1,0 +1,71 @@
+{
+  "summary": "Executed targeted backend + UI regression for approved LLM chain, enrichment badge visibility, atomic background enrichment writes, and admin monitoring/talent-search screens (public preview URL, no production candidate mutations).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "NVIDIA NIM GPT-OSS adapter (services/llm_providers.call_gpt_oss)",
+        "issue": "Live synthetic call fails consistently with ProviderError http_410 (NVIDIA /v1/chat/completions) so Nemotron→GPT forced fallback cannot stop on GPT and drops to Emergent.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "/app/backend/scripts/retry_all_failed_enrichment.py",
+        "issue": "Read-only retry script still queries ai_fallback_chain with retired token strict_qwen_no_fallback; violates full Qwen-removal expectation and skews missed-profile counting.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "NVIDIA NIM Nemotron adapter (services/llm_providers.call_nemotron)",
+        "issue": "Live synthetic checks are flaky: passed once, then repeated ProviderError http_503 on retry. Chain resilience works, but primary provider availability is unstable."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Admin AI Monitoring page route",
+        "issue": "Direct /admin/ai-monitoring URL redirects to /website/Index.html; active route is /admin/system-health (AI tab). If deep-link is expected, route alias is missing.",
+        "affected_selectors": [
+          "[data-testid='ai-monitoring-page']"
+        ]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Admin Candidate Bank",
+        "issues": [
+          "Cookie preferences tray overlays lower viewport area on smaller heights, can obstruct bottom interactions."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_llm_chain_badges_phase55.py",
+    "/app/test_reports/pytest/pytest_llm_chain_badges_phase55.xml"
+  ],
+  "action_items": [
+    "Fix GPT-OSS provider path/model compatibility causing HTTP 410 so Nemotron→GPT fallback stage is usable in production.",
+    "Update retry_all_failed_enrichment.py query filter to remove strict_qwen_no_fallback residue and align with approved chain-only historical counting.",
+    "(Optional) Add /admin/ai-monitoring route alias to /admin/system-health?tab=ai if legacy bookmarks must continue working.",
+    "Investigate intermittent Nemotron 503s (provider quota/availability/rate window) and add retries/backoff if needed."
+  ],
+  "critical_code_review_comments": [
+    "backend/services/bill_llm_body.py docstring still says 'RunPod vLLM' though code uses approved chain via llm_service.chat_completion; update wording to avoid operational confusion.",
+    "backend/routes/admin_monitoring.py top docstring still references RunPod/Qwen language in endpoint descriptions; implementation is mostly retired-provider compatibility stubs but comments are stale.",
+    "backend/services/embeddings.py header still references RunPod transport although initialize() returns False (retired path)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_llm_chain_badges_phase55.py",
+    "/app/test_reports/iteration_192.json"
+  ],
+  "success_rate": {
+    "backend": "79%",
+    "frontend": "85%"
+  },
+  "seed_data_creation": "No DB seed/write performed. Synthetic prompts only for live provider checks; write-path tests used MOCKED PyMongo objects.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend pytest file already includes: live adapter checks, forced fallback via MOCKED upstream faults, JSON quality gate transitions, all-fail sanitized error checks, _apply_bg_enrichment atomic write assertions with MOCKED Mongo, and llm_ab._extract_one mocks. UI validated on public preview using admin credentials: Candidate Bank badges show Pending/Failed/N, system-health AI tab loads provider chain, dry-run button clickable, talent-search page loads, responsive checks pass at 320/768/1024/1440.",
+  "rca of the issue": "1) GPT-OSS stage failure RCA: Repro by calling services.llm_providers.call_gpt_oss() with synthetic JSON prompt; consistently returns ProviderError(http_410). In forced-fallback test (Nemotron mocked failure), chain falls through GPT to Emergent, proving traversal works but GPT stage is unavailable. Mitigation: verify NVIDIA model id/base endpoint entitlement and adjust adapter request mapping accordingly. 2) Retry script residue RCA: /backend/scripts/retry_all_failed_enrichment.py count_documents filter still requires ai_fallback_chain contains strict_qwen_no_fallback, so post-migration missed-profile inventory is incorrect and still tied to retired taxonomy. Mitigation: switch filter to approved source ids or enrichment_status-only analytics as intended."
+}

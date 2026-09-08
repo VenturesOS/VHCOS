@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="19" time="9.614" timestamp="2026-09-08T05:26:59.961267+00:00" hostname="agent-env-cd0f4fa2-09a3-4d74-8a11-0788431b48fe"><testcase classname="tests.test_llm_chain_badges_phase55" name="test_live_nemotron_adapter_synthetic_json" time="1.788" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_live_mistral_adapter_synthetic_json" time="0.149"><failure message="services.llm_providers.ProviderError: http_404">model_key = 'NVIDIA_FALLBACK_MODEL'
+system_prompt = 'You are a strict JSON generator.'
+user_prompt = "Return ONLY valid JSON object with keys: name, key_skills. Use name='Synthetic Candidate' and at least 3 realistic key_skills."
+temperature = 0, max_tokens = 250, text_mode = False
+
+    async def _nvidia(model_key, system_prompt, user_prompt, temperature, max_tokens, text_mode):
+        key = os.environ.get("NEMOTRON_API_KEY")
+        base_url = os.environ.get("NEMOTRON_BASE_URL")
+        model = os.environ.get(model_key)
+        if not key or not base_url or not model:
+            raise ProviderError("not_configured")
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system_prompt},
+                         {"role": "user", "content": user_prompt}],
+            "temperature": temperature, "max_tokens": max_tokens, "stream": False,
+        }
+        if model_key == "NEMOTRON_MODEL":
+            # Hosted Nemotron does not support response_format. Validate JSON locally.
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+            payload["reasoning_effort"] = "none"
+        else:
+            # Mistral Large 2 is non-reasoning; its hosted output limit is 8192.
+            payload["max_tokens"] = min(max_tokens, 8192)
+            if not text_mode:
+                payload["response_format"] = {"type": "json_object"}
+        try:
+            # The wall-clock budget covers ALL retries, not 90 seconds per attempt.
+            async with asyncio.timeout(PROVIDER_TIMEOUT):
+                async with httpx.AsyncClient(timeout=httpx.Timeout(PROVIDER_TIMEOUT, connect=10.0)) as client:
+                    for attempt in range(3):
+                        try:
+                            response = await client.post(
+                                f"{base_url.rstrip('/')}/chat/completions", json=payload,
+                                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                            )
+                        except httpx.NetworkError:
+                            if attempt == 2:
+                                raise
+                            await asyncio.sleep(0.5 * (2 ** attempt) + random.uniform(0, 0.2))
+                            continue
+                        if response.status_code in (502, 503, 504) and attempt &lt; 2:
+                            await asyncio.sleep(0.5 * (2 ** attempt) + random.uniform(0, 0.2))
+                            continue
+                        # Permanent failures and throttling advance to the next provider.
+&gt;                       response.raise_for_status()
+
+services/llm_providers.py:59: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;Response [404 Not Found]&gt;
+
+    def raise_for_status(self) -&gt; Response:
+        """
+        Raise the `HTTPStatusError` if one occurred.
+        """
+        request = self._request
+        if request is None:
+            raise RuntimeError(
+                "Cannot call `raise_for_status` as the request "
+                "instance has not been set on this response."
+            )
+    
+        if self.is_success:
+            return self
+    
+        if self.has_redirect_location:
+            message = (
+                "{error_type} '{0.status_code} {0.reason_phrase}' for url '{0.url}'\n"
+                "Redirect location: '{0.headers[location]}'\n"
+                "For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/{0.status_code}"
+            )
+        else:
+            message = (
+                "{error_type} '{0.status_code} {0.reason_phrase}' for url '{0.url}'\n"
+                "For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/{0.status_code}"
+            )
+    
+        status_class = self.status_code // 100
+        error_types = {
+            1: "Informational response",
+            3: "Redirect response",
+            4: "Client error",
+            5: "Server error",
+        }
+        error_type = error_types.get(status_class, "Invalid status code")
+        message = message.format(self, error_type=error_type)
+&gt;       raise HTTPStatusError(message, request=request, response=self)
+E       httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://integrate.api.nvidia.com/v1/chat/completions'
+E       For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+
+/root/.venv/lib/python3.11/site-packages/httpx/_models.py:829: HTTPStatusError
+
+The above exception was the direct cause of the following exception:
+
+    def test_live_mistral_adapter_synthetic_json():
+&gt;       response = asyncio.run(call_mistral(
+            "You are a strict JSON generator.", SYNTHETIC_PROMPT, temperature=0, text_mode=False, max_tokens=250
+        ))
+
+tests/test_llm_chain_badges_phase55.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+services/llm_providers.py:85: in call_mistral
+    return await _nvidia("NVIDIA_FALLBACK_MODEL", system_prompt, user_prompt, temperature, max_tokens, text_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+model_key = 'NVIDIA_FALLBACK_MODEL'
+system_prompt = 'You are a strict JSON generator.'
+user_prompt = "Return ONLY valid JSON object with keys: name, key_skills. Use name='Synthetic Candidate' and at least 3 realistic key_skills."
+temperature = 0, max_tokens = 250, text_mode = False
+
+    async def _nvidia(model_key, system_prompt, user_prompt, temperature, max_tokens, text_mode):
+        key = os.environ.get("NEMOTRON_API_KEY")
+        base_url = os.environ.get("NEMOTRON_BASE_URL")
+        model = os.environ.get(model_key)
+        if not key or not base_url or not model:
+            raise ProviderError("not_configured")
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system_prompt},
+                         {"role": "user", "content": user_prompt}],
+            "temperature": temperature, "max_tokens": max_tokens, "stream": False,
+        }
+        if model_key == "NEMOTRON_MODEL":
+            # Hosted Nemotron does not support response_format. Validate JSON locally.
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+            payload["reasoning_effort"] = "none"
+        else:
+            # Mistral Large 2 is non-reasoning; its hosted output limit is 8192.
+            payload["max_tokens"] = min(max_tokens, 8192)
+            if not text_mode:
+                payload["response_format"] = {"type": "json_object"}
+        try:
+            # The wall-clock budget covers ALL retries, not 90 seconds per attempt.
+            async with asyncio.timeout(PROVIDER_TIMEOUT):
+                async with httpx.AsyncClient(timeout=httpx.Timeout(PROVIDER_TIMEOUT, connect=10.0)) as client:
+                    for attempt in range(3):
+                        try:
+                            response = await client.post(
+                                f"{base_url.rstrip('/')}/chat/completions", json=payload,
+                                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                            )
+                        except httpx.NetworkError:
+                            if attempt == 2:
+                                raise
+                            await asyncio.sleep(0.5 * (2 ** attempt) + random.uniform(0, 0.2))
+                            continue
+                        if response.status_code in (502, 503, 504) and attempt &lt; 2:
+                            await asyncio.sleep(0.5 * (2 ** attempt) + random.uniform(0, 0.2))
+                            continue
+                        # Permanent failures and throttling advance to the next provider.
+                        response.raise_for_status()
+                        data = response.json()
+                        break
+            choice = data["choices"][0]
+            content = choice["message"].get("content")
+            if choice.get("finish_reason") == "length":
+                raise ProviderError("truncated_output")
+            if not isinstance(content, str) or not content.strip():
+                raise ProviderError("empty_content")
+            return {"content": content, "model": model, "usage": data.get("usage", {}),
+                    "finish_reason": choice.get("finish_reason")}
+        except (asyncio.TimeoutError, httpx.TimeoutException) as exc:
+            raise ProviderError("timeout") from exc
+        except httpx.HTTPStatusError as exc:
+&gt;           raise ProviderError(f"http_{exc.response.status_code}") from exc
+E           services.llm_providers.ProviderError: http_404
+
+services/llm_providers.py:73: ProviderError</failure></testcase><testcase classname="tests.test_llm_chain_badges_phase55" name="test_live_haiku_adapter_synthetic_json" time="2.995" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_fallback_forced_to_gpt_when_nemotron_fails" time="1.571"><failure message="AssertionError: {'_fallback_chain': ['nvidia_nemotron_550b', 'nvidia_mistral_large_2', 'emergent_haiku_4_5'], '_fallback_errors': [{'r...gement&quot;, &quot;Cloud Architecture (AWS/Azure)&quot;, &quot;Machine Learning and Python&quot;]}', 'model': 'claude-haiku-4-5-20251001', ...}&#10;assert 'emergent_haiku_4_5' == 'nvidia_mistral_large_2'&#10;  &#10;  - nvidia_mistral_large_2&#10;  + emergent_haiku_4_5">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0xffb6e03a6750&gt;
+
+    def test_fallback_forced_to_gpt_when_nemotron_fails(monkeypatch):
+        from services import llm_fallback_service as lfs
+    
+        async def _fail_nemo(*_, **__):
+            raise ProviderError("mock_nemotron_failure")
+    
+        monkeypatch.setattr(lfs, "_call_nemotron", _fail_nemo)
+    
+        out = asyncio.run(call_llm_chain(
+            "You are a strict JSON generator.",
+            SYNTHETIC_PROMPT,
+            temperature=0,
+            max_tokens=250,
+            json_mode=True,
+            validator=lambda d: bool(d.get("name") and d.get("key_skills")),
+        ))
+    
+&gt;       assert out.get("source") == "nvidia_mistral_large_2", out
+E       AssertionError: {'_fallback_chain': ['nvidia_nemotron_550b', 'nvidia_mistral_large_2', 'emergent_haiku_4_5'], '_fallback_errors': [{'r...gement", "Cloud Architecture (AWS/Azure)", "Machine Learning and Python"]}', 'model': 'claude-haiku-4-5-20251001', ...}
+E       assert 'emergent_haiku_4_5' == 'nvidia_mistral_large_2'
+E         
+E         - nvidia_mistral_large_2
+E         + emergent_haiku_4_5
+
+tests/test_llm_chain_badges_phase55.py:87: AssertionError</failure></testcase><testcase classname="tests.test_llm_chain_badges_phase55" name="test_fallback_forced_to_haiku_when_nemo_and_gpt_fail" time="1.281" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[None]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[[]]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[123]" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[{}]" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_invalid_or_empty_json_triggers_next_provider[{&quot;x&quot;:1}]" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_all_failed_contains_only_approved_chain_and_sanitized_reasons" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_returns_false_when_candidate_missing" time="0.958" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_returns_false_when_atomic_filter_does_not_match" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_marks_success_and_clears_stale_error" time="0.003" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_apply_bg_enrichment_returns_false_when_write_match_fails" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_retry_script_readonly_but_no_qwen_chain_residue" time="0.000" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_llm_ab_comparison_model_is_mistral_and_no_qwen_labeling" time="0.001" /><testcase classname="tests.test_llm_chain_badges_phase55" name="test_llm_ab_extract_one_uses_nemotron_and_mistral_with_mocks" time="0.003" /></testsuite></testsuites>

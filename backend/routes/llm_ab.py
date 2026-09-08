@@ -1,5 +1,5 @@
 """
-LLM Extraction A/B — Nemotron vs RunPod Qwen quality comparison.
+LLM Extraction A/B — Nemotron vs Nemotron Super 120B quality comparison.
 
 Runs the first N candidates captured through the Chrome extension through
 BOTH extraction models in parallel and produces an extensive quality
@@ -36,7 +36,7 @@ from config import db
 from utils import require_role
 from services.llm_fallback_service import (
     _call_nemotron,
-    _call_runpod_vllm,
+    _call_nvidia_fallback,
     _extract_json_from_response,
 )
 
@@ -111,7 +111,7 @@ def _normalise_for_agreement(v: Any) -> Any:
 
 async def _extract_one(raw_text: str, candidate_name: str) -> Dict[str, Any]:
     """
-    Run Nemotron + Qwen on the same raw_text in parallel.
+    Run Nemotron + Nemotron Super 120B on the same raw_text in parallel.
     Returns a dict with per-model output, elapsed_ms, and error info.
     """
     import time
@@ -144,10 +144,10 @@ async def _extract_one(raw_text: str, candidate_name: str) -> Dict[str, Any]:
         except Exception as e:
             return {"ok": False, "error": f"{type(e).__name__}: {e}", "elapsed_ms": int((time.time() - t0) * 1000), "output": None}
 
-    async def _qwen():
+    async def _nemotron_super():
         t0 = time.time()
         try:
-            r = await _call_runpod_vllm(AB_SYSTEM_PROMPT, user_prompt)
+            r = await _call_nvidia_fallback(AB_SYSTEM_PROMPT, user_prompt)
             elapsed = int((time.time() - t0) * 1000)
             if not r:
                 return {"ok": False, "error": "no response", "elapsed_ms": elapsed, "output": None}
@@ -170,8 +170,8 @@ async def _extract_one(raw_text: str, candidate_name: str) -> Dict[str, Any]:
         except Exception as e:
             return {"ok": False, "error": f"{type(e).__name__}: {e}", "elapsed_ms": int((time.time() - t0) * 1000), "output": None}
 
-    nemo, qwen = await asyncio.gather(_nemo(), _qwen())
-    return {"candidate_name": candidate_name, "nemotron": nemo, "qwen": qwen}
+    nemo, nemotron_super = await asyncio.gather(_nemo(), _nemotron_super())
+    return {"candidate_name": candidate_name, "nemotron": nemo, "nemotron_super": nemotron_super}
 
 
 def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -182,9 +182,9 @@ def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     # Successes
     nemo_ok = [r["nemotron"] for r in results if r["nemotron"].get("ok")]
-    qwen_ok = [r["qwen"] for r in results if r["qwen"].get("ok")]
+    nemotron_super_ok = [r["nemotron_super"] for r in results if r["nemotron_super"].get("ok")]
     nemo_repaired = sum(1 for r in results if r["nemotron"].get("json_repaired"))
-    qwen_repaired = sum(1 for r in results if r["qwen"].get("json_repaired"))
+    nemotron_super_repaired = sum(1 for r in results if r["nemotron_super"].get("json_repaired"))
 
     # Latency stats
     def _lat_stats(lst):
@@ -203,18 +203,18 @@ def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         }
 
     nemo_latency = _lat_stats([r["nemotron"] for r in results])
-    qwen_latency = _lat_stats([r["qwen"] for r in results])
+    nemotron_super_latency = _lat_stats([r["nemotron_super"] for r in results])
 
     # Field-fill rate per critical scalar field
     field_fill: Dict[str, Dict[str, float]] = {}
     for f in CRITICAL_SCALAR_FIELDS:
         nemo_hits = sum(1 for r in nemo_ok if _is_populated((r.get("output") or {}).get(f)))
-        qwen_hits = sum(1 for r in qwen_ok if _is_populated((r.get("output") or {}).get(f)))
+        nemotron_super_hits = sum(1 for r in nemotron_super_ok if _is_populated((r.get("output") or {}).get(f)))
         field_fill[f] = {
             "nemotron_pct": round(100 * nemo_hits / max(len(nemo_ok), 1), 1),
-            "qwen_pct": round(100 * qwen_hits / max(len(qwen_ok), 1), 1),
+            "nemotron_super_pct": round(100 * nemotron_super_hits / max(len(nemotron_super_ok), 1), 1),
             "nemotron_count": nemo_hits,
-            "qwen_count": qwen_hits,
+            "nemotron_super_count": nemotron_super_hits,
         }
 
     # Array richness — count populated items per array field
@@ -224,14 +224,14 @@ def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             return [len(x.get("output", {}).get(f) or []) for x in oks
                     if isinstance(x.get("output", {}).get(f), list)]
         n_cnts = _counts(nemo_ok)
-        q_cnts = _counts(qwen_ok)
+        q_cnts = _counts(nemotron_super_ok)
         array_richness[f] = {
             "nemotron_avg": round(statistics.mean(n_cnts), 2) if n_cnts else 0.0,
             "nemotron_median": statistics.median(n_cnts) if n_cnts else 0,
-            "qwen_avg": round(statistics.mean(q_cnts), 2) if q_cnts else 0.0,
-            "qwen_median": statistics.median(q_cnts) if q_cnts else 0,
+            "nemotron_super_avg": round(statistics.mean(q_cnts), 2) if q_cnts else 0.0,
+            "nemotron_super_median": statistics.median(q_cnts) if q_cnts else 0,
             "nemotron_zero_pct": round(100 * sum(1 for c in n_cnts if c == 0) / max(len(n_cnts), 1), 1),
-            "qwen_zero_pct": round(100 * sum(1 for c in q_cnts if c == 0) / max(len(q_cnts), 1), 1),
+            "nemotron_super_zero_pct": round(100 * sum(1 for c in q_cnts if c == 0) / max(len(q_cnts), 1), 1),
         }
 
     # Agreement rate — % of candidates where both models return same value on a field
@@ -240,10 +240,10 @@ def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         both = 0
         agree = 0
         for r in results:
-            if not (r["nemotron"].get("ok") and r["qwen"].get("ok")):
+            if not (r["nemotron"].get("ok") and r["nemotron_super"].get("ok")):
                 continue
             n_val = _normalise_for_agreement((r["nemotron"].get("output") or {}).get(f))
-            q_val = _normalise_for_agreement((r["qwen"].get("output") or {}).get(f))
+            q_val = _normalise_for_agreement((r["nemotron_super"].get("output") or {}).get(f))
             if n_val is None and q_val is None:
                 continue
             both += 1
@@ -256,40 +256,40 @@ def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         }
 
     # Winner per candidate: side with more populated critical scalars + more skills
-    winner = {"nemotron": 0, "qwen": 0, "tie": 0, "both_failed": 0}
+    winner = {"nemotron": 0, "nemotron_super": 0, "tie": 0, "both_failed": 0}
     for r in results:
         n_ok = r["nemotron"].get("ok")
-        q_ok = r["qwen"].get("ok")
+        q_ok = r["nemotron_super"].get("ok")
         if not n_ok and not q_ok:
             winner["both_failed"] += 1
             continue
         if not n_ok:
-            winner["qwen"] += 1
+            winner["nemotron_super"] += 1
             continue
         if not q_ok:
             winner["nemotron"] += 1
             continue
         n_score = sum(1 for f in CRITICAL_SCALAR_FIELDS if _is_populated((r["nemotron"].get("output") or {}).get(f)))
         n_score += len(r["nemotron"].get("output", {}).get("key_skills") or []) * 0.1
-        q_score = sum(1 for f in CRITICAL_SCALAR_FIELDS if _is_populated((r["qwen"].get("output") or {}).get(f)))
-        q_score += len(r["qwen"].get("output", {}).get("key_skills") or []) * 0.1
+        q_score = sum(1 for f in CRITICAL_SCALAR_FIELDS if _is_populated((r["nemotron_super"].get("output") or {}).get(f)))
+        q_score += len(r["nemotron_super"].get("output", {}).get("key_skills") or []) * 0.1
         if abs(n_score - q_score) < 0.05:
             winner["tie"] += 1
         elif n_score > q_score:
             winner["nemotron"] += 1
         else:
-            winner["qwen"] += 1
+            winner["nemotron_super"] += 1
 
     # Empty critical field rate — how often a name/employer/exp is missing on a successful call
-    critical_missing = {"nemotron": 0, "qwen": 0}
+    critical_missing = {"nemotron": 0, "nemotron_super": 0}
     for r in nemo_ok:
         out = r.get("output") or {}
         if not (out.get("name") and out.get("current_employer") and out.get("experience_years") is not None):
             critical_missing["nemotron"] += 1
-    for r in qwen_ok:
+    for r in nemotron_super_ok:
         out = r.get("output") or {}
         if not (out.get("name") and out.get("current_employer") and out.get("experience_years") is not None):
-            critical_missing["qwen"] += 1
+            critical_missing["nemotron_super"] += 1
 
     # Response-size stats
     def _size_stats(lst):
@@ -302,19 +302,19 @@ def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "sample_size": n,
         "success": {
             "nemotron_ok": len(nemo_ok),
-            "qwen_ok": len(qwen_ok),
+            "nemotron_super_ok": len(nemotron_super_ok),
             "nemotron_success_pct": round(100 * len(nemo_ok) / n, 1),
-            "qwen_success_pct": round(100 * len(qwen_ok) / n, 1),
+            "nemotron_super_success_pct": round(100 * len(nemotron_super_ok) / n, 1),
             "nemotron_json_repaired": nemo_repaired,
-            "qwen_json_repaired": qwen_repaired,
+            "nemotron_super_json_repaired": nemotron_super_repaired,
         },
         "latency": {
             "nemotron": nemo_latency,
-            "qwen": qwen_latency,
+            "nemotron_super": nemotron_super_latency,
         },
         "response_size": {
             "nemotron": _size_stats([r["nemotron"] for r in results]),
-            "qwen": _size_stats([r["qwen"] for r in results]),
+            "nemotron_super": _size_stats([r["nemotron_super"] for r in results]),
         },
         "field_fill_rate": field_fill,
         "array_richness": array_richness,
@@ -322,21 +322,21 @@ def _compile_report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "winner_per_candidate": winner,
         "critical_missing": {
             "nemotron_pct": round(100 * critical_missing["nemotron"] / max(len(nemo_ok), 1), 1),
-            "qwen_pct": round(100 * critical_missing["qwen"] / max(len(qwen_ok), 1), 1),
+            "nemotron_super_pct": round(100 * critical_missing["nemotron_super"] / max(len(nemotron_super_ok), 1), 1),
             **critical_missing,
         },
-        "verdict": _verdict(winner, len(nemo_ok), len(qwen_ok), n),
+        "verdict": _verdict(winner, len(nemo_ok), len(nemotron_super_ok), n),
     }
 
 
-def _verdict(winner: Dict, nemo_ok: int, qwen_ok: int, n: int) -> str:
-    if nemo_ok == 0 and qwen_ok == 0:
+def _verdict(winner: Dict, nemo_ok: int, nemotron_super_ok: int, n: int) -> str:
+    if nemo_ok == 0 and nemotron_super_ok == 0:
         return "Both models failed — check API keys and pod status."
-    if winner["nemotron"] > winner["qwen"] * 1.5:
-        return f"Nemotron wins clearly ({winner['nemotron']} vs {winner['qwen']} — {round(100 * winner['nemotron'] / n, 1)}%)"
-    if winner["qwen"] > winner["nemotron"] * 1.5:
-        return f"Qwen wins clearly ({winner['qwen']} vs {winner['nemotron']} — {round(100 * winner['qwen'] / n, 1)}%)"
-    return f"Effectively tied (Nemotron {winner['nemotron']} / Qwen {winner['qwen']} / Tie {winner['tie']})"
+    if winner["nemotron"] > winner["nemotron_super"] * 1.5:
+        return f"Nemotron wins clearly ({winner['nemotron']} vs {winner['nemotron_super']} — {round(100 * winner['nemotron'] / n, 1)}%)"
+    if winner["nemotron_super"] > winner["nemotron"] * 1.5:
+        return f"Nemotron Super 120B wins clearly ({winner['nemotron_super']} vs {winner['nemotron']} — {round(100 * winner['nemotron_super'] / n, 1)}%)"
+    return f"Effectively tied (Nemotron {winner['nemotron']} / Nemotron Super 120B {winner['nemotron_super']} / Tie {winner['tie']})"
 
 
 async def _run_ab_job(run_id: str, sample_size: int, source_filter: str) -> None:
@@ -380,8 +380,8 @@ async def _run_ab_job(run_id: str, sample_size: int, source_filter: str) -> None
             }},
         )
 
-        # Concurrency 5 keeps us under Nemotron's 40 rpm free tier + Qwen pod concurrency
-        sem = asyncio.Semaphore(5)
+        # Concurrency 5 keeps us under Nemotron's 40 rpm free tier + Nemotron Super 120B pod concurrency
+        sem = asyncio.Semaphore(2)
         results: List[Dict[str, Any]] = []
 
         async def _one(idx: int, c: Dict):
@@ -454,6 +454,7 @@ async def start_ab_run(
         "started_by_name": current_user.get("name") or current_user.get("email"),
         "sample_size": sample_size,
         "source_filter": source_filter,
+        "comparison_model": "nemotron_super",
         "progress": {"done": 0, "total": sample_size},
         "results": [],
         "report": None,
@@ -469,7 +470,7 @@ async def list_ab_runs(current_user: dict = Depends(require_role(["admin"]))):
     cursor = db.llm_ab_runs.find(
         {},
         {"_id": 0, "id": 1, "status": 1, "created_at": 1, "completed_at": 1,
-         "sample_size": 1, "source_filter": 1, "progress": 1,
+         "sample_size": 1, "source_filter": 1, "comparison_model": 1, "progress": 1,
          "started_by_name": 1, "report.verdict": 1, "error": 1},
     ).sort("created_at", -1).limit(20)
     return [r async for r in cursor]

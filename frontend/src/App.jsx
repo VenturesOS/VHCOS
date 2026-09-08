@@ -1,6 +1,6 @@
 import "@/App.css";
 import React, { Suspense } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "./lib/auth";
@@ -225,6 +225,7 @@ function App() {
             <Route path="settings" element={<SettingsTabsPage />} />
             <Route path="bulk-import" element={<NaukriImportTabsPage />} />
             <Route path="system-health" element={<SystemHealthTabsPage />} />
+            <Route path="ai-monitoring" element={<Navigate to="/admin/system-health" replace />} />
             <Route path="security-audit" element={<SecurityTabsPage />} />
             <Route path="contact-submissions" element={<ContactSubmissionsPage />} />
             <Route path="blog-engine" element={<BlogTabsPage />} />

@@ -19,7 +19,7 @@ Two-tier inference:
      table of ~250 Indian companies and ~40 designation patterns. Returns a
      verdict OR `None` (when the rules can't decide).
 
-  2. **LLM fallback (RunPod Qwen)** — only invoked for company → industry when
+  2. **LLM fallback (approved LLM chain)** — only invoked for company → industry when
      the rule table misses. Caches results in `enrichment_cache` so we never
      pay the LLM cost twice for the same company. Phase 2 keeps the LLM scope
      narrow (one field, one inference) to control budget; we expand once we
@@ -308,7 +308,7 @@ def parse_notice_period_days(text: Optional[str]) -> Optional[int]:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# 6. LLM tier — company → industry via RunPod Qwen (cached)
+# 6. LLM tier — company → industry via approved LLM chain (cached)
 # ──────────────────────────────────────────────────────────────────────
 
 _INDUSTRY_LABEL_SET = (
@@ -320,7 +320,7 @@ _INDUSTRY_LABEL_SET = (
 
 
 async def infer_industry_llm(db, company: str) -> Optional[str]:
-    """Cached RunPod Qwen call. Looks up `enrichment_cache` first; only
+    """Cached approved LLM chain call. Looks up `enrichment_cache` first; only
     hits the LLM when the cache misses. Returns the resolved industry
     label or None on failure.
     """
@@ -340,16 +340,7 @@ async def infer_industry_llm(db, company: str) -> Optional[str]:
     except Exception as e:
         logger.debug(f"[Enricher] cache read failed: {e}")
 
-    # LLM call — direct RunPod Qwen request (chat completions, no guided JSON
-    # so we can ask for a plain label). Keep timeout tight; rules already
-    # handled the top-50 companies so this only fires for the long tail.
-    import os
-    import httpx
-    runpod_url = os.environ.get("RUNPOD_VLLM_URL", "").rstrip("/")
-    runpod_model = os.environ.get("RUNPOD_MODEL_NAME", "Qwen/Qwen2.5-14B-Instruct-AWQ")
-    if not runpod_url:
-        logger.warning("[Enricher] RUNPOD_VLLM_URL not configured; skipping LLM tier")
-        return None
+    from services.llm_service import chat_completion
 
     prompt = (
         f"Classify the company '{company}' into ONE of these industries:\n"
@@ -358,22 +349,10 @@ async def infer_industry_llm(db, company: str) -> Optional[str]:
         f"reply with 'Other'."
     )
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.post(
-                f"{runpod_url}/v1/chat/completions",
-                json={
-                    "model": runpod_model,
-                    "messages": [
-                        {"role": "system", "content": "You are an industry-classification assistant. Reply with only the label."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0,
-                    "max_tokens": 20,
-                },
-            )
-            r.raise_for_status()
-            data = r.json()
-        text = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+        text = (await chat_completion(
+            "You are an industry-classification assistant. Reply with only the label.",
+            prompt, temperature=0, max_tokens=100, timeout=45,
+        )).strip()
         text = text.strip(".").strip().split("\n")[0].split(",")[0].strip()
         valid = {x.strip() for x in _INDUSTRY_LABEL_SET.split(",")}
         if text not in valid:

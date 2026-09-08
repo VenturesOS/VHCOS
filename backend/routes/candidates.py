@@ -1080,18 +1080,18 @@ async def fix_ctc_outliers(
 async def bulk_re_enrich(
     background_tasks: BackgroundTasks,
     since_hours: int = Query(24, ge=1, le=720, description="Look-back window in hours (default 24h)"),
-    exclude_source: str = Query("runpod_qwen14b", description="Skip candidates already enriched by this source"),
+    exclude_source: str = Query("nvidia_nemotron_550b", description="Skip candidates already enriched by this source"),
     limit: int = Query(500, ge=1, le=5000, description="Max candidates to process in this run"),
     concurrency: int = Query(4, ge=1, le=16, description="Parallel extraction calls"),
     gaps_only: bool = Query(True, description="Only re-enrich candidates with missing top-card fields (exp=0, ctc=null, notice=null)"),
     dry_run: bool = Query(False),
-    force: bool = Query(False, description="Skip RunPod health check (use only if you know what you're doing)"),
+    force: bool = Query(False, description="Deprecated compatibility parameter; no provider health gate"),
     db=Depends(get_db),
     user=Depends(require_role(["admin"])),
 ):
-    """Bulk re-enrich candidates through the full LLM pipeline (RunPod-first).
+    """Bulk re-enrich candidates through the full LLM pipeline (NVIDIA-first).
     Runs asynchronously in the background. Poll progress via GET /data-quality/bulk-re-enrich/status.
-    Aborts if RunPod is unreachable (unless force=true) to avoid wasting fallback LLM credits.
+    Uses only the approved three-provider chain; no retired-provider health gate.
 
     Filter modes:
     - gaps_only=true (default): only candidates missing exp/ctc/notice/location
@@ -1143,48 +1143,17 @@ async def bulk_re_enrich(
             {"$sort": {"count": -1}},
         ]
         breakdown = await db.candidate_bank.aggregate(pipeline).to_list(50)
-        # Also probe RunPod health for visibility
-        runpod_url = os.environ.get("RUNPOD_VLLM_URL", "")
-        runpod_status = "unknown"
-        if runpod_url:
-            try:
-                # Use same auth derivation logic as the LLM caller
-                from services.llm_fallback_service import RUNPOD_API_KEY as _rk
-                _hdrs = {"Authorization": f"Bearer {_rk}"} if _rk else {}
-                async with httpx.AsyncClient(timeout=8.0) as c:
-                    r = await c.get(f"{runpod_url.rstrip('/')}/v1/models", headers=_hdrs)
-                    runpod_status = f"HTTP {r.status_code}" + (" ✅ healthy" if r.status_code == 200 else " ❌ DOWN")
-            except Exception as e:
-                runpod_status = f"❌ unreachable: {type(e).__name__}"
         return {
             "message": f"DRY RUN — {total_matched} candidates match (since {since_hours}h ago, excluding '{exclude_source}')",
             "candidates_to_process": min(total_matched, limit),
             "total_matched": total_matched,
             "source_breakdown": breakdown,
-            "runpod_health": runpod_status,
+            "provider_chain": ["nvidia_nemotron_550b", "nvidia_nemotron_super_120b", "emergent_haiku_4_5"],
             "dry_run": True,
         }
 
-    # ── Pre-flight: RunPod health check ──
-    if not force:
-        runpod_url = os.environ.get("RUNPOD_VLLM_URL", "")
-        if not runpod_url:
-            raise HTTPException(400, "RUNPOD_VLLM_URL not configured and force=false — aborting")
-        try:
-            from services.llm_fallback_service import RUNPOD_API_KEY as _rk
-            _hdrs = {"Authorization": f"Bearer {_rk}"} if _rk else {}
-            async with httpx.AsyncClient(timeout=8.0) as c:
-                r = await c.get(f"{runpod_url.rstrip('/')}/v1/models", headers=_hdrs)
-                if r.status_code != 200:
-                    raise HTTPException(
-                        503,
-                        f"RunPod /v1/models returned HTTP {r.status_code} — vLLM not ready. "
-                        "Fix RunPod first or use force=true to proceed with fallbacks.",
-                    )
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(503, f"RunPod health probe failed ({type(e).__name__}). Use force=true to override.")
+    if not (os.environ.get("NEMOTRON_API_KEY") or os.environ.get("EMERGENT_LLM_KEY")):
+        raise HTTPException(503, "No approved LLM provider is configured")
 
     # Fetch candidate list
     docs = await db.candidate_bank.find(
@@ -1293,7 +1262,7 @@ async def bulk_re_enrich(
     background_tasks.add_task(_run_job)
 
     return {
-        "message": f"Scheduled re-enrichment of {len(docs)} candidates (of {total_matched} matched). RunPod health OK.",
+        "message": f"Scheduled re-enrichment of {len(docs)} candidates (of {total_matched} matched) through NVIDIA → Nemotron Super 120B → Emergent.",
         "job_id": job_id,
         "scheduled": len(docs),
         "total_matched": total_matched,
