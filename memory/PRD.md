@@ -27,7 +27,7 @@ Current user goal: remove the retired RunPod/Qwen integration and its strict-onl
 - FastAPI backend with Motor/PyMongo and MongoDB Atlas. This preview connects to real candidate data: never assume it is a disposable test database.
 - Runtime backend 8001, frontend 3000, supervised services. API routes begin `/api`.
 - Frontend API base: `REACT_APP_BACKEND_URL`; MongoDB: `MONGO_URL` and unchanged `DB_NAME`.
-- Existing production EC2 service is separate from this preview; this session did not operate or restart that external service.
+- Existing production EC2 service is separate from this preview. User-confirmed service: **`vhc-backend.service`**, NOT `gunicorn.service` (gunicorn is the process). Production repo: `/home/ubuntu/vhc-platform`; Python 3.12.3; frontend output `frontend/build/`, existing webroot `/var/www/html/`. Earlier runbooks naming `gunicorn.service` are obsolete for this host.
 - Existing token key: `vhc_token`. Credentials remain in `memory/test_credentials.md`; none changed this session.
 - Active Talent Graph BGE-small sidecar remains 384-dimensional in `candidate_embeddings`. Do not mix those vectors with legacy 1024-dimensional BGE-M3 or planned NVIDIA embeddings.
 
@@ -58,7 +58,7 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - Full-profile persistence/post-processing and error scenarios used **MOCKED** fixtures; no existing candidate writes were performed for tests.
 - UI passed read-only checks for badges, NS filter, alias, provider configuration, and pending polling using **MOCKED** response fixtures for state transitions.
 - Main follow-up: 10 deterministic tests passed again; Python compilation passed; `/api/health` healthy with MongoDB/Redis OK and zero import failures. Optional Ruff is not installed.
-- External production rollout is not verified. The same new fallback setting must be applied when this code is adopted there.
+- Production update partially completed by user on 2026-09-08: merge `7ef8e308` committed; new fallback env configured; Vite build passed. CSV security removal, housekeeping script and dependency lock preserved. Restart failed because the suggested unit `gunicorn` does not exist, then user's `udo` typo prevented the attempted `vhc-backend` restart. Correct restart, built-frontend copy and production health verification are still pending. Do not repeat the pull/merge or backfill.
 - NVIDIA transient overload remains possible; verified retries/fallback handle it. No promise of permanent upstream availability.
 
 ## Documentation

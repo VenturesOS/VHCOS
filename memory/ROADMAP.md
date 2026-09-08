@@ -4,7 +4,7 @@ Updated 2026-09-08. Consult PRD.md for authoritative current provider configurat
 
 ## P0 — Verify user-facing outcome / remaining operational issues
 - New-capture chain and badges: **implemented, 29 targeted tests passed**. Observe genuinely new captures after this code is adopted on the running production server. No production rollout or real capture mutation was performed from this preview.
-- Ensure production has `NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3-super-120b-a12b` together with existing NVIDIA/Emergent settings when applying the code.
+- Production fallback env update and frontend build are user-confirmed complete. Remaining: restart **`vhc-backend`** (not `gunicorn`), copy built frontend, verify health/new captures. Do not repeat merge or initiate missed-profile retries. See CHANGELOG for 2026-09-08 terminal results.
 - BGE-small sidecar timeouts: still unresolved and out of this session's implementation scope. Investigate load/concurrency, timeouts, circuit breaking and predictable semantic-search failure handling without changing vector dimensions.
 
 ## P1 — Controlled housekeeping

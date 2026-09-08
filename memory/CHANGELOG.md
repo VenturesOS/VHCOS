@@ -1,3 +1,11 @@
+## Production terminal follow-up — 2026-09-08
+
+- Actual production systemd unit is **`vhc-backend.service`**, NOT `gunicorn.service`. Older runbooks naming gunicorn are obsolete for this host. Repo `/home/ubuntu/vhc-platform`, Python 3.12.3, frontend output `frontend/build/`, webroot `/var/www/html/`.
+- User preserved four server-only changes (two lock updates, housekeeping script, public candidate CSV removal) using backup `backup/ec2-before-enrichment-20260908T060308Z` and a reviewed, conflict-free merge.
+- User committed merge `7ef8e308`, set the fallback model (env backup `.env.backup-20260908T060601Z`) and built the frontend successfully.
+- Restart failed because main instructions used the obsolete unit name. User's subsequent `udo` typo also did not execute the correct restart. Old running workers therefore still log the retired chain.
+- Correct `sudo systemctl restart vhc-backend`, frontend copy and production health verification remain pending. No need to repeat pull/merge/env/build. No missed-profile retries/backfills were run.
+
 # VHCOS Changelog
 
 ## 2026-09-08 — New-capture enrichment repair
