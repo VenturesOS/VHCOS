@@ -218,7 +218,7 @@ export default function AIMonitoringPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-slate-500 mb-3">
-            Re-runs the NVIDIA → Nemotron Super 120B → Mistral Nemotron → Emergent pipeline on candidates with missing top-card fields (experience_years=0, CTC=null, notice_period=null). Dry-run first to see how many match.
+            Re-runs the Nemotron Super 120B → Nemotron Ultra 550B → Mistral Nemotron → Emergent pipeline on candidates with missing top-card fields (experience_years=0, CTC=null, notice_period=null). Dry-run first to see how many match.
           </p>
 
           {activeJob && (

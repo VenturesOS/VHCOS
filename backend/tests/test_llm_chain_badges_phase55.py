@@ -67,13 +67,13 @@ def test_live_haiku_adapter_synthetic_json():
 # ── Fallback traversal / quality gates ───────────────────────────────────────
 
 
-def test_fallback_forced_to_nvidia_fallback_when_nemotron_fails(monkeypatch):
+def test_fallback_forced_to_ultra_when_super_fails(monkeypatch):
     from services import llm_fallback_service as lfs
 
-    async def _fail_nemo(*_, **__):
-        raise ProviderError("mock_nemotron_failure")
+    async def _fail_super(*_, **__):
+        raise ProviderError("mock_super_failure")
 
-    monkeypatch.setattr(lfs, "_call_nemotron", _fail_nemo)
+    monkeypatch.setattr(lfs, "_call_nvidia_fallback", _fail_super)
 
     out = asyncio.run(call_llm_chain(
         "You are a strict JSON generator.",
@@ -84,9 +84,9 @@ def test_fallback_forced_to_nvidia_fallback_when_nemotron_fails(monkeypatch):
         validator=lambda d: bool(d.get("name") and d.get("key_skills")),
     ))
 
-    assert out.get("source") == "nvidia_nemotron_super_120b", out
-    assert out.get("_fallback_chain")[:2] == ["nvidia_nemotron_550b", "nvidia_nemotron_super_120b"]
-    assert out.get("_fallback_errors") and out["_fallback_errors"][0]["source"] == "nvidia_nemotron_550b"
+    assert out.get("source") == "nvidia_nemotron_550b", out
+    assert out.get("_fallback_chain")[:2] == ["nvidia_nemotron_super_120b", "nvidia_nemotron_550b"]
+    assert out.get("_fallback_errors") and out["_fallback_errors"][0]["source"] == "nvidia_nemotron_super_120b"
 
 
 def test_fallback_forced_to_haiku_when_nemo_and_fallback_fail(monkeypatch):
@@ -111,8 +111,8 @@ def test_fallback_forced_to_haiku_when_nemo_and_fallback_fail(monkeypatch):
     assert out.get("source") == "emergent_haiku_4_5", out
     assert out.get("_fallback_chain") == list(APPROVED_SOURCES), out.get("_fallback_chain")
     assert [e["source"] for e in out.get("_fallback_errors", [])] == [
-        "nvidia_nemotron_550b",
         "nvidia_nemotron_super_120b",
+        "nvidia_nemotron_550b",
         "nvidia_mistral_nemotron",
     ]
 
@@ -121,14 +121,14 @@ def test_fallback_forced_to_haiku_when_nemo_and_fallback_fail(monkeypatch):
 def test_invalid_or_empty_json_triggers_next_provider(monkeypatch, bad_payload):
     from services import llm_fallback_service as lfs
 
-    async def _bad_nemo(*_, **__):
+    async def _bad_super(*_, **__):
         return {"content": bad_payload}
 
-    async def _good_gpt(*_, **__):
+    async def _good_ultra(*_, **__):
         return {"content": '{"name":"Synthetic Candidate","key_skills":["python","fastapi","mongodb"]}'}
 
-    monkeypatch.setattr(lfs, "_call_nemotron", _bad_nemo)
-    monkeypatch.setattr(lfs, "_call_nvidia_fallback", _good_gpt)
+    monkeypatch.setattr(lfs, "_call_nvidia_fallback", _bad_super)
+    monkeypatch.setattr(lfs, "_call_nemotron", _good_ultra)
 
     out = asyncio.run(call_llm_chain(
         "sys",
@@ -136,8 +136,8 @@ def test_invalid_or_empty_json_triggers_next_provider(monkeypatch, bad_payload):
         json_mode=True,
         validator=lambda d: bool(d.get("name") and d.get("key_skills")),
     ))
-    assert out["source"] == "nvidia_nemotron_super_120b", out
-    assert out["_fallback_errors"][0]["source"] == "nvidia_nemotron_550b"
+    assert out["source"] == "nvidia_nemotron_550b", out
+    assert out["_fallback_errors"][0]["source"] == "nvidia_nemotron_super_120b"
 
 
 def test_all_failed_contains_only_approved_chain_and_sanitized_reasons(monkeypatch):

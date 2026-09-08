@@ -149,8 +149,8 @@ def test_extract_full_profile_synthetic_success_has_postprocessing_and_metadata(
                     {"company": "Acme", "designation": "Engineer", "from_date": "Jan 2020", "to_date": "Present", "is_current": True, "duration": "0y 0m"}
                 ],
             },
-            "_fallback_chain": ["nvidia_nemotron_550b", "nvidia_nemotron_super_120b"],
-            "_fallback_errors": [{"source": "nvidia_nemotron_550b", "reason": "quality_check_failed"}],
+            "_fallback_chain": ["nvidia_nemotron_super_120b"],
+            "_fallback_errors": [],
         }
 
     calls = []
@@ -185,8 +185,8 @@ def test_extract_full_profile_all_failed_shape_and_event_logged(monkeypatch):
         return {
             "error": "All LLM providers failed",
             "source": "all_failed",
-            "_fallback_chain": ["nvidia_nemotron_550b", "nvidia_nemotron_super_120b", "emergent_haiku_4_5"],
-            "_fallback_errors": [{"source": "nvidia_nemotron_550b", "reason": "http_503"}],
+            "_fallback_chain": ["nvidia_nemotron_super_120b", "nvidia_nemotron_550b", "nvidia_mistral_nemotron", "emergent_haiku_4_5"],
+            "_fallback_errors": [{"source": "nvidia_nemotron_super_120b", "reason": "http_503"}],
         }
 
     calls = []

@@ -122,8 +122,8 @@ async def llm_provider_status(current_user=Depends(get_current_user)):
     _require_admin(current_user)
     nvidia = bool(os.environ.get("NEMOTRON_API_KEY") and os.environ.get("NEMOTRON_BASE_URL"))
     return {"providers": [
-        {"id": "nemotron", "name": "NVIDIA Nemotron 550B", "configured": nvidia and bool(os.environ.get("NEMOTRON_MODEL"))},
-        {"id": "nemotron_super", "name": "Nemotron Super 120B", "configured": nvidia and bool(os.environ.get("NVIDIA_FALLBACK_MODEL"))},
+        {"id": "nemotron_super", "name": "Nemotron Super 120B (primary)", "configured": nvidia and bool(os.environ.get("NVIDIA_FALLBACK_MODEL"))},
+        {"id": "nemotron", "name": "NVIDIA Nemotron Ultra 550B", "configured": nvidia and bool(os.environ.get("NEMOTRON_MODEL"))},
         {"id": "mistral_nemotron", "name": "Mistral Nemotron", "configured": nvidia and bool(os.environ.get("NVIDIA_MISTRAL_MODEL"))},
         {"id": "emergent", "name": "Emergent Claude Haiku 4.5", "configured": bool(os.environ.get("EMERGENT_LLM_KEY"))},
     ]}

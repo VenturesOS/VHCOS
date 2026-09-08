@@ -10,7 +10,7 @@ Current user goal: remove the retired RunPod/Qwen integration and its strict-onl
 ## Explicit current user decisions
 - Keep NVIDIA first and Emergent Haiku last; remove Qwen completely from active inference.
 - NVIDIA GPT-OSS-120B is retired. User approved replacing it with another current NVIDIA endpoint and supplied their available model list.
-- Final verified chain: **Nemotron Ultra 550B → Nemotron Super 120B → Mistral Nemotron → Emergent Claude Haiku 4.5**.
+- Final verified chain: **Nemotron Super 120B → Nemotron Ultra 550B → Mistral Nemotron → Emergent Claude Haiku 4.5**. Super leads because production data showed it processes more captures successfully than Ultra (Ultra hits HTTP 429 rate limits under load).
 - **DO NOT retry or re-enrich previously missed profiles.** Earlier retry approval was expressly revoked. No missed-profile re-enrichment or backfill was executed in this session.
 - MongoDB awarded the user USD 500 startup credit. Credit activation/balance/expiry have not been verified here. Keep Atlas M10 for now; no urgent Flex or RDS migration.
 - No AWS DocumentDB, Azure Cosmos DB, or application-managed multi-Flex sharding.
@@ -32,14 +32,14 @@ Current user goal: remove the retired RunPod/Qwen integration and its strict-onl
 - Active Talent Graph BGE-small sidecar remains 384-dimensional in `candidate_embeddings`. Do not mix those vectors with legacy 1024-dimensional BGE-M3 or planned NVIDIA embeddings.
 
 ## Current enrichment architecture (implemented and tested 2026-09-08)
-1. `nvidia/nemotron-3-ultra-550b-a55b`, source `nvidia_nemotron_550b`, badge **N**.
-2. `nvidia/nemotron-3-super-120b-a12b`, source `nvidia_nemotron_super_120b`, badge **NS**.
+1. `nvidia/nemotron-3-super-120b-a12b`, source `nvidia_nemotron_super_120b`, badge **NS**. **Primary** — user-observed to handle more real captures cleanly than Ultra.
+2. `nvidia/nemotron-3-ultra-550b-a55b`, source `nvidia_nemotron_550b`, badge **N**. Fallback for the harder profiles Super struggles on.
 3. `mistralai/mistral-nemotron` via NVIDIA NIM, source `nvidia_mistral_nemotron`, badge **MN**. 15 s wall-clock budget (via `MISTRAL_TIMEOUT`) because this endpoint is intermittent on the current NVIDIA account. Fast escape to Haiku when unhealthy.
 4. `claude-haiku-4-5-20251001` through existing Emergent integrations, source `emergent_haiku_4_5`, badge **EC**.
 
 Not usable on this NVIDIA key (listed in catalog but requests hang indefinitely — do not resurrect without account-side unblock): `deepseek-ai/deepseek-v4-pro-0813`, `deepseek-ai/deepseek-v4-flash-0731`, `google/gemma-4-31b-it`, `moonshotai/kimi-k3`.
 
-Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL`, `EMERGENT_LLM_KEY`; `NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3-super-120b-a12b`; newly required `NVIDIA_MISTRAL_MODEL=mistralai/mistral-nemotron`. Existing deprecated env keys were preserved but are not read by active inference.
+Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL` (Ultra); `NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3-super-120b-a12b`; `NVIDIA_MISTRAL_MODEL=mistralai/mistral-nemotron`; `EMERGENT_LLM_KEY`. Env variable **names** are unchanged — only the chain-order in `APPROVED_SOURCES` was flipped, so nothing to update in production `.env` beyond what was already added.
 
 - Adapters: `backend/services/llm_providers.py`. Non-thinking Nemotron requests omit unsupported `response_format`; structured content is parsed and validated locally.
 - Orchestration: `backend/services/llm_fallback_service.py`; shared facade `services/llm_service.py`.

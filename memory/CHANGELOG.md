@@ -1,3 +1,14 @@
+## 2026-09-08 — Chain reordered: Super 120B now primary
+
+- User observed on live production data that **NS (Super 120B) processes more captures successfully than N (Ultra 550B)**. Ultra hits HTTP 429 rate limits under load; Super handles the same profiles cleanly. Reordered `APPROVED_SOURCES` accordingly.
+- **New order**: `nvidia_nemotron_super_120b` → `nvidia_nemotron_550b` → `nvidia_mistral_nemotron` → `emergent_haiku_4_5`.
+- Env variable **names** and values unchanged. `NEMOTRON_MODEL` still points to Ultra; `NVIDIA_FALLBACK_MODEL` still points to Super — only the chain-order in code flipped, so production `.env` needs **no change** beyond `NVIDIA_MISTRAL_MODEL` already added.
+- Code: `backend/services/llm_fallback_service.py` (`APPROVED_SOURCES` tuple + provider zip), `backend/routes/candidates.py` (bulk re-enrich `provider_chain` metadata), `backend/routes/admin_monitoring.py` (`/llm/provider-status` reflects new order and labels Super as "primary"), `frontend/src/pages/admin/AIMonitoringPage.jsx` (re-enrich helper text).
+- Tests updated: `test_fallback_forced_to_nvidia_fallback_when_nemotron_fails` renamed to `test_fallback_forced_to_ultra_when_super_fails` with mocks swapped to the new order. `test_fallback_forced_to_haiku_when_nemo_and_fallback_fail` error-order updated. `test_invalid_or_empty_json_triggers_next_provider` swapped mocks. `test_llm_provider_retry_and_full_extraction.py` fixture chains updated.
+- **29/29 tests pass**. Live end-to-end verified: extraction of a fresh synthetic profile completed in 8.5 s with `source=nvidia_nemotron_super_120b` (Super used first, no fallback triggered).
+- Frontend badge component unchanged — `NS` badge for Super is already present and correctly renders regardless of chain position.
+
+
 ## 2026-09-08 — Chain expanded to 4 providers (Mistral Nemotron inserted before Haiku)
 
 ### Chain change
