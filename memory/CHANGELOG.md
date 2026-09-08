@@ -1,3 +1,30 @@
+## 2026-09-08 — Chain expanded to 4 providers (Mistral Nemotron inserted before Haiku)
+
+### Chain change
+- **New chain**: NVIDIA Nemotron Ultra 550B → Nemotron Super 120B → **NVIDIA Mistral Nemotron** → Emergent Claude Haiku 4.5.
+- Also validated on user's NVIDIA account and rejected: `deepseek-ai/deepseek-v4-pro-0813`, `deepseek-ai/deepseek-v4-flash-0731`, `google/gemma-4-31b-it`, `moonshotai/kimi-k3` — all listed in the catalog but the endpoint hangs indefinitely (no HTTP response). Do not resurrect without an NVIDIA account-side unblock.
+- `mistralai/mistral-nemotron` returns cleanly (~350 ms warm, ~14 s cold) but is intermittent. Given a 15 s wall-clock budget via `MISTRAL_TIMEOUT` so the chain escapes fast to Haiku when the endpoint is unhealthy.
+
+### Code
+- `backend/services/llm_providers.py` — `_nvidia` now takes an optional `budget` (default `PROVIDER_TIMEOUT`). Added `call_nvidia_mistral(...)` using `MISTRAL_TIMEOUT=15.0`. Accepts `mistralai/*` model IDs (skips the Nemotron-only `chat_template_kwargs`/`reasoning_effort` payload extras).
+- `backend/services/llm_fallback_service.py` — `APPROVED_SOURCES` now 4-tuple. Chain zipped with the new provider in position 3.
+- `backend/routes/admin_monitoring.py` — `/api/admin/monitoring/llm/stats` returns `mistral_nemotron_pct`; `/llm/provider-status` reports the new provider's config status. Health grade counts Mistral successes.
+- `backend/routes/candidates.py` — bulk re-enrich response `provider_chain` metadata updated to the 4-item order.
+- `backend/.env` — `NVIDIA_MISTRAL_MODEL=mistralai/mistral-nemotron`.
+- `frontend/src/components/candidates/EnrichmentBadge.jsx` — new `MN` badge (indigo).
+- `frontend/src/components/candidate-bank/CandidateBankFilters.jsx` — new AI-source filter option "MN - Mistral Nemotron".
+- `frontend/src/pages/admin/AIMonitoringPage.jsx` — new metric row and updated re-enrich helper text.
+
+### Tests
+- `tests/test_llm_chain_badges_phase55.py` — mocked-fault tests now include `nvidia_mistral_nemotron` in the fallback chain; `test_all_failed_contains_only_approved_chain_and_sanitized_reasons` asserts a 4-item chain.
+- Live-verified end-to-end: Ultra path took 6.3 s (source `nvidia_nemotron_550b`). Forced Ultra+Super failure and Mistral live-returned in 1.3 s (source `nvidia_mistral_nemotron`). Forced Mistral hang → correctly walked to Haiku.
+- Full suite: **29 tests passed**.
+
+### Deployment note
+- Frontend badge fix from the prior session never reached production because the commit was not pushed to GitHub before the EC2 `git pull`. Production builds hit `/var/www/html/` at 06:06:30 UTC but the bundle contained zero references to `EnrichmentBadge` or the new source IDs (verified via curl of `/assets/*.js`).
+- To ship this change: push all changes via "Save to Github", then on production run `git pull && cd frontend && yarn install --frozen-lockfile && yarn build && sudo cp -a build/. /var/www/html/`, and `sudo systemctl restart vhc-backend`.
+
+
 ## Production verification completed — 2026-09-08
 
 - User successfully restarted **`vhc-backend`** (reported active) and copied the built frontend. New worker logs at 06:18 UTC confirm Super extraction success, enrichment metadata persistence, and normal extension capture processing. Ultra rate-limit HTTP429 correctly advances to the next provider.

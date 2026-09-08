@@ -1,4 +1,4 @@
-"""Candidate extraction: NVIDIA Nemotron → NVIDIA Nemotron Super 120B → Emergent Haiku.
+"""Candidate extraction: NVIDIA Nemotron Ultra 550B → NVIDIA Nemotron Super 120B → NVIDIA Mistral Nemotron → Emergent Haiku.
 
 Every entry point uses the same ordered chain. No retired inference service,
 health probe, configuration flag, or provider-specific gate can block fallback.
@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from services.llm_providers import (
     call_nemotron as _call_nemotron,
     call_nvidia_fallback as _call_nvidia_fallback,
+    call_nvidia_mistral as _call_nvidia_mistral,
     call_haiku as _call_emergent_llm_haiku,
     ProviderError,
 )
@@ -24,7 +25,12 @@ from services.profile_extraction_helpers import (
 )
 
 logger = logging.getLogger(__name__)
-APPROVED_SOURCES = ("nvidia_nemotron_550b", "nvidia_nemotron_super_120b", "emergent_haiku_4_5")
+APPROVED_SOURCES = (
+    "nvidia_nemotron_550b",
+    "nvidia_nemotron_super_120b",
+    "nvidia_mistral_nemotron",
+    "emergent_haiku_4_5",
+)
 
 
 class ExtractedProfile(BaseModel):
@@ -47,7 +53,7 @@ async def call_llm_chain(system_prompt, user_prompt, temperature=0, max_tokens=1
                          json_mode=False, validator=None):
     """One bounded attempt per provider, including parse/quality failure fallback."""
     chain, errors = [], []
-    providers = zip(APPROVED_SOURCES, (_call_nemotron, _call_nvidia_fallback, _call_emergent_llm_haiku))
+    providers = zip(APPROVED_SOURCES, (_call_nemotron, _call_nvidia_fallback, _call_nvidia_mistral, _call_emergent_llm_haiku))
     for source, call in providers:
         chain.append(source)
         try:

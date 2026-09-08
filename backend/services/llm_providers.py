@@ -10,18 +10,25 @@ import httpx
 logger = logging.getLogger(__name__)
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 PROVIDER_TIMEOUT = 90.0
+# Mistral Nemotron on NVIDIA NIM is intermittent: warm calls return in ~1s, cold
+# calls hang. A short budget lets us use it when it is healthy without stalling
+# the chain when it is not — Emergent Haiku takes over immediately after.
+MISTRAL_TIMEOUT = 15.0
 
 
 class ProviderError(RuntimeError):
     """Sanitized failure suitable for storing with an extraction attempt."""
 
 
-async def _nvidia(model_key, system_prompt, user_prompt, temperature, max_tokens, text_mode):
+async def _nvidia(model_key, system_prompt, user_prompt, temperature, max_tokens, text_mode,
+                  budget=None):
     key = os.environ.get("NEMOTRON_API_KEY")
     base_url = os.environ.get("NEMOTRON_BASE_URL")
     model = os.environ.get(model_key)
     if not key or not base_url or not model:
         raise ProviderError("not_configured")
+    if budget is None:
+        budget = PROVIDER_TIMEOUT
     payload = {
         "model": model,
         "messages": [{"role": "system", "content": system_prompt},
@@ -35,12 +42,15 @@ async def _nvidia(model_key, system_prompt, user_prompt, temperature, max_tokens
         if model_key == "NVIDIA_FALLBACK_MODEL":
             payload["temperature"] = 1.0
             payload["top_p"] = 0.95
+    elif model.startswith("mistralai/"):
+        # Mistral Nemotron hosted on NVIDIA NIM accepts the vanilla payload.
+        pass
     else:
         raise ProviderError("unsupported_model_configuration")
     try:
-        # The wall-clock budget covers ALL retries, not 90 seconds per attempt.
-        async with asyncio.timeout(PROVIDER_TIMEOUT):
-            async with httpx.AsyncClient(timeout=httpx.Timeout(PROVIDER_TIMEOUT, connect=10.0)) as client:
+        # The wall-clock budget covers ALL retries, not the per-attempt timeout.
+        async with asyncio.timeout(budget):
+            async with httpx.AsyncClient(timeout=httpx.Timeout(budget, connect=10.0)) as client:
                 for attempt in range(3):
                     try:
                         response = await client.post(
@@ -83,6 +93,11 @@ async def call_nemotron(system_prompt, user_prompt, temperature=0, text_mode=Fal
 
 async def call_nvidia_fallback(system_prompt, user_prompt, temperature=0, text_mode=False, max_tokens=16000):
     return await _nvidia("NVIDIA_FALLBACK_MODEL", system_prompt, user_prompt, temperature, max_tokens, text_mode)
+
+
+async def call_nvidia_mistral(system_prompt, user_prompt, temperature=0, text_mode=False, max_tokens=16000):
+    return await _nvidia("NVIDIA_MISTRAL_MODEL", system_prompt, user_prompt, temperature, max_tokens, text_mode,
+                         budget=MISTRAL_TIMEOUT)
 
 
 async def call_haiku(system_prompt, user_prompt, temperature=0, text_mode=False, max_tokens=16000):

@@ -10,7 +10,7 @@ Current user goal: remove the retired RunPod/Qwen integration and its strict-onl
 ## Explicit current user decisions
 - Keep NVIDIA first and Emergent Haiku last; remove Qwen completely from active inference.
 - NVIDIA GPT-OSS-120B is retired. User approved replacing it with another current NVIDIA endpoint and supplied their available model list.
-- Final verified chain: **Nemotron Ultra 550B → Nemotron Super 120B → Emergent Claude Haiku 4.5**.
+- Final verified chain: **Nemotron Ultra 550B → Nemotron Super 120B → Mistral Nemotron → Emergent Claude Haiku 4.5**.
 - **DO NOT retry or re-enrich previously missed profiles.** Earlier retry approval was expressly revoked. No missed-profile re-enrichment or backfill was executed in this session.
 - MongoDB awarded the user USD 500 startup credit. Credit activation/balance/expiry have not been verified here. Keep Atlas M10 for now; no urgent Flex or RDS migration.
 - No AWS DocumentDB, Azure Cosmos DB, or application-managed multi-Flex sharding.
@@ -34,9 +34,12 @@ Current user goal: remove the retired RunPod/Qwen integration and its strict-onl
 ## Current enrichment architecture (implemented and tested 2026-09-08)
 1. `nvidia/nemotron-3-ultra-550b-a55b`, source `nvidia_nemotron_550b`, badge **N**.
 2. `nvidia/nemotron-3-super-120b-a12b`, source `nvidia_nemotron_super_120b`, badge **NS**.
-3. `claude-haiku-4-5-20251001` through existing Emergent integrations, source `emergent_haiku_4_5`, badge **EC**.
+3. `mistralai/mistral-nemotron` via NVIDIA NIM, source `nvidia_mistral_nemotron`, badge **MN**. 15 s wall-clock budget (via `MISTRAL_TIMEOUT`) because this endpoint is intermittent on the current NVIDIA account. Fast escape to Haiku when unhealthy.
+4. `claude-haiku-4-5-20251001` through existing Emergent integrations, source `emergent_haiku_4_5`, badge **EC**.
 
-Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL`, `EMERGENT_LLM_KEY`; newly required `NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3-super-120b-a12b` is configured in this preview. Existing deprecated env keys were preserved but are not read by active inference.
+Not usable on this NVIDIA key (listed in catalog but requests hang indefinitely — do not resurrect without account-side unblock): `deepseek-ai/deepseek-v4-pro-0813`, `deepseek-ai/deepseek-v4-flash-0731`, `google/gemma-4-31b-it`, `moonshotai/kimi-k3`.
+
+Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL`, `EMERGENT_LLM_KEY`; `NVIDIA_FALLBACK_MODEL=nvidia/nemotron-3-super-120b-a12b`; newly required `NVIDIA_MISTRAL_MODEL=mistralai/mistral-nemotron`. Existing deprecated env keys were preserved but are not read by active inference.
 
 - Adapters: `backend/services/llm_providers.py`. Non-thinking Nemotron requests omit unsupported `response_format`; structured content is parsed and validated locally.
 - Orchestration: `backend/services/llm_fallback_service.py`; shared facade `services/llm_service.py`.
@@ -45,7 +48,7 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - CV extraction, industry classification, billing body generation, and talent summaries use the approved shared path rather than direct Qwen calls.
 - RunPod sync daemon is no longer scheduled. Historical monitoring endpoints return an explicit retired status without network access. Legacy remote BGE-M3 transport is disabled; BGE-small is unchanged.
 - `routes/extension.py` success persistence atomically saves enrichment status/source/time/hash/chain and clears stale errors. Conditional writes discard stale recapture results; failed attempts cannot replace an already-successful status.
-- UI: `EnrichmentBadge.jsx` shows N/NS/EC/Pending/Failed/Not enriched. Historical successful sources remain represented truthfully; old data is not rewritten.
+- UI: `EnrichmentBadge.jsx` shows N/NS/MN/EC/Pending/Failed/Not enriched. Historical successful sources remain represented truthfully; old data is not rewritten.
 - `useEnrichmentPolling.js` checks a bounded number of visible Pending rows, avoids overlapping requests, and cleans up on unmount. It does not initiate enrichment.
 - Admin A/B now compares Ultra vs Super. Historical reports are not relabeled as the new models.
 - `/admin/ai-monitoring` aliases existing `/admin/system-health`. Provider configuration display is not represented as proof of live availability.

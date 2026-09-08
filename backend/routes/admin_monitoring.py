@@ -82,6 +82,7 @@ async def llm_failure_stats(
 
     nvidia_ok = sum(r["count"] for r in by_source if r.get("_id") == "nvidia_nemotron_550b")
     gpt_ok = sum(r["count"] for r in by_source if r.get("_id") == "nvidia_nemotron_super_120b")
+    mistral_ok = sum(r["count"] for r in by_source if r.get("_id") == "nvidia_mistral_nemotron")
     anthropic_fallback = sum(r["count"] for r in by_source if r.get("_id") in ("emergent_haiku_4_5", "claude_haiku_4_5_emergent"))
     regex_only = sum(r["count"] for r in by_source if r.get("_id") == "regex_only")
 
@@ -92,11 +93,12 @@ async def llm_failure_stats(
         "summary": {
             "nvidia_nemotron_pct": round(nvidia_ok / total * 100, 1) if total else 0,
             "nemotron_super_pct": round(gpt_ok / total * 100, 1) if total else 0,
+            "mistral_nemotron_pct": round(mistral_ok / total * 100, 1) if total else 0,
             "anthropic_fallback_pct": round(anthropic_fallback / total * 100, 1) if total else 0,
             "regex_only_pct": round(regex_only / total * 100, 1) if total else 0,
             "anthropic_fallback_count": anthropic_fallback,
         },
-        "health_grade": _grade(nvidia_ok + gpt_ok, anthropic_fallback, total),
+        "health_grade": _grade(nvidia_ok + gpt_ok + mistral_ok, anthropic_fallback, total),
     }
 
 
@@ -122,6 +124,7 @@ async def llm_provider_status(current_user=Depends(get_current_user)):
     return {"providers": [
         {"id": "nemotron", "name": "NVIDIA Nemotron 550B", "configured": nvidia and bool(os.environ.get("NEMOTRON_MODEL"))},
         {"id": "nemotron_super", "name": "Nemotron Super 120B", "configured": nvidia and bool(os.environ.get("NVIDIA_FALLBACK_MODEL"))},
+        {"id": "mistral_nemotron", "name": "Mistral Nemotron", "configured": nvidia and bool(os.environ.get("NVIDIA_MISTRAL_MODEL"))},
         {"id": "emergent", "name": "Emergent Claude Haiku 4.5", "configured": bool(os.environ.get("EMERGENT_LLM_KEY"))},
     ]}
 

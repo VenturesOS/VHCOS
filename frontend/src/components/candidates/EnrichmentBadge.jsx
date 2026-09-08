@@ -4,6 +4,7 @@ const SOURCES = {
   nvidia_nemotron_550b: { label: 'N', title: 'NVIDIA Nemotron 550B', style: 'bg-slate-900 text-emerald-400 border-emerald-500' },
   openai_gpt_oss_120b: { label: 'GO', title: 'GPT-OSS 120B via NVIDIA', style: 'bg-amber-100 text-amber-800 border-amber-300' },
   nvidia_nemotron_super_120b: { label: 'NS', title: 'NVIDIA Nemotron Super 120B', style: 'bg-cyan-50 text-cyan-800 border-cyan-300' },
+  nvidia_mistral_nemotron: { label: 'MN', title: 'NVIDIA Mistral Nemotron', style: 'bg-indigo-50 text-indigo-800 border-indigo-300' },
   emergent_haiku_4_5: { label: 'EC', title: 'Emergent Claude Haiku 4.5', style: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
   claude_haiku_4_5_emergent: { label: 'EC', title: 'Emergent Claude Haiku 4.5', style: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
   regex_zero_cost: { label: 'RX', title: 'Rule-based extraction, not AI', style: 'bg-slate-100 text-slate-600 border-slate-300' },

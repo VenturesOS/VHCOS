@@ -227,6 +227,7 @@ export function CandidateBankFilters({
                     <SelectItem value="_all">All Sources</SelectItem>
                     <SelectItem value="nvidia">N - NVIDIA Nemotron 550B</SelectItem>
                     <SelectItem value="nemotron_super" data-testid="ai-source-filter-nemotron-super">NS - Nemotron Super 120B</SelectItem>
+                    <SelectItem value="mistral_nemotron" data-testid="ai-source-filter-mistral-nemotron">MN - Mistral Nemotron</SelectItem>
                     <SelectItem value="gpt_oss">GO - GPT-OSS 120B (historical)</SelectItem>
                     <SelectItem value="anthropic">AC - Anthropic Direct</SelectItem>
                     <SelectItem value="emergent">EC - Emergent Key</SelectItem>
