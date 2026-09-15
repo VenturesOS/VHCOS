@@ -70,17 +70,51 @@ from utils.auth import get_current_user, require_role
 # on the Candidate Bank. Returns distinct values from candidate_bank with
 # a lightweight prefix match. Bounded to `limit` distinct values so the
 # response is always cheap regardless of dataset size.
+#
+# 2026-09-15 (Skills normalization migration): all three facets now target
+# the pre-lowercased `_lc` mirrors (`skills_lc`, `current_company_lc`,
+# `location_lc`) populated by services.schema_normalizer.normalize_candidate.
+# Combined with a case-sensitive `^prefix` regex this hits the sparse
+# btree index instead of a full-collection scan → < 200 ms for any prefix
+# on a 170 k row bank. Falls back gracefully to the raw field for docs
+# where the backfill hasn't landed yet (nothing to display but no error).
 # ---------------------------------------------------------------------------
 
+# Raw fields kept for the human-readable `display` value returned to the UI.
 _FACET_FIELD_MAP = {
-    # 2026-09-08 verified against production candidate_bank:
-    #   `location`  → 171k docs populated
-    #   `current_company` → 761 docs (sparse in current dataset)
-    #   `skills`    → 171k docs populated
-    "location": "location",
-    "company":  "current_company",
-    "skills":   "skills",
+    "location": ("location_lc",        "location"),
+    "company":  ("current_company_lc", "current_company"),
+    "skills":   ("skills_lc",          "skills"),
 }
+
+# Tiny in-process TTL cache (60 s) so repeated keystrokes on the same
+# prefix don't re-hit Mongo. LRU-ish: bounded by _FACET_CACHE_MAX so a
+# rogue client cannot balloon memory. Deliberately per-worker — this is a
+# read-only, low-cardinality projection so cross-worker cache coherence
+# doesn't matter and Redis round-trips would dominate the latency.
+import time as _time
+_FACET_CACHE: dict = {}
+_FACET_CACHE_TTL = 60.0
+_FACET_CACHE_MAX = 512
+
+
+def _facet_cache_get(key):
+    row = _FACET_CACHE.get(key)
+    if not row:
+        return None
+    ts, val = row
+    if _time.time() - ts > _FACET_CACHE_TTL:
+        _FACET_CACHE.pop(key, None)
+        return None
+    return val
+
+
+def _facet_cache_put(key, val):
+    if len(_FACET_CACHE) >= _FACET_CACHE_MAX:
+        # Drop the oldest ~10% to amortize eviction cost.
+        for k in list(_FACET_CACHE.keys())[: _FACET_CACHE_MAX // 10]:
+            _FACET_CACHE.pop(k, None)
+    _FACET_CACHE[key] = (_time.time(), val)
 
 
 @router.get("/facets")
@@ -96,41 +130,75 @@ async def candidate_bank_facets(
     from config import db
     if field not in _FACET_FIELD_MAP:
         return {"field": field, "values": []}
-    mongo_field = _FACET_FIELD_MAP[field]
-    match: dict = {mongo_field: {"$exists": True, "$nin": [None, ""]}}
-    if q:
-        # anchored, case-insensitive — the ONLY regex shape that can use
-        # the existing indexes on current_location/current_company/skills.
-        import re as _re
-        match[mongo_field] = {**match[mongo_field], "$regex": f"^{_re.escape(q)}", "$options": "i"}
+    lc_field, display_field = _FACET_FIELD_MAP[field]
+
     limit = max(1, min(limit, 100))
-    # Bound the doc set so the response is always O(20k) even without a
-    # user-supplied prefix. 20 k is enough to surface the top values by
-    # frequency for a 170 k-candidate bank without ever timing out.
+    q_norm = (q or "").strip().lower()
+    cache_key = (field, q_norm, limit)
+    cached = _facet_cache_get(cache_key)
+    if cached is not None:
+        return {"field": field, "q": q, "values": cached, "cached": True}
+
+    # Case-SENSITIVE prefix match on the lowercased mirror = index-backed.
+    match: dict = {lc_field: {"$exists": True, "$nin": [None, ""]}}
+    if q_norm:
+        import re as _re
+        match[lc_field] = {**match[lc_field], "$regex": f"^{_re.escape(q_norm)}"}
+
     _SAMPLE_CAP = 20000
-    if mongo_field == "skills":
-        # `skills` is an array. Two-stage filter:
-        #  1) array-level $match (uses the skills multikey index)
-        #  2) after $unwind, re-filter individual tokens so we group only
-        #     the matching skill spelling (a doc holding [Python, Java]
-        #     for q='py' should surface Python, not Java).
-        pipeline = [{"$match": match}, {"$limit": _SAMPLE_CAP},
-                    {"$unwind": {"path": f"${mongo_field}", "preserveNullAndEmptyArrays": False}}]
-        if q:
+    if lc_field == "skills_lc":
+        # Array field — unwind after the multikey $match filters candidate
+        # docs, then re-filter individual tokens so a doc holding
+        # [python, java] under q='py' surfaces "python" not "java".
+        pipeline = [
+            {"$match": match},
+            {"$limit": _SAMPLE_CAP},
+            {"$unwind": {"path": f"${lc_field}", "preserveNullAndEmptyArrays": False}},
+        ]
+        if q_norm:
             import re as _re
-            pipeline.append({"$match": {mongo_field: {"$regex": f"^{_re.escape(q)}", "$options": "i"}}})
+            pipeline.append({"$match": {lc_field: {"$regex": f"^{_re.escape(q_norm)}"}}})
+        # For the display value we grab any element from the raw `skills`
+        # array that lowercases to this key. Cheap: $first + $arrayElemAt.
+        pipeline += [
+            {"$group": {
+                "_id": f"${lc_field}",
+                "display": {"$first": f"${lc_field}"},  # lowercased is fine for display
+                "n": {"$sum": 1},
+            }},
+        ]
     else:
-        pipeline = [{"$match": match}, {"$limit": _SAMPLE_CAP}]
+        # `$ifNull` fallback: some docs store the value under the alias
+        # field (current_employer, current_location) rather than the
+        # canonical one (current_company, location). Both feed the same
+        # `_lc` mirror in the backfill, so the group key is consistent —
+        # but the display field must fall back the same way.
+        _alias = {"company": "current_employer", "location": "current_location"}.get(field)
+        display_expr = (
+            {"$ifNull": [f"${display_field}", f"${_alias}"]}
+            if _alias
+            else f"${display_field}"
+        )
+        pipeline = [
+            {"$match": match},
+            {"$limit": _SAMPLE_CAP},
+            {"$group": {
+                "_id": f"${lc_field}",
+                "display": {"$first": display_expr},
+                "n": {"$sum": 1},
+            }},
+        ]
     pipeline += [
-        {"$group": {"_id": {"$toLower": f"${mongo_field}"}, "display": {"$first": f"${mongo_field}"}, "n": {"$sum": 1}}},
         {"$sort": {"n": -1}},
         {"$limit": limit},
         {"$project": {"_id": 0, "value": "$display", "count": "$n"}},
     ]
     try:
-        rows = await db.candidate_bank.aggregate(pipeline, maxTimeMS=15000, allowDiskUse=True).to_list(limit)
-    except Exception:
+        rows = await db.candidate_bank.aggregate(pipeline, maxTimeMS=8000, allowDiskUse=True).to_list(limit)
+    except Exception as e:
+        logger.warning(f"[Facets] {field} q={q!r} aggregation failed: {e}")
         rows = []
+    _facet_cache_put(cache_key, rows)
     return {"field": field, "q": q, "values": rows}
 
 

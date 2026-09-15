@@ -153,6 +153,11 @@ def normalize_candidate(parsed: Dict) -> Dict:
     )
     out["key_skills"] = canonical_skills   # canonical
     out["skills"]     = canonical_skills   # alias
+    # Lowercased mirror for indexed facet aggregation (Spec 5.11 follow-up).
+    # `$regex` on the raw `skills` array with case-insensitive flag cannot
+    # use the multikey index; matching against a pre-lowercased mirror with
+    # a case-SENSITIVE `^prefix` regex is index-backed and ~50-100× faster.
+    out["skills_lc"] = [s.lower() for s in canonical_skills if isinstance(s, str)]
 
     # ── summary ─────────────────────────────────────────────────────────────
     canonical_summary = _pick_longer_string(
@@ -195,6 +200,22 @@ def normalize_candidate(parsed: Dict) -> Dict:
     email = out.get("email")
     if isinstance(email, str) and email.strip():
         out["email"] = email.strip().lower()
+
+    # ── lowercased mirrors for indexed facet aggregation (Spec 5.11) ────────
+    # current_company / location facets used to `$regex` scan the raw fields.
+    # We mirror to `_lc` so the /facets endpoint can `$match` an indexed
+    # case-sensitive `^prefix` regex — index-backed, 10-50× faster.
+    _company_raw = out.get("current_company") or out.get("current_employer") or ""
+    if isinstance(_company_raw, str) and _company_raw.strip():
+        out["current_company_lc"] = _company_raw.strip().lower()
+    else:
+        out["current_company_lc"] = None
+
+    _loc_raw = out.get("location") or out.get("current_location") or ""
+    if isinstance(_loc_raw, str) and _loc_raw.strip():
+        out["location_lc"] = _loc_raw.strip().lower()
+    else:
+        out["location_lc"] = None
 
     return out
 

@@ -1938,3 +1938,78 @@ async def get_company_profile(
         },
         "mandates": mandate_details,
     }
+
+
+
+# ---------------------------------------------------------------------------
+# One-shot maintenance: backfill lowercased mirror fields on candidate_bank
+# ---------------------------------------------------------------------------
+# Populates skills_lc / current_company_lc / location_lc across the whole
+# 170 k-row bank so the /candidate-bank/facets endpoint can hit indexes
+# instead of full-collection regex scans. Kicked off manually so ops can
+# schedule it during a quiet window; safe to re-run (idempotent).
+
+# Module-level state so GET /status can read progress while the task runs.
+# Restarting the process resets this — acceptable because the backfill is
+# idempotent and only takes minutes on Atlas M10+.
+_BACKFILL_LC_STATE: dict = {
+    "status": "idle",   # idle | running | done | error
+    "started_at": None,
+    "finished_at": None,
+    "total": 0,
+    "processed": 0,
+    "updated": 0,
+    "error": None,
+}
+import asyncio as _bf_asyncio
+
+
+@admin_router.post("/admin/backfill-candidate-lc", tags=["Admin Maintenance"])
+async def start_backfill_candidate_lc(
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Kick off the lowercased-mirror backfill in the background.
+
+    Idempotent — re-running is safe. Returns 409 if a run is already
+    in-flight (poll `/admin/backfill-candidate-lc/status`).
+    """
+    if _BACKFILL_LC_STATE["status"] == "running":
+        raise HTTPException(status_code=409, detail="Backfill already running. Poll /status.")
+
+    _BACKFILL_LC_STATE.update({
+        "status": "running",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": None,
+        "total": 0, "processed": 0, "updated": 0, "error": None,
+    })
+
+    async def _progress(counters: dict) -> None:
+        _BACKFILL_LC_STATE.update(counters)
+
+    async def _runner() -> None:
+        try:
+            from scripts.backfill_candidate_lc import run_backfill
+            res = await run_backfill(db, progress_cb=_progress)
+            _BACKFILL_LC_STATE.update({
+                "status": "done",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                **res,
+            })
+        except Exception as e:
+            logger.exception("[Backfill LC] failed")
+            _BACKFILL_LC_STATE.update({
+                "status": "error",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "error": str(e),
+            })
+
+    _bf_asyncio.create_task(_runner())
+    return {"status": "started", "poll": "/api/admin/backfill-candidate-lc/status"}
+
+
+@admin_router.get("/admin/backfill-candidate-lc/status", tags=["Admin Maintenance"])
+async def get_backfill_candidate_lc_status(
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Return the current state of the mirror-fields backfill task."""
+    return dict(_BACKFILL_LC_STATE)

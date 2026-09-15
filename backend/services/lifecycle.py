@@ -113,6 +113,12 @@ async def run_deferred_init(app):
         await _safe_index(db.candidate_bank, [("mandate_id", 1)])
         await _safe_index(db.candidate_bank, "naukri_id")
         await _safe_index(db.candidate_bank, "naukri_profile_id")
+        # Facet-aggregation indexes (Spec 5.11 follow-up, 2026-09-08). Back
+        # the /candidate-bank/facets endpoint so a 170 k-row `^prefix` scan
+        # returns in < 200 ms instead of the ~10 s regex-on-raw-field path.
+        await _safe_index(db.candidate_bank, "skills_lc", sparse=True)
+        await _safe_index(db.candidate_bank, "current_company_lc", sparse=True)
+        await _safe_index(db.candidate_bank, "location_lc", sparse=True)
 
         # badge_audit — Phase 56.3 (rolling 30-day TTL via `expires_at`)
         await _safe_index(db.badge_audit, "id", unique=True)

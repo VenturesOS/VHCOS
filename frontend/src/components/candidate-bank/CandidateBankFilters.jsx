@@ -124,11 +124,23 @@ export function CandidateBankFilters({
             </div>
             <div>
               <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Building2 className="w-3 h-3" /> Company</Label>
-              <Input value={filters.company} onChange={(e) => updateFilter('company', e.target.value)} placeholder="Current company" data-testid="filter-company" className="text-sm" />
+              <SearchableMultiSelect
+                field="company"
+                value={filters.company}
+                onChange={(v) => updateFilter('company', v)}
+                placeholder="Search & pick companies…"
+                testid="filter-company"
+              />
             </div>
             <div>
               <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Code className="w-3 h-3" /> Skills</Label>
-              <Input value={skills} onChange={(e) => setSkills(e.target.value)} placeholder="Java, React, Python..." data-testid="filter-skills" className="text-sm" />
+              <SearchableMultiSelect
+                field="skills"
+                value={skills}
+                onChange={(v) => setSkills(v)}
+                placeholder="Search & pick skills…"
+                testid="filter-skills"
+              />
             </div>
             <div>
               <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Clock className="w-3 h-3" /> Notice Period</Label>
