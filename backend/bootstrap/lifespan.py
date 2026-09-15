@@ -47,6 +47,16 @@ async def lifespan(app: FastAPI):
     start_metrics_flusher()
     await ensure_metrics_indexes()
 
+    # 5. Log retention pruner — bounded delete_many every 6h for the
+    # telemetry collections that store timestamps as float/string (no
+    # native TTL index possible without a schema migration).
+    try:
+        from services.log_retention import start_retention_pruner
+        from config import db as _lr_db
+        start_retention_pruner(_lr_db)
+    except Exception as _e:
+        logger.warning(f"[Lifespan] Log retention pruner not started: {_e}")
+
     # 6. Talent Graph indexes — safe to run on every boot
     try:
         from services.talent_graph_service import ensure_embeddings_indexes

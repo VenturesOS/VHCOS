@@ -1,3 +1,35 @@
+## 2026-09-08 — Log retention (application-side pruner)
+
+### Investigation
+- Verified stored timestamp types on the four target collections. Native `expireAfterSeconds` TTL indexes only work on BSON `Date` — the current schema stores:
+  - `api_metrics.timestamp` — **float** (Unix epoch)
+  - `activity_logs.timestamp` — **str** (ISO 8601)
+  - `extraction_traces.created_at` — **str** (ISO 8601)
+  - `badge_audit.expires_at` — **BSON date**, **already** indexed with `expireAfterSeconds: 0` (verified in Atlas)
+- Rather than migrate three field types (would touch every write path and require a backfill on ~640k rows), added an application-side pruner that reads the existing field. Dry-run count against production Mongo: **0 stale rows today** in all three collections — the retention windows are conservative and won't nuke anything on first run.
+
+### Implementation
+- New `backend/services/log_retention.py` — bounded `delete_many` per collection, tagged with `comment="log_retention_prune"` for Atlas profiler visibility. Uses the existing `timestamp_-1` / `created_at_1` indexes to keep the filter cheap. Failure in one collection never blocks the others; startup is never blocked.
+- Wired into `backend/bootstrap/lifespan.py` after `ensure_metrics_indexes()`. First pass runs immediately after boot; then every 6 h.
+- `badge_audit` deliberately left alone — its native TTL index is doing the work.
+
+### Config (all optional; sensible defaults)
+```
+API_METRICS_RETENTION_DAYS        # default 30
+ACTIVITY_LOGS_RETENTION_DAYS      # default 90
+EXTRACTION_TRACES_RETENTION_DAYS  # default 30
+RETENTION_INTERVAL_HOURS          # default 6
+RETENTION_PRUNER_ENABLED          # default true; set false to disable
+```
+
+### Tests
+- New `backend/tests/test_log_retention.py` (4 tests): confirms float/ISO cutoff shapes and the correct 30/90/30-day windows, per-collection failure isolation, disable-by-env, and the Atlas-profiler `comment` tag.
+- Full suite: **38 tests pass** (4 new + 34 existing).
+
+### Runtime evidence
+- Backend log after restart: `[Retention] pruner started (every 6.0h, api_metrics=30d, activity_logs=90d, extraction_traces=30d)`.
+
+
 ## 2026-09-08 — BGE sidecar client stability fix
 
 **Symptoms addressed**: Talent-graph similarity requests occasionally stalled under load when the local BGE sidecar at `127.0.0.1:8002` was slow or momentarily unreachable. Root cause was inside `backend/services/embed_client.py`, not in call-site orchestration (`_cross_encoder_rerank` at `services/talent_graph_service.py:590` already correctly runs under `asyncio.to_thread`).
