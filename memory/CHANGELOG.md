@@ -1,3 +1,26 @@
+## 2026-09-08 — BGE sidecar client stability fix
+
+**Symptoms addressed**: Talent-graph similarity requests occasionally stalled under load when the local BGE sidecar at `127.0.0.1:8002` was slow or momentarily unreachable. Root cause was inside `backend/services/embed_client.py`, not in call-site orchestration (`_cross_encoder_rerank` at `services/talent_graph_service.py:590` already correctly runs under `asyncio.to_thread`).
+
+### Fixes
+- Replaced module-level `requests.post`/`requests.get` calls with a **shared `requests.Session`** mounted on a pooled `HTTPAdapter` (`pool_connections=4`, `pool_maxsize=32`, `max_retries=0`). Keep-alive avoids repeated TCP handshakes; explicit `max_retries=0` keeps failures visible to the existing circuit breaker instead of being masked by transparent retries.
+- Split the single 10 s timeout into **`(connect=2s, read=8s)`** so an unreachable sidecar surfaces in ~2 s and the breaker trips in ~6 s (3× consecutive failures) instead of ~30 s. Tunable via `BGE_SIDECAR_CONNECT_TIMEOUT` and `BGE_SIDECAR_TIMEOUT`.
+- Health probe now uses the same session and the split-timeout style: `(BGE_SIDECAR_CONNECT_TIMEOUT, 5.0)`.
+
+### Tests
+- New `backend/tests/test_embed_client_stability.py` (5 tests):
+  1. Shared session pooled adapter with `max_retries.total == 0`.
+  2. `embed_remote` passes the `(2.0, 8.0)` tuple as timeout.
+  3. Three simulated `ConnectionError`s trip the breaker to OPEN and the 4th call short-circuits without hitting HTTP.
+  4. `BGE_SIDECAR_URL=""` disables both embed and rerank cleanly.
+  5. Success path closes the breaker and increments `total_successes`.
+- Full LLM + sidecar suite: **34 tests pass** (5 new sidecar + 29 existing LLM/enrichment tests).
+
+### Config
+- `BGE_SIDECAR_TIMEOUT` default lowered from `10` to `8` seconds.
+- New: `BGE_SIDECAR_CONNECT_TIMEOUT` (default `2`). Existing prod `.env` needs no change; the defaults are picked up automatically.
+
+
 ## 2026-09-08 — Chain reordered: Super 120B now primary
 
 - User observed on live production data that **NS (Super 120B) processes more captures successfully than N (Ultra 550B)**. Ultra hits HTTP 429 rate limits under load; Super handles the same profiles cleanly. Reordered `APPROVED_SOURCES` accordingly.

@@ -25,12 +25,19 @@ is instant fallback. After 5 minutes, ONE probe call tests recovery
 
 ## Env vars
 
-  BGE_SIDECAR_URL          — base URL of the sidecar (required to enable)
-  BGE_SIDECAR_TIMEOUT      — per-request timeout in seconds (default 10)
-  BGE_BREAKER_THRESHOLD    — consecutive failures to trip (default 3)
-  BGE_BREAKER_OPEN_SECS    — how long to stay OPEN (default 300)
+  BGE_SIDECAR_URL              — base URL of the sidecar (required to enable)
+  BGE_SIDECAR_TIMEOUT          — read timeout in seconds (default 8)
+  BGE_SIDECAR_CONNECT_TIMEOUT  — connect timeout in seconds (default 2)
+  BGE_BREAKER_THRESHOLD        — consecutive failures to trip (default 3)
+  BGE_BREAKER_OPEN_SECS        — how long to stay OPEN (default 300)
 
 Set BGE_SIDECAR_URL='' to disable remote entirely and always use local.
+
+## Connection pooling
+
+Calls share a `requests.Session` with a pooled `HTTPAdapter`
+(`pool_maxsize=32`, `max_retries=0`). Keep-alive avoids TCP+TLS handshake
+per call and `max_retries=0` keeps failures visible to the breaker.
 """
 from __future__ import annotations
 
@@ -41,13 +48,26 @@ import time
 from typing import List, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
 
 logger = logging.getLogger(__name__)
 
 SIDECAR_URL = os.environ.get("BGE_SIDECAR_URL", "").rstrip("/")
-SIDECAR_TIMEOUT_SECS = float(os.environ.get("BGE_SIDECAR_TIMEOUT", "10"))
+SIDECAR_TIMEOUT_SECS = float(os.environ.get("BGE_SIDECAR_TIMEOUT", "8"))
+SIDECAR_CONNECT_TIMEOUT_SECS = float(os.environ.get("BGE_SIDECAR_CONNECT_TIMEOUT", "2"))
 EMBED_DIM = 384
 MAX_BATCH_SIZE = 64
+
+# Shared session with a pooled HTTPAdapter. `pool_maxsize` sets the number of
+# keep-alive sockets we hold per host; anything above this queues, which is
+# fine because callers always run under `asyncio.to_thread` and the breaker
+# short-circuits when the sidecar is unhealthy. `max_retries=0` keeps failures
+# visible to the breaker instead of masked by transparent retries.
+_session = requests.Session()
+_adapter = HTTPAdapter(pool_connections=4, pool_maxsize=32, max_retries=0)
+_session.mount("http://", _adapter)
+_session.mount("https://", _adapter)
+_REQUEST_TIMEOUT = (SIDECAR_CONNECT_TIMEOUT_SECS, SIDECAR_TIMEOUT_SECS)
 
 # ── Circuit breaker config ───────────────────────────────────────────
 _BREAKER_THRESHOLD = int(os.environ.get("BGE_BREAKER_THRESHOLD", "3"))
@@ -179,10 +199,10 @@ def embed_remote(texts: List[str]) -> Optional[List[Optional[List[float]]]]:
         return out
 
     try:
-        r = requests.post(
+        r = _session.post(
             f"{SIDECAR_URL}/embed",
             json={"texts": texts, "normalize": True},
-            timeout=SIDECAR_TIMEOUT_SECS,
+            timeout=_REQUEST_TIMEOUT,
         )
         if r.status_code == 503:
             logger.warning("[EmbedClient] sidecar 503 — model not warm yet")
@@ -214,10 +234,10 @@ def rerank_remote(query: str, documents: List[str], top_k: Optional[int] = None)
     if not _should_attempt():
         return None
     try:
-        r = requests.post(
+        r = _session.post(
             f"{SIDECAR_URL}/rerank",
             json={"query": query, "documents": documents, "top_k": top_k},
-            timeout=SIDECAR_TIMEOUT_SECS,
+            timeout=_REQUEST_TIMEOUT,
         )
         if r.status_code == 503:
             logger.warning("[EmbedClient] rerank 503 — model not warm yet")
@@ -241,7 +261,7 @@ def health_check() -> dict:
     if not SIDECAR_URL:
         return {"enabled": False, "reason": "BGE_SIDECAR_URL unset"}
     try:
-        r = requests.get(f"{SIDECAR_URL}/health", timeout=5)
+        r = _session.get(f"{SIDECAR_URL}/health", timeout=(SIDECAR_CONNECT_TIMEOUT_SECS, 5.0))
         r.raise_for_status()
         return {
             "enabled": True,
