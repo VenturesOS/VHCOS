@@ -18,6 +18,14 @@ teams_router = APIRouter(prefix="/api", tags=["Teams"])
 
 logger = logging.getLogger(__name__)
 
+# Fix 5.13 (spec 2026-09-08): canonical Active Job status set. User Section
+# 10 decision was `open + in_progress`; the production database currently
+# stores `active` on every open job, so all three are treated as equivalent
+# until a status normalization migration runs. This constant is the ONLY
+# place the "active" definition should live — team stats, team cards and any
+# other "active jobs" surface must import from here.
+ACTIVE_JOB_STATUSES = ("open", "in_progress", "active")
+
 
 # ============== PYDANTIC MODELS ==============
 
@@ -242,7 +250,35 @@ async def get_teams(
 
     teams = await db.teams.find(query, {"_id": 0}).to_list(100)
 
-    # Resolve company names dynamically
+    # Compute active_jobs_count per team from the jobs collection.
+    # Uses team_id directly (jobs carry it) which is the cleanest join,
+    # falling back to team.company_ids for legacy jobs that predate the
+    # denormalized team_id write.
+    team_ids = [t["id"] for t in teams]
+    all_company_ids = list({cid for t in teams for cid in (t.get("company_ids") or [])})
+    counts_by_team_id: dict[str, int] = {}
+    if team_ids:
+        cursor = db.jobs.aggregate([
+            {"$match": {"team_id": {"$in": team_ids}, "status": {"$in": list(ACTIVE_JOB_STATUSES)}}},
+            {"$group": {"_id": "$team_id", "n": {"$sum": 1}}},
+        ])
+        async for row in cursor:
+            counts_by_team_id[row["_id"]] = row["n"]
+
+    counts_by_company_id: dict[str, int] = {}
+    if all_company_ids:
+        cursor = db.jobs.aggregate([
+            {"$match": {
+                "team_id": {"$exists": False},
+                "company_id": {"$in": all_company_ids},
+                "status": {"$in": list(ACTIVE_JOB_STATUSES)},
+            }},
+            {"$group": {"_id": "$company_id", "n": {"$sum": 1}}},
+        ])
+        async for row in cursor:
+            counts_by_company_id[row["_id"]] = row["n"]
+
+    # Resolve company names dynamically + attach active_jobs_count
     for team in teams:
         cids = team.get("company_ids") or []
         if cids:
@@ -251,6 +287,10 @@ async def get_teams(
             ).to_list(len(cids))
             name_map = {c["id"]: c["name"] for c in companies}
             team["company_names"] = [name_map.get(cid, "Unknown") for cid in cids]
+        team["active_jobs_count"] = (
+            counts_by_team_id.get(team["id"], 0)
+            + sum(counts_by_company_id.get(cid, 0) for cid in cids)
+        )
 
     return [TeamResponse(**t) for t in teams]
 
@@ -618,7 +658,7 @@ async def get_team_stats(
         ]
     }
     total_jobs = await db.jobs.count_documents(jobs_query)
-    active_jobs = await db.jobs.count_documents({**jobs_query, "status": "active"})
+    active_jobs = await db.jobs.count_documents({**jobs_query, "status": {"$in": list(ACTIVE_JOB_STATUSES)}})
     
     # Count applications
     job_ids = await db.jobs.find(jobs_query, {"id": 1, "_id": 0}).to_list(1000)

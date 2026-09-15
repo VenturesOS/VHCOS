@@ -658,6 +658,47 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
             except Exception as _e:
                 # Never break stage transitions because of billing side-effects.
                 logger.warning("[applications] auto-draft bill failed for %s: %s", app_id, _e)
+
+        # Fix 5.1 (spec 2026-09-08) — a job whose headcount is fully hired
+        # should disappear from the active/open job view. When a candidate
+        # reaches `joined`, count the joined applications on the same job
+        # and, if it meets the job's headcount (default 1), transition the
+        # job's status to `filled`. Best-effort; never blocks the stage
+        # change. Idempotent — if the job is already `filled`/`archived` we
+        # do nothing.
+        if new_stage == "joined":
+            try:
+                job_id = application.get("job_id")
+                if job_id:
+                    job_doc = await db.jobs.find_one(
+                        {"id": job_id},
+                        {"_id": 0, "status": 1, "headcount": 1, "positions": 1, "vacancies": 1},
+                    )
+                    if job_doc and job_doc.get("status") not in ("filled", "archived", "closed"):
+                        headcount = int(
+                            job_doc.get("headcount")
+                            or job_doc.get("positions")
+                            or job_doc.get("vacancies")
+                            or 1
+                        )
+                        joined_count = await db.applications.count_documents(
+                            {"job_id": job_id, "stage": "joined"}
+                        )
+                        if joined_count >= headcount:
+                            await db.jobs.update_one(
+                                {"id": job_id},
+                                {"$set": {
+                                    "status": "filled",
+                                    "filled_at": datetime.now(timezone.utc).isoformat(),
+                                }},
+                            )
+                            logger.info(
+                                "[applications] job %s auto-filled (%d/%d joined)",
+                                job_id, joined_count, headcount,
+                            )
+            except Exception as _e:
+                # Auto-fill is opportunistic; never break the stage transition.
+                logger.warning("[applications] job auto-fill on joined failed: %s", _e)
     
     updated_application = await db.applications.find_one({"id": app_id}, {"_id": 0})
 

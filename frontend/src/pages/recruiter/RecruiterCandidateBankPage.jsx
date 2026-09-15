@@ -36,7 +36,7 @@ export default function RecruiterCandidateBankPage() {
   const [nextCursor, setNextCursor] = useState(null);
 
   const filterHook = useCandidateBankFilters();
-  const { currentPage, setCurrentPage, getApiParams, debouncedSearch, debouncedSkills } = filterHook;
+  const { currentPage, setCurrentPage, getApiParams, debouncedSearch, debouncedSkills, debouncedFiltersKey } = filterHook;
 
   const [activeView, setActiveView] = useState('candidates');
 
@@ -101,7 +101,8 @@ export default function RecruiterCandidateBankPage() {
     // Skip the heavy list fetch when opened via extension deep-link
     if (searchParams.get('candidateId')) return;
     loadCandidates();
-  }, [loadCandidates, searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, debouncedSkills, debouncedFiltersKey, searchParams]);
 
   const loadJobs = async () => {
     try {

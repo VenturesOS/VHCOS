@@ -1,3 +1,66 @@
+## 2026-09-08 — Emergent Spec Wave 1 (removals + P0 defects)
+
+Executing user-uploaded spec `Emergent_Fix_and_Employee_Performance_Analytics_Specification_WITH_IMAGES.docx`. Section 10 decisions captured in `memory/ANALYTICS_SPEC_DECISIONS.md`.
+
+### Removals — 5 obsolete pages retired (spec 5.6 / 5.9 / 5.10 / 5.16 / 5.17)
+- Deleted files: `pages/admin/DedupeMergePage.jsx`, `pages/admin/DigestEmailPage.jsx`, `pages/admin/LinkedInJobDraftsPage.jsx`, `pages/employer/FindCandidatesPage.jsx`, `pages/shared/TalentSearchABPage.jsx`.
+- Sidebar entries removed for all three roles (admin/recruiter/employer): Dedupe, Find Candidates, LLM A/B Testing, Digest Email, LinkedIn Drafts.
+- Routes removed from `App.jsx`; lazy imports pruned.
+- CommandPalette entry pruned.
+- 5 dead "Find Candidates" buttons/links removed from RecruiterDashboard, RecruiterJobsPage, admin JobsPage, EmployerDashboard, EmployerJobsPage.
+- Daily Digest scoring logic preserved (still needed for Wave 2 analytics).
+- Post-build grep: **0 references** in bundle to any of the 5 removed page components.
+
+### Data Bank — filters cleanup + live count (spec 5.11)
+- `hooks/useCandidateBankFilters.js`: `FILTER_KEYS` dropped `source`, `hasResume`, `mandateId`, `aiSource`, `smartTags`. Added `debouncedFiltersKey` (400 ms debounce over JSON-stringified filters) so downstream pages can auto-reload on any filter change.
+- `components/candidate-bank/CandidateBankFilters.jsx`: Removed Source, Has Resume, Mandate, AI Source, Smart Tags filter sections and their chips. Dropped now-unused `jobAPI` mandate fetch. `isAdmin` prop kept for backwards-compat but no longer changes what renders.
+- Wired `debouncedFiltersKey` into all three consumer pages so **the headline count and list refresh on every filter change**: `CandidateDataBankPage.jsx` (admin), `RecruiterCandidateBankPage.jsx`, `EmployerCandidateBankPage.jsx`. Fixes the "Phone/Email filters don't work" symptom (backend was fine; the UI just never re-fetched).
+- Note: Location / Company / Skills remain as text inputs. Server-side searchable multi-select is Wave 3 work.
+
+### Teams — active_jobs_count derived on read (spec 5.13)
+- `backend/routes/teams.py`: Added canonical `ACTIVE_JOB_STATUSES = ("open", "in_progress", "active")` — used everywhere "active job" is counted. `"active"` is included alongside `open`/`in_progress` because 100 % of the current production dataset uses `active`; user Section 10 decision was `open + in_progress` so this bridges the two until a status normalization migration runs.
+- `get_teams` now aggregates from the jobs collection in two passes (via `team_id`, fallback via `company_id` for legacy jobs) and attaches `active_jobs_count` per team.
+- `get_team_stats` now uses `$in ACTIVE_JOB_STATUSES` instead of the single-value `"active"` match.
+- Live verification against production Mongo after backend restart:
+  ```
+  Delhi Team          418 active jobs
+  Faridabad team      330
+  Gurgaon Team        306
+  Bengaluru team       80
+  Krishna Team          6
+  Jatin Yadav Team      5
+  Manorma yadav Team    1
+  ```
+
+### Jobs — auto-fill on joined (spec 5.1)
+- `backend/routes/applications.py`: When a candidate transitions to `joined`, the code now counts joined applications on the same job. If `joined_count >= headcount` (fallback field order: `headcount → positions → vacancies → 1`), the job's `status` transitions to `"filled"` and `filled_at` is stamped.
+- Best-effort — auto-fill errors log a warning and never break the stage transition.
+- Idempotent — jobs already in `filled`/`archived`/`closed` are left alone.
+
+### Tests
+- New `backend/tests/test_wave1_fixes.py` (5 tests): locks `ACTIVE_JOB_STATUSES` shape, TeamResponse default, headcount-field priority order, "joined only" gating on auto-fill, terminal-status guard.
+- Full suite: **43 tests pass** (5 new wave1 + 4 log_retention + 5 embed_client + 29 llm chain).
+
+### Build & runtime
+- `yarn build` succeeded in 10.2 s. Bundle now contains `EnrichmentBadge`, `nvidia_mistral_nemotron`, and none of the 5 removed page components.
+- Backend restart clean; `/api/health` returns `mongodb: ok, redis: ok`.
+
+### What's still pending
+
+**Wave 2 — Analytics rebuild (biggest remaining piece)**
+- Full Section 4 Employee Performance & KPI page: KPI Summary, Scorecard, Conversion View, Team Comparison, Annual Leaderboard, Employee Drill-down.
+- Dashboard headline change (5.1) — replace Hiring Funnel block with recruitment KPI markers.
+- Requires: locating the existing Daily Digest event→points collection (user Section 10 answer 1 said "in Mongo" — collection name to confirm).
+
+**Wave 3 — remaining fixes**
+- 5.2 Collective Pipeline From/To date filter
+- 5.7 Salary Benchmarking loading fix
+- 5.12 User Management team filter
+- 5.14 Bills & Invoices preview modal / email / download
+- 5.15 Blog Engine year=2026 + topic traction feedback
+- 5.11 Location / Company / Skills → server-side searchable multi-select
+
+
 ## 2026-09-08 — Log retention (application-side pruner)
 
 ### Investigation

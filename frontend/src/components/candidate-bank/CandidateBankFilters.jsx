@@ -5,10 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import {
   Search, Filter, X, ChevronDown, ChevronUp,
   Phone, Mail, MapPin, Building2, Code, Clock,
-  Briefcase, DollarSign, Database, FileText, EyeOff, Calendar, Target,
+  Briefcase, DollarSign, EyeOff, Calendar,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { jobAPI } from '../../lib/api';
 
 export const NOTICE_PERIODS = [
   'Immediate', '15 days', '30 days', '45 days', '60 days', '90 days', '90+ days',
@@ -26,6 +24,10 @@ function FilterChip({ label, onRemove }) {
 /**
  * Reusable filter panel for Candidate Bank pages (Admin, Employer, Recruiter).
  * Accepts filter state from `useCandidateBankFilters` hook.
+ *
+ * Spec 5.11 (2026-09-08): Source, Has Resume, Mandate, AI Source and Smart
+ * Tags filter sections were removed by user request. The `isAdmin` prop is
+ * still accepted for backwards-compat but no longer changes what renders.
  */
 export function CandidateBankFilters({
   search, setSearch,
@@ -35,18 +37,8 @@ export function CandidateBankFilters({
   activeFilterCount,
   clearFilters, setDatePreset,
   onSearch,
-  isAdmin = false,
+  isAdmin: _isAdmin = false,  // eslint-disable-line no-unused-vars
 }) {
-  const [mandates, setMandates] = useState([]);
-  useEffect(() => {
-    jobAPI.getAll().then(res => {
-      const active = (res.data || []).filter(j => j.status === 'active');
-      setMandates(active);
-    }).catch(() => {});
-  }, []);
-
-  const mandateLabel = mandates.find(m => m.id === filters.mandateId)?.title || filters.mandateId || '';
-
   return (
     <div className="p-4 space-y-3" data-testid="candidate-bank-filters">
       {/* Primary search bar */}
@@ -100,14 +92,9 @@ export function CandidateBankFilters({
           {(filters.minSalary || filters.maxSalary) && (
             <FilterChip label={`Salary: ${filters.minSalary || '0'}-${filters.maxSalary || 'any'}`} onRemove={() => { updateFilter('minSalary', ''); updateFilter('maxSalary', ''); }} />
           )}
-          {filters.source && <FilterChip label={`Source: ${filters.source}`} onRemove={() => updateFilter('source', '')} />}
-          {filters.hasResume && <FilterChip label={`Resume: ${filters.hasResume}`} onRemove={() => updateFilter('hasResume', '')} />}
           {filters.contactHidden && <FilterChip label={`Contact: ${filters.contactHidden === 'yes' ? 'Hidden' : 'Visible'}`} onRemove={() => updateFilter('contactHidden', '')} />}
           {filters.capturedAfter && <FilterChip label={`After: ${filters.capturedAfter}`} onRemove={() => updateFilter('capturedAfter', '')} />}
           {filters.capturedBefore && <FilterChip label={`Before: ${filters.capturedBefore}`} onRemove={() => updateFilter('capturedBefore', '')} />}
-          {filters.mandateId && <FilterChip label={`Mandate: ${mandateLabel}`} onRemove={() => updateFilter('mandateId', '')} />}
-          {filters.aiSource && <FilterChip label={`AI: ${filters.aiSource === 'nvidia' ? 'NVIDIA Nemotron' : filters.aiSource === 'gpt_oss' ? 'GPT-OSS 120B' : filters.aiSource === 'anthropic' ? 'Anthropic' : filters.aiSource === 'emergent' ? 'Emergent' : filters.aiSource}`} onRemove={() => updateFilter('aiSource', '')} />}
-          {filters.smartTags && <FilterChip label={`Tags: ${filters.smartTags}`} onRemove={() => updateFilter('smartTags', '')} />}
           <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 ml-1 underline" data-testid="clear-all-filters">Clear all</button>
         </div>
       )}
@@ -163,29 +150,6 @@ export function CandidateBankFilters({
               </div>
             </div>
             <div>
-              <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Database className="w-3 h-3" /> Source</Label>
-              <Select value={filters.source} onValueChange={(v) => updateFilter('source', v === '_all' ? '' : v)}>
-                <SelectTrigger className="text-sm" data-testid="filter-source"><SelectValue placeholder="Any source" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_all">Any source</SelectItem>
-                  <SelectItem value="extension">Naukri Extension</SelectItem>
-                  <SelectItem value="manual">Manual Upload</SelectItem>
-                  <SelectItem value="bulk">Bulk Import</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><FileText className="w-3 h-3" /> Has Resume</Label>
-              <Select value={filters.hasResume} onValueChange={(v) => updateFilter('hasResume', v === '_all' ? '' : v)}>
-                <SelectTrigger className="text-sm" data-testid="filter-has-resume"><SelectValue placeholder="Any" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_all">Any</SelectItem>
-                  <SelectItem value="yes">Yes - Has resume</SelectItem>
-                  <SelectItem value="no">No - Missing resume</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
               <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><EyeOff className="w-3 h-3" /> Contact Status</Label>
               <Select value={filters.contactHidden} onValueChange={(v) => updateFilter('contactHidden', v === '_all' ? '' : v)}>
                 <SelectTrigger className="text-sm" data-testid="filter-contact-hidden"><SelectValue placeholder="Any" /></SelectTrigger>
@@ -193,16 +157,6 @@ export function CandidateBankFilters({
                   <SelectItem value="_all">Any</SelectItem>
                   <SelectItem value="yes">Hidden (missing email/phone)</SelectItem>
                   <SelectItem value="no">Visible (has both)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Target className="w-3 h-3" /> Mandate</Label>
-              <Select value={filters.mandateId || '_all'} onValueChange={(v) => updateFilter('mandateId', v === '_all' ? '' : v)}>
-                <SelectTrigger className="text-sm" data-testid="filter-mandate"><SelectValue placeholder="Any mandate" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_all">All Mandates</SelectItem>
-                  {mandates.map(m => <SelectItem key={m.id} value={m.id}>{m.title} — {m.company_name || ''}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -217,29 +171,6 @@ export function CandidateBankFilters({
                 <Input value={filters.capturedAfter} onChange={(e) => updateFilter('capturedAfter', e.target.value)} type="date" data-testid="filter-date-after" className="text-sm" />
                 <Input value={filters.capturedBefore} onChange={(e) => updateFilter('capturedBefore', e.target.value)} type="date" data-testid="filter-date-before" className="text-sm" />
               </div>
-            </div>
-            {isAdmin && (
-              <div>
-                <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Briefcase className="w-3 h-3" /> AI Source</Label>
-                <Select value={filters.aiSource || '_all'} onValueChange={(v) => updateFilter('aiSource', v === '_all' ? '' : v)}>
-                  <SelectTrigger className="text-sm" data-testid="filter-ai-source"><SelectValue placeholder="Any AI source" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_all">All Sources</SelectItem>
-                    <SelectItem value="nvidia">N - NVIDIA Nemotron 550B</SelectItem>
-                    <SelectItem value="nemotron_super" data-testid="ai-source-filter-nemotron-super">NS - Nemotron Super 120B</SelectItem>
-                    <SelectItem value="mistral_nemotron" data-testid="ai-source-filter-mistral-nemotron">MN - Mistral Nemotron</SelectItem>
-                    <SelectItem value="gpt_oss">GO - GPT-OSS 120B (historical)</SelectItem>
-                    <SelectItem value="anthropic">AC - Anthropic Direct</SelectItem>
-                    <SelectItem value="emergent">EC - Emergent Key</SelectItem>
-                    <SelectItem value="regex">Regex (No AI)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Target className="w-3 h-3" /> Smart Tags</Label>
-              <Input value={filters.smartTags || ''} onChange={(e) => updateFilter('smartTags', e.target.value)} placeholder="Senior, Java Developer, Immediate Joiner" data-testid="filter-smart-tags" className="text-sm" />
-              <p className="text-[10px] text-slate-400 mt-0.5">Comma-separated tags</p>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">

@@ -34,7 +34,7 @@ export default function EmployerCandidateBankPage() {
   const [totalCount, setTotalCount] = useState(0);
 
   const filterHook = useCandidateBankFilters();
-  const { currentPage, setCurrentPage, getApiParams, debouncedSearch, debouncedSkills } = filterHook;
+  const { currentPage, setCurrentPage, getApiParams, debouncedSearch, debouncedSkills, debouncedFiltersKey } = filterHook;
 
   const [activeView, setActiveView] = useState('candidates');
   
@@ -61,7 +61,7 @@ export default function EmployerCandidateBankPage() {
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     loadCandidates();
-  }, [debouncedSearch, debouncedSkills]);
+  }, [debouncedSearch, debouncedSkills, debouncedFiltersKey]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const loadJobs = async () => {

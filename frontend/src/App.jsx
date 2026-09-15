@@ -67,16 +67,13 @@ const AdminAnalyticsPage = React.lazy(() => import("./pages/admin/AdminAnalytics
 const AnalyticsHubPage = React.lazy(() => import("./pages/admin/AnalyticsHubPage"));
 const ClustersPage = React.lazy(() => import("./pages/admin/ClustersPage"));
 const BadgeAuditPage = React.lazy(() => import("./pages/admin/BadgeAuditPage"));
-const DedupeMergePage = React.lazy(() => import("./pages/admin/DedupeMergePage"));
 const TallyHealthPage = React.lazy(() => import("./pages/admin/TallyHealthPage"));
-const DigestEmailPage = React.lazy(() => import("./pages/admin/DigestEmailPage"));
 const DailyDigestPage = React.lazy(() => import("./pages/admin/DailyDigestPage"));
 const SalaryBenchmarkPage = React.lazy(() => import("./pages/admin/SalaryBenchmarkPage"));
 const ContactSubmissionsPage = React.lazy(() => import("./pages/admin/ContactSubmissionsPage"));
 const SubmissionTrackerPage = React.lazy(() => import("./pages/admin/SubmissionTrackerPage"));
 const HiringFunnelPage = React.lazy(() => import("./pages/admin/HiringFunnelPage"));
 const AdvancedSearchPage = React.lazy(() => import("./pages/shared/AdvancedSearchPage"));
-const TalentSearchABPage = React.lazy(() => import("./pages/shared/TalentSearchABPage"));
 const CompanyProfilePage = React.lazy(() => import("./pages/admin/CompanyProfilePage"));
 // Tab wrapper pages (merged sidebar items)
 const CandidateBankTabsPage = React.lazy(() => import("./pages/admin/CandidateBankTabsPage"));
@@ -105,7 +102,6 @@ const CreateJobPage = React.lazy(() => import("./pages/employer/CreateJobPage"))
 const ApplicantsPage = React.lazy(() => import("./pages/employer/ApplicantsPage"));
 const JobApplicantsPage = React.lazy(() => import("./pages/employer/JobApplicantsPage"));
 const AnalyticsPage = React.lazy(() => import("./pages/employer/AnalyticsPage"));
-const FindCandidatesPage = React.lazy(() => import("./pages/employer/FindCandidatesPage"));
 const JobApprovalPage = React.lazy(() => import("./pages/employer/JobApprovalPage"));
 const EmployerCandidateBankPage = React.lazy(() => import("./pages/employer/EmployerCandidateBankPage"));
 const EmployerAnalyticsPage = React.lazy(() => import("./pages/employer/EmployerAnalyticsPage"));
@@ -125,7 +121,6 @@ const ActivityFeedPage = React.lazy(() => import("./pages/shared/ActivityFeedPag
 
 // ── Pages shared across multiple roles (used by recruiter/employer/accounts) ──
 const LinkedInSettingsPage = React.lazy(() => import("./pages/admin/LinkedInSettingsPage"));
-const LinkedInJobDraftsPage = React.lazy(() => import("./pages/admin/LinkedInJobDraftsPage"));
 const AshaAgentPage = React.lazy(() => import("./pages/admin/AshaAgentPage"));
 const AttendanceInsightsPage = React.lazy(() => import("./pages/admin/AttendanceInsightsPage"));
 const AdminAttendancePage = React.lazy(() => import("./pages/admin/AdminAttendancePage"));
@@ -203,14 +198,11 @@ function App() {
             <Route path="analytics-hub" element={<AnalyticsHubPage />} />
             <Route path="clusters" element={<ClustersPage />} />
             <Route path="badge-audit" element={<BadgeAuditPage />} />
-            <Route path="dedupe" element={<DedupeMergePage />} />
             <Route path="tally-health" element={<TallyHealthPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
-            <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />
             <Route path="company-profile/:companyId" element={<CompanyProfilePage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
-            <Route path="talent-search" element={<TalentSearchABPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="jobs" element={<AdminJobsPage />} />
             <Route path="jobs/new" element={<CreateJobPage />} />
@@ -229,14 +221,12 @@ function App() {
             <Route path="security-audit" element={<SecurityTabsPage />} />
             <Route path="contact-submissions" element={<ContactSubmissionsPage />} />
             <Route path="blog-engine" element={<BlogTabsPage />} />
-            <Route path="digest-email" element={<DigestEmailPage />} />
             <Route path="daily-digest" element={<DailyDigestPage />} />
             <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="hiring-funnel" element={<HiringFunnelPage />} />
             <Route path="attendance" element={<AttendanceTabsPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
             <Route path="activity-monitor" element={<ActivityTabsPage />} />
-            <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
             <Route path="asha" element={<AshaAgentPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
@@ -253,10 +243,8 @@ function App() {
             <Route path="candidate-bank" element={<RecruiterCandidateBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="candidates" element={<RecruiterCandidatesPage />} />
-            <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
-            <Route path="talent-search" element={<TalentSearchABPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
             <Route path="submission-tracker" element={<SubmissionTrackerPage />} />
             <Route path="attendance" element={<AttendancePage />} />
@@ -264,7 +252,6 @@ function App() {
             <Route path="resume-builder" element={<ResumeBuilderPage />} />
             <Route path="activity-feed" element={<ActivityFeedPage />} />
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
-            <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             {/* Account Manager Routes (for recruiters with is_account_manager flag) */}
             <Route path="account-manager" element={<AccountManagerDashboard />} />
@@ -292,10 +279,8 @@ function App() {
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="applicants" element={<ApplicantsPage />} />
             <Route path="approvals" element={<JobApprovalPage />} />
-            <Route path="find-candidates" element={<FindCandidatesPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />
             <Route path="match-history" element={<MatchHistoryPage />} />
-            <Route path="talent-search" element={<TalentSearchABPage />} />
             <Route path="candidate-bank" element={<EmployerCandidateBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="naukri-profile/:candidateId" element={<NaukriProfileView />} />
@@ -307,7 +292,6 @@ function App() {
             <Route path="resume-builder" element={<ResumeBuilderPage />} />
             <Route path="activity-feed" element={<ActivityFeedPage />} />
             <Route path="linkedin-settings" element={<LinkedInSettingsPage />} />
-            <Route path="linkedin-drafts" element={<LinkedInJobDraftsPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             <Route path="settings/notifications" element={<NotificationPreferencesPage />} />
             {/* Account Manager Routes (for employers) */}

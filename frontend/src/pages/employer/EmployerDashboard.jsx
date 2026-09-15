@@ -167,26 +167,6 @@ export default function EmployerDashboard() {
             </CardContent>
           </Card>
 
-          {/* Find Candidates */}
-          <Card className="border-slate-200 hover:border-purple-300 hover:shadow-md transition-all">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-xl bg-purple-50 flex items-center justify-center">
-                  <Sparkles className="w-7 h-7 text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-slate-900">Find Candidates</h3>
-                  <p className="text-sm text-slate-500">AI-powered candidate matching</p>
-                </div>
-              </div>
-              <Link to="/employer/find-candidates" className="block mt-4">
-                <Button variant="outline" className="w-full">
-                  <Search className="w-4 h-4 mr-2" /> Find Matches
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
           {/* My Team */}
           <Card className="border-slate-200 hover:border-blue-300 hover:shadow-md transition-all">
             <CardContent className="p-4 sm:p-6">

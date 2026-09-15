@@ -43,7 +43,7 @@ export default function CandidateDataBankPage() {
 
   // Shared filter hook (with URL persistence)
   const filterHook = useCandidateBankFilters();
-  const { currentPage, setCurrentPage, getApiParams, debouncedSearch, debouncedSkills } = filterHook;
+  const { currentPage, setCurrentPage, getApiParams, debouncedSearch, debouncedSkills, debouncedFiltersKey } = filterHook;
 
   const [activeView, setActiveView] = useState('candidates');
 
@@ -82,7 +82,7 @@ export default function CandidateDataBankPage() {
     setNextCursor(null);
     loadCandidates({ fresh: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, debouncedSkills]);
+  }, [debouncedSearch, debouncedSkills, debouncedFiltersKey]);
 
   const loadCandidates = async ({ fresh = false, cursor = null } = {}) => {
     if (fresh) setLoading(true); else setLoadingMore(true);

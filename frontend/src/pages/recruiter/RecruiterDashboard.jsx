@@ -65,11 +65,6 @@ export default function RecruiterDashboard() {
               <ClipboardList className="w-4 h-4 mr-2" /> View Pipeline
             </Button>
           </Link>
-          <Link to="/recruiter/find-candidates">
-            <Button className="bg-[#7CB342] hover:bg-[#689F38]">
-              <Search className="w-4 h-4 mr-2" /> AI Screening
-            </Button>
-          </Link>
         </div>
       </div>
 

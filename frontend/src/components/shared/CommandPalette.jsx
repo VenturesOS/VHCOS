@@ -26,7 +26,6 @@ import { candidateBankAPI } from '../../lib/api';
 const NAV = [
   { label: 'Dashboard',       icon: LayoutDashboard, path: '/dashboard',        roles: ['admin', 'recruiter', 'account_manager', 'employer'] },
   { label: 'Candidate Bank',  icon: Users,           path: '/candidate-bank',   roles: ['admin', 'recruiter', 'account_manager'] },
-  { label: 'Find Candidates', icon: UserSearch,      path: '/find-candidates',  roles: ['employer'] },
   { label: 'Jobs',            icon: Briefcase,       path: '/jobs',             roles: ['admin', 'recruiter', 'employer'] },
   { label: 'Pipeline',        icon: GitBranch,       path: '/pipeline',         roles: ['admin', 'recruiter', 'employer'] },
   { label: 'Companies',       icon: Building2,       path: '/companies',        roles: ['admin'] },

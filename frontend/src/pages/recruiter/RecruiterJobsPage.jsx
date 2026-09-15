@@ -154,18 +154,6 @@ export default function RecruiterJobsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-blue-600 border-blue-300 hover:bg-blue-50 gap-1.5"
-                        onClick={() => navigate(`/recruiter/find-candidates?job_id=${job.id}`)}
-                        data-testid={`find-candidates-${job.id}`}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Find Candidates</span>
-                      </Button>
-                    )}
-                    {job.status === 'active' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
                         className="text-purple-600 border-purple-300 hover:bg-purple-50 gap-1.5"
                         onClick={() => setAddCandidateJob(job)}
                         data-testid={`add-candidate-${job.id}`}

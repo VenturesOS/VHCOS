@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+// Spec 5.11 (2026-09-08): Source, Has Resume, Mandate, AI Source and Smart
+// Tags filters were removed from the visible panel by user request. Their
+// keys were removed here too so no stale URL params can re-open them.
 const FILTER_KEYS = [
   'phone', 'email', 'location', 'company', 'noticePeriod',
   'minExperience', 'maxExperience', 'minSalary', 'maxSalary',
-  'source', 'hasResume', 'contactHidden', 'capturedAfter', 'capturedBefore',
-  'mandateId', 'aiSource', 'smartTags',
+  'contactHidden', 'capturedAfter', 'capturedBefore',
 ];
 
 const EMPTY_FILTERS = Object.fromEntries(FILTER_KEYS.map(k => [k, '']));
@@ -45,6 +47,11 @@ export function useCandidateBankFilters() {
 
   const debouncedSearch = useDebounce(search);
   const debouncedSkills = useDebounce(skills);
+  // Spec 5.11 (2026-09-08): headline count and list must reload whenever ANY
+  // filter changes, not just search/skills. This debounced JSON key drives
+  // the fresh-load effect on each Bank page without firing on every keystroke.
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const debouncedFiltersKey = useDebounce(filtersKey, 400);
 
   const activeFilterCount = useMemo(
     () => Object.values(filters).filter(v => v !== '').length + (skills ? 1 : 0),
@@ -97,14 +104,9 @@ export function useCandidateBankFilters() {
     if (filters.maxExperience !== '') params.max_experience = parseInt(filters.maxExperience);
     if (filters.minSalary !== '') params.min_salary = parseInt(filters.minSalary);
     if (filters.maxSalary !== '') params.max_salary = parseInt(filters.maxSalary);
-    if (filters.source) params.source = filters.source;
-    if (filters.hasResume) params.has_resume = filters.hasResume;
-    if (filters.contactHidden) params.contact_hidden = filters.contactHidden;
     if (filters.capturedAfter) params.captured_after = filters.capturedAfter;
     if (filters.capturedBefore) params.captured_before = filters.capturedBefore;
-    if (filters.mandateId) params.mandate_id = filters.mandateId;
-    if (filters.aiSource) params.ai_source = filters.aiSource;
-    if (filters.smartTags) params.smart_tags = filters.smartTags;
+    if (filters.contactHidden) params.contact_hidden = filters.contactHidden;
     return params;
   }, [currentPage, debouncedSearch, debouncedSkills, filters]);
 
@@ -118,7 +120,7 @@ export function useCandidateBankFilters() {
     filters, updateFilter,
     filtersOpen, setFiltersOpen,
     currentPage, setCurrentPage,
-    debouncedSearch, debouncedSkills,
+    debouncedSearch, debouncedSkills, debouncedFiltersKey,
     activeFilterCount,
     clearFilters, setDatePreset, applyFilters,
     getApiParams,
