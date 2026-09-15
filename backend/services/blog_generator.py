@@ -29,7 +29,10 @@ You MUST return valid JSON only. No markdown fencing, no backticks, no commentar
 
 async def research_topics(blog_type: str, industry: Optional[str] = None, region: Optional[str] = None, count: int = 5) -> list:
     """Use OpenAI to research trending topics and keywords for blog generation."""
-    context = f"Blog type: {blog_type}"
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    year = datetime.now(timezone.utc).year
+    context = f"Today's date is {today}. Current year is {year}. Blog type: {blog_type}"
     if industry:
         context += f"\nIndustry: {industry}"
     if region:
@@ -46,6 +49,12 @@ Research and suggest {count} compelling blog topics with SEO keyword sets. For e
 - Recommended region focus
 
 {"Focus on industrial hiring, manufacturing recruitment, talent acquisition strategies, workforce planning, and HR technology for employers." if blog_type == "employer" else "Focus on career growth, resume optimization, interview preparation, salary negotiation, industry transitions, and professional development for candidates."}
+
+IMPORTANT — dating rules:
+- Do NOT reference the year 2024 anywhere in topic titles, rationale, or content. That year is stale.
+- Anchor "trend" claims and "current" references to {year}.
+- If you cite a specific year in a topic title, use {year} or {year - 1}.
+- Do NOT fabricate statistics with a specific year — if unsure, keep the claim year-agnostic.
 
 Return as JSON array:
 [

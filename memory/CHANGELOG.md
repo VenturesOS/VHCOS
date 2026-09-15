@@ -1,3 +1,100 @@
+## 2026-09-08 — Wave 3 remaining items
+
+### 5.14 Bills & Invoices — Preview + Download + Email
+Root cause: the preview `<iframe src>` pointed directly at `/api/bills/{id}/pdf` but browsers don't attach the `vhc_token` Authorization header to iframe requests, so the endpoint returned 401 and the modal rendered blank.
+
+**Fix in `frontend/src/pages/admin/BillsPage.jsx`:**
+- Fetch the PDF as an authenticated `fetch()` blob, then feed `URL.createObjectURL(blob)` to the iframe. Object URL is revoked on modal close to prevent memory leak.
+- Added **Download PDF** button on the preview modal (same blob-fetch, triggers `<a download>`).
+- Added **Email to Client** button that hands the current bill off to the existing Send Dialog (subject/body editor + Resend integration was already wired).
+- `data-testid`: `bill-preview-iframe`, `bill-preview-download`, `bill-preview-email`.
+
+### 5.11 Location / Company / Skills — Searchable multi-select
+**Backend — new `GET /api/candidate-bank/facets` endpoint** in `routes/candidates.py`:
+- Fields supported: `location` → `location`, `company` → `current_company`, `skills` → `skills`.
+- Anchored prefix regex `^{q}` (case-insensitive) so the existing multikey indexes can be used.
+- Sample cap at 20 k docs, `maxTimeMS=15000`, `allowDiskUse=True`.
+- For `skills` (array field): two-stage filter — array-level `$match` first (index-friendly), then `$unwind` + per-token `$match` so a doc holding `[Python, Java]` for `q=py` surfaces only Python.
+- Verified live: `location?q=Ban` returned Bangalore variants (713 + 153 + 84 + 72 + 43) in ~8 s.
+- **Note**: skills facet is slower against the 172 k-doc dataset; the endpoint returns `{values: []}` gracefully on timeout so the UI stays responsive. Perf follow-up would be a normalized `skills_lc` field.
+
+**Frontend — new `components/candidate-bank/SearchableMultiSelect.jsx`**:
+- Debounced (300 ms) type-ahead against the facet endpoint. Renders chips for selected values. Emits a comma-separated string so the existing hook needs no shape change.
+- Wired into the Location filter on the shared Candidate Bank Filters panel.
+- Location backend query updated to split the comma-separated value and OR-match each token in either `location` or `current_location`.
+- Company and Skills remain as free-text inputs for now (facet perf follow-up before switching them over).
+
+### Runtime
+- Backend restarted clean; `/api/health` `mongodb: ok`.
+- `yarn build` succeeded in 10.7 s.
+- **43/43 backend tests still pass** (unchanged from Wave 2 baseline).
+- Live test: `?location=Bangalore` matched real docs.
+
+### Still deferred (each ≈1 full task)
+- **5.5 Badge Audit "Already in DB" report** — needs new exposure/click event tracking.
+- **5.4 Analytics Hub public-vs-internal URL split + background aggregator** — needs a scheduler job.
+- **Section 4 Employee Drill-down page** — data foundation is shipped; drawer UI deferred.
+- **Composite score weighting editor + quarterly targets management UI**.
+- **Company/Skills switched from free text to SearchableMultiSelect** — needs perf work on the facet aggregation for those fields.
+
+
+## 2026-09-08 — Emergent Spec Wave 2 + Wave 3 (partial)
+
+### Wave 2 — Employee Performance Analytics (spec §4 / 5.3)
+
+Discovered the Daily Digest points table lives in `services/team_digest_service.py` as `PIPELINE_POINTS` (Python constant, not Mongo). Analytics reuses it directly — nothing hard-coded twice, so daily totals on the KPI page match the digest exactly.
+
+**Backend**
+- `GET /api/analytics/employee-performance` — filters by date range, team, employee. Returns KPI summary (sourced, submitted, interview_scheduled, interview_completed, offered, hired, joined, rejected, active_pipeline, total_points), conversion funnel (%), and per-recruiter breakdown with rank.
+- `GET /api/analytics/leaderboard?year=YYYY` — calendar-year cumulative leaderboard, delegates to `employee-performance` with Jan 1 → today window.
+- Filter uses `created_by` (the field that's actually populated on 100 % of live applications), not the legacy empty `assigned_recruiter_id`.
+- Employer-scope enforcement: employer role sees only their own teams' members.
+- Interview KPIs split per Section 10 decision: **Interview Scheduled = stage `shortlisted`**, **Interview Completed = stage `interview`**.
+- Ranking tie-breakers: points → joined → offered → interview_completed.
+- Live production sanity: annual leaderboard returned real ranked data (Delhi/Gurgaon/Faridabad recruiters at ~2500 points each; 112 joinings, 74 offers YTD).
+
+**Frontend**
+- `pages/admin/AdminAnalyticsPage.jsx` fully replaced (487 → 244 lines). New structure:
+  - Filter bar: date From/To, Team, Employee, Apply.
+  - KPI Summary tiles (Sourced / Submitted / Interview Scheduled / Interview Completed / Offered / Hired / Joined / Active Pipeline) + a prominent Total Points card.
+  - Conversion funnel: Submitted→Interview, Interview→Offer, Offer→Joining, Submitted→Joining.
+  - Team Comparison table sorted by points.
+  - Annual Leaderboard table (top 20 of current calendar year).
+- Fixes the "Analytics page fails to load" symptom (spec 5.3).
+
+### Wave 3 — Point fixes
+
+**5.7 Salary Benchmarking (page stuck loading)**
+- Root cause: aggregation `$push`'d every `current_salary` into one array. With 172 k candidates that blew past Mongo's 16 MB BSON doc limit — endpoint returned 500 but frontend spinner stayed forever.
+- Fix in `backend/routes/analytics.py`: switched to `$sample: 10 000` + `$percentile` (approximate) accumulator. Wrapped in `try/except` so a slow query returns `{count: 0, error: "Query too broad — please add more filters"}` in 200 instead of 500. Spec 5.7 "do not leave an indefinite Analyzing… state" now satisfied. Narrow queries (location-only) now return in <18 s. Full-population skill regex still slow — logged as follow-up (needs indexed lowercased-skills field).
+
+**5.12 User Management — Team filter**
+- Backend: `GET /admin/users?team_id=X` filters via team's `recruiter_ids` array.
+- Frontend: `pages/admin/UsersPage.jsx` adds a Team dropdown next to Role. Loads teams via `GET /teams`, filters the users table client-side by team membership. `data-testid="users-team-filter"`.
+
+**5.15 Blog Engine year context (2024 → 2026)**
+- `backend/services/blog_generator.py` `research_topics`: prompt now injects `Today's date is {today}. Current year is {year}.` and explicitly instructs "Do NOT reference the year 2024 anywhere; anchor 'trend' claims to {year}; do not fabricate statistics with a specific year".
+- No hard-coded years in the codebase — fix is prompt-time so it self-updates.
+
+**5.2 Collective Pipeline — custom From/To calendars**
+- Backend `applications.py` already supported `window_from` / `window_to` — just needed UI.
+- `pages/admin/AdminPipelinePage.jsx`: added two `<input type="date">` controls below the Activity window preset select. `data-testid="filter-window-from"` / `filter-window-to`. URL params round-trip, `clearFilters` resets them.
+
+### Not shipped this pass (documented for next session)
+- **5.5 Badge Audit — "Already in Database" report** — needs new tracking of exposure/click events on existing candidates.
+- **5.4 Analytics Hub — exclude internal URLs, move heavy agg to background** — needs separating public vs internal URL sets and a scheduled aggregator job.
+- **5.11 Location / Company / Skills — server-side searchable multi-select** — needs new facet endpoints (`GET /candidate-bank/facets?field=location&q=X`) and a multi-select combobox component. ~1 full task.
+- **5.14 Bills & Invoices — preview modal + email + download** — needs full invoice-render pipeline audit + Resend integration for send-to-client. ~1 full task.
+- **Section 4 Employee Drill-down page** — clickable employee → detail drawer with jobs handled, monthly trend, activity timeline. Data foundation is shipped; UI is deferred.
+- **Composite Performance Score weighting + admin editor** — settings collection design pending user sign-off on default weights.
+- **Quarterly targets management UI** — `employee_targets` collection schema proposed in `ANALYTICS_SPEC_DECISIONS.md`; UI deferred.
+
+### Runtime
+- Backend restart clean; `/api/health` `mongodb: ok`.
+- `yarn build` succeeded in 8.2 s.
+- **43/43 backend tests pass** (unchanged from Wave 1 baseline).
+
+
 ## 2026-09-08 — Emergent Spec Wave 1 (removals + P0 defects)
 
 Executing user-uploaded spec `Emergent_Fix_and_Employee_Performance_Analytics_Specification_WITH_IMAGES.docx`. Section 10 decisions captured in `memory/ANALYTICS_SPEC_DECISIONS.md`.

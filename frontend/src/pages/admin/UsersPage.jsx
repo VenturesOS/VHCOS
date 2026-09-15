@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { userAPI, companyAPI, accountManagerAPI, teamLeadAPI } from '../../lib/api';
+import api from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -18,6 +19,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [teamFilter, setTeamFilter] = useState('all');
+  const [teamsList, setTeamsList] = useState([]);
   
   // Dialog states
   const [editingUser, setEditingUser] = useState(null);
@@ -44,14 +47,16 @@ export default function UsersPage() {
 
   const loadData = async () => {
     try {
-      const [usersRes, employersRes, companiesRes] = await Promise.all([
+      const [usersRes, employersRes, companiesRes, teamsRes] = await Promise.all([
         userAPI.getAll(),
         userAPI.getEmployers().catch(() => ({ data: [] })),
         companyAPI.getAll().catch(() => ({ data: [] })),
+        api.get('/teams').catch(() => ({ data: [] })),
       ]);
       setUsers(usersRes.data);
       setEmployers(employersRes.data || []);
       setCompanies(companiesRes.data || []);
+      setTeamsList((teamsRes.data || []).filter(t => t.status !== 'deleted'));
     } catch (error) {
       toast.error('Failed to load users');
     } finally {
@@ -222,11 +227,17 @@ export default function UsersPage() {
 
   // Filter users
   const filteredUsers = users.filter((user) => {
-    const matchesSearch = 
+    const matchesSearch =
       user.name.toLowerCase().includes(search.toLowerCase()) ||
       user.email.toLowerCase().includes(search.toLowerCase());
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    return matchesSearch && matchesRole;
+    let matchesTeam = true;
+    if (teamFilter !== 'all') {
+      const team = teamsList.find(t => t.id === teamFilter);
+      const rids = (team && team.recruiter_ids) || [];
+      matchesTeam = rids.includes(user.id);
+    }
+    return matchesSearch && matchesRole && matchesTeam;
   });
 
   // Group by role for counts
@@ -332,6 +343,17 @@ export default function UsersPage() {
             <SelectItem value="employer">Employer</SelectItem>
             <SelectItem value="recruiter">Recruiter</SelectItem>
             <SelectItem value="candidate">Candidate</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={teamFilter} onValueChange={setTeamFilter}>
+          <SelectTrigger className="w-48" data-testid="users-team-filter">
+            <SelectValue placeholder="Filter by team" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Teams</SelectItem>
+            {teamsList.map(t => (
+              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

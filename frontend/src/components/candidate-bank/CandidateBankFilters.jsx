@@ -2,6 +2,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { SearchableMultiSelect } from './SearchableMultiSelect';
 import {
   Search, Filter, X, ChevronDown, ChevronUp,
   Phone, Mail, MapPin, Building2, Code, Clock,
@@ -113,7 +114,13 @@ export function CandidateBankFilters({
             </div>
             <div>
               <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><MapPin className="w-3 h-3" /> Location</Label>
-              <Input value={filters.location} onChange={(e) => updateFilter('location', e.target.value)} placeholder="City or location" data-testid="filter-location" className="text-sm" />
+              <SearchableMultiSelect
+                field="location"
+                value={filters.location}
+                onChange={(v) => updateFilter('location', v)}
+                placeholder="Search & pick locations…"
+                testid="filter-location"
+              />
             </div>
             <div>
               <Label className="text-xs text-slate-500 flex items-center gap-1 mb-1"><Building2 className="w-3 h-3" /> Company</Label>

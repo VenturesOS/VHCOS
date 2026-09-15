@@ -63,6 +63,77 @@ from utils.auth import get_current_user, require_role
 # Batch CV parse + save
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# Facet endpoints — spec 5.11 (2026-09-08)
+# Search-as-you-type multi-select for Location / Company / Skills filters
+# on the Candidate Bank. Returns distinct values from candidate_bank with
+# a lightweight prefix match. Bounded to `limit` distinct values so the
+# response is always cheap regardless of dataset size.
+# ---------------------------------------------------------------------------
+
+_FACET_FIELD_MAP = {
+    # 2026-09-08 verified against production candidate_bank:
+    #   `location`  → 171k docs populated
+    #   `current_company` → 761 docs (sparse in current dataset)
+    #   `skills`    → 171k docs populated
+    "location": "location",
+    "company":  "current_company",
+    "skills":   "skills",
+}
+
+
+@router.get("/facets")
+async def candidate_bank_facets(
+    field: str,
+    q: str = "",
+    limit: int = 30,
+    current_user: dict = Depends(get_current_user),
+):
+    """Distinct values for a filter field with a prefix-match search.
+    `field` ∈ {location, company, skills}. `q` is optional prefix filter.
+    """
+    from config import db
+    if field not in _FACET_FIELD_MAP:
+        return {"field": field, "values": []}
+    mongo_field = _FACET_FIELD_MAP[field]
+    match: dict = {mongo_field: {"$exists": True, "$nin": [None, ""]}}
+    if q:
+        # anchored, case-insensitive — the ONLY regex shape that can use
+        # the existing indexes on current_location/current_company/skills.
+        import re as _re
+        match[mongo_field] = {**match[mongo_field], "$regex": f"^{_re.escape(q)}", "$options": "i"}
+    limit = max(1, min(limit, 100))
+    # Bound the doc set so the response is always O(20k) even without a
+    # user-supplied prefix. 20 k is enough to surface the top values by
+    # frequency for a 170 k-candidate bank without ever timing out.
+    _SAMPLE_CAP = 20000
+    if mongo_field == "skills":
+        # `skills` is an array. Two-stage filter:
+        #  1) array-level $match (uses the skills multikey index)
+        #  2) after $unwind, re-filter individual tokens so we group only
+        #     the matching skill spelling (a doc holding [Python, Java]
+        #     for q='py' should surface Python, not Java).
+        pipeline = [{"$match": match}, {"$limit": _SAMPLE_CAP},
+                    {"$unwind": {"path": f"${mongo_field}", "preserveNullAndEmptyArrays": False}}]
+        if q:
+            import re as _re
+            pipeline.append({"$match": {mongo_field: {"$regex": f"^{_re.escape(q)}", "$options": "i"}}})
+    else:
+        pipeline = [{"$match": match}, {"$limit": _SAMPLE_CAP}]
+    pipeline += [
+        {"$group": {"_id": {"$toLower": f"${mongo_field}"}, "display": {"$first": f"${mongo_field}"}, "n": {"$sum": 1}}},
+        {"$sort": {"n": -1}},
+        {"$limit": limit},
+        {"$project": {"_id": 0, "value": "$display", "count": "$n"}},
+    ]
+    try:
+        rows = await db.candidate_bank.aggregate(pipeline, maxTimeMS=15000, allowDiskUse=True).to_list(limit)
+    except Exception:
+        rows = []
+    return {"field": field, "q": q, "values": rows}
+
+
 @router.post("/batch-parse")
 async def batch_parse_cvs(
     files: List[UploadFile] = File(...),
@@ -1766,11 +1837,20 @@ async def list_candidates(
 
     # ── Location ──
     if location:
+        # Spec 5.11 (2026-09-08): the frontend now sends a comma-separated
+        # list of picked values (from SearchableMultiSelect). Match ANY of
+        # them, in either `location` or `current_location`.
         import re
-        conditions.append({"$or": [
-            {"location":      {"$regex": re.escape(location), "$options": "i"}},
-            {"current_location": {"$regex": re.escape(location), "$options": "i"}},
-        ]})
+        tokens = [t.strip() for t in str(location).split(",") if t.strip()]
+        if tokens:
+            per_token = []
+            for tok in tokens:
+                pat = re.escape(tok)
+                per_token.append({"$or": [
+                    {"location":         {"$regex": pat, "$options": "i"}},
+                    {"current_location": {"$regex": pat, "$options": "i"}},
+                ]})
+            conditions.append({"$or": per_token} if len(per_token) > 1 else per_token[0])
 
     # ── Company ──
     # FIX (Phase 55, 2026-02): 87% of candidates store company in `current_employer`.

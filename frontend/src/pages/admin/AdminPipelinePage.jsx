@@ -46,6 +46,10 @@ export default function AdminPipelinePage() {
   // Pipeline timeline filter (v5.5.10) — shows only stage MOVEMENTS in window.
   // Default 'all' preserves the old global view.
   const [pipelineWindow, setPipelineWindow] = useState(searchParams.get('window') || 'all');
+  // Spec 5.2 (2026-09-08): custom From/To calendar controls in addition to
+  // the preset windows.
+  const [windowFrom, setWindowFrom] = useState(searchParams.get('window_from') || '');
+  const [windowTo, setWindowTo] = useState(searchParams.get('window_to') || '');
 
   // Deep-link: if URL contains ?job_id=X, keep it in sync with state.
   useEffect(() => {
@@ -100,6 +104,8 @@ export default function AdminPipelinePage() {
       if (selectedRecruiter !== 'all') params.recruiter_id = selectedRecruiter;
       if (selectedJob !== 'all') params.job_id = selectedJob;
       if (pipelineWindow && pipelineWindow !== 'all') params.window = pipelineWindow;
+      if (windowFrom) params.window_from = windowFrom;
+      if (windowTo) params.window_to = windowTo;
 
       const res = await adminAPI.getPipeline(params);
       setPipelineData(res.data.pipeline);
@@ -110,7 +116,7 @@ export default function AdminPipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedEmployer, selectedRecruiter, selectedJob, pipelineWindow]);
+  }, [selectedEmployer, selectedRecruiter, selectedJob, pipelineWindow, windowFrom, windowTo]);
 
   // Load filters once on mount + whenever employer cascade changes
   useEffect(() => {
@@ -126,6 +132,8 @@ export default function AdminPipelinePage() {
     setSelectedRecruiter('all');
     updateSelectedJob('all');
     updateWindow('all');
+    setWindowFrom('');
+    setWindowTo('');
   };
 
   // Phase 52 cascade: when employer changes, reset recruiter + job because
@@ -404,6 +412,25 @@ export default function AdminPipelinePage() {
                   <SelectItem value="year" data-testid="window-opt-year">This Year</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Spec 5.2 (2026-09-08): custom From/To calendar controls */}
+              <div className="flex gap-1.5 mt-1.5">
+                <input
+                  type="date"
+                  value={windowFrom}
+                  onChange={(e) => setWindowFrom(e.target.value)}
+                  className="flex-1 rounded border border-slate-200 text-xs px-2 py-1"
+                  data-testid="filter-window-from"
+                  placeholder="From"
+                />
+                <input
+                  type="date"
+                  value={windowTo}
+                  onChange={(e) => setWindowTo(e.target.value)}
+                  className="flex-1 rounded border border-slate-200 text-xs px-2 py-1"
+                  data-testid="filter-window-to"
+                  placeholder="To"
+                />
+              </div>
             </div>
           </div>
         </CardContent>

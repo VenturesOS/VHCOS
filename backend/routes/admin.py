@@ -407,13 +407,21 @@ async def delete_company(
 async def get_users(
     page: int = 1,
     limit: int = 200,
+    team_id: Optional[str] = None,
     current_user: dict = Depends(require_role(["admin"]))
 ):
+    """List admin users. `team_id` filter (spec 5.12, 2026-09-08) narrows
+    the result set to members of a single team (union of `recruiter_ids`)."""
     skip = (page - 1) * max(1, min(limit, 500))
     limit = max(1, min(limit, 500))
-    users = await db.users.find(
-        {"deleted_at": {"$exists": False}}, {"_id": 0, "password": 0}
-    ).skip(skip).limit(limit).to_list(limit)
+    query: dict = {"deleted_at": {"$exists": False}}
+    if team_id:
+        team = await db.teams.find_one({"id": team_id}, {"_id": 0, "recruiter_ids": 1})
+        member_ids = (team or {}).get("recruiter_ids") or []
+        if not member_ids:
+            return []
+        query["id"] = {"$in": member_ids}
+    users = await db.users.find(query, {"_id": 0, "password": 0}).skip(skip).limit(limit).to_list(limit)
     return [UserResponse(**u) for u in users]
 
 

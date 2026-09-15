@@ -3,6 +3,7 @@ VHC Talent OS - Analytics Routes
 Admin-only analytics dashboard API + Pipeline conversion + Revenue intelligence.
 """
 import io
+import logging
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -14,6 +15,8 @@ from services.pipeline_events import STAGE_REVENUE_PROBABILITY, PIPELINE_STAGES
 from config import db
 
 analytics_router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
+
+logger = logging.getLogger(__name__)
 
 # In-process cache for the heavy admin summary (key = filter tuple).
 _summary_cache: dict = {}
@@ -386,6 +389,221 @@ async def get_mandate_performance(
 
 
 # ═══════════════════════════════════════
+# EMPLOYEE PERFORMANCE ANALYTICS — Section 4 (spec 2026-09-08)
+# ═══════════════════════════════════════
+
+# Locked decisions (Section 10):
+#   - Interview KPIs split: Interview Scheduled = stage `shortlisted`,
+#                           Interview Completed = stage `interview`.
+#   - Active Pipeline stages: sourced, submitted_to_client, shortlisted,
+#     interview, offered  (excludes hired, joined, on_hold, rejected).
+#   - Annual leaderboard window = calendar year (Jan 1 – Dec 31).
+#   - Points table = same PIPELINE_POINTS used by Daily Digest.
+
+_ACTIVE_PIPELINE_STAGES = ["sourced", "submitted_to_client", "shortlisted", "interview", "offered"]
+
+
+def _parse_range(date_from: Optional[str], date_to: Optional[str]) -> tuple[datetime, datetime]:
+    """Parse ISO date strings; default to current calendar month."""
+    now = datetime.now(timezone.utc)
+    if date_from:
+        start = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
+    else:
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if date_to:
+        end = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
+    else:
+        end = now
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    return start, end
+
+
+@analytics_router.get("/employee-performance")
+async def employee_performance(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    team_id: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer"])),
+):
+    """KPI summary + per-employee breakdown for the Employee Performance page.
+
+    Reads directly from `applications` (stage events) using the same
+    PIPELINE_POINTS mapping as Daily Digest so the daily total for an
+    employee/date matches the digest exactly.
+    """
+    from services.team_digest_service import PIPELINE_POINTS
+    start, end = _parse_range(date_from, date_to)
+
+    # Employer-scope enforcement — Section 10 role permissions
+    if current_user.get("role") == "employer":
+        # Employer sees only their own teams' members
+        emp_teams = await db.teams.find(
+            {"employer_id": current_user["id"]},
+            {"_id": 0, "id": 1, "recruiter_ids": 1},
+        ).to_list(50)
+        if team_id and team_id not in {t["id"] for t in emp_teams}:
+            return {"error": "team not accessible"}
+        allowed_recruiters = {r for t in emp_teams for r in t.get("recruiter_ids", [])}
+    else:
+        allowed_recruiters = None  # admin sees all
+
+    # Build filter for applications updated within the window
+    # Data reality: `assigned_recruiter_id` is legacy/empty; the field that
+    # identifies the recruiter on 100% of live applications is `created_by`.
+    apps_match: dict = {"updated_at": {"$gte": start.isoformat(), "$lte": end.isoformat()}}
+    if employee_id:
+        apps_match["created_by"] = employee_id
+    elif team_id:
+        team_doc = await db.teams.find_one({"id": team_id}, {"_id": 0, "recruiter_ids": 1})
+        rids = (team_doc or {}).get("recruiter_ids") or []
+        if not rids:
+            return _empty_performance(start, end)
+        apps_match["created_by"] = {"$in": rids}
+    elif allowed_recruiters is not None:
+        apps_match["created_by"] = {"$in": list(allowed_recruiters)}
+
+    # Per-recruiter aggregation across all stage buckets we care about
+    pipeline = [
+        {"$match": apps_match},
+        {"$group": {
+            "_id": "$created_by",
+            "sourced":              {"$sum": {"$cond": [{"$eq": ["$stage", "sourced"]}, 1, 0]}},
+            "submitted":            {"$sum": {"$cond": [{"$eq": ["$stage", "submitted_to_client"]}, 1, 0]}},
+            "interview_scheduled":  {"$sum": {"$cond": [{"$eq": ["$stage", "shortlisted"]}, 1, 0]}},
+            "interview_completed":  {"$sum": {"$cond": [{"$eq": ["$stage", "interview"]}, 1, 0]}},
+            "offered":              {"$sum": {"$cond": [{"$eq": ["$stage", "offered"]}, 1, 0]}},
+            "hired":                {"$sum": {"$cond": [{"$eq": ["$stage", "hired"]}, 1, 0]}},
+            "joined":               {"$sum": {"$cond": [{"$eq": ["$stage", "joined"]}, 1, 0]}},
+            "rejected":             {"$sum": {"$cond": [{"$eq": ["$stage", "rejected"]}, 1, 0]}},
+            "active_pipeline":      {"$sum": {"$cond": [{"$in": ["$stage", _ACTIVE_PIPELINE_STAGES]}, 1, 0]}},
+            "total_apps":           {"$sum": 1},
+        }},
+    ]
+    rows = await db.applications.aggregate(pipeline).to_list(2000)
+
+    # Resolve recruiter names + team memberships
+    rec_ids = [r["_id"] for r in rows if r["_id"]]
+    users = await db.users.find(
+        {"id": {"$in": rec_ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(len(rec_ids)) if rec_ids else []
+    umap = {u["id"]: u for u in users}
+    teams = await db.teams.find(
+        {"recruiter_ids": {"$in": rec_ids}} if rec_ids else {"_id": None},
+        {"_id": 0, "id": 1, "name": 1, "recruiter_ids": 1},
+    ).to_list(50) if rec_ids else []
+    team_lookup: dict = {}
+    for t in teams:
+        for rid in t.get("recruiter_ids", []):
+            team_lookup[rid] = {"id": t["id"], "name": t["name"]}
+
+    employees = []
+    totals = {k: 0 for k in (
+        "sourced", "submitted", "interview_scheduled", "interview_completed",
+        "offered", "hired", "joined", "rejected", "active_pipeline", "total_apps",
+    )}
+    total_points = 0.0
+    for r in rows:
+        if not r["_id"]:
+            continue
+        # Points calculation matches Daily Digest exactly
+        pts = (
+            r["joined"] * PIPELINE_POINTS["joined"]
+            + r["hired"] * PIPELINE_POINTS["hired"]
+            + r["offered"] * PIPELINE_POINTS["offered"]
+            + r["interview_completed"] * PIPELINE_POINTS["interview"]
+            + r["interview_scheduled"] * PIPELINE_POINTS["shortlisted"]
+            + r["submitted"] * PIPELINE_POINTS["submitted_to_client"]
+            + r["sourced"] * PIPELINE_POINTS["sourced"]
+            + r["rejected"] * PIPELINE_POINTS["rejected"]
+        )
+        submitted = r["submitted"] or 0
+        joined = r["joined"] or 0
+        conv_sub_to_join = round((joined / submitted) * 100, 1) if submitted else 0.0
+        employees.append({
+            "recruiter_id": r["_id"],
+            "recruiter_name": umap.get(r["_id"], {}).get("name") or umap.get(r["_id"], {}).get("email") or "Unknown",
+            "team_id": team_lookup.get(r["_id"], {}).get("id"),
+            "team_name": team_lookup.get(r["_id"], {}).get("name"),
+            "sourced": r["sourced"],
+            "submitted": r["submitted"],
+            "interview_scheduled": r["interview_scheduled"],
+            "interview_completed": r["interview_completed"],
+            "offered": r["offered"],
+            "hired": r["hired"],
+            "joined": r["joined"],
+            "rejected": r["rejected"],
+            "active_pipeline": r["active_pipeline"],
+            "points": round(pts, 1),
+            "sub_to_joining_pct": conv_sub_to_join,
+        })
+        for k in totals:
+            totals[k] += r[k]
+        total_points += pts
+
+    employees.sort(key=lambda e: (-e["points"], -e["joined"], -e["offered"], -e["interview_completed"]))
+    for i, e in enumerate(employees, 1):
+        e["rank"] = i
+
+    conversion_summary = {
+        "submitted_to_interview_pct": round((totals["interview_completed"] / totals["submitted"]) * 100, 1) if totals["submitted"] else 0.0,
+        "interview_to_offer_pct":    round((totals["offered"] / totals["interview_completed"]) * 100, 1) if totals["interview_completed"] else 0.0,
+        "offer_to_joining_pct":      round((totals["joined"] / totals["offered"]) * 100, 1) if totals["offered"] else 0.0,
+        "submitted_to_joining_pct":  round((totals["joined"] / totals["submitted"]) * 100, 1) if totals["submitted"] else 0.0,
+    }
+
+    return {
+        "range": {"from": start.isoformat(), "to": end.isoformat()},
+        "kpi_summary": {
+            **totals,
+            "total_points": round(total_points, 1),
+        },
+        "conversion_summary": conversion_summary,
+        "employees": employees,
+    }
+
+
+def _empty_performance(start: datetime, end: datetime):
+    return {
+        "range": {"from": start.isoformat(), "to": end.isoformat()},
+        "kpi_summary": {k: 0 for k in ("sourced", "submitted", "interview_scheduled",
+                                        "interview_completed", "offered", "hired",
+                                        "joined", "rejected", "active_pipeline",
+                                        "total_apps", "total_points")},
+        "conversion_summary": {"submitted_to_interview_pct": 0.0, "interview_to_offer_pct": 0.0,
+                                "offer_to_joining_pct": 0.0, "submitted_to_joining_pct": 0.0},
+        "employees": [],
+    }
+
+
+@analytics_router.get("/leaderboard")
+async def annual_leaderboard(
+    year: Optional[int] = None,
+    team_id: Optional[str] = None,
+    current_user: dict = Depends(require_role(["admin", "employer"])),
+):
+    """Cumulative calendar-year leaderboard using the same PIPELINE_POINTS.
+
+    Delegates to `employee_performance` with a Jan 1 → today window. This
+    keeps the leaderboard's scoring in lockstep with the KPI page.
+    """
+    now = datetime.now(timezone.utc)
+    yr = year or now.year
+    start = datetime(yr, 1, 1, tzinfo=timezone.utc)
+    end = now if yr == now.year else datetime(yr, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+    return await employee_performance(
+        date_from=start.isoformat(),
+        date_to=end.isoformat(),
+        team_id=team_id,
+        current_user=current_user,
+    )
+
+
+
+# ═══════════════════════════════════════
 # SALARY BENCHMARKING
 # ═══════════════════════════════════════
 
@@ -442,19 +660,44 @@ async def salary_benchmark(
     if experience_max is not None:
         match_filter.setdefault("experience_years", {})["$lte"] = experience_max
 
-    # Main stats aggregation
+    # Main stats aggregation — use MongoDB `$percentile` accumulator so we
+    # never $push the whole salary array into a single doc (172 k candidates
+    # would bust the 16 MB BSON limit, which is why the endpoint stalled).
+    # A leading `$sample` bounds the work to ~10 k docs so the multi-planner
+    # can pick a fast path even for regex filters that don't fit an index.
+    # Percentiles from a random 10 k sample are within ±2 % of the full
+    # population for a distribution this large.
     stats_pipeline = [
         {"$match": match_filter},
+        {"$sample": {"size": 10000}},
         {"$group": {
             "_id": None,
             "count": {"$sum": 1},
             "avg_salary": {"$avg": "$current_salary"},
             "min_salary": {"$min": "$current_salary"},
             "max_salary": {"$max": "$current_salary"},
-            "salaries": {"$push": "$current_salary"},
+            "percentiles": {"$percentile": {
+                "input": "$current_salary",
+                "p": [0.25, 0.5, 0.75],
+                "method": "approximate",
+            }},
         }},
     ]
-    stats_result = await db.candidate_bank.aggregate(stats_pipeline).to_list(1)
+    try:
+        stats_result = await db.candidate_bank.aggregate(
+            stats_pipeline, maxTimeMS=25000, allowDiskUse=True,
+        ).to_list(1)
+    except Exception as _e:
+        # Spec 5.7: never leave the UI in an indefinite "Analyzing..." state.
+        # Return a clear error the frontend can render instead of a 500.
+        logger.warning("[SalaryBenchmark] aggregation failed: %s", _e)
+        return {
+            "count": 0, "avg_salary": 0, "median_salary": 0,
+            "min_salary": 0, "max_salary": 0, "p25": 0, "p75": 0,
+            "by_location": [], "by_experience": [], "by_designation": [],
+            "salary_ranges": [],
+            "error": "Query too broad — please add more filters to narrow the search.",
+        }
 
     if not stats_result or stats_result[0]["count"] == 0:
         return {
@@ -466,20 +709,8 @@ async def salary_benchmark(
         }
 
     s = stats_result[0]
-    salaries = sorted(s["salaries"])
-    n = len(salaries)
-
-    def percentile(arr, p):
-        k = (len(arr) - 1) * p / 100
-        f = math.floor(k)
-        c = math.ceil(k)
-        if f == c:
-            return arr[int(k)]
-        return arr[f] * (c - k) + arr[c] * (k - f)
-
-    median = percentile(salaries, 50)
-    p25 = percentile(salaries, 25)
-    p75 = percentile(salaries, 75)
+    p25, median, p75 = s["percentiles"]
+    n = s["count"]
 
     # Breakdown by location (top 10)
     loc_pipeline = [

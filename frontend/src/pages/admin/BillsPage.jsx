@@ -75,6 +75,61 @@ export default function BillsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(null);
   const [previewBill, setPreviewBill] = useState(null);
+  // Fix 5.14 (spec 2026-09-08): the iframe cannot pass the Bearer token so
+  // the PDF endpoint returned 401 and the modal rendered blank. Fetch the
+  // PDF as an authenticated blob and hand the iframe an object URL.
+  const [previewBlobUrl, setPreviewBlobUrl] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let currentUrl = null;
+    if (previewBill) {
+      const token = localStorage.getItem('vhc_token');
+      fetch(billsAPI.pdfUrl(previewBill.id), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then(r => {
+          if (!r.ok) throw new Error(`PDF fetch failed (${r.status})`);
+          return r.blob();
+        })
+        .then(blob => {
+          if (cancelled) return;
+          currentUrl = URL.createObjectURL(blob);
+          setPreviewBlobUrl(currentUrl);
+        })
+        .catch(e => {
+          if (!cancelled) toast.error(e.message || 'Preview failed');
+        });
+    } else {
+      setPreviewBlobUrl(null);
+    }
+    return () => {
+      cancelled = true;
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+    };
+  }, [previewBill]);
+
+  const downloadPreviewPdf = async () => {
+    if (!previewBill) return;
+    try {
+      const token = localStorage.getItem('vhc_token');
+      const r = await fetch(billsAPI.pdfUrl(previewBill.id), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${previewBill.bill_number || 'bill'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e.message || 'Download failed');
+    }
+  };
   const [sendForm, setSendForm] = useState({ extra_cc: '', subject: '', body: '', test_mode: false });
   const [generating, setGenerating] = useState(false);
 
@@ -396,15 +451,34 @@ export default function BillsPage() {
           <DialogHeader>
             <DialogTitle>{previewBill?.bill_number} — Preview</DialogTitle>
           </DialogHeader>
-          {previewBill && (
+          {previewBill && previewBlobUrl ? (
             <iframe
               key={previewBill.id}
-              src={billsAPI.pdfUrl(previewBill.id) + `?v=${previewBill.updated_at || previewBill.created_at}`}
+              src={previewBlobUrl}
               className="flex-1 w-full border rounded"
               title="Bill PDF"
+              data-testid="bill-preview-iframe"
             />
-          )}
-          <DialogFooter>
+          ) : previewBill ? (
+            <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">Loading PDF…</div>
+          ) : null}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={downloadPreviewPdf}
+              disabled={!previewBlobUrl}
+              data-testid="bill-preview-download"
+            >
+              Download PDF
+            </Button>
+            <Button
+              onClick={() => { const b = previewBill; setPreviewBill(null); setShowSendDialog(b); }}
+              disabled={!previewBill}
+              className="bg-[#7CB342] hover:bg-[#689F38]"
+              data-testid="bill-preview-email"
+            >
+              Email to Client
+            </Button>
             <Button variant="outline" onClick={() => setPreviewBill(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
