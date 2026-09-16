@@ -121,85 +121,53 @@ def _facet_cache_put(key, val):
 async def candidate_bank_facets(
     field: str,
     q: str = "",
-    limit: int = 30,
+    limit: int = 500,
     current_user: dict = Depends(get_current_user),
 ):
     """Distinct values for a filter field with a prefix-match search.
     `field` ∈ {location, company, skills}. `q` is optional prefix filter.
+
+    fix.docx (2026-09-16): reads from the precomputed `facet_cache`
+    collection (same one that powers the Salary Benchmark dropdown),
+    which stores the top-500 values per field alphabetized. Live
+    aggregation over 178 k rows can't return in a reasonable UI budget,
+    so this endpoint is now a thin proxy over the cache. If a `q` is
+    supplied we filter the cached list server-side (still O(500)) so
+    the frontend can either preload once with q="" and filter locally,
+    OR pass q for narrower results — both patterns work.
     """
     from config import db
     if field not in _FACET_FIELD_MAP:
         return {"field": field, "values": []}
-    lc_field, display_field = _FACET_FIELD_MAP[field]
 
-    limit = max(1, min(limit, 100))
+    limit = max(1, min(limit, 1000))
     q_norm = (q or "").strip().lower()
     cache_key = (field, q_norm, limit)
     cached = _facet_cache_get(cache_key)
     if cached is not None:
         return {"field": field, "q": q, "values": cached, "cached": True}
 
-    # Case-SENSITIVE prefix match on the lowercased mirror = index-backed.
-    match: dict = {lc_field: {"$exists": True, "$nin": [None, ""]}}
-    if q_norm:
-        import re as _re
-        match[lc_field] = {**match[lc_field], "$regex": f"^{_re.escape(q_norm)}"}
+    # Read from the persistent facet_cache built by services.facet_cache.
+    # The cache key stores each field under `salary__<field>` — the data
+    # is identical (candidate_bank distinct values top-500) so we reuse it.
+    doc = await db.facet_cache.find_one({"_id": f"salary__{field}"}, {"_id": 0, "values": 1, "generated_at": 1})
+    values = (doc or {}).get("values") or []
 
-    _SAMPLE_CAP = 20000
-    if lc_field == "skills_lc":
-        # Array field — unwind after the multikey $match filters candidate
-        # docs, then re-filter individual tokens so a doc holding
-        # [python, java] under q='py' surfaces "python" not "java".
-        pipeline = [
-            {"$match": match},
-            {"$limit": _SAMPLE_CAP},
-            {"$unwind": {"path": f"${lc_field}", "preserveNullAndEmptyArrays": False}},
+    if q_norm:
+        # Substring match on either the display or the lowercased mirror.
+        values = [
+            v for v in values
+            if q_norm in (v.get("value_lc") or (v.get("value") or "").lower())
         ]
-        if q_norm:
-            import re as _re
-            pipeline.append({"$match": {lc_field: {"$regex": f"^{_re.escape(q_norm)}"}}})
-        # For the display value we grab any element from the raw `skills`
-        # array that lowercases to this key. Cheap: $first + $arrayElemAt.
-        pipeline += [
-            {"$group": {
-                "_id": f"${lc_field}",
-                "display": {"$first": f"${lc_field}"},  # lowercased is fine for display
-                "n": {"$sum": 1},
-            }},
-        ]
-    else:
-        # `$ifNull` fallback: some docs store the value under the alias
-        # field (current_employer, current_location) rather than the
-        # canonical one (current_company, location). Both feed the same
-        # `_lc` mirror in the backfill, so the group key is consistent —
-        # but the display field must fall back the same way.
-        _alias = {"company": "current_employer", "location": "current_location"}.get(field)
-        display_expr = (
-            {"$ifNull": [f"${display_field}", f"${_alias}"]}
-            if _alias
-            else f"${display_field}"
-        )
-        pipeline = [
-            {"$match": match},
-            {"$limit": _SAMPLE_CAP},
-            {"$group": {
-                "_id": f"${lc_field}",
-                "display": {"$first": display_expr},
-                "n": {"$sum": 1},
-            }},
-        ]
-    pipeline += [
-        {"$sort": {"n": -1}},
-        {"$limit": limit},
-        {"$project": {"_id": 0, "value": "$display", "count": "$n"}},
-    ]
-    try:
-        rows = await db.candidate_bank.aggregate(pipeline, maxTimeMS=8000, allowDiskUse=True).to_list(limit)
-    except Exception as e:
-        logger.warning(f"[Facets] {field} q={q!r} aggregation failed: {e}")
-        rows = []
+
+    # Preserve the (value, count) shape the SearchableMultiSelect expects.
+    rows = [{"value": v.get("value", ""), "count": v.get("count", 0)} for v in values[:limit]]
     _facet_cache_put(cache_key, rows)
-    return {"field": field, "q": q, "values": rows}
+    return {
+        "field": field, "q": q, "values": rows,
+        "generated_at": (doc or {}).get("generated_at"),
+        "stale": not doc,
+    }
 
 
 @router.post("/batch-parse")
@@ -1904,48 +1872,33 @@ async def list_candidates(
         conditions.append({"email": {"$regex": re.escape(email), "$options": "i"}})
 
     # ── Location ──
+    # fix.docx (2026-09-16): the SearchableMultiSelect passes canonical
+    # values from the /candidate-bank/facets dropdown, which is fed by
+    # the precomputed `_lc` mirrors. Match against `location_lc` with
+    # `$in` — a single indexed lookup instead of N unindexed regex scans
+    # (the old path timed count_documents out at 2 s so the total kept
+    # falling back to the unfiltered 178 k estimate).
     if location:
-        # Spec 5.11 (2026-09-08): the frontend now sends a comma-separated
-        # list of picked values (from SearchableMultiSelect). Match ANY of
-        # them, in either `location` or `current_location`.
-        import re
-        tokens = [t.strip() for t in str(location).split(",") if t.strip()]
+        tokens = [t.strip().lower() for t in str(location).split(",") if t.strip()]
         if tokens:
-            per_token = []
-            for tok in tokens:
-                pat = re.escape(tok)
-                per_token.append({"$or": [
-                    {"location":         {"$regex": pat, "$options": "i"}},
-                    {"current_location": {"$regex": pat, "$options": "i"}},
-                ]})
-            conditions.append({"$or": per_token} if len(per_token) > 1 else per_token[0])
+            conditions.append({"location_lc": {"$in": tokens}})
 
     # ── Company ──
-    # FIX (Phase 55, 2026-02): 87% of candidates store company in `current_employer`.
-    # The old query targeted `current_company` (0.3%) + `company` (0%) and returned
-    # near-zero results. Now queries all three so the filter actually works.
+    # Same trick as location — the SearchableMultiSelect ships canonical
+    # picks that map 1-to-1 to `current_company_lc`.
     if company:
-        import re
-        pat = re.escape(company)
-        conditions.append({"$or": [
-            {"current_employer": {"$regex": pat, "$options": "i"}},
-            {"current_company":  {"$regex": pat, "$options": "i"}},
-            {"company":          {"$regex": pat, "$options": "i"}},
-        ]})
+        tokens = [t.strip().lower() for t in str(company).split(",") if t.strip()]
+        if tokens:
+            conditions.append({"current_company_lc": {"$in": tokens}})
 
     # ── Skills (comma-separated) ──
+    # AND semantics — every picked skill must appear on the candidate.
+    # We hit the multikey index `skills_lc_1` with `$all` for an indexed
+    # intersection instead of the previous per-skill regex.
     if skills:
-        import re
-        skill_list = [s.strip() for s in skills.split(",") if s.strip()]
-        skill_conditions = []
-        for s in skill_list:
-            pat = re.escape(s)
-            skill_conditions.append({"$or": [
-                {"skills":     {"$elemMatch": {"$regex": pat, "$options": "i"}}},
-                {"key_skills": {"$regex": pat, "$options": "i"}},
-            ]})
-        if skill_conditions:
-            conditions.append({"$and": skill_conditions})
+        skill_list = [s.strip().lower() for s in skills.split(",") if s.strip()]
+        if skill_list:
+            conditions.append({"skills_lc": {"$all": skill_list}})
 
     # ── Notice Period ──
     # FIX (Phase 55, 2026-02): allow substring/case-insensitive match instead
@@ -2206,8 +2159,14 @@ async def list_candidates(
     if not conditions:
         total = await db.candidate_bank.estimated_document_count()
     else:
+        # fix.docx (2026-09-16): with the `_lc` indexes on
+        # location/company/skills the count is index-covered and returns
+        # in < 500 ms. Raise the timeout to 10 s so pathological unindexed
+        # filters still fall back to the estimate but the common case
+        # (dropdown-picked values) returns a real filtered total instead
+        # of the misleading 178 k estimate.
         try:
-            total = await db.candidate_bank.count_documents(query, maxTimeMS=2000)
+            total = await db.candidate_bank.count_documents(query, maxTimeMS=10000)
         except Exception as _e:
             logger.warning(f"[list_candidates] count_documents timed out — using estimate: {_e}")
             total = await db.candidate_bank.estimated_document_count()

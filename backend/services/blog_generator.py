@@ -97,9 +97,20 @@ Your writing style:
 Target audience: HR Heads, Plant Heads, Manufacturing decision-makers across industrial sectors.
 Excluded industries: BPO, Banking, Insurance.
 
+HARD RULES ON DATES:
+- You DO NOT operate in 2024. Never anchor claims to 2024, "last year (2024)",
+  "in 2024", or the "post-pandemic 2024 hiring market". Those references are
+  stale and will get the article rejected.
+- Anchor every "current", "trend", "as of" reference to the year passed in
+  the user prompt (or the year before it for retrospective claims).
+
 You MUST return valid JSON only. No markdown fencing, no backticks, no commentary outside JSON."""
 
 EMPLOYER_USER_PROMPT = """Generate a complete recruitment-focused blog article.
+
+CURRENT DATE CONTEXT: Today is {today}. Current year is {year}. All "trend",
+"current", "latest", "recent" and "as of" references MUST anchor to {year}
+(or the last quarter of {year}, or Q1 {next_year} for forward-looking claims).
 
 Topic: {topic}
 Industry Focus: {industry}
@@ -117,6 +128,15 @@ Requirements:
 - End CTA: "Our team can shortlist top candidates within 72 hours"
 {ats_note}
 - Suggest 3-5 internal linking opportunities
+
+DATING RULES (STRICT):
+- Do NOT reference the year 2024 anywhere in the article. It is stale.
+- Do NOT reference any year earlier than {stale_year} unless you're
+  citing an established historical fact (e.g. "since the 2008 crisis").
+- When you cite a year use {year} or {prev_year}. If you're unsure, keep
+  the claim year-agnostic ("in the current cycle", "over the past year").
+- Do NOT fabricate statistics tied to a specific year — either cite a
+  real source or keep the number year-agnostic.
 
 Return as JSON with this exact structure:
 {{
@@ -147,9 +167,19 @@ Your writing style:
 Target audience: Engineers, Plant HR, IR professionals, Manufacturing leaders.
 Excluded industries: BPO, Banking, Insurance.
 
+HARD RULES ON DATES:
+- You DO NOT operate in 2024. Never anchor claims to 2024 or earlier
+  ("in 2024", "post-2024 job market", "trends for 2024") — those are
+  stale. Anchor every "current" / "recent" reference to the year the
+  user prompt specifies.
+
 You MUST return valid JSON only. No markdown fencing, no backticks, no commentary outside JSON."""
 
 CANDIDATE_USER_PROMPT = """Generate a complete career advice blog article.
+
+CURRENT DATE CONTEXT: Today is {today}. Current year is {year}. All "trend",
+"current", "latest", "recent" and "as of" references MUST anchor to {year}
+(or the last quarter of {year}, or Q1 {next_year} for forward-looking claims).
 
 Topic: {topic}
 Category: {category}
@@ -167,6 +197,14 @@ Requirements:
 - Helpful, non-sales tone throughout
 - Soft CTA: Encourage readers to "Create your profile" or "Upload your resume" to discover matching opportunities
 - Suggest 3-5 internal linking opportunities
+
+DATING RULES (STRICT):
+- Do NOT reference the year 2024 anywhere in the article. It is stale.
+- Do NOT reference any year earlier than {stale_year} unless it is an
+  established historical fact.
+- When you cite a year use {year} or {prev_year}. If unsure, keep the
+  claim year-agnostic ("in the current market", "these days").
+- Do NOT fabricate statistics tied to a specific year.
 
 Return as JSON with this exact structure:
 {{
@@ -193,10 +231,16 @@ def _parse_json_response(text: str) -> dict:
 
 async def generate_employer_blog(topic: str, industry: str, region: str, keywords: str) -> dict:
     """Generate a complete employer-focused blog article."""
+    from datetime import datetime, timezone
+    _now = datetime.now(timezone.utc)
+    _year = _now.year
     ats_note = '- Include ATS (Applicant Tracking System) positioning and how technology accelerates hiring' if region.lower() == 'global' else ''
     user_prompt = EMPLOYER_USER_PROMPT.format(
         topic=topic, industry=industry, region=region,
-        keywords=keywords, ats_note=ats_note
+        keywords=keywords, ats_note=ats_note,
+        today=_now.strftime("%B %d, %Y"),
+        year=_year, prev_year=_year - 1, next_year=_year + 1,
+        stale_year=_year - 2,   # any citation older than 2 years is "stale"
     )
     raw = await chat_completion(EMPLOYER_SYSTEM_PROMPT, user_prompt, temperature=BLOG_TEMPERATURE, max_tokens=BLOG_MAX_TOKENS)
     result = _parse_json_response(raw)
@@ -207,8 +251,14 @@ async def generate_employer_blog(topic: str, industry: str, region: str, keyword
 
 async def generate_candidate_blog(topic: str, category: str, industry: str, keywords: str) -> dict:
     """Generate a complete candidate-focused blog article."""
+    from datetime import datetime, timezone
+    _now = datetime.now(timezone.utc)
+    _year = _now.year
     user_prompt = CANDIDATE_USER_PROMPT.format(
-        topic=topic, category=category, industry=industry, keywords=keywords
+        topic=topic, category=category, industry=industry, keywords=keywords,
+        today=_now.strftime("%B %d, %Y"),
+        year=_year, prev_year=_year - 1, next_year=_year + 1,
+        stale_year=_year - 2,
     )
     raw = await chat_completion(CANDIDATE_SYSTEM_PROMPT, user_prompt, temperature=BLOG_TEMPERATURE, max_tokens=BLOG_MAX_TOKENS)
     result = _parse_json_response(raw)

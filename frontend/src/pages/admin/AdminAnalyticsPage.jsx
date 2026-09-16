@@ -3,7 +3,7 @@
 // analytics overview with a recruitment-performance workspace.
 // Data source: GET /api/analytics/employee-performance & /leaderboard.
 // KPI point rules match Daily Digest exactly (PIPELINE_POINTS).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -11,7 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Loader2, TrendingUp, Users, CheckCircle2, Award, Target, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import api from '../../lib/api';
+import api, { blogAPI } from '../../lib/api';
 
 const KPI_TILES = [
   { key: 'sourced',              label: 'Sourced',             icon: Users,        color: 'text-slate-600' },
@@ -238,6 +238,155 @@ export default function AdminAnalyticsPage() {
           </table>
         </CardContent>
       </Card>
+      {/* Recent Joinings (fix.docx 2026-09-16) — moved from Blog Engine.
+          Team leaders fill CTC + revenue here so the Employee
+          Performance workspace becomes the single place they track
+          actual joinings & the money each one made. */}
+      <JoiningsSection />
     </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// Joinings section (was: Blog Engine → Joinings tab).
+// Reads /api/blog/joinings; filters by date range, position, location.
+// Team leaders inline-edit joined CTC + revenue.
+// ─────────────────────────────────────────────────────────────
+function JoiningsSection() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({ date_from: '', date_to: '', position_q: '', location_q: '' });
+  const [draft, setDraft] = useState({});
+  const [saving, setSaving] = useState({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
+      const res = await blogAPI.listJoinings(params);
+      setItems(res.data?.items || []);
+    } catch {
+      toast.error('Failed to load joinings');
+    } finally { setLoading(false); }
+  }, [filters]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const saveEdit = async (row) => {
+    const patch = draft[row.application_id];
+    if (!patch) return;
+    setSaving(s => ({ ...s, [row.application_id]: true }));
+    try {
+      const body = {};
+      if (patch.joined_ctc !== undefined && patch.joined_ctc !== '') body.joined_ctc = parseFloat(patch.joined_ctc);
+      if (patch.revenue !== undefined && patch.revenue !== '') body.revenue = parseFloat(patch.revenue);
+      await blogAPI.updateJoining(row.application_id, body);
+      toast.success('Saved');
+      setDraft(d => { const c = { ...d }; delete c[row.application_id]; return c; });
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Save failed');
+    } finally {
+      setSaving(s => ({ ...s, [row.application_id]: false }));
+    }
+  };
+
+  return (
+    <Card className="border-slate-200" data-testid="recent-joinings">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Recent Joinings ({items.length})</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <Label className="text-xs text-slate-500 mb-1 block">From</Label>
+            <Input type="date" value={filters.date_from} onChange={e => setFilters({ ...filters, date_from: e.target.value })} data-testid="joinings-from" />
+          </div>
+          <div>
+            <Label className="text-xs text-slate-500 mb-1 block">To</Label>
+            <Input type="date" value={filters.date_to} onChange={e => setFilters({ ...filters, date_to: e.target.value })} data-testid="joinings-to" />
+          </div>
+          <div>
+            <Label className="text-xs text-slate-500 mb-1 block">Position contains</Label>
+            <Input value={filters.position_q} onChange={e => setFilters({ ...filters, position_q: e.target.value })} placeholder="e.g. Manager" data-testid="joinings-position" />
+          </div>
+          <div>
+            <Label className="text-xs text-slate-500 mb-1 block">Location contains</Label>
+            <Input value={filters.location_q} onChange={e => setFilters({ ...filters, location_q: e.target.value })} placeholder="e.g. Delhi" data-testid="joinings-location" />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-6 text-center text-slate-500"><Loader2 className="w-5 h-5 inline animate-spin mr-2" /> Loading joinings…</div>
+        ) : items.length === 0 ? (
+          <div className="p-6 text-center text-slate-400">No joinings match these filters.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="joinings-table">
+              <thead className="bg-slate-50 text-slate-600 text-xs">
+                <tr>
+                  <th className="text-left px-3 py-2">DOJ</th>
+                  <th className="text-left px-3 py-2">Client company</th>
+                  <th className="text-left px-3 py-2">Candidate</th>
+                  <th className="text-left px-3 py-2">Position</th>
+                  <th className="text-left px-3 py-2">Location</th>
+                  <th className="text-right px-3 py-2">CTC (₹)</th>
+                  <th className="text-right px-3 py-2">Revenue (₹)</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(row => {
+                  const patch = draft[row.application_id] || {};
+                  const dirty = ('joined_ctc' in patch) || ('revenue' in patch);
+                  const ctcVal = patch.joined_ctc !== undefined ? patch.joined_ctc : (row.joined_ctc || '');
+                  const revVal = patch.revenue !== undefined ? patch.revenue : (row.revenue ?? '');
+                  return (
+                    <tr key={row.application_id} className="border-t border-slate-100" data-testid={`joining-row-${row.application_id}`}>
+                      <td className="px-3 py-2 font-mono">{row.join_date}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {row.client_logo_url && <img src={row.client_logo_url} alt="" className="w-5 h-5 rounded object-contain bg-slate-50" />}
+                          <span>{row.client_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">{row.candidate_name}</td>
+                      <td className="px-3 py-2">{row.position}</td>
+                      <td className="px-3 py-2">{row.location}</td>
+                      <td className="px-3 py-2 text-right">
+                        <Input
+                          type="number" min="0" step="1000"
+                          className="text-right h-8 w-32 ml-auto"
+                          value={ctcVal}
+                          onChange={e => setDraft(d => ({ ...d, [row.application_id]: { ...(d[row.application_id] || {}), joined_ctc: e.target.value } }))}
+                          data-testid={`joining-ctc-${row.application_id}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Input
+                          type="number" min="0" step="100"
+                          className="text-right h-8 w-32 ml-auto"
+                          value={revVal}
+                          onChange={e => setDraft(d => ({ ...d, [row.application_id]: { ...(d[row.application_id] || {}), revenue: e.target.value } }))}
+                          placeholder="—"
+                          data-testid={`joining-revenue-${row.application_id}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button size="sm" disabled={!dirty || saving[row.application_id]} onClick={() => saveEdit(row)} className="bg-[#7CB342] hover:bg-[#689F38]" data-testid={`joining-save-${row.application_id}`}>
+                          {saving[row.application_id] ? '…' : 'Save'}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
