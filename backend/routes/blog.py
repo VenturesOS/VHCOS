@@ -153,6 +153,127 @@ async def admin_list_blogs(
     return {"blogs": blogs, "total": len(blogs)}
 
 
+# ── Joinings list (fix.docx 2026-09-15) ─────────────────────────────
+# The Blog Engine page needs a "Recent Joinings" section that team
+# leaders can filter by date / client company / position / location.
+# We derive it live from `applications` (stage = joined) joined against
+# `jobs`, `companies`, `candidate_bank`, and `revenue`.
+@router.get("/api/blog/joinings")
+async def list_joinings(
+    date_from: Optional[str] = Query(None, description="ISO date — filters on join_date"),
+    date_to:   Optional[str] = Query(None, description="ISO date — filters on join_date"),
+    company_id: Optional[str] = None,
+    position_q: Optional[str] = None,
+    location_q: Optional[str] = None,
+    limit: int = 200,
+    current_user: dict = Depends(require_role(["admin", "employer"])),
+):
+    """Return every candidate currently at stage=joined, hydrated with
+    the fields the Blog Engine "Recent Joinings" table shows."""
+    import re as _re
+
+    q: dict = {"stage": "joined"}
+    if date_from or date_to:
+        rng: dict = {}
+        if date_from: rng["$gte"] = date_from
+        if date_to:   rng["$lte"] = date_to
+        q["join_date"] = rng
+    if company_id:
+        # Applications don't carry the client company id directly — resolve
+        # via jobs.company_id (join below), so we can't filter here. Filter
+        # in-Python after hydration.
+        pass
+
+    apps = await db.applications.find(q, {"_id": 0}).sort("join_date", -1).to_list(max(1, min(limit, 1000)))
+    if not apps:
+        return {"items": [], "count": 0}
+
+    # Batch-fetch related docs so we make a fixed number of round-trips.
+    job_ids       = list({a.get("job_id")       for a in apps if a.get("job_id")})
+    cand_ids      = list({a.get("candidate_id") for a in apps if a.get("candidate_id")})
+    app_ids       = [a["id"] for a in apps if a.get("id")]
+
+    jobs = {}
+    async for j in db.jobs.find({"id": {"$in": job_ids}}, {"_id": 0, "id": 1, "title": 1, "company_id": 1, "location": 1}):
+        jobs[j["id"]] = j
+    company_ids = list({j.get("company_id") for j in jobs.values() if j.get("company_id")})
+    companies = {}
+    async for c in db.companies.find({"id": {"$in": company_ids}}, {"_id": 0, "id": 1, "name": 1, "legal_name": 1, "logo_url": 1}):
+        companies[c["id"]] = c
+    cands = {}
+    async for k in db.candidate_bank.find({"id": {"$in": cand_ids}}, {"_id": 0, "id": 1, "name": 1, "location": 1, "current_location": 1}):
+        cands[k["id"]] = k
+    revs = {}
+    async for r in db.revenue.find({"application_id": {"$in": app_ids}}, {"_id": 0, "application_id": 1, "final_revenue": 1, "revenue_status": 1}):
+        revs[r["application_id"]] = r
+
+    items = []
+    for a in apps:
+        job    = jobs.get(a.get("job_id"), {}) or {}
+        client = companies.get(job.get("company_id"), {}) or {}
+        cand   = cands.get(a.get("candidate_id"), {}) or {}
+        rev    = revs.get(a["id"], {}) or {}
+        if company_id and client.get("id") != company_id:
+            continue
+        row = {
+            "application_id": a["id"],
+            "join_date": a.get("join_date") or "",
+            "candidate_name": a.get("candidate_name") or cand.get("name") or "",
+            "client_id":   client.get("id") or "",
+            "client_name": client.get("legal_name") or client.get("name") or "",
+            "client_logo_url": client.get("logo_url") or "",
+            "position":    a.get("job_title") or job.get("title") or "",
+            "location":    cand.get("location") or cand.get("current_location") or job.get("location") or "",
+            "joined_ctc":  a.get("joined_ctc") or a.get("offered_ctc") or 0,
+            "revenue":     rev.get("final_revenue"),
+            "revenue_status": rev.get("revenue_status") or "",
+        }
+        if position_q and position_q.lower() not in (row["position"] or "").lower():
+            continue
+        if location_q and location_q.lower() not in (row["location"] or "").lower():
+            continue
+        items.append(row)
+
+    return {"items": items, "count": len(items)}
+
+
+class JoiningUpdate(BaseModel):
+    joined_ctc: Optional[float] = None
+    revenue:    Optional[float] = None
+
+
+@router.patch("/api/blog/joinings/{application_id}")
+async def update_joining(
+    application_id: str,
+    payload: JoiningUpdate,
+    current_user: dict = Depends(require_role(["admin", "employer"])),
+):
+    """Edit the joined_ctc / revenue captured against a joined
+    application (fix.docx 2026-09-15). Team leaders use this to fill
+    the revenue value that was intentionally left blank at joining time.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    app_updates: dict = {}
+    if payload.joined_ctc is not None:
+        app_updates["joined_ctc"] = float(payload.joined_ctc)
+    if app_updates:
+        app_updates["updated_at"] = now
+        res = await db.applications.update_one({"id": application_id}, {"$set": app_updates})
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+    if payload.revenue is not None:
+        # Upsert the revenue row so team leaders can fill in a value even
+        # if the offered-stage never generated one (edge case).
+        await db.revenue.update_one(
+            {"application_id": application_id},
+            {"$set": {"final_revenue": float(payload.revenue), "updated_at": now},
+             "$setOnInsert": {"application_id": application_id, "revenue_status": "joined", "created_at": now}},
+            upsert=True,
+        )
+    return {"message": "Updated", "application_id": application_id}
+
+
 @router.get("/api/blog/admin/{blog_id}")
 async def admin_get_blog(blog_id: str, current_user: dict = Depends(require_role(["admin"]))):
     """Admin: get full blog by ID."""

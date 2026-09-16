@@ -57,6 +57,25 @@ async def lifespan(app: FastAPI):
     except Exception as _e:
         logger.warning(f"[Lifespan] Log retention pruner not started: {_e}")
 
+    # 5b. Salary Benchmark facet cache — auto-rebuild in background if the
+    # last snapshot is missing / older than TTL (fix.docx 2026-09-15).
+    # Serving the Salary Benchmark dropdown live over 178 k rows on the
+    # shared Atlas tier times out at 30 s, so we precompute once via cursor
+    # stream and cache the top-N per field in the `facet_cache` collection.
+    try:
+        from services.facet_cache import is_cache_stale, rebuild_facet_cache
+        from config import db as _fc_db
+        async def _fc_boot():
+            try:
+                if await is_cache_stale(_fc_db):
+                    logger.info("[Lifespan] Facet cache stale — rebuilding in background")
+                    await rebuild_facet_cache(_fc_db)
+            except Exception as _e:
+                logger.info(f"[Lifespan] Facet cache boot rebuild soft-failed: {_e}")
+        asyncio.create_task(_fc_boot())
+    except Exception as _e:
+        logger.warning(f"[Lifespan] Facet cache init skipped: {_e}")
+
     # 6. Talent Graph indexes — safe to run on every boot
     try:
         from services.talent_graph_service import ensure_embeddings_indexes

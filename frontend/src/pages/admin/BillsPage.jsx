@@ -42,6 +42,7 @@ import {
   Eye,
   Sparkles,
   XCircle,
+  Landmark,
 } from 'lucide-react';
 import { billsAPI, companyAPI } from '../../lib/api';
 
@@ -75,6 +76,13 @@ export default function BillsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(null);
   const [previewBill, setPreviewBill] = useState(null);
+  // fix.docx (2026-09-15): bank accounts + client email override
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [showBankDialog, setShowBankDialog] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    id: null, label: '', bank_name: '', beneficiary_name: '',
+    branch: '', account_number: '', ifsc: '', is_default: false,
+  });
   // Fix 5.14 (spec 2026-09-08): the iframe cannot pass the Bearer token so
   // the PDF endpoint returned 401 and the modal rendered blank. Fetch the
   // PDF as an authenticated blob and hand the iframe an object URL.
@@ -130,7 +138,7 @@ export default function BillsPage() {
       toast.error(e.message || 'Download failed');
     }
   };
-  const [sendForm, setSendForm] = useState({ extra_cc: '', subject: '', body: '', test_mode: false });
+  const [sendForm, setSendForm] = useState({ to_email: '', extra_cc: '', subject: '', body: '', test_mode: false });
   const [generating, setGenerating] = useState(false);
 
   // New bill form state
@@ -140,6 +148,7 @@ export default function BillsPage() {
     bill_date: new Date().toISOString().slice(0, 10),
     due_date: '',
     gst_kind: '',
+    bank_account_id: '',
     line_items: [emptyLine()],
   });
 
@@ -150,13 +159,57 @@ export default function BillsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [bs, cs] = await Promise.all([billsAPI.list(), companyAPI.getAll().catch(() => ({ data: [] }))]);
+      const [bs, cs, banks] = await Promise.all([
+        billsAPI.list(),
+        companyAPI.getAll().catch(() => ({ data: [] })),
+        billsAPI.listBankAccounts().catch(() => ({ data: { items: [] } })),
+      ]);
       setBills(bs.data?.items || []);
       setCompanies(cs.data || []);
+      setBankAccounts(banks.data?.items || []);
     } catch (e) {
       toast.error('Failed to load bills');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openEditBank = (b) => {
+    setBankForm(b ? { ...b } : {
+      id: null, label: '', bank_name: '', beneficiary_name: '',
+      branch: '', account_number: '', ifsc: '', is_default: false,
+    });
+    setShowBankDialog(true);
+  };
+
+  const saveBank = async () => {
+    if (!bankForm.label || !bankForm.bank_name || !bankForm.account_number || !bankForm.ifsc) {
+      toast.error('Label, Bank name, A/C number and IFSC are required.');
+      return;
+    }
+    try {
+      if (bankForm.id) {
+        await billsAPI.updateBankAccount(bankForm.id, bankForm);
+        toast.success('Bank account updated');
+      } else {
+        await billsAPI.createBankAccount(bankForm);
+        toast.success('Bank account added');
+      }
+      setShowBankDialog(false);
+      loadData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Save failed');
+    }
+  };
+
+  const deleteBank = async (id) => {
+    if (!confirm('Delete this bank account? Existing bills that already reference it keep their frozen copy.')) return;
+    try {
+      await billsAPI.deleteBankAccount(id);
+      toast.success('Deleted');
+      loadData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Delete failed');
     }
   };
 
@@ -197,6 +250,7 @@ export default function BillsPage() {
         bill_date: new Date().toISOString().slice(0, 10),
         due_date: '',
         gst_kind: '',
+        bank_account_id: '',
         line_items: [emptyLine()],
       });
       loadData();
@@ -207,7 +261,13 @@ export default function BillsPage() {
 
   const openSendDialog = async (bill) => {
     setShowSendDialog(bill);
-    setSendForm({ extra_cc: '', subject: `Invoice ${bill.bill_number} — ${bill.sender_legal_name}`, body: '', test_mode: false });
+    setSendForm({
+      to_email: bill.client_billing_email || '',
+      extra_cc: '',
+      subject: `Invoice ${bill.bill_number} — ${bill.sender_legal_name}`,
+      body: '',
+      test_mode: false,
+    });
     // Generate LLM body upfront
     setGenerating(true);
     try {
@@ -242,6 +302,7 @@ export default function BillsPage() {
         .map((s) => s.trim())
         .filter((s) => /^[^@]+@[^@]+\.[^@]+$/.test(s));
       const res = await billsAPI.send(showSendDialog.id, {
+        to_email: sendForm.to_email || undefined,
         extra_cc: extras,
         mail_subject: sendForm.subject,
         mail_body_plain: sendForm.body,
@@ -285,10 +346,45 @@ export default function BillsPage() {
           <h1 className="font-heading text-2xl lg:text-3xl font-bold text-slate-900">Bills & Invoices</h1>
           <p className="text-slate-500 mt-1">Generate GST tax invoices, send to clients, track payment.</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="bg-[#7CB342] hover:bg-[#689F38]" data-testid="new-bill-btn">
-          <Plus className="w-4 h-4 mr-2" /> New Bill
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => openEditBank(null)}
+            variant="outline"
+            data-testid="add-bank-btn"
+          >
+            <Landmark className="w-4 h-4 mr-2" /> Bank Accounts
+          </Button>
+          <Button onClick={() => setShowCreate(true)} className="bg-[#7CB342] hover:bg-[#689F38]" data-testid="new-bill-btn">
+            <Plus className="w-4 h-4 mr-2" /> New Bill
+          </Button>
+        </div>
       </div>
+
+      {/* Bank accounts strip — always visible so users know they exist */}
+      {bankAccounts.length > 0 && (
+        <Card data-testid="bank-accounts-strip">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 flex-wrap text-sm">
+              <span className="text-xs font-medium text-slate-500 flex items-center gap-1 mr-1">
+                <Landmark className="w-3.5 h-3.5" /> Saved bank accounts:
+              </span>
+              {bankAccounts.map((b) => (
+                <div
+                  key={b.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200"
+                  data-testid={`bank-chip-${b.id}`}
+                >
+                  <span>{b.label}{b.is_default && <span className="text-emerald-600 ml-1">•default</span>}</span>
+                  <button onClick={() => openEditBank(b)} className="text-slate-400 hover:text-slate-700 ml-1" title="Edit">✎</button>
+                  <button onClick={() => deleteBank(b.id)} className="text-slate-400 hover:text-red-600" title="Delete">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* List */}
       <Card>
@@ -386,6 +482,30 @@ export default function BillsPage() {
               <div>
                 <Label>Due Date (optional)</Label>
                 <Input type="date" value={newBill.due_date} onChange={(e) => setNewBill({ ...newBill, due_date: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <Label>Bank Account (printed on the PDF)</Label>
+                <Select
+                  value={newBill.bank_account_id || '_default'}
+                  onValueChange={(v) => setNewBill({ ...newBill, bank_account_id: v === '_default' ? '' : v })}
+                >
+                  <SelectTrigger data-testid="bill-bank-select">
+                    <SelectValue placeholder="Default account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_default">Use default account</SelectItem>
+                    {bankAccounts.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.label} — {b.bank_name} ({b.account_number?.slice(-4).padStart(4, '•')})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {bankAccounts.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No saved bank accounts — the invoice PDF will omit the bank block. Add one via the “Bank Accounts” button.
+                  </p>
+                )}
               </div>
             </div>
             <div>
@@ -490,10 +610,23 @@ export default function BillsPage() {
           <DialogHeader>
             <DialogTitle>Send Bill {showSendDialog?.bill_number}</DialogTitle>
             <DialogDescription>
-              To: <b>{showSendDialog?.client_billing_email}</b>. CC: accounts@vhc.in + employer + bsy@ + rohit@ + any extras below.
+              CC: accounts@vhc.in + employer + bsy@ + rohit@ + any extras below.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div>
+              <Label>Client email (To)</Label>
+              <Input
+                type="email"
+                value={sendForm.to_email}
+                onChange={(e) => setSendForm({ ...sendForm, to_email: e.target.value })}
+                placeholder="finance@client.com"
+                data-testid="send-to-email"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Overrides the company's saved billing email for this send only.
+              </p>
+            </div>
             <div>
               <Label>Subject</Label>
               <Input value={sendForm.subject} onChange={(e) => setSendForm({ ...sendForm, subject: e.target.value })} data-testid="send-subject" />
@@ -525,6 +658,66 @@ export default function BillsPage() {
             <Button variant="outline" onClick={() => setShowSendDialog(null)}>Cancel</Button>
             <Button onClick={sendBill} className="bg-blue-600 hover:bg-blue-700" data-testid="send-bill-submit">
               <Send className="w-4 h-4 mr-1" /> {sendForm.test_mode ? 'Send Test' : 'Send Now'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bank Account edit dialog ── */}
+      <Dialog open={showBankDialog} onOpenChange={(o) => !o && setShowBankDialog(false)}>
+        <DialogContent className="max-w-lg" data-testid="bank-dialog">
+          <DialogHeader>
+            <DialogTitle>{bankForm.id ? 'Edit bank account' : 'Add bank account'}</DialogTitle>
+            <DialogDescription>
+              Add every account you might invoice from. The chosen account is
+              snapshotted onto each bill so later edits never rewrite past
+              invoices.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <Label>Label</Label>
+              <Input
+                value={bankForm.label}
+                onChange={(e) => setBankForm({ ...bankForm, label: e.target.value })}
+                placeholder="HDFC Current — Delhi"
+                data-testid="bank-label"
+              />
+            </div>
+            <div>
+              <Label>Bank name</Label>
+              <Input value={bankForm.bank_name} onChange={(e) => setBankForm({ ...bankForm, bank_name: e.target.value })} data-testid="bank-name" />
+            </div>
+            <div>
+              <Label>Beneficiary name</Label>
+              <Input value={bankForm.beneficiary_name} onChange={(e) => setBankForm({ ...bankForm, beneficiary_name: e.target.value })} data-testid="bank-beneficiary" />
+            </div>
+            <div>
+              <Label>Branch</Label>
+              <Input value={bankForm.branch} onChange={(e) => setBankForm({ ...bankForm, branch: e.target.value })} data-testid="bank-branch" />
+            </div>
+            <div>
+              <Label>A/C number</Label>
+              <Input value={bankForm.account_number} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} data-testid="bank-account-number" />
+            </div>
+            <div>
+              <Label>IFSC</Label>
+              <Input value={bankForm.ifsc} onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })} data-testid="bank-ifsc" />
+            </div>
+            <label className="col-span-2 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={!!bankForm.is_default}
+                onChange={(e) => setBankForm({ ...bankForm, is_default: e.target.checked })}
+                data-testid="bank-is-default"
+              />
+              Make this the default account (picked automatically when no account is chosen on a bill)
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBankDialog(false)}>Cancel</Button>
+            <Button onClick={saveBank} className="bg-[#7CB342] hover:bg-[#689F38]" data-testid="bank-save">
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

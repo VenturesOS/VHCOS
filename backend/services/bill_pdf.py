@@ -307,6 +307,32 @@ def render_bill_pdf(bill: Dict, signature_png_bytes: Optional[bytes] = None,
     story.append(Paragraph(f"<b>Tax Amount (in words):</b> {totals.get('tax_in_words','')}", S["body"]))
     story.append(Spacer(1, 5 * mm))
 
+    # ── Bank details block (fix.docx 2026-09-15) ──
+    _bank = bill.get("bank_account") or {}
+    if _bank and (_bank.get("account_number") or _bank.get("bank_name")):
+        bank_rows = [
+            [Paragraph("<b>Bank Details (for NEFT / RTGS / IMPS)</b>", S["body"]), ""],
+            [Paragraph("Bank Name",        S["small"]), Paragraph(_bank.get("bank_name", ""),        S["small"])],
+            [Paragraph("Beneficiary Name", S["small"]), Paragraph(_bank.get("beneficiary_name", ""), S["small"])],
+            [Paragraph("Branch",           S["small"]), Paragraph(_bank.get("branch", ""),           S["small"])],
+            [Paragraph("A/C Number",       S["small"]), Paragraph(_bank.get("account_number", ""),   S["small"])],
+            [Paragraph("IFSC Code",        S["small"]), Paragraph(_bank.get("ifsc", ""),             S["small"])],
+        ]
+        bank_tbl = Table(bank_rows, colWidths=[45 * mm, None])
+        bank_tbl.setStyle(TableStyle([
+            ("SPAN",     (0, 0), (1, 0)),
+            ("BACKGROUND", (0, 0), (1, 0), colors.HexColor("#F4F4F4")),
+            ("BOX",      (0, 0), (-1, -1), 0.5, colors.HexColor("#666666")),
+            ("INNERGRID",(0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+            ("VALIGN",   (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING",   (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
+        ]))
+        story.append(bank_tbl)
+        story.append(Spacer(1, 5 * mm))
+
     # ── Declaration / payment terms ──
     decl = (
         "<b>Declaration:</b><br/>"

@@ -8,6 +8,51 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 # ────────────────────────────────────────────────────────────
+# Bank accounts (fix.docx 2026-09-15) — user maintains a list,
+# picks one per bill; the chosen values snapshot onto the bill
+# so later account changes don't mutate old invoices.
+# ────────────────────────────────────────────────────────────
+class BankAccountBase(BaseModel):
+    label: str = Field(..., description="Short human label e.g. 'HDFC Current — Delhi'")
+    bank_name: str
+    beneficiary_name: str
+    branch: str
+    account_number: str
+    ifsc: str
+    is_default: bool = False
+
+
+class BankAccountCreate(BankAccountBase):
+    pass
+
+
+class BankAccountUpdate(BaseModel):
+    label: Optional[str] = None
+    bank_name: Optional[str] = None
+    beneficiary_name: Optional[str] = None
+    branch: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class BankAccountRecord(BankAccountBase):
+    id: str
+    created_at: str
+    updated_at: Optional[str] = None
+
+
+class BillBankSnapshot(BaseModel):
+    """Bank details frozen onto the bill at creation time."""
+    bank_account_id: Optional[str] = None
+    bank_name: str
+    beneficiary_name: str
+    branch: str
+    account_number: str
+    ifsc: str
+
+
+# ────────────────────────────────────────────────────────────
 # Line items + amount computations
 # ────────────────────────────────────────────────────────────
 class BillLineItem(BaseModel):
@@ -65,6 +110,14 @@ class BillRecord(BaseModel):
     line_items: List[BillLineItem]
     totals: BillTotals
 
+    # Bank account snapshot (fix.docx 2026-09-15) — the bank the user
+    # picked when creating this bill. Frozen so later account edits
+    # don't rewrite paid invoices.
+    bank_account: Optional[BillBankSnapshot] = None
+
+    # Sender logo URL — snapshotted from sender config at creation.
+    sender_logo_url: Optional[str] = None
+
     # Mail config (snapshotted at send time)
     cc_emails: List[EmailStr] = Field(default_factory=list)
     bcc_emails: List[EmailStr] = Field(default_factory=list)
@@ -105,6 +158,7 @@ class BillCreate(BaseModel):
     line_items: List[BillLineItem]
     gst_kind: Optional[str] = None  # auto-detected from state codes if None
     sender_variant: Optional[str] = "VENTURE HRD CENTRE"  # or "VENTURE HRD CENTRE PVT LTD"
+    bank_account_id: Optional[str] = None  # if None → default account
 
 
 class BillUpdate(BaseModel):
@@ -113,6 +167,7 @@ class BillUpdate(BaseModel):
     line_items: Optional[List[BillLineItem]] = None
     gst_kind: Optional[str] = None
     sender_variant: Optional[str] = None
+    bank_account_id: Optional[str] = None
     cc_emails: Optional[List[EmailStr]] = None
     bcc_emails: Optional[List[EmailStr]] = None
     mail_subject: Optional[str] = None
@@ -121,6 +176,9 @@ class BillUpdate(BaseModel):
 
 
 class BillSend(BaseModel):
+    to_email: Optional[EmailStr] = None  # fix.docx 2026-09-15 — override
+                                           # `client_billing_email` (users
+                                           # asked to type a per-send address)
     extra_cc: List[EmailStr] = Field(default_factory=list)
     mail_subject: Optional[str] = None
     mail_body_html: Optional[str] = None

@@ -295,9 +295,18 @@ def _build_pipeline_window_filter(window: Optional[str],
     whose stage_history has at least one transition inside the window.
 
     Returns None for 'all' / unset → no filter applied.
+
+    fix.docx (2026-09-15): the frontend preset dropdown ("This Week / …")
+    was removed in favour of two date pickers + Apply button. Callers that
+    now supply `window_from` / `window_to` WITHOUT `window="custom"` are
+    treated as an implicit custom window so the filter still fires.
     """
     if not window or window == "all":
-        return None
+        # No preset chosen — but if the two calendars were used, honor them.
+        if window_from or window_to:
+            window = "custom"
+        else:
+            return None
 
     now = datetime.now(timezone.utc)
 

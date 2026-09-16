@@ -18,7 +18,15 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 
 from config import db
-from models.bill import BillCreate, BillRecord, BillSend, BillUpdate
+from models.bill import (
+    BankAccountCreate,
+    BankAccountUpdate,
+    BillBankSnapshot,
+    BillCreate,
+    BillRecord,
+    BillSend,
+    BillUpdate,
+)
 from services.bill_llm_body import generate_send_body, plain_to_html
 from services.bill_mailer import build_cc_list, send_bill_email
 from services.bill_pdf import amount_to_words, render_bill_pdf
@@ -53,6 +61,7 @@ _SENDER_PRESETS = {
         "gstin": os.environ.get("BILLING_SENDER_GSTIN") or "07AAMPY9883D2ZT",
         "pan": os.environ.get("BILLING_SENDER_PAN") or "AAMPY9883D",
         "state_code": "07",
+        "logo_url": os.environ.get("BILLING_SENDER_LOGO_URL") or "",
     },
     "VENTURE HRD CENTRE PVT LTD": {
         "legal_name": "VENTURE HRD CENTRE PVT LTD",
@@ -60,6 +69,7 @@ _SENDER_PRESETS = {
         "gstin": os.environ.get("BILLING_SENDER_PVT_GSTIN") or "",
         "pan": os.environ.get("BILLING_SENDER_PVT_PAN") or "",
         "state_code": "07",
+        "logo_url": os.environ.get("BILLING_SENDER_PVT_LOGO_URL") or "",
     },
 }
 
@@ -130,6 +140,77 @@ def _build_totals(line_items: List[dict], gst_kind: str) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Bank accounts (fix.docx 2026-09-15) — admin CRUD, snapshot per-bill.
+# ──────────────────────────────────────────────────────────────────────
+@bills_router.get("/bills/bank-accounts")
+async def list_bank_accounts(user: dict = Depends(_require_billing_role)):
+    """Return every configured bank account, default first, then alphabetical."""
+    rows = await db.bill_bank_accounts.find({}, {"_id": 0}).to_list(200)
+    rows.sort(key=lambda r: (not r.get("is_default"), (r.get("label") or "").lower()))
+    return {"items": rows}
+
+
+@bills_router.post("/bills/bank-accounts")
+async def create_bank_account(payload: BankAccountCreate, user: dict = Depends(_require_billing_role)):
+    now = datetime.now(timezone.utc).isoformat()
+    doc = payload.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["created_at"] = now
+    if doc.get("is_default"):
+        # Only one default at a time.
+        await db.bill_bank_accounts.update_many({}, {"$set": {"is_default": False}})
+    await db.bill_bank_accounts.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@bills_router.put("/bills/bank-accounts/{account_id}")
+async def update_bank_account(
+    account_id: str,
+    payload: BankAccountUpdate,
+    user: dict = Depends(_require_billing_role),
+):
+    upd = {k: v for k, v in payload.model_dump(exclude_none=True).items()}
+    if not upd:
+        raise HTTPException(status_code=400, detail="Nothing to update.")
+    if upd.get("is_default") is True:
+        await db.bill_bank_accounts.update_many({}, {"$set": {"is_default": False}})
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    res = await db.bill_bank_accounts.update_one({"id": account_id}, {"$set": upd})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bank account not found.")
+    doc = await db.bill_bank_accounts.find_one({"id": account_id}, {"_id": 0})
+    return doc
+
+
+@bills_router.delete("/bills/bank-accounts/{account_id}")
+async def delete_bank_account(account_id: str, user: dict = Depends(_require_billing_role)):
+    res = await db.bill_bank_accounts.delete_one({"id": account_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Bank account not found.")
+    return {"message": "Deleted", "id": account_id}
+
+
+async def _resolve_bank_snapshot(bank_account_id: Optional[str]) -> Optional[dict]:
+    """Load a bank account (given id, or the default) and return the
+    subset of fields we snapshot onto a bill."""
+    q = {"id": bank_account_id} if bank_account_id else {"is_default": True}
+    doc = await db.bill_bank_accounts.find_one(q, {"_id": 0})
+    if not doc and bank_account_id:
+        raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found.")
+    if not doc:
+        return None
+    return {
+        "bank_account_id":  doc.get("id"),
+        "bank_name":        doc.get("bank_name", ""),
+        "beneficiary_name": doc.get("beneficiary_name", ""),
+        "branch":           doc.get("branch", ""),
+        "account_number":   doc.get("account_number", ""),
+        "ifsc":             doc.get("ifsc", ""),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
 # CRUD
 # ──────────────────────────────────────────────────────────────────────
 @bills_router.post("/bills")
@@ -155,6 +236,7 @@ async def create_bill(payload: BillCreate, user: dict = Depends(_require_billing
 
     totals = _build_totals(line_items, gst_kind)
     now = datetime.now(timezone.utc)
+    bank_snapshot = await _resolve_bank_snapshot(payload.bank_account_id)
 
     bill = {
         "id": str(uuid.uuid4()),
@@ -166,6 +248,7 @@ async def create_bill(payload: BillCreate, user: dict = Depends(_require_billing
         "sender_gstin": sender["gstin"],
         "sender_pan": sender["pan"],
         "sender_state_code": sender["state_code"],
+        "sender_logo_url": sender.get("logo_url") or "",
         "client_company_id": company.get("id"),
         "client_legal_name": company.get("legal_name") or company.get("name") or "",
         "client_address": company.get("billing_address") or company.get("address") or "",
@@ -174,6 +257,7 @@ async def create_bill(payload: BillCreate, user: dict = Depends(_require_billing
         "client_billing_email": company.get("billing_email") or company.get("primary_email") or "",
         "line_items": line_items,
         "totals": totals,
+        "bank_account": bank_snapshot,
         "status": "draft",
         "reminders_enabled": True,
         "reminder_schedule_days": [7, 14, 30],
@@ -247,11 +331,16 @@ async def update_bill(bill_id: str, payload: BillUpdate, user: dict = Depends(_r
             upd["sender_gstin"] = sender["gstin"]
             upd["sender_pan"] = sender["pan"]
             upd["sender_state_code"] = sender["state_code"]
+            upd["sender_logo_url"] = sender.get("logo_url") or ""
             upd.pop("sender_variant", None)
 
         gst_kind = upd.get("gst_kind") or bill["totals"]["gst_kind"]
         upd["line_items"] = new_items_dicts
         upd["totals"] = _build_totals(new_items_dicts, gst_kind)
+
+    # Bank account swap
+    if "bank_account_id" in upd:
+        upd["bank_account"] = await _resolve_bank_snapshot(upd.pop("bank_account_id"))
 
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.bills.update_one({"id": bill_id}, {"$set": upd})
@@ -292,13 +381,41 @@ async def _load_signature_png() -> Optional[bytes]:
         return None
 
 
+# Simple in-process cache for remote sender logos so we don't refetch on
+# every /pdf render.
+_LOGO_CACHE: dict = {}
+
+
+async def _load_logo_bytes(url: Optional[str]) -> Optional[bytes]:
+    """Fetch the sender's logo from `sender_logo_url` (or the preset
+    default). Cached in-process."""
+    if not url:
+        return None
+    cached = _LOGO_CACHE.get(url)
+    if cached is not None:
+        return cached or None  # empty bytes → previous failure sentinel
+    try:
+        import httpx  # already a dep for LLM calls
+        async with httpx.AsyncClient(timeout=8.0) as _c:
+            r = await _c.get(url)
+            r.raise_for_status()
+            data = r.content
+            _LOGO_CACHE[url] = data
+            return data
+    except Exception as e:
+        logger.warning("[Bills] Couldn't fetch sender logo %s: %s", url, e)
+        _LOGO_CACHE[url] = b""  # cache the failure so we don't spam retries
+        return None
+
+
 @bills_router.get("/bills/{bill_id}/pdf")
 async def render_pdf(bill_id: str, user: dict = Depends(_require_billing_role)):
     bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     sig = await _load_signature_png()
-    pdf = render_bill_pdf(bill, signature_png_bytes=sig)
+    logo = await _load_logo_bytes(bill.get("sender_logo_url"))
+    pdf = render_bill_pdf(bill, signature_png_bytes=sig, logo_png_bytes=logo)
     headers = {
         "Content-Disposition": f'inline; filename="{bill["bill_number"].replace("/", "_")}.pdf"',
         "X-VHC-Bill-Id": bill_id,
@@ -345,9 +462,11 @@ async def send_bill(bill_id: str, payload: BillSend, user: dict = Depends(_requi
         to_addr = user.get("email")
         cc_list = []
     else:
-        to_addr = bill.get("client_billing_email")
+        # fix.docx (2026-09-15): allow the user to type a per-send To
+        # address that overrides the company's stored billing_email.
+        to_addr = (payload.to_email or bill.get("client_billing_email") or "").strip()
     if not to_addr:
-        raise HTTPException(status_code=400, detail="Client billing email is missing on the company record.")
+        raise HTTPException(status_code=400, detail="No recipient email — set one on the client company or pass `to_email`.")
 
     # Body — payload override > stored > generate fresh
     plain = payload.mail_body_plain or bill.get("mail_body_plain")
@@ -362,7 +481,8 @@ async def send_bill(bill_id: str, payload: BillSend, user: dict = Depends(_requi
 
     # Render the PDF fresh
     sig = await _load_signature_png()
-    pdf = render_bill_pdf(bill, signature_png_bytes=sig)
+    logo = await _load_logo_bytes(bill.get("sender_logo_url"))
+    pdf = render_bill_pdf(bill, signature_png_bytes=sig, logo_png_bytes=logo)
     sha = hashlib.sha256(pdf).hexdigest()
 
     res = await send_bill_email(

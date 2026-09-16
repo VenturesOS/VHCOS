@@ -1,3 +1,26 @@
+## 2026-09-15 — fix.docx pass (Pipeline, Salary, Bills, Blog Joinings, Analytics)
+
+- **Pipeline calendar**: removed the legacy "Activity window" preset dropdown; two date pickers now sit at the TOP of the filter card with an Apply button that only fires the fetch when clicked. Bare `window_from` / `window_to` (without `window="custom"`) now filter — frontend no longer needs to spoof the preset. (`AdminPipelinePage.jsx`, `PipelinePage.jsx`, `routes/applications.py::_build_pipeline_window_filter`)
+- **Salary Benchmark**:
+  - Persistent `facet_cache` collection (`services/facet_cache.py`) precomputes top-500 per field via cursor-stream — dropdown fetches drop from 10 s→<200 ms.
+  - Admin endpoint `POST /api/admin/rebuild-facet-cache` + startup auto-rebuild if stale (`bootstrap/lifespan.py`).
+  - Frontend preloads full alphabetical list on box focus, then client-side filters as user types.
+  - Single-pass `$facet` aggregation: stats + 5 breakdowns share one `$sample`, cutting unfiltered response ~30 s → ~5 s. Filter now actually reduces the candidate count.
+- **Bills**:
+  - `bill_bank_accounts` collection + full CRUD (`/api/bills/bank-accounts`) with default-account picker.
+  - Bank details snapshotted onto each bill and printed as a block in the invoice PDF (`services/bill_pdf.py`).
+  - Sender logo loaded from env-var URL (`BILLING_SENDER_LOGO_URL` / `BILLING_SENDER_PVT_LOGO_URL`) and shown in the PDF header.
+  - `to_email` override in the send dialog so the client email can be typed per-send.
+- **Blog Engine → Joinings tab**:
+  - `GET /api/blog/joinings` — every application at stage=joined, hydrated with client company + logo, position, location, joined CTC, revenue. Filters: date range, position, location.
+  - `PATCH /api/blog/joinings/{id}` — team leaders edit the revenue value that was intentionally left blank at joining time.
+  - `JoinDialog` now captures `joined_ctc` when moving a candidate to Joined.
+- **Analytics hub**:
+  - `public_only` param (default true) restricts route-based aggregations to `/careers`, `/jobs`, `/blog`, and anonymous hits — internal portal noise no longer drowns marketing traffic.
+  - New `top_utm_sources` block from `props.utm_source` so redirect campaigns (Naukri / LinkedIn / Facebook) are traceable.
+- **Skills normalization migration** (from prior turn, kept for context): `skills_lc`, `current_company_lc`, `location_lc` mirrors + sparse indexes populated by `services.schema_normalizer.normalize_candidate` and one-shot `scripts.backfill_candidate_lc` (admin endpoint + status). Backfill run: 178 443 processed. Candidate Data Bank Company + Skills filters use `SearchableMultiSelect`.
+
+
 ## 2026-09-08 — Wave 3 remaining items
 
 ### 5.14 Bills & Invoices — Preview + Download + Email

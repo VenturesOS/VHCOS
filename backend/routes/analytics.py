@@ -626,31 +626,40 @@ async def salary_benchmark(
     import re as _re
     import math
 
-    # Build match filter
+    # fix.docx (2026-09-15): the previous impl scanned raw `location` /
+    # `current_employer` fields with case-insensitive regex on 178 k docs,
+    # timing out at 30 s so the page appeared not to load at all and the
+    # candidate count never changed with filters. We now match against
+    # the indexed lowercased mirrors (`location_lc`, `current_company_lc`,
+    # `skills_lc`) with exact equality — those values are populated by
+    # `services.schema_normalizer.normalize_candidate` + the
+    # `scripts.backfill_candidate_lc` one-shot migration.
     match_filter = {
         "current_salary": {"$exists": True, "$gt": 0},
     }
 
-    # Skills filter: match candidates who have ANY of the requested skills
+    # Skills filter: candidates whose skill array contains ANY of the picks.
     if skills:
-        skill_list = [s.strip() for s in skills.split(",") if s.strip()]
+        skill_list = [s.strip().lower() for s in skills.split(",") if s.strip()]
         if skill_list:
-            skill_regexes = [{"skills": {"$regex": _re.escape(s), "$options": "i"}} for s in skill_list]
-            match_filter["$or"] = skill_regexes
+            match_filter["skills_lc"] = {"$in": skill_list}
 
-    # Location filter (partial match)
+    # Location — dropdown picks are lowercase canonical values, so exact
+    # equality on the indexed mirror. If the user typed a raw string we
+    # still coerce to lowercase.
     if location:
-        match_filter["location"] = {"$regex": _re.escape(location.strip()), "$options": "i"}
+        match_filter["location_lc"] = location.strip().lower()
 
-    # Designation filter (partial match)
+    # Designation still uses regex — no _lc mirror for it yet, and the
+    # designation universe is small enough that the scan stays cheap.
     if designation:
         match_filter["designation"] = {"$regex": _re.escape(designation.strip()), "$options": "i"}
 
-    # Company/Employer filter (partial match)
+    # Company / employer — same exact-lc trick as location.
     if company:
-        match_filter["current_employer"] = {"$regex": _re.escape(company.strip()), "$options": "i"}
+        match_filter["current_company_lc"] = company.strip().lower()
 
-    # Industry filter (partial match)
+    # Industry regex (no lc mirror; small universe).
     if industry:
         match_filter["industry"] = {"$regex": _re.escape(industry.strip()), "$options": "i"}
 
@@ -660,16 +669,28 @@ async def salary_benchmark(
     if experience_max is not None:
         match_filter.setdefault("experience_years", {})["$lte"] = experience_max
 
-    # Main stats aggregation — use MongoDB `$percentile` accumulator so we
-    # never $push the whole salary array into a single doc (172 k candidates
-    # would bust the 16 MB BSON limit, which is why the endpoint stalled).
-    # A leading `$sample` bounds the work to ~10 k docs so the multi-planner
-    # can pick a fast path even for regex filters that don't fit an index.
-    # Percentiles from a random 10 k sample are within ±2 % of the full
-    # population for a distribution this large.
-    stats_pipeline = [
-        {"$match": match_filter},
-        {"$sample": {"size": 10000}},
+    # Detect "no meaningful filter" — the unfiltered case doesn't need a
+    # $match to slice 178 k rows down; we can $sample FIRST (fast random
+    # cursor pick) and drop zero-salary rows in the group. With any
+    # user-supplied filter we keep $match first so the sample draws from
+    # the filtered universe.
+    _has_user_filter = any([skills, location, designation, company, industry,
+                             experience_min is not None, experience_max is not None])
+
+    # Single-pass pipeline: sample the collection ONCE, then $facet out
+    # stats + all five breakdowns. This is what pushed the unfiltered
+    # case from ~30 s (six separate aggregations, each with its own
+    # $sample scan) down to a few seconds.
+    _sample_size = 5000
+    if _has_user_filter:
+        pre_stages = [{"$match": match_filter}, {"$sample": {"size": _sample_size}}]
+    else:
+        # sample first (fast pseudo-random cursor when < 5 % of collection),
+        # then filter out zero-salary rows.
+        pre_stages = [{"$sample": {"size": _sample_size}}, {"$match": match_filter}]
+
+    # ── Stats accumulators (aggregated across the same sample) ──
+    _stats_stages = [
         {"$group": {
             "_id": None,
             "count": {"$sum": 1},
@@ -683,38 +704,9 @@ async def salary_benchmark(
             }},
         }},
     ]
-    try:
-        stats_result = await db.candidate_bank.aggregate(
-            stats_pipeline, maxTimeMS=25000, allowDiskUse=True,
-        ).to_list(1)
-    except Exception as _e:
-        # Spec 5.7: never leave the UI in an indefinite "Analyzing..." state.
-        # Return a clear error the frontend can render instead of a 500.
-        logger.warning("[SalaryBenchmark] aggregation failed: %s", _e)
-        return {
-            "count": 0, "avg_salary": 0, "median_salary": 0,
-            "min_salary": 0, "max_salary": 0, "p25": 0, "p75": 0,
-            "by_location": [], "by_experience": [], "by_designation": [],
-            "salary_ranges": [],
-            "error": "Query too broad — please add more filters to narrow the search.",
-        }
 
-    if not stats_result or stats_result[0]["count"] == 0:
-        return {
-            "count": 0, "avg_salary": 0, "median_salary": 0,
-            "min_salary": 0, "max_salary": 0,
-            "p25": 0, "p75": 0,
-            "by_location": [], "by_experience": [], "by_designation": [],
-            "salary_ranges": [],
-        }
-
-    s = stats_result[0]
-    p25, median, p75 = s["percentiles"]
-    n = s["count"]
-
-    # Breakdown by location (top 10)
-    loc_pipeline = [
-        {"$match": match_filter},
+    # ── Breakdown sub-pipelines ──
+    _loc_stages = [
         {"$match": {"location": {"$exists": True, "$nin": [None, ""]}}},
         {"$group": {
             "_id": "$location",
@@ -724,11 +716,7 @@ async def salary_benchmark(
         {"$sort": {"count": -1}},
         {"$limit": 10},
     ]
-    by_location = await db.candidate_bank.aggregate(loc_pipeline).to_list(10)
-
-    # Breakdown by experience range
-    exp_pipeline = [
-        {"$match": match_filter},
+    _exp_stages = [
         {"$match": {"experience_years": {"$exists": True, "$gte": 0}}},
         {"$bucket": {
             "groupBy": "$experience_years",
@@ -742,16 +730,7 @@ async def salary_benchmark(
             },
         }},
     ]
-    by_experience = await db.candidate_bank.aggregate(exp_pipeline).to_list(20)
-
-    exp_labels = {0: "0-2 yrs", 2: "2-5 yrs", 5: "5-8 yrs", 8: "8-12 yrs", 12: "12-16 yrs", 16: "16-20 yrs", 20: "20+ yrs"}
-    for b in by_experience:
-        b["label"] = exp_labels.get(b["_id"], f"{b['_id']}+ yrs")
-        b["avg_salary"] = round(b["avg_salary"])
-
-    # Breakdown by designation (top 10)
-    desig_pipeline = [
-        {"$match": match_filter},
+    _desig_stages = [
         {"$match": {"designation": {"$exists": True, "$nin": [None, ""]}}},
         {"$group": {
             "_id": "$designation",
@@ -761,11 +740,7 @@ async def salary_benchmark(
         {"$sort": {"avg_salary": -1}},
         {"$limit": 10},
     ]
-    by_designation = await db.candidate_bank.aggregate(desig_pipeline).to_list(10)
-
-    # Salary range distribution
-    range_pipeline = [
-        {"$match": match_filter},
+    _range_stages = [
         {"$bucket": {
             "groupBy": "$current_salary",
             "boundaries": [0, 300000, 500000, 800000, 1200000, 1800000, 2500000, 4000000, 6000000, 10000000, 100000000],
@@ -773,7 +748,69 @@ async def salary_benchmark(
             "output": {"count": {"$sum": 1}},
         }},
     ]
-    salary_ranges = await db.candidate_bank.aggregate(range_pipeline).to_list(20)
+    _skills_stages = [
+        {"$unwind": "$skills"},
+        {"$group": {"_id": {"$toLower": "$skills"}, "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 15},
+    ]
+
+    pipeline = pre_stages + [{
+        "$facet": {
+            "stats":         _stats_stages,
+            "by_location":   _loc_stages,
+            "by_experience": _exp_stages,
+            "by_designation": _desig_stages,
+            "salary_ranges": _range_stages,
+            "top_skills":    _skills_stages,
+        },
+    }]
+
+    try:
+        _res = await db.candidate_bank.aggregate(
+            pipeline, maxTimeMS=25000, allowDiskUse=True,
+        ).to_list(1)
+    except Exception as _e:
+        logger.warning("[SalaryBenchmark] aggregation failed: %s", _e)
+        return {
+            "count": 0, "avg_salary": 0, "median_salary": 0,
+            "min_salary": 0, "max_salary": 0, "p25": 0, "p75": 0,
+            "by_location": [], "by_experience": [], "by_designation": [],
+            "salary_ranges": [], "top_skills": [],
+            "error": "Query too broad — please add more filters to narrow the search.",
+        }
+
+    if not _res or not _res[0].get("stats"):
+        return {
+            "count": 0, "avg_salary": 0, "median_salary": 0,
+            "min_salary": 0, "max_salary": 0,
+            "p25": 0, "p75": 0,
+            "by_location": [], "by_experience": [], "by_designation": [],
+            "salary_ranges": [], "top_skills": [],
+        }
+
+    _fr = _res[0]
+    s = (_fr.get("stats") or [{}])[0]
+    if not s or s.get("count", 0) == 0:
+        return {
+            "count": 0, "avg_salary": 0, "median_salary": 0,
+            "min_salary": 0, "max_salary": 0,
+            "p25": 0, "p75": 0,
+            "by_location": [], "by_experience": [], "by_designation": [],
+            "salary_ranges": [], "top_skills": [],
+        }
+    p25, median, p75 = s["percentiles"]
+    n = s["count"]
+    by_location   = _fr.get("by_location") or []
+    by_experience = _fr.get("by_experience") or []
+    by_designation = _fr.get("by_designation") or []
+    salary_ranges = _fr.get("salary_ranges") or []
+    top_skills    = _fr.get("top_skills") or []
+
+    exp_labels = {0: "0-2 yrs", 2: "2-5 yrs", 5: "5-8 yrs", 8: "8-12 yrs", 12: "12-16 yrs", 16: "16-20 yrs", 20: "20+ yrs"}
+    for b in by_experience:
+        b["label"] = exp_labels.get(b["_id"], f"{b['_id']}+ yrs")
+        b["avg_salary"] = round(b["avg_salary"] or 0)
 
     range_labels = {
         0: "0-3L", 300000: "3-5L", 500000: "5-8L", 800000: "8-12L",
@@ -782,16 +819,6 @@ async def salary_benchmark(
     }
     for r in salary_ranges:
         r["label"] = range_labels.get(r["_id"], str(r["_id"]))
-
-    # Top skills in the filtered set
-    skills_pipeline = [
-        {"$match": match_filter},
-        {"$unwind": "$skills"},
-        {"$group": {"_id": {"$toLower": "$skills"}, "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 15},
-    ]
-    top_skills = await db.candidate_bank.aggregate(skills_pipeline).to_list(15)
 
     return {
         "count": n,
@@ -811,48 +838,29 @@ async def salary_benchmark(
 
 @analytics_router.get("/salary-benchmark/suggestions")
 async def salary_benchmark_suggestions(
-    field: str = Query(..., description="Field to get suggestions for: skills, location, designation"),
-    q: Optional[str] = Query(None, description="Search query"),
+    field: str = Query(..., description="Field: skills, location, designation, company, industry"),
+    q: Optional[str] = Query(None, description="Ignored — client filters the preloaded list"),
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"])),
 ):
-    """Get autocomplete suggestions for salary benchmark filters."""
-    import re as _re
+    """Preloaded, alphabetically-sorted dropdown options for salary-benchmark
+    filters (fix.docx 2026-09-15).
 
-    field_map = {
-        "skills": "skills",
-        "location": "location",
-        "designation": "designation",
-        "company": "current_employer",
-        "industry": "industry",
-    }
-    db_field = field_map.get(field)
-    if not db_field:
+    Reads from the persistent `facet_cache` collection populated by
+    `services.facet_cache.rebuild_facet_cache` (invoked from the admin
+    endpoint + startup). Doing the $group live over 178 k rows on the
+    shared Atlas tier times out at 30 s, so we compute once via cursor
+    stream and serve from a small pre-sorted list.
+    """
+    if field not in {"skills", "location", "designation", "company", "industry"}:
         return {"suggestions": []}
 
-    match = {"current_salary": {"$gt": 0}}
-    if db_field == "skills":
-        pipeline = [
-            {"$match": match},
-            {"$unwind": "$skills"},
-        ]
-        if q:
-            pipeline.append({"$match": {"skills": {"$regex": _re.escape(q), "$options": "i"}}})
-        pipeline.extend([
-            {"$group": {"_id": "$skills", "count": {"$sum": 1}}},
-            {"$sort": {"count": -1}},
-            {"$limit": 20},
-        ])
-    else:
-        if q:
-            match[db_field] = {"$regex": _re.escape(q), "$options": "i"}
-        else:
-            match[db_field] = {"$exists": True, "$nin": [None, ""]}
-        pipeline = [
-            {"$match": match},
-            {"$group": {"_id": f"${db_field}", "count": {"$sum": 1}}},
-            {"$sort": {"count": -1}},
-            {"$limit": 20},
-        ]
-
-    results = await db.candidate_bank.aggregate(pipeline).to_list(20)
-    return {"suggestions": [{"value": r["_id"], "count": r["count"]} for r in results if r["_id"]]}
+    from services.facet_cache import get_cached_facet
+    doc = await get_cached_facet(db, field)
+    if not doc:
+        return {"suggestions": [], "stale": True,
+                "hint": "Cache not built. Ask an admin to POST /api/admin/rebuild-facet-cache."}
+    return {
+        "suggestions": doc.get("values", []),
+        "generated_at": doc.get("generated_at"),
+        "distinct_count": doc.get("distinct_count"),
+    }

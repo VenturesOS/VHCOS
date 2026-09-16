@@ -70,3 +70,24 @@ def test_window_filter_includes_updated_at_fallback():
     sh_check = fallback["$and"][1]["$or"]
     assert any("$exists" in c.get("stage_history", {}) for c in sh_check)
     assert any("$size" in c.get("stage_history", {}) for c in sh_check)
+
+
+
+def test_window_bare_dates_imply_custom():
+    """fix.docx (2026-09-15): frontend removed the preset dropdown, now
+    sends window_from / window_to without window='custom'. Those bare
+    dates must still activate the filter."""
+    f = _build_pipeline_window_filter(None, "2026-05-01", "2026-05-31")
+    assert f is not None, "bare dates without window preset should filter"
+    sh = f["$or"][0]["stage_history"]["$elemMatch"]["timestamp"]
+    assert "2026-05-01" in sh["$gte"]
+    assert "2026-05-31" in sh["$lte"]
+
+
+def test_window_all_with_bare_from_still_fires():
+    """Same as above but window='all' is explicitly sent by the URL —
+    if the user set only a From date, that alone should still filter."""
+    f = _build_pipeline_window_filter("all", "2026-05-01", None)
+    assert f is not None
+    sh = f["$or"][0]["stage_history"]["$elemMatch"]["timestamp"]
+    assert "2026-05-01" in sh["$gte"]

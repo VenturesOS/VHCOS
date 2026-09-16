@@ -109,7 +109,20 @@ export function JoinDialog({ open, onClose, app, form, setForm, onConfirm, loadi
         <div className="space-y-4 py-2">
           <div>
             <Label className="text-sm font-medium">Join Date *</Label>
-            <Input type="date" value={form.join_date} onChange={e => setForm({ join_date: e.target.value })} data-testid="join-date-input" />
+            <Input type="date" value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} data-testid="join-date-input" />
+          </div>
+          <div>
+            <Label className="text-sm font-medium">Joined CTC (Annual, INR)</Label>
+            <Input
+              type="number" min="0" step="1000"
+              placeholder={app?.offered_ctc ? `Defaults to offered ₹${app.offered_ctc}` : 'e.g. 1800000'}
+              value={form.joined_ctc || ''}
+              onChange={e => setForm({ ...form, joined_ctc: e.target.value })}
+              data-testid="joined-ctc-input"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Fill this if the candidate joined at a CTC different from the offered one. Leave blank to keep the offered value.
+            </p>
           </div>
         </div>
         <DialogFooter>

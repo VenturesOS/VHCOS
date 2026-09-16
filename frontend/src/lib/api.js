@@ -265,6 +265,11 @@ export const billsAPI = {
   previewMail: (id) => api.post(`/bills/${id}/preview-mail`),
   send: (id, payload = {}) => api.post(`/bills/${id}/send`, payload),
   markPaid: (id) => api.post(`/bills/${id}/mark-paid`),
+  // Bank accounts (fix.docx 2026-09-15)
+  listBankAccounts: () => api.get('/bills/bank-accounts'),
+  createBankAccount: (data) => api.post('/bills/bank-accounts', data),
+  updateBankAccount: (id, data) => api.put(`/bills/bank-accounts/${id}`, data),
+  deleteBankAccount: (id) => api.delete(`/bills/bank-accounts/${id}`),
 };
 
 // Employer Portal APIs (Internal OS Enhancement)
@@ -588,6 +593,9 @@ export const blogAPI = {
   researchTopics: (data) => api.post('/blog/research-topics', data),
   // Sitemap & Digest
   sendDigest: () => api.post('/blog/send-digest'),
+  // Joinings (fix.docx 2026-09-15)
+  listJoinings: (params = {}) => api.get('/blog/joinings', { params }),
+  updateJoining: (applicationId, data) => api.patch(`/blog/joinings/${applicationId}`, data),
 };
 
 // Candidate Data Bank APIs

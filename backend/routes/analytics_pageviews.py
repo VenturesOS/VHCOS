@@ -105,20 +105,42 @@ async def track_event(
 @analytics_pageviews_router.get("/hub/dashboard")
 async def hub_dashboard(
     days: int = 7,
+    public_only: bool = True,
     current_user: dict = Depends(require_role(["admin"])),
 ):
     """Unified admin analytics: page views, DAU, top pages, top recruiters,
-    capture funnel, top referrers. All aggregations are MongoDB-side for speed."""
+    capture funnel, top referrers. All aggregations are MongoDB-side for speed.
+
+    fix.docx (2026-09-15): the hub used to bucket the internal employee
+    portal (/admin, /employer, /recruiter, /candidate) together with the
+    public careers / job / blog pages, drowning out the marketing traffic.
+    `public_only=true` (the new default) restricts every route-based
+    aggregation to the outward-facing URLs. Toggle to `false` to see
+    combined data.
+    """
     days = max(1, min(days, 90))
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
-    # 1. Total page views + DAU + unique visitors
-    total_pv = await db.analytics_pageviews.count_documents(
-        {"ts": {"$gte": since}, "event_type": "pageview"}
-    )
+    # Regex that keeps only public / marketing / careers routes when
+    # `public_only` is on. Anonymous ({"user_id": null}) hits from
+    # external redirects also count as public even if the URL prefix
+    # isn't a canonical marketing one (e.g. custom vanity landing pages).
+    _PUBLIC_ROUTE_RE = r"^/(careers|jobs?|job/|blog|apply|company/|companies/|$)"
+    _pv_match: dict = {"ts": {"$gte": since}, "event_type": "pageview"}
+    if public_only:
+        _pv_match["$or"] = [
+            {"route": {"$regex": _PUBLIC_ROUTE_RE}},
+            {"user_id": None},
+        ]
 
+    # 1. Total page views + DAU + unique visitors
+    total_pv = await db.analytics_pageviews.count_documents(_pv_match)
+
+    dau_match = {"ts": {"$gte": since}}
+    if public_only:
+        dau_match["$or"] = _pv_match["$or"]
     dau_pipeline = [
-        {"$match": {"ts": {"$gte": since}}},
+        {"$match": dau_match},
         {
             "$group": {
                 "_id": {
@@ -135,7 +157,7 @@ async def hub_dashboard(
 
     # 2. Top pages
     top_pages_pipeline = [
-        {"$match": {"ts": {"$gte": since}, "event_type": "pageview"}},
+        {"$match": _pv_match},
         {"$group": {"_id": "$route", "views": {"$sum": 1}}},
         {"$sort": {"views": -1}},
         {"$limit": 15},
@@ -143,15 +165,12 @@ async def hub_dashboard(
     ]
     top_pages = await db.analytics_pageviews.aggregate(top_pages_pipeline).to_list(15)
 
-    # 3. Top referrers
+    # 3. Top referrers — always excludes empty referrer AND same-origin
+    # referrers (we only care about external redirect traffic).
+    _ref_match = dict(_pv_match)
+    _ref_match["referrer"] = {"$nin": [None, ""]}
     top_referrers_pipeline = [
-        {
-            "$match": {
-                "ts": {"$gte": since},
-                "event_type": "pageview",
-                "referrer": {"$nin": [None, ""]},
-            }
-        },
+        {"$match": _ref_match},
         {"$group": {"_id": "$referrer", "hits": {"$sum": 1}}},
         {"$sort": {"hits": -1}},
         {"$limit": 10},
@@ -160,6 +179,20 @@ async def hub_dashboard(
     top_referrers = await db.analytics_pageviews.aggregate(
         top_referrers_pipeline
     ).to_list(10)
+
+    # 3b. UTM sources (Naukri / LinkedIn / Facebook redirect campaigns).
+    utm_pipeline = [
+        {"$match": _pv_match},
+        {"$match": {"props.utm_source": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": "$props.utm_source", "hits": {"$sum": 1}}},
+        {"$sort": {"hits": -1}},
+        {"$limit": 10},
+        {"$project": {"_id": 0, "utm_source": "$_id", "hits": 1}},
+    ]
+    try:
+        top_utm_sources = await db.analytics_pageviews.aggregate(utm_pipeline).to_list(10)
+    except Exception:
+        top_utm_sources = []
 
     # 4. Top recruiters by activity (from activity_logs)
     top_recruiters_pipeline = [
@@ -220,10 +253,12 @@ async def hub_dashboard(
 
     return {
         "range_days": days,
+        "public_only": public_only,
         "total_pageviews": total_pv,
         "dau": dau,
         "top_pages": top_pages,
         "top_referrers": top_referrers,
+        "top_utm_sources": top_utm_sources,
         "top_recruiters": top_recruiters,
         "funnel": funnel,
         "auth_split": auth_split,

@@ -2013,3 +2013,70 @@ async def get_backfill_candidate_lc_status(
 ):
     """Return the current state of the mirror-fields backfill task."""
     return dict(_BACKFILL_LC_STATE)
+
+
+# ---------------------------------------------------------------------------
+# Facet cache — precomputes Salary Benchmark dropdown options (fix.docx 2026-09-15)
+# ---------------------------------------------------------------------------
+_FACET_REBUILD_STATE: dict = {
+    "status": "idle",   # idle | running | done | error
+    "started_at": None,
+    "finished_at": None,
+    "processed": 0,
+    "written": 0,
+    "phase": None,
+    "elapsed_s": None,
+    "error": None,
+}
+
+
+@admin_router.post("/admin/rebuild-facet-cache", tags=["Admin Maintenance"])
+async def start_rebuild_facet_cache(
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Kick off a rebuild of the Salary Benchmark facet cache.
+
+    Streams every candidate_bank doc once, counts values per field
+    in-process, writes top-N per field to the `facet_cache` collection.
+    Takes ~2 minutes on Atlas M10 for 178 k rows. Idempotent.
+    """
+    if _FACET_REBUILD_STATE["status"] == "running":
+        raise HTTPException(status_code=409, detail="Rebuild already running. Poll /status.")
+
+    _FACET_REBUILD_STATE.update({
+        "status": "running",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": None, "processed": 0, "written": 0,
+        "phase": "starting", "elapsed_s": None, "error": None,
+    })
+
+    async def _progress(counters: dict) -> None:
+        _FACET_REBUILD_STATE.update(counters)
+
+    async def _runner() -> None:
+        try:
+            from services.facet_cache import rebuild_facet_cache
+            res = await rebuild_facet_cache(db, progress_cb=_progress)
+            _FACET_REBUILD_STATE.update({
+                "status": "done",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                **res,
+            })
+        except Exception as e:
+            logger.exception("[FacetCache] rebuild failed")
+            _FACET_REBUILD_STATE.update({
+                "status": "error",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "error": str(e),
+            })
+
+    _bf_asyncio.create_task(_runner())
+    return {"status": "started", "poll": "/api/admin/rebuild-facet-cache/status"}
+
+
+@admin_router.get("/admin/rebuild-facet-cache/status", tags=["Admin Maintenance"])
+async def get_rebuild_facet_cache_status(
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Current state of the salary-benchmark facet cache rebuild task."""
+    return dict(_FACET_REBUILD_STATE)

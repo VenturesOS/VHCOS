@@ -59,9 +59,38 @@ export default function SalaryBenchmarkPage() {
   const [industry, setIndustry] = useState('');
   const [expMin, setExpMin] = useState('');
   const [expMax, setExpMax] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
+
+  // fix.docx (2026-09-15): preload the full alphabetical option list per
+  // field the FIRST time a box is focused, then filter client-side as the
+  // user types. Cache the response so subsequent focuses are instant.
+  const [optionCache, setOptionCache] = useState({});   // field → [{value,count}]
+  const [optionLoading, setOptionLoading] = useState({}); // field → bool
   const [activeField, setActiveField] = useState(null);
-  const [sugQuery, setSugQuery] = useState('');
+  const [queryByField, setQueryByField] = useState({});   // field → current typed query
+
+  const ensureOptions = async (field) => {
+    if (optionCache[field] || optionLoading[field]) return;
+    setOptionLoading((prev) => ({ ...prev, [field]: true }));
+    try {
+      const result = await fetchJSON(`/analytics/salary-benchmark/suggestions?field=${encodeURIComponent(field)}`);
+      // Sort A→Z for display (backend also sorts, keep as safety net)
+      const opts = (result.suggestions || []).slice().sort((a, b) =>
+        (a.value || '').toString().localeCompare((b.value || '').toString(), 'en', { sensitivity: 'base' })
+      );
+      setOptionCache((prev) => ({ ...prev, [field]: opts }));
+    } catch {
+      setOptionCache((prev) => ({ ...prev, [field]: [] }));
+    } finally {
+      setOptionLoading((prev) => ({ ...prev, [field]: false }));
+    }
+  };
+
+  const getFilteredOptions = (field) => {
+    const opts = optionCache[field] || [];
+    const q = (queryByField[field] || '').trim().toLowerCase();
+    if (!q) return opts.slice(0, 200);
+    return opts.filter((o) => (o.value || '').toString().toLowerCase().includes(q)).slice(0, 200);
+  };
 
   const fetchBenchmark = useCallback(async () => {
     setLoading(true);
@@ -85,16 +114,6 @@ export default function SalaryBenchmarkPage() {
 
   useEffect(() => { fetchBenchmark(); }, [fetchBenchmark]);
 
-  const fetchSuggestions = async (field, q) => {
-    try {
-      const params = new URLSearchParams({ field, q: q || '' });
-      const result = await fetchJSON(`/analytics/salary-benchmark/suggestions?${params.toString()}`);
-      setSuggestions(result.suggestions || []);
-    } catch {
-      setSuggestions([]);
-    }
-  };
-
   const handleSuggestionClick = (field, value) => {
     if (field === 'skills') {
       const current = skills ? skills.split(',').map(s => s.trim()) : [];
@@ -103,8 +122,8 @@ export default function SalaryBenchmarkPage() {
     else if (field === 'designation') setDesignation(value);
     else if (field === 'company') setCompany(value);
     else if (field === 'industry') setIndustry(value);
-    setSuggestions([]);
     setActiveField(null);
+    setQueryByField((prev) => ({ ...prev, [field]: '' }));
   };
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -144,17 +163,21 @@ export default function SalaryBenchmarkPage() {
                 <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
                 <Input
                   placeholder="e.g. Java, Python"
-                  value={skills}
-                  onChange={(e) => { setSkills(e.target.value); fetchSuggestions('skills', e.target.value); setActiveField('skills'); }}
-                  onFocus={() => { fetchSuggestions('skills', skills); setActiveField('skills'); }}
-                  onBlur={() => setTimeout(() => setActiveField(null), 200)}
+                  value={queryByField.skills ?? skills}
+                  onChange={(e) => setQueryByField((p) => ({ ...p, skills: e.target.value }))}
+                  onFocus={() => { ensureOptions('skills'); setActiveField('skills'); }}
+                  onBlur={() => setTimeout(() => setActiveField((f) => f === 'skills' ? null : f), 200)}
                   className="pl-8 h-9 text-sm"
                   data-testid="filter-skills"
                 />
               </div>
-              {activeField === 'skills' && suggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {suggestions.map((s, i) => (
+              {activeField === 'skills' && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {optionLoading.skills && <div className="px-3 py-2 text-xs text-slate-400">Loading…</div>}
+                  {!optionLoading.skills && getFilteredOptions('skills').length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
+                  )}
+                  {getFilteredOptions('skills').map((s, i) => (
                     <button key={i} className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex justify-between"
                       onMouseDown={() => handleSuggestionClick('skills', s.value)}>
                       <span>{s.value}</span>
@@ -170,18 +193,22 @@ export default function SalaryBenchmarkPage() {
               <div className="relative">
                 <MapPin className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
                 <Input
-                  placeholder="e.g. Bangalore"
-                  value={location}
-                  onChange={(e) => { setLocation(e.target.value); fetchSuggestions('location', e.target.value); setActiveField('location'); }}
-                  onFocus={() => { fetchSuggestions('location', location); setActiveField('location'); }}
-                  onBlur={() => setTimeout(() => setActiveField(null), 200)}
+                  placeholder="Click to pick a city"
+                  value={queryByField.location ?? location}
+                  onChange={(e) => setQueryByField((p) => ({ ...p, location: e.target.value }))}
+                  onFocus={() => { ensureOptions('location'); setActiveField('location'); }}
+                  onBlur={() => setTimeout(() => setActiveField((f) => f === 'location' ? null : f), 200)}
                   className="pl-8 h-9 text-sm"
                   data-testid="filter-location"
                 />
               </div>
-              {activeField === 'location' && suggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {suggestions.map((s, i) => (
+              {activeField === 'location' && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {optionLoading.location && <div className="px-3 py-2 text-xs text-slate-400">Loading…</div>}
+                  {!optionLoading.location && getFilteredOptions('location').length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
+                  )}
+                  {getFilteredOptions('location').map((s, i) => (
                     <button key={i} className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex justify-between"
                       onMouseDown={() => handleSuggestionClick('location', s.value)}>
                       <span>{s.value}</span>
@@ -198,17 +225,21 @@ export default function SalaryBenchmarkPage() {
                 <Briefcase className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
                 <Input
                   placeholder="e.g. Manager"
-                  value={designation}
-                  onChange={(e) => { setDesignation(e.target.value); fetchSuggestions('designation', e.target.value); setActiveField('designation'); }}
-                  onFocus={() => { fetchSuggestions('designation', designation); setActiveField('designation'); }}
-                  onBlur={() => setTimeout(() => setActiveField(null), 200)}
+                  value={queryByField.designation ?? designation}
+                  onChange={(e) => setQueryByField((p) => ({ ...p, designation: e.target.value }))}
+                  onFocus={() => { ensureOptions('designation'); setActiveField('designation'); }}
+                  onBlur={() => setTimeout(() => setActiveField((f) => f === 'designation' ? null : f), 200)}
                   className="pl-8 h-9 text-sm"
                   data-testid="filter-designation"
                 />
               </div>
-              {activeField === 'designation' && suggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {suggestions.map((s, i) => (
+              {activeField === 'designation' && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {optionLoading.designation && <div className="px-3 py-2 text-xs text-slate-400">Loading…</div>}
+                  {!optionLoading.designation && getFilteredOptions('designation').length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
+                  )}
+                  {getFilteredOptions('designation').map((s, i) => (
                     <button key={i} className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex justify-between"
                       onMouseDown={() => handleSuggestionClick('designation', s.value)}>
                       <span>{s.value}</span>
@@ -224,18 +255,22 @@ export default function SalaryBenchmarkPage() {
               <div className="relative">
                 <Building2 className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
                 <Input
-                  placeholder="e.g. TCS, Infosys"
-                  value={company}
-                  onChange={(e) => { setCompany(e.target.value); fetchSuggestions('company', e.target.value); setActiveField('company'); }}
-                  onFocus={() => { fetchSuggestions('company', company); setActiveField('company'); }}
-                  onBlur={() => setTimeout(() => setActiveField(null), 200)}
+                  placeholder="Click to pick a company"
+                  value={queryByField.company ?? company}
+                  onChange={(e) => setQueryByField((p) => ({ ...p, company: e.target.value }))}
+                  onFocus={() => { ensureOptions('company'); setActiveField('company'); }}
+                  onBlur={() => setTimeout(() => setActiveField((f) => f === 'company' ? null : f), 200)}
                   className="pl-8 h-9 text-sm"
                   data-testid="filter-company"
                 />
               </div>
-              {activeField === 'company' && suggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {suggestions.map((s, i) => (
+              {activeField === 'company' && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {optionLoading.company && <div className="px-3 py-2 text-xs text-slate-400">Loading…</div>}
+                  {!optionLoading.company && getFilteredOptions('company').length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
+                  )}
+                  {getFilteredOptions('company').map((s, i) => (
                     <button key={i} className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex justify-between"
                       onMouseDown={() => handleSuggestionClick('company', s.value)}>
                       <span>{s.value}</span>
@@ -252,17 +287,21 @@ export default function SalaryBenchmarkPage() {
                 <TrendingUp className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
                 <Input
                   placeholder="e.g. IT Services"
-                  value={industry}
-                  onChange={(e) => { setIndustry(e.target.value); fetchSuggestions('industry', e.target.value); setActiveField('industry'); }}
-                  onFocus={() => { fetchSuggestions('industry', industry); setActiveField('industry'); }}
-                  onBlur={() => setTimeout(() => setActiveField(null), 200)}
+                  value={queryByField.industry ?? industry}
+                  onChange={(e) => setQueryByField((p) => ({ ...p, industry: e.target.value }))}
+                  onFocus={() => { ensureOptions('industry'); setActiveField('industry'); }}
+                  onBlur={() => setTimeout(() => setActiveField((f) => f === 'industry' ? null : f), 200)}
                   className="pl-8 h-9 text-sm"
                   data-testid="filter-industry"
                 />
               </div>
-              {activeField === 'industry' && suggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {suggestions.map((s, i) => (
+              {activeField === 'industry' && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {optionLoading.industry && <div className="px-3 py-2 text-xs text-slate-400">Loading…</div>}
+                  {!optionLoading.industry && getFilteredOptions('industry').length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
+                  )}
+                  {getFilteredOptions('industry').map((s, i) => (
                     <button key={i} className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex justify-between"
                       onMouseDown={() => handleSuggestionClick('industry', s.value)}>
                       <span>{s.value}</span>

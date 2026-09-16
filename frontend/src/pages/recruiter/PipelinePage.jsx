@@ -32,10 +32,13 @@ export default function PipelinePage() {
   const [applications, setApplications] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(searchParams.get('job_id') || 'all');
-  // Pipeline timeline filter (v5.5.10). 'all' is the historical default so
-  // existing recruiter habits don't change unexpectedly — they opt into a
-  // window from the dropdown.
-  const [pipelineWindow, setPipelineWindow] = useState(searchParams.get('window') || 'all');
+  // Spec fix.docx (2026-09-15): the legacy "Activity window" preset dropdown
+  // (All Time / This Week / …) has been replaced by two date pickers +
+  // an Apply button. Draft state buffers user input until Apply is clicked.
+  const [windowFrom, setWindowFrom] = useState(searchParams.get('window_from') || '');
+  const [windowTo, setWindowTo] = useState(searchParams.get('window_to') || '');
+  const [draftFrom, setDraftFrom] = useState(windowFrom);
+  const [draftTo, setDraftTo] = useState(windowTo);
   const [loading, setLoading] = useState(true);
   const [selectedApp, setSelectedApp] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -72,7 +75,8 @@ export default function PipelinePage() {
     try {
       const params = {};
       if (selectedJob !== 'all') params.job_id = selectedJob;
-      if (pipelineWindow && pipelineWindow !== 'all') params.window = pipelineWindow;
+      if (windowFrom) params.window_from = windowFrom;
+      if (windowTo)   params.window_to   = windowTo;
       const res = await applicationAPI.getAll(params);
       setApplications(res.data);
     } catch (error) {
@@ -80,20 +84,18 @@ export default function PipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedJob, pipelineWindow]);
+  }, [selectedJob, windowFrom, windowTo]);
 
-  // Keep ?window in the URL so the filter survives refreshes / can be shared
-  const updateWindow = (v) => {
-    setPipelineWindow(v);
-    if (!v || v === 'all') {
-      if (searchParams.get('window')) {
-        searchParams.delete('window');
-        setSearchParams(searchParams, { replace: true });
-      }
-    } else if (searchParams.get('window') !== v) {
-      searchParams.set('window', v);
-      setSearchParams(searchParams, { replace: true });
-    }
+  // Push buffered date-picker values into the applied set + URL. Fetch
+  // fires via the `loadApplications` dep.
+  const applyDateWindow = () => {
+    setWindowFrom(draftFrom);
+    setWindowTo(draftTo);
+    const next = new URLSearchParams(searchParams);
+    if (draftFrom) next.set('window_from', draftFrom); else next.delete('window_from');
+    if (draftTo)   next.set('window_to',   draftTo);   else next.delete('window_to');
+    next.delete('window');   // kill any stale preset param
+    setSearchParams(next, { replace: true });
   };
 
   useEffect(() => {
@@ -175,24 +177,44 @@ export default function PipelinePage() {
 
   return (
     <div className="space-y-6" data-testid="pipeline-page">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Candidate Pipeline</h1>
           <p className="text-slate-500 mt-1">Drag candidates between stages to update status</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <Select value={pipelineWindow} onValueChange={updateWindow}>
-            <SelectTrigger className="w-full sm:w-44" data-testid="window-filter-select">
-              <SelectValue placeholder="Activity window" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" data-testid="window-opt-all">All Time</SelectItem>
-              <SelectItem value="week" data-testid="window-opt-week">This Week</SelectItem>
-              <SelectItem value="month" data-testid="window-opt-month">This Month</SelectItem>
-              <SelectItem value="quarter" data-testid="window-opt-quarter">This Quarter</SelectItem>
-              <SelectItem value="year" data-testid="window-opt-year">This Year</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-col gap-2 w-full sm:w-auto">
+          {/* Date window with Apply button — replaces the old "Activity window"
+              preset dropdown (fix.docx 2026-09-15). */}
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end" data-testid="pipeline-date-window">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-0.5">From</div>
+              <input
+                type="date"
+                value={draftFrom}
+                onChange={(e) => setDraftFrom(e.target.value)}
+                className="w-full sm:w-40 rounded border border-slate-200 text-sm px-2 py-1.5"
+                data-testid="filter-window-from"
+              />
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-0.5">To</div>
+              <input
+                type="date"
+                value={draftTo}
+                onChange={(e) => setDraftTo(e.target.value)}
+                className="w-full sm:w-40 rounded border border-slate-200 text-sm px-2 py-1.5"
+                data-testid="filter-window-to"
+              />
+            </div>
+            <Button
+              onClick={applyDateWindow}
+              className="bg-[#7CB342] hover:bg-[#689F38] text-white"
+              data-testid="apply-window-btn"
+              disabled={draftFrom === windowFrom && draftTo === windowTo}
+            >
+              Apply
+            </Button>
+          </div>
           <Select value={selectedJob} onValueChange={updateSelectedJob}>
             <SelectTrigger className="w-full sm:w-64" data-testid="job-filter-select">
               <SelectValue placeholder="Filter by mandate" />

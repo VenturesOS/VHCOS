@@ -43,13 +43,16 @@ export default function AdminPipelinePage() {
   const [selectedEmployer, setSelectedEmployer] = useState('all');
   const [selectedRecruiter, setSelectedRecruiter] = useState('all');
   const [selectedJob, setSelectedJob] = useState(searchParams.get('job_id') || 'all');
-  // Pipeline timeline filter (v5.5.10) — shows only stage MOVEMENTS in window.
-  // Default 'all' preserves the old global view.
-  const [pipelineWindow, setPipelineWindow] = useState(searchParams.get('window') || 'all');
-  // Spec 5.2 (2026-09-08): custom From/To calendar controls in addition to
-  // the preset windows.
+  // Spec fix.docx (2026-09-15): the legacy "Activity window" preset dropdown
+  // (All Time / This Week / …) has been removed. The two date pickers below
+  // are the only date filter, they now sit at the TOP of the filter card,
+  // and their values only push into the fetch once the user clicks Apply.
+  //   • `windowFrom` / `windowTo`     — APPLIED values, feed the API call.
+  //   • `draftFrom`  / `draftTo`      — user's typing, buffered until Apply.
   const [windowFrom, setWindowFrom] = useState(searchParams.get('window_from') || '');
   const [windowTo, setWindowTo] = useState(searchParams.get('window_to') || '');
+  const [draftFrom, setDraftFrom] = useState(windowFrom);
+  const [draftTo, setDraftTo] = useState(windowTo);
 
   // Deep-link: if URL contains ?job_id=X, keep it in sync with state.
   useEffect(() => {
@@ -70,17 +73,17 @@ export default function AdminPipelinePage() {
     }
   };
 
-  const updateWindow = (v) => {
-    setPipelineWindow(v);
-    if (!v || v === 'all') {
-      if (searchParams.get('window')) {
-        searchParams.delete('window');
-        setSearchParams(searchParams, { replace: true });
-      }
-    } else if (searchParams.get('window') !== v) {
-      searchParams.set('window', v);
-      setSearchParams(searchParams, { replace: true });
-    }
+  // Apply the buffered date-picker values. Also persists them to the URL
+  // so a refresh keeps the same window, and so pipeline links can be shared.
+  const applyDateWindow = () => {
+    setWindowFrom(draftFrom);
+    setWindowTo(draftTo);
+    const next = new URLSearchParams(searchParams);
+    if (draftFrom) next.set('window_from', draftFrom); else next.delete('window_from');
+    if (draftTo)   next.set('window_to',   draftTo);   else next.delete('window_to');
+    // Kill any stale ?window=… left over from the removed preset dropdown.
+    next.delete('window');
+    setSearchParams(next, { replace: true });
   };
 
   const loadFilters = useCallback(async () => {
@@ -103,7 +106,6 @@ export default function AdminPipelinePage() {
       if (selectedEmployer !== 'all') params.employer_id = selectedEmployer;
       if (selectedRecruiter !== 'all') params.recruiter_id = selectedRecruiter;
       if (selectedJob !== 'all') params.job_id = selectedJob;
-      if (pipelineWindow && pipelineWindow !== 'all') params.window = pipelineWindow;
       if (windowFrom) params.window_from = windowFrom;
       if (windowTo) params.window_to = windowTo;
 
@@ -116,7 +118,7 @@ export default function AdminPipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedEmployer, selectedRecruiter, selectedJob, pipelineWindow, windowFrom, windowTo]);
+  }, [selectedEmployer, selectedRecruiter, selectedJob, windowFrom, windowTo]);
 
   // Load filters once on mount + whenever employer cascade changes
   useEffect(() => {
@@ -131,9 +133,15 @@ export default function AdminPipelinePage() {
     setSelectedEmployer('all');
     setSelectedRecruiter('all');
     updateSelectedJob('all');
-    updateWindow('all');
     setWindowFrom('');
     setWindowTo('');
+    setDraftFrom('');
+    setDraftTo('');
+    const next = new URLSearchParams(searchParams);
+    next.delete('window_from');
+    next.delete('window_to');
+    next.delete('window');
+    setSearchParams(next, { replace: true });
   };
 
   // Phase 52 cascade: when employer changes, reset recruiter + job because
@@ -164,7 +172,7 @@ export default function AdminPipelinePage() {
   const [selectedApp, setSelectedApp] = useState(null);
   const [offerForm, setOfferForm] = useState({ offered_ctc: '', offer_date: '' });
   const [hiredForm, setHiredForm] = useState({ date_of_joining: '' });
-  const [joinForm, setJoinForm] = useState({ join_date: '' });
+  const [joinForm, setJoinForm] = useState({ join_date: '', joined_ctc: '' });
   const [stageLoading, setStageLoading] = useState(false);
 
   const openOfferDialog = (app) => {
@@ -181,7 +189,10 @@ export default function AdminPipelinePage() {
 
   const openJoinDialog = (app) => {
     setSelectedApp(app);
-    setJoinForm({ join_date: app.join_date || new Date().toISOString().split('T')[0] });
+    setJoinForm({
+      join_date: app.join_date || new Date().toISOString().split('T')[0],
+      joined_ctc: app.joined_ctc || '',
+    });
     setShowJoinDialog(true);
   };
 
@@ -227,6 +238,23 @@ export default function AdminPipelinePage() {
     setStageLoading(true);
     try {
       const res = await revenueAPI.joined(selectedApp.id, { join_date: joinForm.join_date });
+      // fix.docx (2026-09-15): capture the actual joined CTC (may differ
+      // from offered) so the Blog Engine "Joinings" list can render it.
+      const jc = parseFloat(joinForm.joined_ctc);
+      if (!Number.isNaN(jc) && jc > 0) {
+        try {
+          await fetch(`${process.env.REACT_APP_BACKEND_URL || ''}/api/blog/joinings/${selectedApp.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${localStorage.getItem('vhc_token') || ''}`,
+            },
+            body: JSON.stringify({ joined_ctc: jc }),
+          });
+        } catch {
+          // Non-blocking — the join itself succeeded, the CTC edit can be redone from the Blog Engine tab.
+        }
+      }
       toast.success(`Joined: Revenue ₹${Math.round(res.data.final_revenue).toLocaleString('en-IN')} locked`);
       setShowJoinDialog(false);
       loadPipeline();
@@ -329,18 +357,59 @@ export default function AdminPipelinePage() {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-500" />
             <span className="font-medium text-slate-700">Filters</span>
-            {(selectedEmployer !== 'all' || selectedRecruiter !== 'all' || selectedJob !== 'all' || pipelineWindow !== 'all') && (
-              <button 
+            {(selectedEmployer !== 'all' || selectedRecruiter !== 'all' || selectedJob !== 'all' || windowFrom || windowTo) && (
+              <button
                 onClick={clearFilters}
                 className="ml-auto text-sm text-[#7CB342] hover:underline"
+                data-testid="clear-filters-btn"
               >
                 Clear all
               </button>
             )}
           </div>
         </CardHeader>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContent className="p-4 space-y-4">
+          {/* Date window — TOP of the filter panel (fix.docx 2026-09-15).
+              User buffers From/To in the two pickers; the fetch only fires
+              when they hit Apply, so mistyping a year no longer stalls the
+              page mid-keystroke. */}
+          <div className="space-y-2" data-testid="pipeline-date-window">
+            <label className="text-sm text-slate-500 flex items-center gap-1">
+              <CalendarClock className="w-3 h-3" /> Date window
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
+              <div className="flex-1">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-0.5">From</div>
+                <input
+                  type="date"
+                  value={draftFrom}
+                  onChange={(e) => setDraftFrom(e.target.value)}
+                  className="w-full rounded border border-slate-200 text-sm px-2 py-1.5"
+                  data-testid="filter-window-from"
+                />
+              </div>
+              <div className="flex-1">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-0.5">To</div>
+                <input
+                  type="date"
+                  value={draftTo}
+                  onChange={(e) => setDraftTo(e.target.value)}
+                  className="w-full rounded border border-slate-200 text-sm px-2 py-1.5"
+                  data-testid="filter-window-to"
+                />
+              </div>
+              <Button
+                onClick={applyDateWindow}
+                className="bg-[#7CB342] hover:bg-[#689F38] text-white sm:w-32"
+                data-testid="apply-window-btn"
+                disabled={draftFrom === windowFrom && draftTo === windowTo}
+              >
+                Apply
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-sm text-slate-500 flex items-center gap-1">
                 <Building2 className="w-3 h-3" /> Employer
@@ -394,43 +463,6 @@ export default function AdminPipelinePage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            {/* v5.5.10 — Activity window: filters to applications whose stage CHANGED in window. */}
-            <div className="space-y-1">
-              <label className="text-sm text-slate-500 flex items-center gap-1">
-                <CalendarClock className="w-3 h-3" /> Activity window
-              </label>
-              <Select value={pipelineWindow} onValueChange={updateWindow}>
-                <SelectTrigger data-testid="filter-window">
-                  <SelectValue placeholder="All Time" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" data-testid="window-opt-all">All Time</SelectItem>
-                  <SelectItem value="week" data-testid="window-opt-week">This Week</SelectItem>
-                  <SelectItem value="month" data-testid="window-opt-month">This Month</SelectItem>
-                  <SelectItem value="quarter" data-testid="window-opt-quarter">This Quarter</SelectItem>
-                  <SelectItem value="year" data-testid="window-opt-year">This Year</SelectItem>
-                </SelectContent>
-              </Select>
-              {/* Spec 5.2 (2026-09-08): custom From/To calendar controls */}
-              <div className="flex gap-1.5 mt-1.5">
-                <input
-                  type="date"
-                  value={windowFrom}
-                  onChange={(e) => setWindowFrom(e.target.value)}
-                  className="flex-1 rounded border border-slate-200 text-xs px-2 py-1"
-                  data-testid="filter-window-from"
-                  placeholder="From"
-                />
-                <input
-                  type="date"
-                  value={windowTo}
-                  onChange={(e) => setWindowTo(e.target.value)}
-                  className="flex-1 rounded border border-slate-200 text-xs px-2 py-1"
-                  data-testid="filter-window-to"
-                  placeholder="To"
-                />
-              </div>
             </div>
           </div>
         </CardContent>

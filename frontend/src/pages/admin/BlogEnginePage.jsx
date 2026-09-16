@@ -17,6 +17,7 @@ import {
 const TABS = [
   { id: 'pipeline', label: 'Pipeline', icon: Activity },
   { id: 'blogs', label: 'All Blogs', icon: FileText },
+  { id: 'joinings', label: 'Recent Joinings', icon: CheckCircle },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -200,6 +201,7 @@ export default function BlogEnginePage() {
           onEdit={(blog) => { setEditBlog({ ...blog }); setShowEditDialog(true); }}
         />
       )}
+      {activeTab === 'joinings' && <JoiningsTab />}
       {activeTab === 'settings' && <SettingsTab config={config} onSave={handleSaveConfig} />}
 
       {/* Bulk Generate Dialog */}
@@ -708,6 +710,162 @@ function ScheduleSection({ label, enabled, onToggle, days, time, testPrefix }) {
           <span>{days}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+
+// ─────────────────────────────────────────────────────────────
+// Joinings tab (fix.docx 2026-09-15)
+// Reads /api/blog/joinings; filters by date range, client company,
+// position and location. Team leaders can inline-edit CTC + revenue.
+// ─────────────────────────────────────────────────────────────
+function JoiningsTab() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({ date_from: '', date_to: '', position_q: '', location_q: '' });
+  const [draft, setDraft] = useState({});   // applicationId → {joined_ctc, revenue}
+  const [saving, setSaving] = useState({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
+      const res = await blogAPI.listJoinings(params);
+      setItems(res.data?.items || []);
+    } catch (e) {
+      toast.error('Failed to load joinings');
+    } finally { setLoading(false); }
+  }, [filters]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const saveEdit = async (row) => {
+    const patch = draft[row.application_id];
+    if (!patch) return;
+    setSaving((s) => ({ ...s, [row.application_id]: true }));
+    try {
+      const body = {};
+      if (patch.joined_ctc !== undefined && patch.joined_ctc !== '') body.joined_ctc = parseFloat(patch.joined_ctc);
+      if (patch.revenue !== undefined && patch.revenue !== '') body.revenue = parseFloat(patch.revenue);
+      await blogAPI.updateJoining(row.application_id, body);
+      toast.success('Saved');
+      setDraft((d) => { const c = { ...d }; delete c[row.application_id]; return c; });
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Save failed');
+    } finally {
+      setSaving((s) => ({ ...s, [row.application_id]: false }));
+    }
+  };
+
+  const inr = (n) => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('en-IN');
+
+  return (
+    <div className="space-y-4" data-testid="joinings-tab">
+      <Card>
+        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">From</label>
+            <Input type="date" value={filters.date_from} onChange={(e) => setFilters({ ...filters, date_from: e.target.value })} data-testid="joinings-from" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">To</label>
+            <Input type="date" value={filters.date_to} onChange={(e) => setFilters({ ...filters, date_to: e.target.value })} data-testid="joinings-to" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Position contains</label>
+            <Input value={filters.position_q} onChange={(e) => setFilters({ ...filters, position_q: e.target.value })} data-testid="joinings-position" placeholder="e.g. Manager" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Location contains</label>
+            <Input value={filters.location_q} onChange={(e) => setFilters({ ...filters, location_q: e.target.value })} data-testid="joinings-location" placeholder="e.g. Delhi" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-8 text-center text-slate-500"><Loader2 className="w-5 h-5 inline animate-spin mr-2" /> Loading joinings…</div>
+          ) : items.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No joinings match these filters.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="joinings-table">
+                <thead className="bg-slate-50 text-slate-700">
+                  <tr>
+                    <th className="text-left p-3">DOJ</th>
+                    <th className="text-left p-3">Client company</th>
+                    <th className="text-left p-3">Candidate</th>
+                    <th className="text-left p-3">Position</th>
+                    <th className="text-left p-3">Location</th>
+                    <th className="text-right p-3">CTC (₹)</th>
+                    <th className="text-right p-3">Revenue (₹)</th>
+                    <th className="p-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((row) => {
+                    const patch = draft[row.application_id] || {};
+                    const dirty = ('joined_ctc' in patch) || ('revenue' in patch);
+                    const ctcVal = patch.joined_ctc !== undefined ? patch.joined_ctc : (row.joined_ctc || '');
+                    const revVal = patch.revenue !== undefined ? patch.revenue : (row.revenue ?? '');
+                    return (
+                      <tr key={row.application_id} className="border-t" data-testid={`joining-row-${row.application_id}`}>
+                        <td className="p-3 font-mono">{row.join_date}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            {row.client_logo_url && (
+                              <img src={row.client_logo_url} alt="" className="w-5 h-5 rounded object-contain bg-slate-50" />
+                            )}
+                            <span>{row.client_name}</span>
+                          </div>
+                        </td>
+                        <td className="p-3">{row.candidate_name}</td>
+                        <td className="p-3">{row.position}</td>
+                        <td className="p-3">{row.location}</td>
+                        <td className="p-3 text-right">
+                          <Input
+                            type="number" min="0" step="1000"
+                            className="text-right h-8 w-32 ml-auto"
+                            value={ctcVal}
+                            onChange={(e) => setDraft((d) => ({ ...d, [row.application_id]: { ...(d[row.application_id] || {}), joined_ctc: e.target.value } }))}
+                            data-testid={`joining-ctc-${row.application_id}`}
+                          />
+                        </td>
+                        <td className="p-3 text-right">
+                          <Input
+                            type="number" min="0" step="100"
+                            className="text-right h-8 w-32 ml-auto"
+                            value={revVal}
+                            onChange={(e) => setDraft((d) => ({ ...d, [row.application_id]: { ...(d[row.application_id] || {}), revenue: e.target.value } }))}
+                            placeholder="—"
+                            data-testid={`joining-revenue-${row.application_id}`}
+                          />
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            size="sm"
+                            disabled={!dirty || saving[row.application_id]}
+                            onClick={() => saveEdit(row)}
+                            className="bg-[#7CB342] hover:bg-[#689F38]"
+                            data-testid={`joining-save-${row.application_id}`}
+                          >
+                            {saving[row.application_id] ? '…' : 'Save'}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
