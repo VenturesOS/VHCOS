@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { statsAPI, adminAPI } from '../../lib/api';
+import { statsAPI, adminAPI, targetsAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import {
   Users, Briefcase, FileText, Building2, Database, UserPlus,
   Eye, GitBranch, Trophy, AlertTriangle, Clock, TrendingUp,
-  ArrowRight, Zap, Key, Cpu, CheckCircle2, BarChart3,
+  ArrowRight, Zap, Key, Cpu, CheckCircle2, BarChart3, Target,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -22,6 +22,14 @@ function getToken() { return localStorage.getItem('vhc_token'); }
 const STAGE_LABELS = { sourced: 'Sourced', submitted_to_client: 'Submitted', shortlisted: 'Shortlisted', interview: 'Interviewed', offered: 'Offered', hired: 'Hired', joined: 'Joined', rejected: 'Rejected', on_hold: 'On Hold' };
 const STAGE_COLORS = { sourced: '#94a3b8', submitted_to_client: '#06b6d4', shortlisted: '#d97706', interview: '#8b5cf6', offered: '#059669', hired: '#10b981', joined: '#14b8a6', rejected: '#dc2626', on_hold: '#6b7280' };
 const FUNNEL_ORDER = ['sourced', 'submitted_to_client', 'shortlisted', 'interview', 'offered', 'hired', 'joined'];
+
+const fmtINRShort = (n) => {
+  if (n === undefined || n === null) return '—';
+  const v = Number(n);
+  if (v >= 10000000) return `₹${(v / 10000000).toFixed(2)}Cr`;
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  return `₹${v.toLocaleString('en-IN')}`;
+};
 
 function StatCard({ icon: Icon, label, value, sub, color, bg, onClick, testId }) {
   return (
@@ -156,7 +164,12 @@ function HiringFunnelWidget() {
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [company, setCompany] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    targetsAPI.companySummary().then(({ data }) => setCompany(data)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -233,6 +246,25 @@ export default function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Company revenue target roll-up (2026-09-17) */}
+      <div className="grid grid-cols-3 gap-3" data-testid="admin-target-boxes">
+        <StatCard icon={Target} label={`Company target ${company?.year || ''}`}
+                  value={fmtINRShort(company?.total_target)}
+                  sub="Jan–Dec · all teams"
+                  color="text-[#7CB342]" bg="bg-[#DCFCE7]" testId="stat-company-target"
+                  onClick={() => navigate('/admin/teams')} />
+        <StatCard icon={TrendingUp} label="Revenue achieved"
+                  value={fmtINRShort(company?.total_achieved)}
+                  sub={`${company?.total_joinings ?? 0} joinings booked`}
+                  color="text-emerald-600" bg="bg-emerald-50" testId="stat-company-achieved"
+                  onClick={() => navigate('/admin/performance-records')} />
+        <StatCard icon={Trophy} label="Achievement"
+                  value={`${company?.achievement_pct ?? 0}%`}
+                  sub={`${company?.teams?.length ?? 0} teams`}
+                  color="text-amber-600" bg="bg-amber-50" testId="stat-company-pct"
+                  onClick={() => navigate('/admin/performance-records')} />
+      </div>
 
       {/* Core Stats */}
       <div className="grid grid-cols-5 gap-3" data-testid="core-stats">

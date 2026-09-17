@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
+import RevenueTargetsCard from '../../components/targets/RevenueTargetsCard';
 import {
   Users, Briefcase, TrendingUp, DollarSign, Mail, Calendar,
   ChevronRight, Clock, Target, UserCheck, UserX, AlertTriangle,
@@ -139,6 +140,8 @@ export default function EmployerMyTeamPage() {
         <h1 className="text-2xl font-heading font-bold text-slate-900">My Team</h1>
         <p className="text-sm text-slate-500 mt-1">Team: {team.name} - {summary.total_members} members</p>
       </div>
+
+      <RevenueTargetsCard mode="team" />
 
       {/* Performance Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

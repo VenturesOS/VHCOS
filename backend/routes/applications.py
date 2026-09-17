@@ -1865,7 +1865,7 @@ async def get_match_job_status(
 
 @applications_router.get("/matching/history")
 async def get_match_history(
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    current_user: dict = Depends(require_role(["admin"]))
 ):
     """
     Get past match search history for the current user.
@@ -1889,7 +1889,7 @@ async def get_match_history(
 @applications_router.get("/matching/history/{history_id}")
 async def get_match_history_detail(
     history_id: str,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    current_user: dict = Depends(require_role(["admin"]))
 ):
     """
     Get full results of a past match search.

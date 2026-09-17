@@ -52,7 +52,8 @@ class LinkedInSettingsRequest(BaseModel):
 
 # ── OAuth Endpoints ──
 
-LINKEDIN_ROLES = ["admin", "recruiter", "employer"]
+# Access trimmed 2026-09-17: LinkedIn is an admin-only surface now.
+LINKEDIN_ROLES = ["admin"]
 
 
 @router.get("/authorize")

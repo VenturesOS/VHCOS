@@ -616,7 +616,7 @@ async def salary_benchmark(
     industry: Optional[str] = Query(None, description="Industry filter"),
     experience_min: Optional[int] = Query(None, description="Minimum years of experience"),
     experience_max: Optional[int] = Query(None, description="Maximum years of experience"),
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"])),
+    current_user: dict = Depends(require_role(["admin", "employer"])),
 ):
     """
     Salary benchmarking tool — aggregates salary data from the candidate bank.
@@ -840,7 +840,7 @@ async def salary_benchmark(
 async def salary_benchmark_suggestions(
     field: str = Query(..., description="Field: skills, location, designation, company, industry"),
     q: Optional[str] = Query(None, description="Ignored — client filters the preloaded list"),
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"])),
+    current_user: dict = Depends(require_role(["admin", "employer"])),
 ):
     """Preloaded, alphabetically-sorted dropdown options for salary-benchmark
     filters (fix.docx 2026-09-15).

@@ -233,6 +233,18 @@ async def _resolve_bank_snapshot(bank_account_id: Optional[str]) -> Optional[dic
 @bills_router.post("/bills")
 async def create_bill(payload: BillCreate, user: dict = Depends(_require_billing_role)):
     """Create a draft bill from line items + client company id."""
+    bill = await build_draft_bill(payload, user)
+    await db.bills.insert_one(dict(bill))
+    bill.pop("_id", None)
+    return bill
+
+
+async def build_draft_bill(payload: BillCreate, user: dict) -> dict:
+    """Build (but don't insert) a draft bill document.
+
+    Shared with the employer Joining List "Raise Invoice" action so a
+    joining-sourced invoice is identical to a hand-made one.
+    """
     company = await db.companies.find_one({"id": payload.client_company_id}, {"_id": 0})
     if not company:
         raise HTTPException(status_code=404, detail="Client company not found")
@@ -286,8 +298,6 @@ async def create_bill(payload: BillCreate, user: dict = Depends(_require_billing
         "created_by_email": user.get("email"),
         "created_at": now.isoformat(),
     }
-    await db.bills.insert_one(bill)
-    bill.pop("_id", None)
     return bill
 
 

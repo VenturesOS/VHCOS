@@ -8,6 +8,7 @@ import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
+import RevenueTargetsCard from '../../components/targets/RevenueTargetsCard';
 import { 
   Search, Users, Building2, Plus, Edit2, Trash2, 
   UserCircle, Briefcase, ChevronRight, AlertCircle
@@ -221,6 +222,8 @@ export default function TeamsPage() {
           </Button>
         </div>
       </div>
+
+      <RevenueTargetsCard mode="company" />
 
       {/* Phase 55.5 — duplicate-employer audit banner */}
       {duplicateEmployers.length > 0 && (

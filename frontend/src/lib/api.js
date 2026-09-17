@@ -598,6 +598,29 @@ export const blogAPI = {
   updateJoining: (applicationId, data) => api.patch(`/blog/joinings/${applicationId}`, data),
 };
 
+// Revenue targets + Joining List + Performance Records (2026-09-17)
+export const targetsAPI = {
+  me: (year) => api.get('/targets/me', { params: year ? { year } : {} }),
+  upsert: (data) => api.put('/targets', data),
+  teamSummary: (params = {}) => api.get('/targets/team-summary', { params }),
+  companySummary: (params = {}) => api.get('/targets/company-summary', { params }),
+  years: () => api.get('/targets/years'),
+};
+
+export const joiningsAPI = {
+  list: (params = {}) => api.get('/joinings', { params }),
+  update: (applicationId, data) => api.patch(`/joinings/${applicationId}`, data),
+  raiseInvoice: (applicationId, data) => api.post(`/joinings/${applicationId}/raise-invoice`, data),
+};
+
+export const performanceRecordsAPI = {
+  report: (params = {}) => api.get('/performance-records/report', { params }),
+  periods: () => api.get('/performance-records/periods'),
+  archive: () => api.get('/performance-records/archive'),
+  snapshot: (params) => api.post('/performance-records/snapshot', null, { params }),
+  deleteRecord: (id) => api.delete(`/performance-records/archive/${id}`),
+};
+
 // "Candidates called" tracking (fix.docx) — fire-and-forget. `source` is
 // one of badge_expand | profile_modal | called_button.
 export const trackCandidateCalled = (candidateId, source, extra = {}) => {

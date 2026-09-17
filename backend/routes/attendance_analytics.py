@@ -29,6 +29,24 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # ANALYTICS ENDPOINT
 # ═══════════════════════════════════════
 
+async def _employer_member_ids(employer_id: str) -> list:
+    """Recruiters that belong to this employer's own team(s).
+
+    Access trim 2026-09-17: employers previously saw every recruiter in the
+    company on Team Insights — now only their dedicated teams.
+    """
+    teams = await db.teams.find(
+        {"employer_id": employer_id, "status": {"$ne": "deleted"}},
+        {"_id": 0, "recruiter_ids": 1, "team_lead_id": 1},
+    ).to_list(100)
+    ids = set()
+    for t in teams:
+        ids.update(t.get("recruiter_ids") or [])
+        if t.get("team_lead_id"):
+            ids.add(t["team_lead_id"])
+    return list(ids)
+
+
 @router.get("")
 async def get_attendance_analytics(
     days: int = Query(30, ge=7, le=365),
@@ -37,23 +55,22 @@ async def get_attendance_analytics(
 ):
     """
     Attendance analytics with extensible payload.
-    Admin sees all, employer sees team only.
+    Admin sees all, employer sees their own team(s) only.
     """
     end_date = datetime.now(IST).strftime("%Y-%m-%d")
     start_date = (datetime.now(IST) - timedelta(days=days)).strftime("%Y-%m-%d")
 
     # Build user filter
     user_filter = {"role": {"$in": ["employer", "recruiter", "accounts"]}, "is_active": True}
-    if user.get("role") == "employer":
-        pass
 
     users = await db.users.find(user_filter, {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}).to_list(500)
     user_ids = [u["id"] for u in users]
     user_map = {u["id"]: u for u in users}
 
     if user.get("role") == "employer":
-        recruiter_ids = [u["id"] for u in users if u["role"] == "recruiter"]
-        user_ids = recruiter_ids + [user["id"]]
+        user_ids = await _employer_member_ids(user["id"]) + [user["id"]]
+        users = [u for u in users if u["id"] in set(user_ids)]
+        user_map = {u["id"]: u for u in users}
 
     # Fetch records
     records = await db.attendance_records.find(
@@ -269,7 +286,8 @@ async def get_health_scores(
     users = await db.users.find(user_filter, {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}).to_list(500)
 
     if user.get("role") == "employer":
-        users = [u for u in users if u["role"] == "recruiter" or u["id"] == user["id"]]
+        allowed = set(await _employer_member_ids(user["id"])) | {user["id"]}
+        users = [u for u in users if u["id"] in allowed]
 
     scores = []
     for u in users:

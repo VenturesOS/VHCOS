@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { statsAPI, jobAPI } from '../../lib/api';
+import { statsAPI, jobAPI, targetsAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Link } from 'react-router-dom';
@@ -8,14 +8,22 @@ import {
   CheckCircle, TrendingUp, LayoutGrid, Building2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Progress } from '../../components/ui/progress';
+import { Target, UserCheck } from 'lucide-react';
+
+const fmtINR = (n) => (n || n === 0)
+  ? `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+  : '—';
 
 export default function EmployerDashboard() {
   const [stats, setStats] = useState(null);
   const [recentJobs, setRecentJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [targets, setTargets] = useState(null);
 
   useEffect(() => {
     loadData();
+    targetsAPI.teamSummary().then(({ data }) => setTargets(data)).catch(() => {});
   }, []);
 
   const loadData = async () => {
@@ -103,6 +111,47 @@ export default function EmployerDashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Team revenue target (2026-09-17) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="employer-target-boxes">
+        <Card className="border-slate-200 border-l-4 border-l-[#7CB342]">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center gap-2 text-slate-500 text-xs uppercase tracking-wide">
+              <Target className="w-4 h-4 text-[#7CB342]" /> Team target ({targets?.year || new Date().getFullYear()})
+            </div>
+            <p className="font-heading text-2xl font-bold text-slate-900 mt-2" data-testid="employer-target-amount">
+              {fmtINR(targets?.total_target)}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Jan–Dec · set per member in My Team</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center gap-2 text-slate-500 text-xs uppercase tracking-wide">
+              <TrendingUp className="w-4 h-4 text-emerald-600" /> Achieved
+            </div>
+            <p className="font-heading text-2xl font-bold text-slate-900 mt-2" data-testid="employer-achieved-amount">
+              {fmtINR(targets?.total_achieved)}
+            </p>
+            <Progress value={Math.min(targets?.achievement_pct ?? 0, 100)} className="h-1.5 mt-3" />
+          </CardContent>
+        </Card>
+        <Link to="/employer/joinings">
+          <Card className="border-slate-200 hover:border-[#7CB342] transition-colors h-full">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center gap-2 text-slate-500 text-xs uppercase tracking-wide">
+                <UserCheck className="w-4 h-4 text-blue-600" /> Achievement
+              </div>
+              <p className="font-heading text-2xl font-bold text-slate-900 mt-2" data-testid="employer-achievement-pct">
+                {targets?.achievement_pct ?? 0}%
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {targets?.total_joinings ?? 0} joinings booked · open Joining List
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
 
       {/* Stats Cards - Clean without pipeline breakdown */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 stagger-children">

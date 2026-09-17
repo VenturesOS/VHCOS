@@ -1,0 +1,208 @@
+"""Joining List APIs (employer + admin).
+
+When a recruiter moves a candidate to `joined`, the row appears here so the
+team leader can fill in the joining CTC and the revenue generated, then
+click "Raise Invoice" — which drops a pre-filled draft bill into the
+Bills tab for Accounts/Admin and books the revenue against that
+recruiter's target (services/targets_service.py).
+"""
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from config import db
+from utils import get_current_user
+from services.joinings_service import fetch_joinings
+from services import targets_service as ts
+
+joinings_router = APIRouter(prefix="/api/joinings", tags=["Joinings"])
+logger = logging.getLogger(__name__)
+
+
+async def _scope(user: dict) -> Optional[list]:
+    """None = every recruiter (admin). Otherwise the recruiter ids the
+    caller owns."""
+    role = user.get("role")
+    if role == "admin":
+        return None
+    if role == "employer":
+        teams = await db.teams.find({"employer_id": user["id"], "status": {"$ne": "deleted"}}, {"_id": 0}).to_list(100)
+    elif role == "recruiter" and user.get("is_team_lead"):
+        teams = await db.teams.find(
+            {"status": {"$ne": "deleted"}, "$or": [{"team_lead_id": user["id"]}, {"recruiter_ids": user["id"]}]},
+            {"_id": 0},
+        ).to_list(100)
+    else:
+        raise HTTPException(status_code=403, detail="Joining list is for Admin, Employer or Team Leads.")
+    ids = {uid for t in teams for uid in ts.team_member_ids(t)}
+    return list(ids)
+
+
+async def _team_of(recruiter_id: str) -> dict:
+    return await db.teams.find_one(
+        {"status": {"$ne": "deleted"}, "$or": [{"recruiter_ids": recruiter_id}, {"team_lead_id": recruiter_id}]},
+        {"_id": 0, "id": 1, "name": 1, "employer_id": 1},
+    ) or {}
+
+
+@joinings_router.get("")
+async def list_joinings(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    company_id: Optional[str] = None,
+    position_q: Optional[str] = None,
+    location_q: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    limit: int = 200,
+    user: dict = Depends(get_current_user),
+):
+    recruiter_ids = await _scope(user)
+    if employee_id:
+        if recruiter_ids is not None and employee_id not in recruiter_ids:
+            raise HTTPException(status_code=403, detail="That recruiter is not in your team.")
+        recruiter_ids = [employee_id]
+    rows = await fetch_joinings(
+        db,
+        date_from=date_from, date_to=date_to, company_id=company_id,
+        position_q=position_q, location_q=location_q,
+        recruiter_ids=recruiter_ids, limit=limit,
+    )
+    pending = sum(1 for r in rows if not r.get("revenue"))
+    return {
+        "items": rows,
+        "count": len(rows),
+        "pending_revenue_count": pending,
+        "total_revenue": round(sum(float(r.get("revenue") or 0) for r in rows), 2),
+    }
+
+
+class JoiningUpdate(BaseModel):
+    joined_ctc: Optional[float] = None
+    revenue: Optional[float] = None
+    commercial_rate_pct: Optional[float] = None
+
+
+async def _load_scoped_application(application_id: str, user: dict) -> dict:
+    app = await db.applications.find_one({"id": application_id}, {"_id": 0})
+    if not app:
+        raise HTTPException(status_code=404, detail="Joining not found")
+    recruiter_ids = await _scope(user)
+    if recruiter_ids is not None and app.get("created_by") not in recruiter_ids:
+        raise HTTPException(status_code=403, detail="That joining belongs to another team.")
+    return app
+
+
+@joinings_router.patch("/{application_id}")
+async def update_joining(application_id: str, payload: JoiningUpdate, user: dict = Depends(get_current_user)):
+    """Fill the blanks: joining CTC and the revenue generated. The revenue
+    row carries recruiter + join date so target rollups stay cheap."""
+    app = await _load_scoped_application(application_id, user)
+    now = datetime.now(timezone.utc).isoformat()
+
+    if payload.joined_ctc is not None:
+        await db.applications.update_one(
+            {"id": application_id},
+            {"$set": {"joined_ctc": float(payload.joined_ctc), "updated_at": now}},
+        )
+
+    if payload.revenue is not None or payload.commercial_rate_pct is not None:
+        from services.joinings_service import derive_join_date
+        team = await _team_of(app.get("created_by") or "")
+        set_doc: dict = {"updated_at": now, "recruiter_id": app.get("created_by") or "",
+                         "team_id": team.get("id") or "", "join_date": derive_join_date(app)}
+        if payload.revenue is not None:
+            set_doc["final_revenue"] = float(payload.revenue)
+            set_doc["revenue_status"] = "booked"
+        if payload.commercial_rate_pct is not None:
+            set_doc["commercial_rate_pct"] = float(payload.commercial_rate_pct)
+        await db.revenue.update_one(
+            {"application_id": application_id},
+            {"$set": set_doc,
+             "$setOnInsert": {"application_id": application_id, "created_at": now,
+                              "created_by": user.get("id")}},
+            upsert=True,
+        )
+    return {"message": "Saved", "application_id": application_id}
+
+
+class RaiseInvoiceRequest(BaseModel):
+    joined_ctc: float
+    commercial_rate_pct: float
+    sender_variant: Optional[str] = None
+    designation: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@joinings_router.post("/{application_id}/raise-invoice")
+async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user: dict = Depends(get_current_user)):
+    """Create a pre-filled DRAFT bill for Accounts/Admin from a joining.
+
+    CTC and commercial rate are entered by the team leader (user choice
+    2026-09-17) — nothing is guessed. The resulting line amount is booked
+    as that recruiter's revenue for the year.
+    """
+    app = await _load_scoped_application(application_id, user)
+    existing = await db.revenue.find_one({"application_id": application_id}, {"_id": 0, "bill_id": 1, "bill_number": 1})
+    if existing and existing.get("bill_id"):
+        raise HTTPException(status_code=409, detail=f"Invoice {existing.get('bill_number')} was already raised for this joining.")
+
+    job = await db.jobs.find_one({"id": app.get("job_id")}, {"_id": 0, "company_id": 1, "title": 1}) or {}
+    if not job.get("company_id"):
+        raise HTTPException(status_code=400, detail="This joining has no client company on its mandate — cannot raise an invoice.")
+
+    from routes.bills import build_draft_bill
+    from models.bill import BillCreate, BillLineItem
+    from services.joinings_service import derive_join_date
+
+    join_date = derive_join_date(app)
+    line = BillLineItem(
+        candidate_name=app.get("candidate_name") or "",
+        designation=payload.designation or app.get("job_title") or job.get("title") or "",
+        joining_date=join_date,
+        annual_ctc=float(payload.joined_ctc),
+        commercial_rate_pct=float(payload.commercial_rate_pct),
+    )
+    bill = await build_draft_bill(
+        BillCreate(
+            client_company_id=job["company_id"],
+            sender_variant=payload.sender_variant,
+            line_items=[line],
+            notes=payload.notes,
+        ),
+        user,
+    )
+    await db.bills.insert_one(dict(bill))
+    bill.pop("_id", None)
+
+    line_amount = float(bill["line_items"][0]["line_amount"])
+    team = await _team_of(app.get("created_by") or "")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.applications.update_one(
+        {"id": application_id},
+        {"$set": {"joined_ctc": float(payload.joined_ctc), "updated_at": now}},
+    )
+    await db.revenue.update_one(
+        {"application_id": application_id},
+        {"$set": {
+            "final_revenue": line_amount,
+            "commercial_rate_pct": float(payload.commercial_rate_pct),
+            "revenue_status": "invoiced",
+            "recruiter_id": app.get("created_by") or "",
+            "team_id": team.get("id") or "",
+            "join_date": join_date,
+            "bill_id": bill["id"],
+            "bill_number": bill["bill_number"],
+            "updated_at": now,
+        },
+         "$setOnInsert": {"application_id": application_id, "created_at": now, "created_by": user.get("id")}},
+        upsert=True,
+    )
+    return {
+        "message": "Invoice draft created",
+        "bill_id": bill["id"],
+        "bill_number": bill["bill_number"],
+        "revenue_booked": line_amount,
+    }

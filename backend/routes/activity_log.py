@@ -5,7 +5,7 @@ Endpoints for fetching candidate-level and global activity feeds.
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 
-from utils.auth import get_current_user
+from utils.auth import get_current_user, require_role
 from services.activity_log_service import (
     get_candidate_activity,
     get_global_activity,
@@ -35,7 +35,7 @@ async def global_activity_feed(
     limit: int = Query(50, ge=1, le=200),
     action: Optional[str] = None,
     user_id: Optional[str] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_role(["admin"])),
 ):
     """Get global activity feed across all candidates."""
     return await get_global_activity(page, limit, action, user_id)

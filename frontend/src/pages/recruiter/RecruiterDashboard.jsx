@@ -1,19 +1,25 @@
 import { useState, useEffect } from 'react';
-import { statsAPI, jobAPI, applicationAPI } from '../../lib/api';
+import { statsAPI, jobAPI, applicationAPI, targetsAPI } from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Link } from 'react-router-dom';
 import { Briefcase, Users, TrendingUp, Clock, ArrowRight, ClipboardList, Search, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { Progress } from '../../components/ui/progress';
+import { Target } from 'lucide-react';
 
 export default function RecruiterDashboard() {
   const [stats, setStats] = useState(null);
   const [recentJobs, setRecentJobs] = useState([]);
   const [recentApplications, setRecentApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Target achievement is shown to recruiters as a PERCENTAGE ONLY —
+  // rupee targets stay with the team leader / admin (user choice 2026-09-17).
+  const [target, setTarget] = useState(null);
 
   useEffect(() => {
     loadData();
+    targetsAPI.me().then(({ data }) => setTarget(data)).catch(() => {});
   }, []);
 
   const loadData = async () => {
@@ -67,6 +73,33 @@ export default function RecruiterDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Target achievement — percentage only */}
+      <Card className="border-slate-200 border-l-4 border-l-[#7CB342]" data-testid="recruiter-target-box">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[#7CB342]/10 flex items-center justify-center">
+                <Target className="w-5 h-5 text-[#7CB342]" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-900">Target achievement</p>
+                <p className="text-xs text-slate-500">
+                  {target?.target_set
+                    ? `${target.year} (Jan–Dec) · ${target.joinings} joining${target.joinings === 1 ? '' : 's'} counted`
+                    : 'Your target has not been set by your team leader yet'}
+                </p>
+              </div>
+            </div>
+            <div className="text-right min-w-[140px]">
+              <p className="text-3xl font-bold text-slate-900" data-testid="recruiter-target-pct">
+                {target?.target_set ? `${target.achievement_pct}%` : '—'}
+              </p>
+              <Progress value={Math.min(target?.achievement_pct ?? 0, 100)} className="h-1.5 mt-2" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 stagger-children">

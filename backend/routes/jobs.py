@@ -273,7 +273,7 @@ async def transition_job_status(
 
 
 @jobs_router.get("/jobs/pending-approval", response_model=List[JobResponse])
-async def get_pending_approval_jobs(current_user: dict = Depends(require_role(["admin", "employer"]))):
+async def get_pending_approval_jobs(current_user: dict = Depends(require_role(["admin"]))):
     """Get jobs pending approval (for Admin and Employers)"""
     query = {"status": "pending_approval"}
     

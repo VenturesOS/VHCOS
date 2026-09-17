@@ -62,7 +62,7 @@ class ReferralResponse(BaseModel):
 @referrals_router.post("/referrals", response_model=ReferralResponse)
 async def create_referral(
     referral_data: ReferralCreate,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    current_user: dict = Depends(require_role(["admin", "employer"]))
 ):
     """
     Create a new candidate referral.
@@ -130,7 +130,7 @@ async def create_referral(
 async def get_referrals(
     job_id: Optional[str] = None,
     status: Optional[str] = None,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    current_user: dict = Depends(require_role(["admin", "employer"]))
 ):
     """
     Get referrals based on user role.
@@ -164,7 +164,7 @@ async def get_referrals(
 @referrals_router.get("/referrals/{referral_id}", response_model=ReferralResponse)
 async def get_referral(
     referral_id: str,
-    current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
+    current_user: dict = Depends(require_role(["admin", "employer"]))
 ):
     """Get a specific referral by ID."""
     referral = await db.referrals.find_one({"id": referral_id}, {"_id": 0})
