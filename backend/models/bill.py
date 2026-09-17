@@ -157,7 +157,7 @@ class BillCreate(BaseModel):
     client_company_id: str
     line_items: List[BillLineItem]
     gst_kind: Optional[str] = None  # auto-detected from state codes if None
-    sender_variant: Optional[str] = "VENTURE HRD CENTRE"  # or "VENTURE HRD CENTRE PVT LTD"
+    sender_variant: Optional[str] = "VENTURE HRD CENTER"  # or "VENTURES HRD PVT LTD"
     bank_account_id: Optional[str] = None  # if None → default account
 
 

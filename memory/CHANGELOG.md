@@ -1,3 +1,37 @@
+## 2026-09-17 (later) — Billing reset, entity/GST details, invoice logo, accounts@vhc.in access
+
+- **Invoice logo fixed for real.** The uploaded `VHC_logo-removebg_edited_edited.png` was an 830×1133
+  canvas with the mark floating in the middle (alpha bbox 76,274→741,933), so any header slot rendered
+  it as a tiny/empty patch. Cropped to the alpha bounding box + 3% padding and saved as
+  `frontend/public/assets/vhc_logo_invoice.png`; `routes/bills.py::_LOCAL_LOGO_PATHS` now prefers it
+  (override with `BILLING_SENDER_LOGO_PATH`). Verified by rasterising a generated invoice — logo sits
+  beside the entity name.
+- **Both legal entities + GST/address** (`routes/bills.py::_SENDER_PRESETS`, `services/bill_auto_draft.py`,
+  `models/bill.py`, `BillsPage.jsx`):
+  - `VENTURE HRD CENTER` — GSTIN 07AAMPY9883D2ZT, PAN AAMPY9883D
+  - `Ventures HRD Pvt Ltd` — GSTIN 07AACCV6268J1ZW, PAN AACCV6268J
+  - Shared address: Second Floor, D-12/79-80, Rohini, Rohini Sector 8, New Delhi, North West Delhi,
+    Delhi, 110085. Legacy variant spellings ("VENTURE HRD CENTRE [PVT LTD]") still resolve via
+    `_SENDER_ALIASES`. The New Bill dialog shows each entity with its GSTIN.
+- **Billing module zeroed** (user-confirmed, no backup): `scripts/reset_billing_module.py` deleted
+  bills (32), invoices (5), expenses (3), tally_receipts (1), bill_bank_accounts (0), revenue (0) and
+  unset inline revenue fields on applications. Invoice numbering is derived from the `bills` collection,
+  so it restarts at `VHC/26-27/1` (verified, then the verification bill was deleted). All billing
+  functions remain intact.
+- **accounts@vhc.in** — the user already existed with role `accounts` but the billing guard rejected it.
+  `_require_billing_role` now accepts `accounts`, `GET /api/companies` allows `accounts` (needed for the
+  client dropdown), `/accounts/bills` route + "Bills & Invoices" sidebar entry added for the role, and the
+  password was reset idempotently by the same script. Verified end-to-end in the browser.
+- **Invoice mail identity** (`services/bill_mailer.py` + `.env`): FROM `VHC Accounts
+  <accounts@ventureshrd.com>`, reply-to `accounts@vhc.in`, and `accounts@vhc.in` is now a locked BCC on
+  every send (removed from the CC list to avoid duplication). **`vhc.in` is not verified in Resend** — a
+  live API test sending from `accounts@vhc.in` returned 403 "domain is not verified", while
+  `accounts@ventureshrd.com` sent successfully (message id returned). Once vhc.in is added at
+  resend.com/domains, set `BILLING_SENDER_EMAIL=accounts@vhc.in` and restart.
+- New `.env` keys (must be added on the AWS box too): `BILLING_SENDER_EMAIL`, `BILLING_SENDER_NAME`,
+  `BILLING_REPLY_TO`, `BILLING_ACCOUNTS_EMAIL`.
+
+
 ## 2026-09-17 — Spec verification pass (both docs) + gap fixes
 
 End-to-end audit of `fix.docx` + `Emergent_Fix_and_Employee_Performance_Analytics_Specification`.

@@ -144,7 +144,7 @@ export default function BillsPage() {
   // New bill form state
   const [newBill, setNewBill] = useState({
     client_company_id: '',
-    sender_variant: 'VENTURE HRD CENTRE',
+    sender_variant: 'VENTURE HRD CENTER',
     bill_date: new Date().toISOString().slice(0, 10),
     due_date: '',
     gst_kind: '',
@@ -246,7 +246,7 @@ export default function BillsPage() {
       setShowCreate(false);
       setNewBill({
         client_company_id: '',
-        sender_variant: 'VENTURE HRD CENTRE',
+        sender_variant: 'VENTURE HRD CENTER',
         bill_date: new Date().toISOString().slice(0, 10),
         due_date: '',
         gst_kind: '',
@@ -470,8 +470,8 @@ export default function BillsPage() {
                 <Select value={newBill.sender_variant} onValueChange={(v) => setNewBill({ ...newBill, sender_variant: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="VENTURE HRD CENTRE">VENTURE HRD CENTRE</SelectItem>
-                    <SelectItem value="VENTURE HRD CENTRE PVT LTD">VENTURE HRD CENTRE PVT LTD</SelectItem>
+                    <SelectItem value="VENTURE HRD CENTER">VENTURE HRD CENTER (07AAMPY9883D2ZT)</SelectItem>
+                    <SelectItem value="VENTURES HRD PVT LTD">Ventures HRD Pvt Ltd (07AACCV6268J1ZW)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

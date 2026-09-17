@@ -103,7 +103,7 @@ def _validate_commercial(commercial):
 # ============== COMPANY MANAGEMENT (ADMIN) ==============
 
 @admin_router.get("/companies", response_model=List[CompanyResponse])
-async def get_all_companies(current_user: dict = Depends(require_role(["admin"]))):
+async def get_all_companies(current_user: dict = Depends(require_role(["admin", "accounts"]))):
     """
     Get all companies (Admin only).
     Returns complete list of companies with assigned employer info.

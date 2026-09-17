@@ -130,6 +130,7 @@ const navItems = {
   ],
   accounts: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/accounts' },
+    { icon: IndianRupee, label: 'Bills & Invoices', path: '/accounts/bills' },
     { icon: FileText, label: 'Invoices', path: '/accounts/invoices' },
     { icon: Building2, label: 'Clients', path: '/accounts/clients' },
     { icon: IndianRupee, label: 'Expenses', path: '/accounts/expenses' },

@@ -1,19 +1,21 @@
-# Test Credentials
+# VHC Talent OS — Test Credentials
 
-## Admin
-- Email: `admin@vhc.in`
-- Password: `VhcAdmin@2024`
+> Keep this file in sync whenever an account is created or a password changes.
 
-## Recruiter test accounts (May 2026)
-- `hr6@vhc.in` / `12345678` — **Diya** (fresh, active)
-- `hr12@vhc.in` / `12345678` — **Sachin** (fresh, active)
-- `hr14@vhc.in` / `12345678` — **Ronak** (migrated from `hr6@vhc.in`, password unchanged from before migration; all 357 records preserved)
+| Role | Email | Password | Notes |
+|------|-------|----------|-------|
+| Admin | admin@vhc.in | VhcAdmin@2024 | Full access |
+| Recruiter | hr6@vhc.in | 12345678 | Pipeline / candidate bank |
+| Accounts | accounts@vhc.in | VhcAccounts@2026 | Bills & Invoices module (`/accounts/bills`). Password reset 2026-09-17 via `python3 -m scripts.reset_billing_module` |
 
-## Notes
-- After Feb 2026 SEC-04 fix: deactivated users (`is_active=false`) are
-  rejected by `get_current_user` and cannot refresh tokens. Reactivating
-  a user requires them to log in fresh.
-- Phase 55.4 (May 2026): deactivation now archives the user's email to
-  `_deact_<utc-ts>_<original>@<domain>` so the original email becomes
-  available for re-use by a brand-new account. See
-  `backend/scripts/admin_user_ops.py` for the helper script.
+## Billing / invoice mail identity (2026-09-17)
+- Invoices are sent **from** `VHC Accounts <accounts@ventureshrd.com>` (Resend-verified domain),
+  **reply-to** `accounts@vhc.in`, and `accounts@vhc.in` is **always BCC'd**.
+- `vhc.in` is NOT verified in Resend (403 "domain is not verified"), so sending directly from
+  `accounts@vhc.in` fails. Once the domain is added at https://resend.com/domains, switch
+  `BILLING_SENDER_EMAIL=accounts@vhc.in` in `backend/.env` and restart the backend.
+
+## Auth endpoints
+- `POST /api/auth/login` → `{ access_token, user }`
+- `GET /api/auth/me`
+- `POST /api/auth/reset-password`

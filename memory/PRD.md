@@ -64,6 +64,17 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - Production update completed by user on 2026-09-08: merge `7ef8e308`, fallback env setting, successful Vite build, **`vhc-backend` restart active**, and frontend copy. CSV security removal, housekeeping script and dependency lock preserved. Fresh production logs show successful `nvidia_nemotron_super_120b` extraction/persistence and normal live capture processing; Ultra HTTP429 falls through correctly. Main independently retrieved **`https://ventureshrd.com/api/health`**: healthy, MongoDB OK, Redis OK/local, import_failures=0. The previously supplied `app.ventureshrd.com` hostname has a certificate-name mismatch and is NOT the verified health-check hostname. Do not bypass TLS checks. Production badge display still awaits user observation; no repeat pull/build/restart or missed-profile backfill needed.
 - NVIDIA transient overload remains possible; verified retries/fallback handle it. No promise of permanent upstream availability.
 
+## Billing module — current state (2026-09-17)
+- Two sender entities: `VENTURE HRD CENTER` (07AAMPY9883D2ZT) and `Ventures HRD Pvt Ltd`
+  (07AACCV6268J1ZW), both at Second Floor, D-12/79-80, Rohini Sector 8, New Delhi 110085.
+- All historical bills/invoices/expenses/revenue were wiped on user instruction; numbering restarts at
+  VHC/26-27/1. Bank accounts must be re-added by the user (invoice PDF prints the bank block from the
+  default/only saved account).
+- Invoices send from accounts@ventureshrd.com, reply-to + BCC accounts@vhc.in. Switch the FROM to
+  accounts@vhc.in once that domain is verified in Resend.
+- accounts@vhc.in (role `accounts`) can use Bills & Invoices at `/accounts/bills`.
+- Pending from the user: further additions/removals to employer and recruiter access.
+
 ## Spec compliance status (2026-09-17) — both uploaded docs
 All items from `fix.docx` and the Employee Performance Analytics specification are implemented and
 verified live. See the 2026-09-17 entry in [CHANGELOG.md](CHANGELOG.md) for evidence per item.

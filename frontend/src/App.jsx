@@ -301,6 +301,7 @@ function App() {
           {/* Accounts Routes */}
           <Route path="/accounts" element={<DashboardLayout allowedRoles={["accounts"]} />}>
             <Route index element={<AccountsDashboard />} />
+            <Route path="bills" element={<BillsPage />} />
             <Route path="invoices" element={<InvoicePage />} />
             <Route path="clients" element={<ClientBillingPage />} />
             <Route path="expenses" element={<ExpenseTrackingPage />} />

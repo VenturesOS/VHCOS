@@ -42,41 +42,54 @@ bills_router = APIRouter(prefix="/api", tags=["bills"])
 # ──────────────────────────────────────────────────────────────────────
 async def _require_billing_role(current_user: dict = Depends(get_current_user)) -> dict:
     role = (current_user or {}).get("role")
-    if role == "admin":
-        return current_user
-    if role == "employer":
+    if role in ("admin", "employer", "accounts"):
         return current_user
     if role == "recruiter" and current_user.get("is_account_manager"):
         return current_user
-    raise HTTPException(status_code=403, detail="Bills are accessible to Admin, Employer or Account-Manager recruiters only.")
+    raise HTTPException(status_code=403, detail="Bills are accessible to Admin, Employer, Accounts or Account-Manager recruiters only.")
 
 
 # ──────────────────────────────────────────────────────────────────────
 # Sender variants — frozen at creation time
 # ──────────────────────────────────────────────────────────────────────
+# Both entities share one registered office (user-confirmed 2026-09-17).
+_SENDER_ADDRESS = (
+    "Second Floor, D-12/79-80, Rohini, Rohini Sector 8, "
+    "New Delhi, North West Delhi, Delhi, 110085"
+)
+
 _SENDER_PRESETS = {
-    "VENTURE HRD CENTRE": {
-        "legal_name": "VENTURE HRD CENTRE",
-        "address": "Second Floor, D-12/79 & 80, Rohini Sector-8, New Delhi 110085",
+    "VENTURE HRD CENTER": {
+        "legal_name": "VENTURE HRD CENTER",
+        "address": _SENDER_ADDRESS,
         "gstin": os.environ.get("BILLING_SENDER_GSTIN") or "07AAMPY9883D2ZT",
         "pan": os.environ.get("BILLING_SENDER_PAN") or "AAMPY9883D",
         "state_code": "07",
         "logo_url": os.environ.get("BILLING_SENDER_LOGO_URL") or "",
     },
-    "VENTURE HRD CENTRE PVT LTD": {
-        "legal_name": "VENTURE HRD CENTRE PVT LTD",
-        "address": "Second Floor, D-12/79 & 80, Rohini Sector-8, New Delhi 110085",
-        "gstin": os.environ.get("BILLING_SENDER_PVT_GSTIN") or "",
-        "pan": os.environ.get("BILLING_SENDER_PVT_PAN") or "",
+    "VENTURES HRD PVT LTD": {
+        "legal_name": "Ventures HRD Pvt Ltd",
+        "address": _SENDER_ADDRESS,
+        "gstin": os.environ.get("BILLING_SENDER_PVT_GSTIN") or "07AACCV6268J1ZW",
+        "pan": os.environ.get("BILLING_SENDER_PVT_PAN") or "AACCV6268J",
         "state_code": "07",
         "logo_url": os.environ.get("BILLING_SENDER_PVT_LOGO_URL") or "",
     },
 }
 
+# Legacy spellings stored on older drafts still resolve.
+_SENDER_ALIASES = {
+    "VENTURE HRD CENTRE": "VENTURE HRD CENTER",
+    "VENTURE HRD CENTRE PVT LTD": "VENTURES HRD PVT LTD",
+    "VENTURE HRD CENTER PVT LTD": "VENTURES HRD PVT LTD",
+    "VENTURES HRD PVT. LTD.": "VENTURES HRD PVT LTD",
+}
+
 
 def _resolve_sender(variant: Optional[str]) -> dict:
-    key = (variant or "VENTURE HRD CENTRE").upper().strip()
-    return _SENDER_PRESETS.get(key, _SENDER_PRESETS["VENTURE HRD CENTRE"])
+    key = (variant or "VENTURE HRD CENTER").upper().strip()
+    key = _SENDER_ALIASES.get(key, key)
+    return _SENDER_PRESETS.get(key, _SENDER_PRESETS["VENTURE HRD CENTER"])
 
 
 def _state_code_from_gstin(gstin: str) -> str:
@@ -419,6 +432,8 @@ async def _load_logo_bytes(url: Optional[str]) -> Optional[bytes]:
 
 _LOCAL_LOGO_PATHS = (
     os.environ.get("BILLING_SENDER_LOGO_PATH") or "",
+    "/app/frontend/public/assets/vhc_logo_invoice.png",
+    "/app/frontend/build/assets/vhc_logo_invoice.png",
     "/app/frontend/public/assets/vhc_logo.png",
     "/app/frontend/build/assets/vhc_logo.png",
 )

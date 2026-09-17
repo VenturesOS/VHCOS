@@ -18,19 +18,20 @@ logger = logging.getLogger(__name__)
 # Resend SDK reads the key from this module-level attribute
 resend.api_key = os.environ.get("RESEND_API_KEY") or ""
 
-# Mail config
+# Mail config — user-confirmed 2026-09-17: invoices go OUT from
+# accounts@vhc.in, reply-to the same box, and accounts@ is always BCC'd.
 SENDER_EMAIL = (
     os.environ.get("BILLING_SENDER_EMAIL")
     or os.environ.get("SENDER_EMAIL")
-    or "billing@vhc.in"
+    or "accounts@vhc.in"
 )
-SENDER_NAME = os.environ.get("BILLING_SENDER_NAME") or "Venture HRD Centre"
-REPLY_TO = os.environ.get("BILLING_REPLY_TO") or "accounts@vhc.in"
+SENDER_NAME = os.environ.get("BILLING_SENDER_NAME") or "Venture HRD Center"
+ACCOUNTS_EMAIL = os.environ.get("BILLING_ACCOUNTS_EMAIL") or "accounts@vhc.in"
+REPLY_TO = os.environ.get("BILLING_REPLY_TO") or ACCOUNTS_EMAIL
 
-# Locked CCs — never removable by users
-LOCKED_CC = [e for e in [
-    os.environ.get("BILLING_ACCOUNTS_EMAIL") or "accounts@vhc.in",
-] if e]
+# Always BCC the accounts mailbox so every invoice lands in that inbox.
+LOCKED_BCC = [ACCOUNTS_EMAIL] if ACCOUNTS_EMAIL else []
+LOCKED_CC: List[str] = []
 DEFAULT_DYNAMIC_CC = [e for e in [
     os.environ.get("BILLING_DEFAULT_CC_1") or "bsy@vhc.in",
     os.environ.get("BILLING_DEFAULT_CC_2") or "rohit@vhc.in",
@@ -86,8 +87,9 @@ async def send_bill_email(
     }
     if plain_body:
         params["text"] = plain_body
-    if bcc_emails:
-        params["bcc"] = list(bcc_emails)
+    bcc = list(dict.fromkeys([*(bcc_emails or []), *LOCKED_BCC]))
+    if bcc:
+        params["bcc"] = bcc
     if pdf_bytes:
         params["attachments"] = [{
             "filename": pdf_filename,

@@ -35,8 +35,11 @@ _ENABLED = (os.environ.get("BILLING_AUTODRAFT_ENABLED", "true") or "").lower() i
 # ── Sender defaults (mirrors bills.py — kept tiny to avoid circular imports) ──
 def _sender() -> dict:
     return {
-        "legal_name": "VENTURE HRD CENTRE",
-        "address": "Second Floor, D-12/79 & 80, Rohini Sector-8, New Delhi 110085",
+        "legal_name": "VENTURE HRD CENTER",
+        "address": (
+            "Second Floor, D-12/79-80, Rohini, Rohini Sector 8, "
+            "New Delhi, North West Delhi, Delhi, 110085"
+        ),
         "gstin": os.environ.get("BILLING_SENDER_GSTIN") or "07AAMPY9883D2ZT",
         "pan": os.environ.get("BILLING_SENDER_PAN") or "AAMPY9883D",
         "state_code": "07",
