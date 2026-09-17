@@ -598,6 +598,15 @@ export const blogAPI = {
   updateJoining: (applicationId, data) => api.patch(`/blog/joinings/${applicationId}`, data),
 };
 
+// "Candidates called" tracking (fix.docx) — fire-and-forget. `source` is
+// one of badge_expand | profile_modal | called_button.
+export const trackCandidateCalled = (candidateId, source, extra = {}) => {
+  if (!candidateId) return Promise.resolve();
+  return api
+    .post('/extension/candidate-called', { candidate_id: candidateId, source, ...extra })
+    .catch(() => {});
+};
+
 // Candidate Data Bank APIs
 export const candidateBankAPI = {
   add: (file, email, name) => {

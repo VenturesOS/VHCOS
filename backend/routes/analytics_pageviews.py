@@ -121,24 +121,30 @@ async def hub_dashboard(
     days = max(1, min(days, 90))
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
-    # Regex that keeps only public / marketing / careers routes when
-    # `public_only` is on. Anonymous ({"user_id": null}) hits from
-    # external redirects also count as public even if the URL prefix
-    # isn't a canonical marketing one (e.g. custom vanity landing pages).
-    _PUBLIC_ROUTE_RE = r"^/(careers|jobs?|job/|blog|apply|company/|companies/|$)"
+    # `public_only` keeps outward-facing website traffic only. Earlier this
+    # was an allow-list of marketing prefixes OR'd with `user_id: null` —
+    # but most internal portal pageviews are written before the session is
+    # resolved (so `user_id` is null), which let /recruiter/attendance,
+    # /login and /admin back in and drowned the marketing numbers.
+    # Now it is a hard exclusion of the internal portal route space, so
+    # every public page (/, /careers, /services, /industries, blog
+    # articles, vanity landing pages) counts and no employee-portal page
+    # ever does.
+    _INTERNAL_ROUTE_RE = (
+        r"^/(admin|recruiter|employer|candidate|accounts|account-manager|"
+        r"settings|login|logout|register|signup|forgot-password|"
+        r"reset-password|onboarding|dashboard|profile)(/|\?|$)"
+    )
     _pv_match: dict = {"ts": {"$gte": since}, "event_type": "pageview"}
     if public_only:
-        _pv_match["$or"] = [
-            {"route": {"$regex": _PUBLIC_ROUTE_RE}},
-            {"user_id": None},
-        ]
+        _pv_match["route"] = {"$not": {"$regex": _INTERNAL_ROUTE_RE}}
 
     # 1. Total page views + DAU + unique visitors
     total_pv = await db.analytics_pageviews.count_documents(_pv_match)
 
     dau_match = {"ts": {"$gte": since}}
     if public_only:
-        dau_match["$or"] = _pv_match["$or"]
+        dau_match["route"] = _pv_match["route"]
     dau_pipeline = [
         {"$match": dau_match},
         {
@@ -238,7 +244,7 @@ async def hub_dashboard(
 
     # 6. Logged-in vs anonymous split
     auth_split_pipeline = [
-        {"$match": {"ts": {"$gte": since}, "event_type": "pageview"}},
+        {"$match": _pv_match},
         {
             "$group": {
                 "_id": {"$cond": [{"$ifNull": ["$user_id", False]}, "auth", "anon"]},

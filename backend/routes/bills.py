@@ -388,24 +388,53 @@ _LOGO_CACHE: dict = {}
 
 async def _load_logo_bytes(url: Optional[str]) -> Optional[bytes]:
     """Fetch the sender's logo from `sender_logo_url` (or the preset
-    default). Cached in-process."""
-    if not url:
-        return None
-    cached = _LOGO_CACHE.get(url)
+    default). Cached in-process.
+
+    fix.docx ("in bills add company logo next to the name"): when no
+    logo URL is configured — or the remote fetch fails — fall back to the
+    VHC logo bundled with the frontend so the invoice header always shows
+    the company mark.
+    """
+    if url:
+        cached = _LOGO_CACHE.get(url)
+        if cached:
+            return cached
+        if cached is None:
+            try:
+                import httpx  # already a dep for LLM calls
+                async with httpx.AsyncClient(timeout=8.0) as _c:
+                    r = await _c.get(url)
+                    r.raise_for_status()
+                    _LOGO_CACHE[url] = r.content
+                    return r.content
+            except Exception as e:
+                logger.warning("[Bills] Couldn't fetch sender logo %s: %s", url, e)
+                _LOGO_CACHE[url] = b""  # cache the failure so we don't spam retries
+    return _load_local_logo_bytes()
+
+
+_LOCAL_LOGO_PATHS = (
+    os.environ.get("BILLING_SENDER_LOGO_PATH") or "",
+    "/app/frontend/public/assets/vhc_logo.png",
+    "/app/frontend/build/assets/vhc_logo.png",
+)
+
+
+def _load_local_logo_bytes() -> Optional[bytes]:
+    cached = _LOGO_CACHE.get("__local__")
     if cached is not None:
-        return cached or None  # empty bytes → previous failure sentinel
-    try:
-        import httpx  # already a dep for LLM calls
-        async with httpx.AsyncClient(timeout=8.0) as _c:
-            r = await _c.get(url)
-            r.raise_for_status()
-            data = r.content
-            _LOGO_CACHE[url] = data
-            return data
-    except Exception as e:
-        logger.warning("[Bills] Couldn't fetch sender logo %s: %s", url, e)
-        _LOGO_CACHE[url] = b""  # cache the failure so we don't spam retries
-        return None
+        return cached or None
+    for path in _LOCAL_LOGO_PATHS:
+        if path and os.path.exists(path):
+            try:
+                with open(path, "rb") as fh:
+                    data = fh.read()
+                _LOGO_CACHE["__local__"] = data
+                return data
+            except Exception as e:
+                logger.warning("[Bills] Couldn't read local logo %s: %s", path, e)
+    _LOGO_CACHE["__local__"] = b""
+    return None
 
 
 @bills_router.get("/bills/{bill_id}/pdf")

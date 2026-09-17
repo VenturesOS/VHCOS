@@ -4261,6 +4261,20 @@
       // Hard-stop propagation so the row's parent click handlers don't fire
       badge.addEventListener('click', (e) => {
         e.stopPropagation();
+        // fix.docx: opening the DB record behind the badge reveals the
+        // contact details — that's a "candidate called" event.
+        if (info.candidate_id) {
+          try {
+            chrome.runtime.sendMessage({
+              action: 'trackCandidateCalled',
+              candidate_id: info.candidate_id,
+              source: 'badge_expand',
+              candidate_name: info.name || null,
+              naukri_id: info.naukri_id || null,
+              page_url: window.location.href,
+            });
+          } catch (_) { /* telemetry must stay silent */ }
+        }
         // Fallback: if href is still "#" (rare race), open via message
         if (badge.getAttribute('href') === '#' && info.candidate_id) {
           e.preventDefault();

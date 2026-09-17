@@ -10,7 +10,10 @@ import {
 } from 'lucide-react';
 import { NOTICE_PERIODS } from '../candidate-bank/CandidateBankFilters';
 import { formatSalaryINR } from '../../lib/currency';
+import { trackCandidateCalled } from '../../lib/api';
 import SimilarCandidatesPanel from './SimilarCandidatesPanel';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 export function CandidateDetailDialog({
   candidate, onClose,
@@ -20,7 +23,25 @@ export function CandidateDetailDialog({
   onDownloadResume, onAttachCV, onDelete,
   user,
 }) {
+  // fix.docx — "candidates called" tracking. Opening the profile modal
+  // reveals the contact details, which is one of the three call intents
+  // the user defined; the explicit button below is another.
+  const candidateId = candidate?.id;
+  const [markedCalled, setMarkedCalled] = useState(false);
+
+  useEffect(() => {
+    setMarkedCalled(false);
+    if (candidateId) trackCandidateCalled(candidateId, 'profile_modal', { candidate_name: candidate?.name });
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [candidateId]);
+
   if (!candidate) return null;
+
+  const markCalled = async () => {
+    await trackCandidateCalled(candidate.id, 'called_button', { candidate_name: candidate.name });
+    setMarkedCalled(true);
+    toast.success('Marked as called');
+  };
 
   const updateField = (key, value) => onEditFormChange({ ...editForm, [key]: value });
 
@@ -32,6 +53,17 @@ export function CandidateDetailDialog({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <span>Candidate Profile</span>
               <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline" size="sm"
+                  onClick={markCalled}
+                  disabled={markedCalled}
+                  className={`text-xs ${markedCalled ? 'text-slate-400' : 'text-blue-600 border-blue-400 hover:bg-blue-50'}`}
+                  data-testid="mark-called-btn"
+                >
+                  <Phone className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">{markedCalled ? 'Called' : 'Mark Called'}</span>
+                </Button>
+
                 {(candidate.cv_attached || candidate.resume_url) && (
                   <Button variant="outline" size="sm" onClick={() => onDownloadResume(candidate)} className="text-[#7CB342] border-[#7CB342] hover:bg-green-50 text-xs" data-testid="download-cv-btn">
                     <Download className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Download CV</span>

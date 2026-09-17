@@ -165,26 +165,60 @@ async def list_joinings(
     company_id: Optional[str] = None,
     position_q: Optional[str] = None,
     location_q: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    team_id: Optional[str] = None,
     limit: int = 200,
     current_user: dict = Depends(require_role(["admin", "employer"])),
 ):
     """Return every candidate currently at stage=joined, hydrated with
-    the fields the Blog Engine "Recent Joinings" table shows."""
-    import re as _re
+    the fields the "Recent Joinings" table shows.
 
+    fix.docx: legacy joined applications never stored `join_date`, so the
+    DOJ column rendered blank and any date filter matched nothing. The
+    joining date is now derived — `join_date` → the `stage_history` entry
+    that moved the candidate to `joined` → `updated_at` — and both the
+    date range and the employee/team ("filter out people") filters are
+    applied to that derived value.
+    """
     q: dict = {"stage": "joined"}
-    if date_from or date_to:
-        rng: dict = {}
-        if date_from: rng["$gte"] = date_from
-        if date_to:   rng["$lte"] = date_to
-        q["join_date"] = rng
-    if company_id:
-        # Applications don't carry the client company id directly — resolve
-        # via jobs.company_id (join below), so we can't filter here. Filter
-        # in-Python after hydration.
-        pass
 
-    apps = await db.applications.find(q, {"_id": 0}).sort("join_date", -1).to_list(max(1, min(limit, 1000)))
+    # Employee / team scope — "when we filter out people the joining list
+    # should be filtered accordingly".
+    recruiter_ids: Optional[set] = None
+    if employee_id:
+        recruiter_ids = {employee_id}
+    elif team_id:
+        team = await db.teams.find_one({"id": team_id}, {"_id": 0, "recruiter_ids": 1, "team_lead_id": 1})
+        ids = set((team or {}).get("recruiter_ids") or [])
+        if (team or {}).get("team_lead_id"):
+            ids.add(team["team_lead_id"])
+        recruiter_ids = ids or {"__none__"}
+    if recruiter_ids:
+        q["created_by"] = {"$in": list(recruiter_ids)}
+
+    apps = await db.applications.find(q, {"_id": 0}).sort("updated_at", -1).to_list(2000)
+    if not apps:
+        return {"items": [], "count": 0}
+
+    def _derive_join_date(app: dict) -> str:
+        raw = app.get("join_date") or app.get("joined_at") or app.get("joining_date")
+        if not raw:
+            for h in reversed(app.get("stage_history") or []):
+                if (h.get("stage") or "").lower() == "joined" and h.get("timestamp"):
+                    raw = h["timestamp"]
+                    break
+        raw = raw or app.get("updated_at") or app.get("created_at") or ""
+        return str(raw)[:10]
+
+    for a in apps:
+        a["_join_date"] = _derive_join_date(a)
+
+    if date_from:
+        apps = [a for a in apps if a["_join_date"] and a["_join_date"] >= date_from]
+    if date_to:
+        apps = [a for a in apps if a["_join_date"] and a["_join_date"] <= date_to]
+    apps.sort(key=lambda a: a["_join_date"], reverse=True)
+    apps = apps[: max(1, min(limit, 1000))]
     if not apps:
         return {"items": [], "count": 0}
 
@@ -206,6 +240,10 @@ async def list_joinings(
     revs = {}
     async for r in db.revenue.find({"application_id": {"$in": app_ids}}, {"_id": 0, "application_id": 1, "final_revenue": 1, "revenue_status": 1}):
         revs[r["application_id"]] = r
+    user_ids = list({a.get("created_by") for a in apps if a.get("created_by")})
+    users = {}
+    async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}):
+        users[u["id"]] = u
 
     items = []
     for a in apps:
@@ -217,7 +255,9 @@ async def list_joinings(
             continue
         row = {
             "application_id": a["id"],
-            "join_date": a.get("join_date") or "",
+            "join_date": a.get("_join_date") or "",
+            "recruiter_id": a.get("created_by") or "",
+            "recruiter_name": (users.get(a.get("created_by")) or {}).get("name") or "",
             "candidate_name": a.get("candidate_name") or cand.get("name") or "",
             "client_id":   client.get("id") or "",
             "client_name": client.get("legal_name") or client.get("name") or "",

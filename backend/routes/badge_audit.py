@@ -174,21 +174,41 @@ async def list_audit_batches(
     if only_v2:
         q["used_v2"] = True
 
-    cursor = db.badge_audit.find(q, {"cards": 0}).sort("ts", -1).limit(limit)
-    rows = await cursor.to_list(limit)
+    # Single aggregation. The previous version fetched the summary rows and
+    # then issued one `find_one` per row to count labels — 100 extra
+    # round-trips that made this page take ~26 s. The label/feedback
+    # counts are now computed server-side in the same pass.
+    pipeline = [
+        {"$match": q},
+        {"$sort": {"ts": -1}},
+        {"$limit": limit},
+        {"$project": {
+            "_id": 0,
+            "id": 1, "user_email": 1, "ts": 1, "used_v2": 1, "page_url": 1,
+            "batch_size": 1, "took_ms": 1, "n_exists": 1,
+            "n_high_confidence": 1, "n_via_naukri_id": 1, "hit_rate": 1,
+            "n_cards": {"$size": {"$ifNull": ["$cards", []]}},
+            "n_labeled": {"$size": {"$filter": {
+                "input": {"$ifNull": ["$cards", []]},
+                "as": "c",
+                "cond": {"$and": [
+                    {"$ne": [{"$ifNull": ["$$c.label", None]}, None]},
+                    {"$ne": ["$$c.label", ""]},
+                ]},
+            }}},
+            "n_client_feedback": {"$size": {"$filter": {
+                "input": {"$ifNull": ["$cards", []]},
+                "as": "c",
+                "cond": {"$ne": [{"$ifNull": ["$$c.client_rendered", None]}, None]},
+            }}},
+        }},
+    ]
+    rows = await db.badge_audit.aggregate(pipeline, allowDiskUse=True).to_list(limit)
 
-    # Backfill computed columns (labels + client feedback counts) — quick
-    # second query so admin page can filter on them
     out: List[AuditBatchSummary] = []
     for r in rows:
-        full = await db.badge_audit.find_one(
-            {"id": r["id"]},
-            {"cards.label": 1, "cards.client_rendered": 1, "_id": 0},
-        )
-        cards = (full or {}).get("cards", []) if full else []
-        n_lbl = sum(1 for c in cards if c.get("label"))
-        n_fb = sum(1 for c in cards if c.get("client_rendered") is not None)
-        if has_unlabeled and n_lbl == len(cards):
+        n_lbl = r.get("n_labeled", 0)
+        if has_unlabeled and n_lbl >= r.get("n_cards", 0):
             continue
         out.append(AuditBatchSummary(
             id=r["id"],
@@ -203,7 +223,7 @@ async def list_audit_batches(
             n_via_naukri_id=r.get("n_via_naukri_id", 0),
             hit_rate=r.get("hit_rate", 0.0),
             n_labeled=n_lbl,
-            n_client_feedback=n_fb,
+            n_client_feedback=r.get("n_client_feedback", 0),
         ))
     return out
 
@@ -366,6 +386,130 @@ async def badge_view_stats(
             }
             for u in by_user
         ],
+    }
+
+
+# ── "Candidates called" tracking ──────────────────────────────────────
+# fix.docx: the raw "how many times a badge was opened" number wasn't
+# useful. What the user asked for is a box showing **how many candidates
+# we actually called** off the back of the "Already in Database" badge.
+# A call is recorded when any of the three user-confirmed intents happen:
+#   • badge_expand  — recruiter expands the badge / opens the DB record
+#                     from a Naukri card (contact details get revealed)
+#   • profile_modal — candidate profile modal is opened from the bank
+#   • called_button — recruiter explicitly marks the candidate as called
+# Every event is stored raw (so unique candidates can be counted) plus a
+# cheap per-day rollup for the header box.
+_CALL_SOURCES = ("badge_expand", "profile_modal", "called_button")
+
+
+class CandidateCalledEvent(BaseModel):
+    candidate_id: str
+    source: str = "called_button"
+    candidate_name: Optional[str] = None
+    naukri_id: Optional[str] = None
+    page_url: Optional[str] = None
+
+
+@ext_feedback_router.post("/candidate-called")
+async def track_candidate_called(
+    payload: CandidateCalledEvent,
+    user: dict = Depends(get_current_user),
+):
+    """Record one "candidate called" event. Fire-and-forget from the UI /
+    extension — never raises on a duplicate."""
+    source = payload.source if payload.source in _CALL_SOURCES else "called_button"
+    now = datetime.now(timezone.utc)
+    day = now.date().isoformat()
+    try:
+        # One row per user+candidate+source+day keeps unique counting sane
+        # while still reflecting repeat activity across days.
+        await db.candidate_call_events.update_one(
+            {
+                "day": day,
+                "user_id": user.get("id"),
+                "candidate_id": payload.candidate_id,
+                "source": source,
+            },
+            {
+                "$inc": {"hits": 1},
+                "$set": {"last_at": now, "candidate_name": payload.candidate_name or ""},
+                "$setOnInsert": {
+                    "day": day,
+                    "user_id": user.get("id"),
+                    "user_email": user.get("email"),
+                    "candidate_id": payload.candidate_id,
+                    "source": source,
+                    "naukri_id": payload.naukri_id or "",
+                    "page_url": payload.page_url or "",
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+        await db.candidate_call_stats.update_one(
+            {"day": day},
+            {"$inc": {f"by_source.{source}": 1, "total": 1},
+             "$setOnInsert": {"day": day, "created_at": now}},
+            upsert=True,
+        )
+    except Exception as e:
+        logger.warning("[CandidateCalled] write failed: %s", e)
+        return {"ok": False}
+    return {"ok": True, "source": source}
+
+
+@router.get("/_/stats/candidates-called")
+async def candidates_called_stats(
+    days: int = Query(30, le=365),
+    user: dict = Depends(get_current_user),
+):
+    """Powers the "Candidates called" box on the Badge Audit page."""
+    since_day = (datetime.now(timezone.utc) - timedelta(days=days - 1)).date().isoformat()
+    base = {"day": {"$gte": since_day}}
+    try:
+        unique_candidates = len(await db.candidate_call_events.distinct("candidate_id", base))
+        total_agg = await db.candidate_call_events.aggregate([
+            {"$match": base},
+            {"$group": {"_id": None, "hits": {"$sum": "$hits"}}},
+        ]).to_list(1)
+        by_source = await db.candidate_call_events.aggregate([
+            {"$match": base},
+            {"$group": {"_id": "$source", "hits": {"$sum": "$hits"},
+                        "candidates": {"$addToSet": "$candidate_id"}}},
+            {"$project": {"_id": 0, "source": "$_id", "hits": 1,
+                          "unique_candidates": {"$size": "$candidates"}}},
+            {"$sort": {"hits": -1}},
+        ]).to_list(10)
+        daily = await db.candidate_call_events.aggregate([
+            {"$match": base},
+            {"$group": {"_id": "$day", "hits": {"$sum": "$hits"},
+                        "candidates": {"$addToSet": "$candidate_id"}}},
+            {"$project": {"_id": 0, "day": "$_id", "hits": 1,
+                          "candidates": {"$size": "$candidates"}}},
+            {"$sort": {"day": 1}},
+        ]).to_list(days)
+        by_user = await db.candidate_call_events.aggregate([
+            {"$match": base},
+            {"$group": {"_id": "$user_email", "hits": {"$sum": "$hits"},
+                        "candidates": {"$addToSet": "$candidate_id"}}},
+            {"$project": {"_id": 0, "email": "$_id", "hits": 1,
+                          "unique_candidates": {"$size": "$candidates"}}},
+            {"$sort": {"hits": -1}},
+            {"$limit": 10},
+        ]).to_list(10)
+    except Exception as e:
+        return {"error": f"query failed: {e}", "days": days,
+                "total_calls": 0, "unique_candidates": 0,
+                "by_source": [], "daily": [], "by_user": []}
+
+    return {
+        "days": days,
+        "total_calls": (total_agg[0]["hits"] if total_agg else 0),
+        "unique_candidates": unique_candidates,
+        "by_source": by_source,
+        "daily": daily,
+        "by_user": by_user,
     }
 
 

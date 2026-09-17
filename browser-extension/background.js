@@ -1101,6 +1101,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // ═══ CANDIDATE CALLED (fix.docx — "how many candidates we called") ═══
+  // Fired when a recruiter opens the DB record behind an "Already in
+  // Database" badge. Silent telemetry — powers the "Candidates called"
+  // box on the admin Badge Audit page.
+  if (request.action === 'trackCandidateCalled') {
+    (async () => {
+      try {
+        const auth = await getAuth();
+        if (!auth?.token || !auth?.apiUrl) { sendResponse({ ok: false }); return; }
+        await fetch(`${auth.apiUrl}/api/extension/candidate-called`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${auth.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            candidate_id: request.candidate_id,
+            source: request.source || 'badge_expand',
+            candidate_name: request.candidate_name || null,
+            naukri_id: request.naukri_id || null,
+            page_url: request.page_url || null,
+          }),
+        });
+        sendResponse({ ok: true });
+      } catch (e) {
+        console.warn(`[VHC BG v${VERSION}] trackCandidateCalled failed:`, e.message);
+        sendResponse({ ok: false });
+      }
+    })();
+    return true;
+  }
+
   // ═══ CHECK EXISTING CANDIDATES (Local cache + API backend) ═══
   if (request.action === 'checkExisting') {
     checkExistingCandidates(request.candidates || [])

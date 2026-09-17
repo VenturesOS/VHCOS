@@ -38,6 +38,7 @@ Ranking rules:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -218,16 +219,17 @@ async def _build_metric_matrix(
         if stage == "submitted_to_client" and ev.get("mandate_id"):
             cell["mandate_subs"][ev["mandate_id"]] += 1
 
-    # 2) Candidates added (candidate_bank rows)
+    # 2) Candidates added (candidate_bank rows).
+    # NOTE: `_ist_day_bounds_utc` returns ISO **strings** — candidate_bank
+    # stores `created_at` as a string too, so the comparison is correct.
+    # The previous version also OR'd three owner fields; one of them
+    # (`source_details.captured_by`) has no index, so Mongo fell back to a
+    # collection scan and the 60 s socket timeout 500'd the whole digest.
+    # The window filter alone is indexed and narrow (a couple of thousand
+    # docs), and the owner is already resolved per-document below — so we
+    # filter by date in Mongo and by owner in Python.
     async for doc in db.candidate_bank.find(
-        {
-            "$or": [
-                {"created_by": {"$in": recruiter_ids}},
-                {"captured_by": {"$in": recruiter_ids}},
-                {"source_details.captured_by": {"$in": recruiter_ids}},
-            ],
-            "created_at": {"$gte": window_start_utc, "$lte": window_end_utc},
-        },
+        {"created_at": {"$gte": window_start_utc, "$lte": window_end_utc}},
         {
             "_id": 0,
             "source": 1, "source_details": 1,
@@ -344,6 +346,17 @@ async def _compute_lifetime_mandate_efficiency(
     captures_by_mandate: Dict[str, Dict[str, int]] = {rid: {} for rid in recruiter_ids}
     cap_pipeline = [
         {"$match": {"source": {"$in": list(EXTENSION_CAPTURE_SOURCES)}}},
+        # Project first: these docs are large (raw text, embeddings), and
+        # carrying them through $addFields/$group was blowing past the
+        # 60 s socket timeout on the 75 k extension-captured subset.
+        {"$project": {
+            "_id": 0,
+            "source_details.captured_by": 1,
+            "source_details.mandate_id": 1,
+            "captured_by": 1,
+            "created_by": 1,
+            "mandate_id": 1,
+        }},
         {"$addFields": {
             "_uid": {"$ifNull": [
                 "$source_details.captured_by",
@@ -360,7 +373,7 @@ async def _compute_lifetime_mandate_efficiency(
             "captures": {"$sum": 1},
         }},
     ]
-    async for r in db.candidate_bank.aggregate(cap_pipeline, allowDiskUse=True):
+    async for r in db.candidate_bank.aggregate(cap_pipeline, allowDiskUse=True, maxTimeMS=45000):
         uid = r["_id"]["uid"]
         if uid not in rec_set:
             continue
@@ -631,8 +644,16 @@ async def build_daily_digest(db, date_ist: Optional[datetime] = None) -> Dict[st
         if eff_made else None
     )
 
-    # Lifetime mandate efficiency (separate from today's daily metric)
-    lifetime_eff_map = await _compute_lifetime_mandate_efficiency(db, recruiter_ids)
+    # Lifetime mandate efficiency (separate from today's daily metric).
+    # Degrades gracefully: a slow Atlas response must not 500 the whole
+    # digest (the rest of the KPI payload is already computed).
+    try:
+        lifetime_eff_map = await asyncio.wait_for(
+            _compute_lifetime_mandate_efficiency(db, recruiter_ids), timeout=45
+        )
+    except Exception as e:
+        logger.warning("[Digest] lifetime mandate efficiency skipped: %s", e)
+        lifetime_eff_map = {}
     uid_to_name_local = {rm["user_id"]: rm["name"] for rm in recruiter_metrics}
     lifetime_ranked = []
     building = []

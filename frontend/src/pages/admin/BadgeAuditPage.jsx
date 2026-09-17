@@ -61,23 +61,31 @@ const fmtTime = (iso) => {
 };
 
 // ── Header stats strip ───────────────────────────────────────────────
-function StatsStrip({ stats, viewStats }) {
+function StatsStrip({ stats, viewStats, callStats }) {
   const tiles = [
+    {
+      label: "Candidates called (30d)",
+      value: callStats?.unique_candidates?.toLocaleString() ?? "—",
+      hint: callStats
+        ? `${(callStats.total_calls || 0).toLocaleString()} call actions · ${
+            (callStats.by_source || [])
+              .map((s) => `${s.source.replace(/_/g, " ")} ${s.unique_candidates}`)
+              .join(" · ") || "no events yet"
+          }`
+        : "badge opened · profile opened · marked called",
+      highlight: true,
+    },
     {
       label: "Badge views (30d)",
       value: viewStats?.total_shown?.toLocaleString() ?? "—",
       hint: viewStats
         ? `${viewStats.total_scanned.toLocaleString()} cards scanned · ${viewStats.dedup_rate_pct}% dedup`
         : "from extension `Already in DB` button",
-      highlight: true,
     },
     { label: "Batches", value: stats?.n_batches ?? "—" },
     { label: "Cards (7d)", value: stats?.n_cards ?? "—" },
     { label: "Recall", value: stats ? `${stats.recall_pct}%` : "—",
       hint: `${stats?.n_hits ?? 0} matched / ${stats?.n_cards ?? 0}` },
-    { label: "Via Naukri ID",
-      value: stats?.n_via_naukri_id ?? "—",
-      hint: "fast path (no scoring)" },
     { label: "Avg latency",
       value: stats ? `${stats.avg_took_ms}ms` : "—" },
   ];
@@ -317,6 +325,7 @@ function CardDecisionRow({ card, batchId, onLabel }) {
 export default function BadgeAuditPage() {
   const [stats, setStats] = useState(null);
   const [viewStats, setViewStats] = useState(null);
+  const [callStats, setCallStats] = useState(null);
   const [batches, setBatches] = useState([]);
   const [selected, setSelected] = useState(null);  // full batch detail
   const [loadingList, setLoadingList] = useState(false);
@@ -336,6 +345,12 @@ export default function BadgeAuditPage() {
       setViewStats(vs);
     } catch (e) {
       console.warn("badge-view stats load failed", e);
+    }
+    try {
+      const cs = await api("/admin/badge-audit/_/stats/candidates-called?days=30");
+      setCallStats(cs);
+    } catch (e) {
+      console.warn("candidates-called stats load failed", e);
     }
   }, []);
 
@@ -397,7 +412,7 @@ export default function BadgeAuditPage() {
         </Button>
       </div>
 
-      <StatsStrip stats={stats} viewStats={viewStats} />
+      <StatsStrip stats={stats} viewStats={viewStats} callStats={callStats} />
 
       <div className="flex items-center gap-2 mb-3">
         <Button

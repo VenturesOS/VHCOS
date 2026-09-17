@@ -11,7 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Loader2, TrendingUp, Users, CheckCircle2, Award, Target, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import api, { blogAPI } from '../../lib/api';
+import api, { blogAPI, userAPI } from '../../lib/api';
 
 const KPI_TILES = [
   { key: 'sourced',              label: 'Sourced',             icon: Users,        color: 'text-slate-600' },
@@ -36,16 +36,25 @@ export default function AdminAnalyticsPage() {
   const [teamId, setTeamId] = useState('_all');
   const [employeeId, setEmployeeId] = useState('_all');
   const [teams, setTeams] = useState([]);
+  const [people, setPeople] = useState([]);
   const [data, setData] = useState(null);
   const [annualData, setAnnualData] = useState(null);
   const [loading, setLoading] = useState(false);
+  // Bumped on every Apply so the Joinings list re-reads with the same
+  // date / team / employee scope as the KPI cards (fix.docx: "when we
+  // filter out people the joining list should be filtered accordingly").
+  const [appliedScope, setAppliedScope] = useState({
+    dateFrom: monthStartISO(), dateTo: todayISO(), teamId: '_all', employeeId: '_all',
+  });
 
   useEffect(() => {
     api.get('/teams').then(r => setTeams(r.data || [])).catch(() => {});
+    userAPI.getAll().then(r => setPeople(r.data || [])).catch(() => {});
   }, []);
 
   const load = async () => {
     setLoading(true);
+    setAppliedScope({ dateFrom, dateTo, teamId, employeeId });
     try {
       const params = { date_from: `${dateFrom}T00:00:00+00:00`, date_to: `${dateTo}T23:59:59+00:00` };
       if (teamId !== '_all') params.team_id = teamId;
@@ -71,6 +80,18 @@ export default function AdminAnalyticsPage() {
   const annualTop = (annualData?.employees || []).slice(0, 20);
 
   const teamsForFilter = useMemo(() => teams.filter(t => t.status !== 'deleted'), [teams]);
+  const peopleForFilter = useMemo(() => {
+    const roster = (people || []).filter(u => u.is_active !== false);
+    const scoped = appliedScope.teamId !== '_all' || teamId !== '_all'
+      ? roster.filter(u => {
+          const t = teamsForFilter.find(x => x.id === teamId);
+          if (!t) return true;
+          return (t.recruiter_ids || []).includes(u.id) || t.team_lead_id === u.id;
+        })
+      : roster;
+    return scoped.sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''));
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [people, teamId, teamsForFilter]);
 
   return (
     <div className="space-y-6 p-4 sm:p-6" data-testid="admin-analytics-page">
@@ -104,7 +125,15 @@ export default function AdminAnalyticsPage() {
           </div>
           <div>
             <Label className="text-xs text-slate-500 mb-1 block">Employee</Label>
-            <Input placeholder="Recruiter id (optional)" value={employeeId === '_all' ? '' : employeeId} onChange={e => setEmployeeId(e.target.value || '_all')} data-testid="filter-employee" />
+            <Select value={employeeId} onValueChange={setEmployeeId}>
+              <SelectTrigger data-testid="filter-employee"><SelectValue placeholder="All employees" /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value="_all">All employees</SelectItem>
+                {peopleForFilter.map(u => (
+                  <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button onClick={load} disabled={loading} className="bg-[#7CB342] hover:bg-[#689F38]" data-testid="apply-btn">
             {loading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5" />} Apply
@@ -242,7 +271,7 @@ export default function AdminAnalyticsPage() {
           Team leaders fill CTC + revenue here so the Employee
           Performance workspace becomes the single place they track
           actual joinings & the money each one made. */}
-      <JoiningsSection />
+      <JoiningsSection scope={appliedScope} />
     </div>
   );
 }
@@ -253,24 +282,29 @@ export default function AdminAnalyticsPage() {
 // Reads /api/blog/joinings; filters by date range, position, location.
 // Team leaders inline-edit joined CTC + revenue.
 // ─────────────────────────────────────────────────────────────
-function JoiningsSection() {
+function JoiningsSection({ scope }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ date_from: '', date_to: '', position_q: '', location_q: '' });
+  const [filters, setFilters] = useState({ position_q: '', location_q: '' });
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = {
+        date_from: scope.dateFrom || undefined,
+        date_to: scope.dateTo || undefined,
+      };
+      if (scope.teamId && scope.teamId !== '_all') params.team_id = scope.teamId;
+      if (scope.employeeId && scope.employeeId !== '_all') params.employee_id = scope.employeeId;
       Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
       const res = await blogAPI.listJoinings(params);
       setItems(res.data?.items || []);
     } catch {
       toast.error('Failed to load joinings');
     } finally { setLoading(false); }
-  }, [filters]);
+  }, [filters, scope]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -297,17 +331,12 @@ function JoiningsSection() {
     <Card className="border-slate-200" data-testid="recent-joinings">
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Recent Joinings ({items.length})</CardTitle>
+        <p className="text-xs text-slate-500">
+          Follows the date range, team and employee filters above ({scope.dateFrom} → {scope.dateTo}).
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
-            <Label className="text-xs text-slate-500 mb-1 block">From</Label>
-            <Input type="date" value={filters.date_from} onChange={e => setFilters({ ...filters, date_from: e.target.value })} data-testid="joinings-from" />
-          </div>
-          <div>
-            <Label className="text-xs text-slate-500 mb-1 block">To</Label>
-            <Input type="date" value={filters.date_to} onChange={e => setFilters({ ...filters, date_to: e.target.value })} data-testid="joinings-to" />
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <Label className="text-xs text-slate-500 mb-1 block">Position contains</Label>
             <Input value={filters.position_q} onChange={e => setFilters({ ...filters, position_q: e.target.value })} placeholder="e.g. Manager" data-testid="joinings-position" />
@@ -330,6 +359,7 @@ function JoiningsSection() {
                   <th className="text-left px-3 py-2">DOJ</th>
                   <th className="text-left px-3 py-2">Client company</th>
                   <th className="text-left px-3 py-2">Candidate</th>
+                  <th className="text-left px-3 py-2">Recruiter</th>
                   <th className="text-left px-3 py-2">Position</th>
                   <th className="text-left px-3 py-2">Location</th>
                   <th className="text-right px-3 py-2">CTC (₹)</th>
@@ -353,6 +383,7 @@ function JoiningsSection() {
                         </div>
                       </td>
                       <td className="px-3 py-2">{row.candidate_name}</td>
+                      <td className="px-3 py-2 text-slate-500">{row.recruiter_name || '—'}</td>
                       <td className="px-3 py-2">{row.position}</td>
                       <td className="px-3 py-2">{row.location}</td>
                       <td className="px-3 py-2 text-right">
