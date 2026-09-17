@@ -11,7 +11,7 @@ import { ArrowLeft, User, Mail, Phone, MapPin, Briefcase, GraduationCap,
   Clock, Globe, Award, FolderOpen, Languages, FileText,
   Building2, Calendar, ExternalLink, ChevronRight, Download, RefreshCw, Paperclip, Upload, Trash2
 } from 'lucide-react';
-import { candidateBankAPI, bulkImportAPI } from '../../lib/api';
+import { candidateBankAPI, bulkImportAPI, trackCandidateCalled } from '../../lib/api';
 import { Textarea } from '../../components/ui/textarea';
 import CandidateActivityTimeline from '../../components/shared/CandidateActivityTimeline';
 
@@ -70,6 +70,20 @@ export default function NaukriProfileView() {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  const [markedCalled, setMarkedCalled] = useState(false);
+
+  // fix.docx "candidates called": opening the full profile reveals the
+  // contact details, and the button below records an explicit call.
+  useEffect(() => {
+    setMarkedCalled(false);
+    if (candidateId) trackCandidateCalled(candidateId, 'profile_modal');
+  }, [candidateId]);
+
+  const markCalled = async () => {
+    await trackCandidateCalled(candidateId, 'called_button', { candidate_name: profile?.name });
+    setMarkedCalled(true);
+    toast.success('Marked as called');
+  };
 
   const loadProfile = useCallback(async () => {
     try {
@@ -267,6 +281,16 @@ export default function NaukriProfileView() {
             </div>
             <div className="flex flex-col items-end gap-2">
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={markCalled}
+                  disabled={markedCalled}
+                  className={`h-7 text-xs ${markedCalled ? 'text-slate-400 border-slate-300' : 'text-blue-600 border-blue-400 hover:bg-blue-50'}`}
+                  data-testid="mark-called-btn"
+                >
+                  <Phone className="w-3 h-3 mr-1" /> {markedCalled ? 'Called' : 'Mark Called'}
+                </Button>
                 {(profile.resume_url || profile.active_resume_id) && (
                   <Button
                     variant="outline"

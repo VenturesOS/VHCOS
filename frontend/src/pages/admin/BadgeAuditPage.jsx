@@ -333,25 +333,16 @@ export default function BadgeAuditPage() {
   const [filters, setFilters] = useState({ only_v2: false, has_unlabeled: false });
 
   const loadStats = useCallback(async () => {
-    try {
-      const s = await api("/admin/badge-audit/_/stats/overview?days=7");
-      setStats(s);
-    } catch (e) {
-      // soft fail — stats are nice-to-have
-      console.warn("stats load failed", e);
-    }
-    try {
-      const vs = await api("/admin/badge-audit/_/stats/badge-views?days=30");
-      setViewStats(vs);
-    } catch (e) {
-      console.warn("badge-view stats load failed", e);
-    }
-    try {
-      const cs = await api("/admin/badge-audit/_/stats/candidates-called?days=30");
-      setCallStats(cs);
-    } catch (e) {
-      console.warn("candidates-called stats load failed", e);
-    }
+    // Fired in parallel — sequential awaits left the header tiles blank
+    // for ~15 s on this dataset.
+    await Promise.all([
+      api("/admin/badge-audit/_/stats/overview?days=7")
+        .then(setStats).catch((e) => console.warn("stats load failed", e)),
+      api("/admin/badge-audit/_/stats/badge-views?days=30")
+        .then(setViewStats).catch((e) => console.warn("badge-view stats load failed", e)),
+      api("/admin/badge-audit/_/stats/candidates-called?days=30")
+        .then(setCallStats).catch((e) => console.warn("candidates-called stats load failed", e)),
+    ]);
   }, []);
 
   const loadBatches = useCallback(async () => {

@@ -1,3 +1,61 @@
+## 2026-09-17 — Spec verification pass (both docs) + gap fixes
+
+End-to-end audit of `fix.docx` + `Emergent_Fix_and_Employee_Performance_Analytics_Specification`.
+Verified live against the preview (real Atlas data). Five genuine gaps found and fixed:
+
+1. **Analytics Hub still showed employee-portal traffic** (`routes/analytics_pageviews.py`).
+   Root cause: `public_only` was `route matches marketing prefix OR user_id == null`, and internal
+   portal pageviews are written before the session resolves (user_id null) — so `/recruiter/attendance`,
+   `/login`, `/admin` sailed through. Replaced with a hard exclusion of the internal route space
+   (`^/(admin|recruiter|employer|candidate|accounts|account-manager|settings|login|…)`), applied to the
+   pageview total, DAU, top pages, referrers, UTM and auth split. Verified: total 15,678 → 3,412 and
+   top pages are now only `/careers`, `/`, `/contact`, `/services`, `/industries`, blog articles.
+2. **Joinings list had blank DOJ and a dead date filter** (`routes/blog.py::list_joinings`).
+   None of the 112 joined applications ever stored `join_date`. The date is now derived
+   (`join_date` → `stage_history` entry with stage `joined` → `updated_at`), the date range filter
+   runs on the derived value, and new `employee_id` / `team_id` filters were added so "filtering out
+   people" filters the joinings. Rows now carry `recruiter_id` + `recruiter_name` (new Recruiter column).
+   `AdminAnalyticsPage` passes its applied date/team/employee scope into `JoiningsSection`
+   (its own duplicate date pickers were removed), and the Employee filter became a real dropdown.
+3. **"Candidates called" metric did not exist** (the user's replacement for "badges opened").
+   New `POST /api/extension/candidate-called` + `GET /api/admin/badge-audit/_/stats/candidates-called`
+   (collections `candidate_call_events`, `candidate_call_stats`; unique-candidate and per-source counts).
+   Three call intents wired per the user's definition: `badge_expand` (extension badge click →
+   `browser-extension/content.js` + `background.js` message handler), `profile_modal` (full candidate
+   profile / detail dialog open), `called_button` (explicit **Mark Called** button,
+   `data-testid=mark-called-btn`, on `NaukriProfileView` and `CandidateDetailDialog`).
+   Badge Audit page shows it as the first highlighted tile; its three stat calls now run in parallel.
+4. **Clusters page still had a nav entry + route** — removed from `Sidebar.jsx` and `App.jsx`
+   (backend clustering service untouched, per "make it a backend process").
+5. **Invoice logo / bank block missing on real invoices** (`routes/bills.py`).
+   `BILLING_SENDER_LOGO_URL` was never set, so `_load_logo_bytes` returned None and the PDF header had
+   no logo. It now falls back to the bundled `frontend/public/assets/vhc_logo.png` (override with
+   `BILLING_SENDER_LOGO_PATH`). Bills created before the bank-account feature had no snapshot, so the
+   payment block never printed — `render_pdf` and `send_bill` now fall back to the default (or only)
+   saved bank account. Verified by rasterising the PDF: logo beside the company name + full
+   Bank/Beneficiary/Branch/A-C/IFSC block.
+
+Performance / stability fixed along the way:
+- `GET /api/admin/badge-audit?limit=100` was doing 100 extra `find_one`s to count labels → **26 s → 1.9 s**
+  via a single `$project`/`$filter` aggregation.
+- `POST /api/admin/daily-digest/regenerate` returned **500** (Mongo 60 s socket timeout). Two causes:
+  the metric-matrix `candidate_bank` query OR'd an unindexed `source_details.captured_by` (now date-only
+  in Mongo, owner resolved in Python) and the lifetime mandate-efficiency aggregation carried whole
+  candidate docs (now projected first, `maxTimeMS`, wrapped in `asyncio.wait_for(45 s)` and degrades to
+  an empty section instead of failing the digest). 9/9 digest tests pass; endpoint returns 200 in ~54 s.
+
+Verified working unchanged (no code needed): pipeline From/To pickers at the top with Apply on both admin
+and recruiter pipelines (no "Activity window"/"All time"), Salary Benchmark loads (~15 s, filters change
+the numbers), candidate-bank facet dropdowns preload alphabetically on focus with client-side search and
+the headline count reduces (178,838 → 23,626 for Bengaluru), bank-account CRUD + per-invoice selector +
+per-send `to_email`, invoice preview/download/email buttons, blog prompts anchored to 2026, and all
+previously retired pages still absent from navigation.
+
+Testing: report `test_reports/iteration_194.json` (frontend agent, 10/12 verified; the two it flagged were
+false negatives — main agent reproduced both flows successfully in the browser). 24 targeted backend tests
+plus 9 daily-digest tests pass. `yarn build` clean.
+
+
 ## 2026-09-15 — fix.docx pass (Pipeline, Salary, Bills, Blog Joinings, Analytics)
 
 - **Pipeline calendar**: removed the legacy "Activity window" preset dropdown; two date pickers now sit at the TOP of the filter card with an Apply button that only fires the fetch when clicked. Bare `window_from` / `window_to` (without `window="custom"`) now filter — frontend no longer needs to spoof the preset. (`AdminPipelinePage.jsx`, `PipelinePage.jsx`, `routes/applications.py::_build_pipeline_window_filter`)

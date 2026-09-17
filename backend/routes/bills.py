@@ -198,6 +198,10 @@ async def _resolve_bank_snapshot(bank_account_id: Optional[str]) -> Optional[dic
     doc = await db.bill_bank_accounts.find_one(q, {"_id": 0})
     if not doc and bank_account_id:
         raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found.")
+    if not doc and not bank_account_id:
+        # No account flagged default — use the only/first saved one so the
+        # payment block still prints.
+        doc = await db.bill_bank_accounts.find_one({}, {"_id": 0})
     if not doc:
         return None
     return {
@@ -437,11 +441,22 @@ def _load_local_logo_bytes() -> Optional[bytes]:
     return None
 
 
+async def _bill_with_bank_fallback(bill: dict) -> dict:
+    """Bills created before bank accounts existed carry no snapshot — fall
+    back to the current default account so the payment block still prints."""
+    if not bill.get("bank_account"):
+        snap = await _resolve_bank_snapshot(None)
+        if snap:
+            bill = {**bill, "bank_account": snap}
+    return bill
+
+
 @bills_router.get("/bills/{bill_id}/pdf")
 async def render_pdf(bill_id: str, user: dict = Depends(_require_billing_role)):
     bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
+    bill = await _bill_with_bank_fallback(bill)
     sig = await _load_signature_png()
     logo = await _load_logo_bytes(bill.get("sender_logo_url"))
     pdf = render_bill_pdf(bill, signature_png_bytes=sig, logo_png_bytes=logo)
@@ -509,6 +524,7 @@ async def send_bill(bill_id: str, payload: BillSend, user: dict = Depends(_requi
     )
 
     # Render the PDF fresh
+    bill = await _bill_with_bank_fallback(bill)
     sig = await _load_signature_png()
     logo = await _load_logo_bytes(bill.get("sender_logo_url"))
     pdf = render_bill_pdf(bill, signature_png_bytes=sig, logo_png_bytes=logo)

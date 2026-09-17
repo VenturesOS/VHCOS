@@ -64,6 +64,22 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - Production update completed by user on 2026-09-08: merge `7ef8e308`, fallback env setting, successful Vite build, **`vhc-backend` restart active**, and frontend copy. CSV security removal, housekeeping script and dependency lock preserved. Fresh production logs show successful `nvidia_nemotron_super_120b` extraction/persistence and normal live capture processing; Ultra HTTP429 falls through correctly. Main independently retrieved **`https://ventureshrd.com/api/health`**: healthy, MongoDB OK, Redis OK/local, import_failures=0. The previously supplied `app.ventureshrd.com` hostname has a certificate-name mismatch and is NOT the verified health-check hostname. Do not bypass TLS checks. Production badge display still awaits user observation; no repeat pull/build/restart or missed-profile backfill needed.
 - NVIDIA transient overload remains possible; verified retries/fallback handle it. No promise of permanent upstream availability.
 
+## Spec compliance status (2026-09-17) — both uploaded docs
+All items from `fix.docx` and the Employee Performance Analytics specification are implemented and
+verified live. See the 2026-09-17 entry in [CHANGELOG.md](CHANGELOG.md) for evidence per item.
+- Analytics Hub is now public-website-only (internal portal routes excluded by route prefix).
+- Joinings list lives on Employee Performance, derives DOJ from stage history, and follows the page's
+  date/team/employee filters. Revenue stays blank until a team leader fills it in.
+- "Candidates called" is tracked from three intents (extension badge click, profile open, explicit
+  Mark Called) and surfaced on Badge Audit.
+- Clusters has no dedicated page any more (backend service only).
+- Invoice PDF always prints the company logo and the bank-transfer block (default/only saved account
+  when a bill predates the feature).
+
+Remaining backlog for this workstream: employee drill-down drawer, quarterly targets UI, composite score
+weighting editor, Badge Audit "Already in Database" reuse report, Advanced Search redesign (deferred by
+the spec), and unifying Daily Digest points (tracker_events) with the analytics points (stage_history).
+
 ## Documentation
 - [CHANGELOG.md](CHANGELOG.md): current implementation and investigation facts.
 - [ROADMAP.md](ROADMAP.md): prioritized remaining work and prohibited/deferred actions.

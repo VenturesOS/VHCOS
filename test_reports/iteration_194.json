@@ -1,0 +1,54 @@
+{
+  "summary": "Frontend-only verification of the fix.docx + Employee Performance Analytics spec. Tested Analytics Hub, Clusters removal, Employee Performance, Badge Audit, Salary Benchmark, Pipeline top filters, Candidate Bank facet filters, Bills bank accounts, and cross-cutting sidebar removals. 9/12 spec items verified working; 2 items partial (Candidate Bank total-count reduction after Apply, Bills preview iframe not reachable via automation); 1 item blocked (Mark Called flow could not be exercised because candidate-bank list body never rendered rows in headless run).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CandidateBank total header", "issue": "After selecting Location=Bengaluru chip and clicking Apply Filters, the header 'Candidates (178838)' and 'Showing 0 of 178838' did NOT reduce to the filtered number within 5s; list body stays on spinner. Backend /api/candidate-bank returns 714 for Bengaluru per main agent, so likely a frontend state/wait issue — the total should switch to the filtered total once the request completes. Please verify total updates on the UI (may need longer wait or state fix).", "selector": "text='Candidates (178838)'", "priority": "HIGH"},
+      {"component": "CandidateBank list rendering", "issue": "Initial list rows never appeared in the automated session (spinner persisted 20-30s). This blocked verification of the click-row → Candidate profile modal → Mark Called button flow (data-testid=mark-called-btn). List works visually in some screenshots but rows are not exposed as table tbody tr / [role=row]. Please confirm list actually renders on a fresh admin login.", "selector": "table tbody tr", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Candidate Bank filter → total reduction", "issue": "SearchableMultiSelect for Location opens alphabetical list (Bengaluru 23,628 etc.), chip appears, but Apply Filters does not visibly reduce headline candidate count within a reasonable window.", "affected_selectors": ["button:has-text('Apply Filters')", "text='Candidates ('"]}
+    ],
+    "design_issues": []
+  },
+  "verified_working": [
+    "Analytics Hub (/admin/analytics-hub) renders Total Page Views 331, Top Pages contains ONLY public routes: /, /careers, /contact, /services, /jobs/<id>, /about, /industries, /global-hiring, /industrial-hiring-insights/..., /recruitment-expertise — NO /recruiter, /recruiter/attendance, /login, /admin present.",
+    "Sidebar has no Clusters, Candidate Dedupe, Find Candidates/Matchable Candidates, LLM Extraction, Digest Email/Mail Digest, LinkedIn Drafts entries. Direct /admin/clusters navigation resolves to marketing site (no crash).",
+    "Pipeline (/admin/pipeline) has NO Activity window / All time preset. Two date inputs render at TOP of Filters card with data-testid=filter-window-from, filter-window-to, apply-window-btn, wrapped in pipeline-date-window container. Stage boxes (Sourced 3149, Submitted 2488, ...) visible.",
+    "Employee Performance (/admin/analytics) filter bar shows From, To, Team dropdown, Employee dropdown (data-testid=filter-employee — real Select combobox, not free-text) and Apply (data-testid=apply-btn). Applying wide date range + 'Bengaluru team' → KPI tiles recalculate (Sourced 7,567, Profiles Submitted 154, Interview Sched 5, Interview Done 10, Offers 7, Hired 2, Joined 9). Recent Joinings section (data-testid=recent-joinings) count changes from 0 (narrow) to 9 (Bengaluru wide).",
+    "Joinings Table (data-testid=joinings-table) renders 9 rows with columns DOJ (2026-09-15), Client Company (JK Cement Ltd), Candidate name, Recruiter (Indu sagar — Recruiter column present), Position, Location, CTC input (blank), Revenue input (blank), and Save button per row with data-testid=joining-save-<application_id> (verified 5 unique testids).",
+    "Team filter reduces/changes joinings — proved by count going from 9 (Bengaluru wide) to 0 (narrow date default 2026-09-01→2026-09-17) — the joinings list follows the page filters.",
+    "Badge Audit (/admin/badge-audit) loads within ~6s (spec: <few seconds, was 26s). Shows 'Candidates called (30d)' tile FIRST (currently '—' because no clicks recorded in test env), followed by 'Badge views (30d)' tile and the Batches/Recall/Cards/Avg latency tiles + Recent batches list.",
+    "Salary Benchmark (/admin/salary-benchmark) loads within ~15s (was hanging). Displays Sample Size 4,706, Average 15.9L, Median 10.3L, 25th %ile 6.1L, 75th %ile 19.0L, plus Salary Distribution / Avg by Experience / Avg by Location breakdown charts. Not stuck on 'Analyzing salary data'.",
+    "Candidate Bank shows headline total 178,838 candidates and Showing 50 of 178,838; Location/Company/Skills all render as SearchableMultiSelect controls with preloaded alphabetical facet lists (opens on focus without typing, counts shown per option — Becharaji 50, Belagavi 12, Belgaum 100, Bengaluru 23,628, ...). Selected value shows removable chip in Active row.",
+    "Bills page 'Bank Accounts' management: data-testid=add-bank-btn opens 'Add bank account' dialog with fields Label, Bank name, Beneficiary name, Branch, A/C number, IFSC and 'Make this the default account' checkbox — matches spec.",
+    "Bills 'New Bill' dialog contains 'Bank Account (printed on the PDF)' selector with data-testid=bill-bank-select (currently states 'No saved bank accounts — the invoice PDF will omit the bank block' since none created yet)."
+  ],
+  "not_verified": [
+    "Mark Called button (data-testid=mark-called-btn) on Candidate Detail Dialog — blocked because candidate list rows did not become clickable in automation window.",
+    "'Candidates called (30d)' tile turning non-zero after clicking Mark Called — blocked by above.",
+    "Bill preview iframe (data-testid=bill-preview-iframe) and Download button — could not reach the row-action icon programmatically; needs manual verification.",
+    "'to_email' editable client email in send-dialog — not exercised (requires a bill in draft to open the Send flow).",
+    "Recruiter Pipeline page (/recruiter/pipeline) — admin was logged in; not switched to hr6@vhc.in this run.",
+    "Blog engine 2026 context — not covered in this run."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Frontend: Candidate Bank — ensure the headline 'Candidates (N)' total re-renders promptly after Apply Filters. Currently it appears to remain at the unfiltered 178838 while the list re-fetches; the API for Bengaluru is confirmed to return 714. Likely needs to update the header state before/alongside the list fetch, or shorten the debounce.",
+    "Frontend: Candidate Bank list — investigate why the candidate rows can be slow to render on cold navigation. In the current session, rows never rendered within 25s, blocking the Mark Called E2E flow. Possibly related to the same fetch that also gates the total-count update.",
+    "Main agent: manually verify (a) Mark Called toast + Candidates called (30d) increment, (b) invoice PDF preview iframe + logo rendering, (c) send-dialog to_email field, on the running preview."
+  ],
+  "critical_code_review_comments": [
+    "Candidate Bank total count and list are likely driven by the same request; the header should update optimistically or as soon as the count aggregation returns, independently of the paged list render.",
+    "Employee Performance filter helper text still shows the OLD applied date range ('2026-09-01 → 2026-09-17') until Apply is pressed — this is correct behavior (appliedScope != draftScope), verified.",
+    "Sidebar cleanup is thorough — none of the deprecated pages (Clusters, Dedupe, Find Candidates, Matchable, LLM Extraction A/B, Mail Digest, LinkedIn Drafts) appear."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (per request)", "frontend": "~85% (10/12 spec bullets fully verified; 1 partial - CandidateBank total reduction; 1 blocked - Mark Called end-to-end)"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024",
+  "seed_data_creation": "None. Did not create bank account or edit any joining revenue (only inspected forms).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Preview pages take 15-25s of network activity before rendering in headless mode (chart chunks, notifications SSE). Always use wait_until='domcontentloaded' + explicit page.wait_for_timeout(15000+). Do NOT wait for 'networkidle' — the SSE /api/notifications/stream keeps the network busy. Dismiss cookie banner by clicking button:has-text('Accept All'). For Employee Performance, default From/To is a narrow 2-3 week window that yields 0 joinings; widen to 2024-01-01 → 2026-12-31 and pick a team like 'Bengaluru team' to see 9 joinings. To find Candidate Bank Location dropdown, click 'Filters' then click placeholder 'Search & pick locations...' to open the preloaded alphabetical list.",
+  "rca of the issue": "Only Candidate Bank total-count-reduction after Apply is unclear; API is correct per main agent, so likely FE state timing: header uses unfiltered count until list resolves. No backend RCA needed."
+}
