@@ -248,8 +248,10 @@ export default function JoiningListPage() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-xs text-slate-500">
-              {invoiceFor?.client_name} · joined {invoiceFor?.join_date}. Both figures are entered manually;
-              the invoice line amount becomes the revenue booked for {invoiceFor?.recruiter_name || 'the recruiter'}.
+              {invoiceFor?.client_name} · joined {invoiceFor?.join_date}. Both figures are entered manually.
+              The invoice line amount <span className="font-medium">replaces</span> the revenue booked for{' '}
+              {invoiceFor?.recruiter_name || 'the recruiter'}
+              {invoiceFor?.revenue ? ` (currently ${fmtINR(invoiceFor.revenue)})` : ''}.
             </p>
             <div>
               <Label className="text-xs text-slate-500 mb-1 block">Designation on invoice</Label>

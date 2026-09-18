@@ -30,22 +30,36 @@ async def _scope(user: dict) -> Optional[list]:
         return None
     if role == "employer":
         teams = await db.teams.find({"employer_id": user["id"], "status": {"$ne": "deleted"}}, {"_id": 0}).to_list(100)
-    elif role == "recruiter" and user.get("is_team_lead"):
-        teams = await db.teams.find(
-            {"status": {"$ne": "deleted"}, "$or": [{"team_lead_id": user["id"]}, {"recruiter_ids": user["id"]}]},
-            {"_id": 0},
-        ).to_list(100)
     else:
-        raise HTTPException(status_code=403, detail="Joining list is for Admin, Employer or Team Leads.")
+        # Recruiters (team leads included) only ever see percentages, so the
+        # rupee-level joining list stays with Admin + Employer logins.
+        raise HTTPException(status_code=403, detail="The Joining List is available to Admin and Employer logins.")
     ids = {uid for t in teams for uid in ts.team_member_ids(t)}
     return list(ids)
 
 
 async def _team_of(recruiter_id: str) -> dict:
-    return await db.teams.find_one(
+    """The ONE team a recruiter's revenue belongs to.
+
+    Picking "any matching team" would put a recruiter who sits on two
+    teams into whichever came back first, and their revenue would then be
+    counted in both team totals. `canonical_team_members` resolves the
+    owner the same way the roll-ups do.
+    """
+    teams = await db.teams.find(
         {"status": {"$ne": "deleted"}, "$or": [{"recruiter_ids": recruiter_id}, {"team_lead_id": recruiter_id}]},
-        {"_id": 0, "id": 1, "name": 1, "employer_id": 1},
-    ) or {}
+        {"_id": 0},
+    ).to_list(20)
+    if not teams:
+        return {}
+    if len(teams) == 1:
+        return teams[0]
+    all_teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
+    canonical = ts.canonical_team_members(all_teams)
+    for t in all_teams:
+        if recruiter_id in canonical.get(t["id"], []):
+            return t
+    return teams[0]
 
 
 @joinings_router.get("")
@@ -56,10 +70,21 @@ async def list_joinings(
     position_q: Optional[str] = None,
     location_q: Optional[str] = None,
     employee_id: Optional[str] = None,
+    team_id: Optional[str] = None,
     limit: int = 200,
     user: dict = Depends(get_current_user),
 ):
     recruiter_ids = await _scope(user)
+    if team_id:
+        team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        team_ids = ts.team_member_ids(team)
+        # An employer can only narrow inside their own scope, never widen it.
+        recruiter_ids = (
+            team_ids if recruiter_ids is None
+            else [uid for uid in team_ids if uid in recruiter_ids]
+        ) or ["__none__"]
     if employee_id:
         if recruiter_ids is not None and employee_id not in recruiter_ids:
             raise HTTPException(status_code=403, detail="That recruiter is not in your team.")

@@ -139,13 +139,18 @@ export default function PerformanceRecordsPage() {
                      icon={IndianRupee} hint={`${report.range?.from} → ${report.range?.to}`} />
             <StatBox testId="record-stat-joinings" label="Joinings" value={report.total_joinings}
                      icon={UserCheck} hint={`${report.teams?.length || 0} teams`} />
-            <StatBox testId="record-stat-target" label="Annual target (all teams)"
-                     value={fmtINR(report.total_annual_target)} icon={Trophy}
-                     hint="Context for the period share" />
+            <StatBox testId="record-stat-target"
+                     label={periodType === 'year' ? 'Target (all teams)' : `Target for this ${periodType}`}
+                     value={fmtINR(report.total_period_target)} icon={Trophy}
+                     hint={`${report.period_achievement_pct ?? 0}% delivered · annual ${fmtINR(report.total_annual_target)}`} />
             <StatBox testId="record-stat-status" label="Status"
                      value={report.source === 'archive' ? 'Archived' : 'Live'}
                      icon={Archive}
-                     hint={report.closed ? 'Period closed' : 'Period still running'} />
+                     hint={report.source === 'archive'
+                       ? 'Frozen — use Store record to refresh'
+                       : report.archive_pending
+                         ? 'Closed · archives automatically after 15 days'
+                         : 'Period still running'} />
           </div>
 
           <Card>
@@ -186,8 +191,8 @@ export default function PerformanceRecordsPage() {
                                 <th className="text-left py-1">Recruiter</th>
                                 <th className="text-left py-1">Joinings</th>
                                 <th className="text-left py-1">Revenue</th>
-                                <th className="text-left py-1">Annual target</th>
-                                <th className="text-left py-1">Share of target</th>
+                                <th className="text-left py-1">{periodType === 'year' ? 'Target' : 'Period target'}</th>
+                                <th className="text-left py-1">Achievement</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -196,9 +201,9 @@ export default function PerformanceRecordsPage() {
                                   <td className="py-1.5">{m.name || m.user_id}</td>
                                   <td className="py-1.5">{m.joinings}</td>
                                   <td className="py-1.5">{fmtINR(m.revenue)}</td>
-                                  <td className="py-1.5">{fmtINR(m.annual_target)}</td>
+                                  <td className="py-1.5">{fmtINR(m.period_target)}</td>
                                   <td className="py-1.5">
-                                    <Badge variant="outline">{m.share_of_annual_target_pct}%</Badge>
+                                    <Badge variant="outline">{m.period_achievement_pct}%</Badge>
                                   </td>
                                 </tr>
                               ))}

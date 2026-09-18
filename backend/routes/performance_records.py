@@ -9,7 +9,7 @@ period that has not been stored yet.
 import logging
 import uuid
 from calendar import monthrange
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -44,7 +44,19 @@ def period_bounds(period_type: str, period: str) -> tuple:
 
 def is_closed(period_type: str, period: str) -> bool:
     _, end = period_bounds(period_type, period)
-    return end < datetime.now(timezone.utc).date().isoformat()
+    return end < ts.ist_today().date().isoformat()
+
+
+# A team leader typically fills revenue days after the joining, so a
+# freshly-closed period must stay LIVE for a while — otherwise the
+# permanent record freezes at a number that is still incomplete.
+ARCHIVE_GRACE_DAYS = 15
+
+
+def ready_to_archive(period_type: str, period: str) -> bool:
+    _, end = period_bounds(period_type, period)
+    end_dt = datetime.fromisoformat(end).replace(tzinfo=ts.IST)
+    return ts.ist_today() >= end_dt + timedelta(days=ARCHIVE_GRACE_DAYS)
 
 
 async def build_report(period_type: str, period: str) -> dict:
@@ -81,7 +93,8 @@ async def build_report(period_type: str, period: str) -> dict:
 
     # Annual targets give context to any period (monthly rows show the
     # share of the yearly target that was delivered in that window).
-    all_member_ids = [uid for t in teams for uid in ts.team_member_ids(t)]
+    canonical = ts.canonical_team_members(teams)
+    all_member_ids = [uid for ids in canonical.values() for uid in ids]
     annual_targets = await ts.get_targets(db, "user", all_member_ids, year)
 
     # Names for everyone on the roster — previously a member with no
@@ -91,13 +104,14 @@ async def build_report(period_type: str, period: str) -> dict:
 
     team_rows = []
     for t in teams:
-        mids = [uid for uid in ts.team_member_ids(t) if uid in member_users]
+        mids = [uid for uid in canonical.get(t["id"], []) if uid in member_users]
         members = []
         for uid in mids:
             r = per_recruiter.get(uid) or {}
             u = member_users.get(uid) or {}
             target = float((annual_targets.get(uid) or {}).get("target_amount") or 0)
             revenue = round(float(r.get("revenue") or 0), 2)
+            p_target = ts.period_target(target, period_type)
             members.append({
                 "user_id": uid,
                 "name": u.get("name") or r.get("recruiter_name") or u.get("email") or uid,
@@ -105,6 +119,11 @@ async def build_report(period_type: str, period: str) -> dict:
                 "joinings": int(r.get("joinings") or 0),
                 "revenue": revenue,
                 "annual_target": target,
+                "period_target": p_target,
+                # % of the target that belongs to THIS window (annual/12 for
+                # a month, /4 for a quarter) — judging a month against the
+                # full-year number made everyone look like a 8% performer.
+                "period_achievement_pct": ts.pct(revenue, p_target),
                 "share_of_annual_target_pct": ts.pct(revenue, target),
                 "candidates": r.get("candidates") or [],
             })
@@ -118,6 +137,11 @@ async def build_report(period_type: str, period: str) -> dict:
             "joinings": sum(m["joinings"] for m in members),
             "revenue": round(sum(m["revenue"] for m in members), 2),
             "annual_target": round(sum(m["annual_target"] for m in members), 2),
+            "period_target": round(sum(m["period_target"] for m in members), 2),
+            "period_achievement_pct": ts.pct(
+                sum(m["revenue"] for m in members),
+                sum(m["period_target"] for m in members),
+            ),
         })
     team_rows.sort(key=lambda r: -r["revenue"])
 
@@ -135,6 +159,11 @@ async def build_report(period_type: str, period: str) -> dict:
         "total_joinings": len(joinings),
         "total_revenue": round(sum(float(j.get("revenue") or 0) for j in joinings), 2),
         "total_annual_target": round(sum(r["annual_target"] for r in team_rows), 2),
+        "total_period_target": round(sum(r["period_target"] for r in team_rows), 2),
+        "period_achievement_pct": ts.pct(
+            sum(float(j.get("revenue") or 0) for j in joinings),
+            sum(r["period_target"] for r in team_rows),
+        ),
         "joinings": joinings,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -148,7 +177,7 @@ async def get_report(
 ):
     """Live report for any period. Closed periods are auto-archived."""
     if not period:
-        now = datetime.now(timezone.utc)
+        now = ts.ist_today()
         period = {
             "month": now.strftime("%Y-%m"),
             "quarter": f"{now.year}-Q{(now.month - 1) // 3 + 1}",
@@ -160,11 +189,12 @@ async def get_report(
         return {**stored, "source": "archive"}
 
     report = await build_report(period_type, period)
-    if report["closed"]:
+    if report["closed"] and ready_to_archive(period_type, period):
         await _store(report, user, auto=True)
         report["source"] = "archive"
     else:
         report["source"] = "live"
+        report["archive_pending"] = report["closed"]
     return report
 
 

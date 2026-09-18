@@ -11,7 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Loader2, TrendingUp, Users, CheckCircle2, Award, Target, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import api, { blogAPI, userAPI } from '../../lib/api';
+import api, { joiningsAPI, userAPI } from '../../lib/api';
 
 const KPI_TILES = [
   { key: 'sourced',              label: 'Sourced',             icon: Users,        color: 'text-slate-600' },
@@ -299,7 +299,7 @@ function JoiningsSection({ scope }) {
       if (scope.teamId && scope.teamId !== '_all') params.team_id = scope.teamId;
       if (scope.employeeId && scope.employeeId !== '_all') params.employee_id = scope.employeeId;
       Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
-      const res = await blogAPI.listJoinings(params);
+      const res = await joiningsAPI.list(params);
       setItems(res.data?.items || []);
     } catch {
       toast.error('Failed to load joinings');
@@ -316,7 +316,7 @@ function JoiningsSection({ scope }) {
       const body = {};
       if (patch.joined_ctc !== undefined && patch.joined_ctc !== '') body.joined_ctc = parseFloat(patch.joined_ctc);
       if (patch.revenue !== undefined && patch.revenue !== '') body.revenue = parseFloat(patch.revenue);
-      await blogAPI.updateJoining(row.application_id, body);
+      await joiningsAPI.update(row.application_id, body);
       toast.success('Saved');
       setDraft(d => { const c = { ...d }; delete c[row.application_id]; return c; });
       load();

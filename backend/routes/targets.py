@@ -27,19 +27,20 @@ async def _visible_teams(user: dict) -> List[dict]:
         pass
     elif role == "employer":
         q["employer_id"] = user["id"]
-    elif role == "recruiter" and user.get("is_team_lead"):
-        q["$or"] = [{"team_lead_id": user["id"]}, {"recruiter_ids": user["id"]}]
     else:
         return []
     return await db.teams.find(q, {"_id": 0}).to_list(200)
 
 
 async def _require_manager(user: dict = Depends(get_current_user)) -> dict:
+    """Rupee-level target data is Admin + Employer only.
+
+    Team-lead recruiters are deliberately excluded: the rule is that a
+    recruiter only ever sees a percentage (`GET /api/targets/me`).
+    """
     if user.get("role") in ("admin", "employer"):
         return user
-    if user.get("role") == "recruiter" and user.get("is_team_lead"):
-        return user
-    raise HTTPException(status_code=403, detail="Targets are managed by Admin, Employer or Team Leads.")
+    raise HTTPException(status_code=403, detail="Revenue targets are managed by Admin and Employer logins.")
 
 
 class TargetUpsert(BaseModel):

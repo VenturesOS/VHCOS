@@ -593,9 +593,6 @@ export const blogAPI = {
   researchTopics: (data) => api.post('/blog/research-topics', data),
   // Sitemap & Digest
   sendDigest: () => api.post('/blog/send-digest'),
-  // Joinings (fix.docx 2026-09-15)
-  listJoinings: (params = {}) => api.get('/blog/joinings', { params }),
-  updateJoining: (applicationId, data) => api.patch(`/blog/joinings/${applicationId}`, data),
 };
 
 // Revenue targets + Joining List + Performance Records (2026-09-17)

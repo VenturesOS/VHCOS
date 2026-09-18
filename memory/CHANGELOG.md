@@ -1,3 +1,41 @@
+## 2026-09-18 (later) — Logic review of the targets/joinings/records feature + fixes
+
+A functional review was run over the new modules. Six real defects found, all fixed and verified:
+
+1. **Multi-team recruiter counted twice (HIGH).** `company_summary` built every team's member rows
+   from one shared revenue dict, so a recruiter listed on two teams added their revenue to both teams
+   *and* to the company total. New `targets_service.canonical_team_members()` attributes each recruiter
+   to exactly one team (oldest team by `created_at`, then name); used by `company_summary`, the
+   performance report and `joinings._team_of` (which previously grabbed "any matching team").
+   No recruiter is on two teams in the current data, so no numbers were wrong yet.
+2. **Unscoped `/api/blog/joinings` (HIGH).** The old admin-analytics endpoints allowed ANY employer to
+   read and PATCH joinings company-wide, and their revenue writes omitted `recruiter_id`/`join_date`,
+   which meant revenue booked through that path never reached any target roll-up. Both endpoints were
+   deleted; the admin Employee Performance tab now calls the role-scoped `/api/joinings` (which also
+   gained a `team_id` filter that can only *narrow* an employer's own scope, never widen it).
+3. **Team-lead recruiters could read rupee targets (MEDIUM).** `/api/targets/team-summary` and
+   `/api/joinings` admitted recruiters with `is_team_lead`, returning member targets and revenue in
+   rupees — against the "recruiter sees percentage only" rule. Both are Admin + Employer only now;
+   team leads keep `/api/targets/me` (percentage). Verified 403 for jatin@vhc.in.
+4. **Records froze too early (MEDIUM).** A closed period was archived on first view and then always
+   served from the archive, so revenue filled a few days later never made it into the permanent record.
+   Auto-archive now waits `ARCHIVE_GRACE_DAYS = 15` after the period ends; before that the report stays
+   live and the status tile says "Closed · archives automatically after 15 days". `Store record` still
+   freezes/refreshes on demand.
+5. **UTC vs IST (MEDIUM).** Period defaults, `current_year()` and `is_closed()` used UTC, so for the
+   first 5.5 h of an IST day/month/year the wrong period was "current". All now use `ts.ist_today()`.
+6. **Monthly revenue judged against the ANNUAL target (LOW).** Added `period_target`
+   (annual ÷ 12 for a month, ÷ 4 for a quarter) and `period_achievement_pct`; the Records page now
+   shows "Target for this month" with the annual figure as context.
+
+Also: the Raise Invoice dialog now states explicitly that the invoice amount **replaces** any revenue
+already typed for that joining (and shows the current value), since that overwrite was silent.
+
+Verified: records + analytics pages render, employer can't widen scope via `team_id`, team lead gets
+403s and a percentage-only `/targets/me`, `/api/blog/joinings` now 404, 24 backend tests pass,
+`yarn build` clean.
+
+
 ## 2026-09-18 — Performance Records: member names + deactivated accounts
 
 - Contributor rows showed raw user ids. Root cause: names were only taken from the joinings feed, so

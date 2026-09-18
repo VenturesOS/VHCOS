@@ -27,7 +27,6 @@ from services.blog_analytics import (
     get_top_blogs, get_clicks_by_blog,
 )
 from services.linkedin_service import auto_post_on_publish
-from services.joinings_service import fetch_joinings
 
 router = APIRouter(tags=["blog"])
 logger = logging.getLogger(__name__)
@@ -159,77 +158,13 @@ async def admin_list_blogs(
 # leaders can filter by date / client company / position / location.
 # We derive it live from `applications` (stage = joined) joined against
 # `jobs`, `companies`, `candidate_bank`, and `revenue`.
-@router.get("/api/blog/joinings")
-async def list_joinings(
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    company_id: Optional[str] = None,
-    position_q: Optional[str] = None,
-    location_q: Optional[str] = None,
-    employee_id: Optional[str] = None,
-    team_id: Optional[str] = None,
-    limit: int = 200,
-    current_user: dict = Depends(require_role(["admin", "employer"])),
-):
-    """Joinings for the admin Employee Performance page.
-
-    Shares `services/joinings_service.fetch_joinings` with the employer
-    Joining List so both views stay identical.
-    """
-    recruiter_ids = None
-    if employee_id:
-        recruiter_ids = [employee_id]
-    elif team_id:
-        team = await db.teams.find_one({"id": team_id}, {"_id": 0, "recruiter_ids": 1, "team_lead_id": 1})
-        ids = set((team or {}).get("recruiter_ids") or [])
-        if (team or {}).get("team_lead_id"):
-            ids.add(team["team_lead_id"])
-        recruiter_ids = list(ids) or ["__none__"]
-
-    rows = await fetch_joinings(
-        db,
-        date_from=date_from, date_to=date_to, company_id=company_id,
-        position_q=position_q, location_q=location_q,
-        recruiter_ids=recruiter_ids, limit=limit,
-    )
-    return {"items": rows, "count": len(rows)}
-
-
-class JoiningUpdate(BaseModel):
-    joined_ctc: Optional[float] = None
-    revenue:    Optional[float] = None
-
-
-@router.patch("/api/blog/joinings/{application_id}")
-async def update_joining(
-    application_id: str,
-    payload: JoiningUpdate,
-    current_user: dict = Depends(require_role(["admin", "employer"])),
-):
-    """Edit the joined_ctc / revenue captured against a joined
-    application (fix.docx 2026-09-15). Team leaders use this to fill
-    the revenue value that was intentionally left blank at joining time.
-    """
-    now = datetime.now(timezone.utc).isoformat()
-    app_updates: dict = {}
-    if payload.joined_ctc is not None:
-        app_updates["joined_ctc"] = float(payload.joined_ctc)
-    if app_updates:
-        app_updates["updated_at"] = now
-        res = await db.applications.update_one({"id": application_id}, {"$set": app_updates})
-        if res.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Application not found")
-
-    if payload.revenue is not None:
-        # Upsert the revenue row so team leaders can fill in a value even
-        # if the offered-stage never generated one (edge case).
-        await db.revenue.update_one(
-            {"application_id": application_id},
-            {"$set": {"final_revenue": float(payload.revenue), "updated_at": now},
-             "$setOnInsert": {"application_id": application_id, "revenue_status": "joined", "created_at": now}},
-            upsert=True,
-        )
-    return {"message": "Updated", "application_id": application_id}
+# NOTE (2026-09-17): the joinings endpoints that used to live here are
+# gone. They were readable by any employer with no team scoping (so one
+# employer could see and overwrite another team's revenue) and their
+# revenue writes skipped `recruiter_id` / `join_date`, which meant the
+# money never reached the target roll-ups. Everything now goes through
+# `routes/joinings.py` (`/api/joinings`), which is role-scoped and books
+# revenue correctly for admin, employers and team leads alike.
 
 
 @router.get("/api/blog/admin/{blog_id}")

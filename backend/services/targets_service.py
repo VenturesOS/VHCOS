@@ -11,18 +11,31 @@ User-confirmed model (2026-09-17):
   • Company achievement = Σ all teams.
   • Recruiters only ever receive a percentage — never the rupee amounts.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 TARGETS = "revenue_targets"
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def ist_today() -> datetime:
+    """Business day in IST. Using UTC made a new month/year start 5.5 h
+    late, so period defaults and closure flipped a day behind."""
+    return datetime.now(IST)
 
 
 def current_year() -> int:
-    return datetime.now(timezone.utc).year
+    return ist_today().year
 
 
 def year_bounds(year: int) -> tuple:
     return f"{year}-01-01", f"{year}-12-31"
+
+
+def period_target(annual_target: float, period_type: str) -> float:
+    """Annual target pro-rated for the window being reported."""
+    divisor = {"month": 12, "quarter": 4, "year": 1}.get(period_type, 1)
+    return round((annual_target or 0) / divisor, 2)
 
 
 def pct(achieved: float, target: float) -> float:
@@ -130,6 +143,24 @@ async def member_rows(db, member_ids: List[str], year: int) -> List[dict]:
     return build_member_rows(member_ids, targets, booked, users)
 
 
+def canonical_team_members(teams: List[dict]) -> Dict[str, List[str]]:
+    """Map team id → members, with every recruiter attributed to exactly
+    ONE team.
+
+    A recruiter listed on two teams used to have their full revenue added
+    to both team totals and therefore counted twice in the company total.
+    The first team (oldest by `created_at`, then by name) keeps them.
+    """
+    ordered = sorted(teams, key=lambda t: (str(t.get("created_at") or ""), str(t.get("name") or "")))
+    claimed: set = set()
+    out: Dict[str, List[str]] = {}
+    for t in ordered:
+        mine = [uid for uid in team_member_ids(t) if uid not in claimed]
+        claimed.update(mine)
+        out[t["id"]] = mine
+    return out
+
+
 def team_member_ids(team: dict) -> List[str]:
     ids = list(team.get("recruiter_ids") or [])
     if team.get("team_lead_id") and team["team_lead_id"] not in ids:
@@ -177,7 +208,8 @@ async def company_summary(db, year: int) -> dict:
     All lookups are batched — the per-team version took ~19 s on 7 teams.
     """
     teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
-    all_member_ids = sorted({uid for t in teams for uid in team_member_ids(t)})
+    canonical = canonical_team_members(teams)
+    all_member_ids = sorted({uid for ids in canonical.values() for uid in ids})
     employer_ids = list({t.get("employer_id") for t in teams if t.get("employer_id")})
 
     users = await active_users(db, sorted(set(all_member_ids) | set(employer_ids)))
@@ -189,7 +221,7 @@ async def company_summary(db, year: int) -> dict:
     rows = []
     for t in teams:
         members = build_member_rows(
-            [uid for uid in team_member_ids(t) if uid in users], user_targets, booked, users)
+            [uid for uid in canonical.get(t["id"], []) if uid in users], user_targets, booked, users)
         s = await team_summary(db, t, year, members=members,
                                team_target_doc=team_targets.get(t["id"]) or {})
         s["employer_name"] = (users.get(t.get("employer_id")) or {}).get("name") or ""
