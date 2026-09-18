@@ -105,14 +105,28 @@ def build_member_rows(member_ids: List[str], targets: Dict[str, dict],
     return rows
 
 
+async def active_users(db, user_ids: List[str]) -> Dict[str, dict]:
+    """Roster lookup that drops deactivated accounts — team `recruiter_ids`
+    keep ex-employees (emails prefixed `_deact_`), which polluted the
+    target tables and the performance report."""
+    out: Dict[str, dict] = {}
+    async for u in db.users.find(
+        {"id": {"$in": list(user_ids)}, "is_active": {"$ne": False}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1},
+    ):
+        if str(u.get("email") or "").startswith("_deact_"):
+            continue
+        out[u["id"]] = u
+    return out
+
+
 async def member_rows(db, member_ids: List[str], year: int) -> List[dict]:
     """Per-recruiter target / achieved / % rows (rupee values included —
     only served to employer + admin)."""
+    users = await active_users(db, member_ids)
+    member_ids = [uid for uid in member_ids if uid in users]
     targets = await get_targets(db, "user", member_ids, year)
     booked = await revenue_by_recruiter(db, year, member_ids)
-    users = {}
-    async for u in db.users.find({"id": {"$in": member_ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}):
-        users[u["id"]] = u
     return build_member_rows(member_ids, targets, booked, users)
 
 
@@ -166,19 +180,16 @@ async def company_summary(db, year: int) -> dict:
     all_member_ids = sorted({uid for t in teams for uid in team_member_ids(t)})
     employer_ids = list({t.get("employer_id") for t in teams if t.get("employer_id")})
 
+    users = await active_users(db, sorted(set(all_member_ids) | set(employer_ids)))
+    all_member_ids = [uid for uid in all_member_ids if uid in users]
     user_targets = await get_targets(db, "user", all_member_ids, year)
     team_targets = await get_targets(db, "team", [t["id"] for t in teams], year)
     booked = await revenue_by_recruiter(db, year, all_member_ids)
-    users = {}
-    async for u in db.users.find(
-        {"id": {"$in": sorted(set(all_member_ids) | set(employer_ids))}},
-        {"_id": 0, "id": 1, "name": 1, "email": 1},
-    ):
-        users[u["id"]] = u
 
     rows = []
     for t in teams:
-        members = build_member_rows(team_member_ids(t), user_targets, booked, users)
+        members = build_member_rows(
+            [uid for uid in team_member_ids(t) if uid in users], user_targets, booked, users)
         s = await team_summary(db, t, year, members=members,
                                team_target_doc=team_targets.get(t["id"]) or {})
         s["employer_name"] = (users.get(t.get("employer_id")) or {}).get("name") or ""

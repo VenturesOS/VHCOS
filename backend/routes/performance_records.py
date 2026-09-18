@@ -84,17 +84,24 @@ async def build_report(period_type: str, period: str) -> dict:
     all_member_ids = [uid for t in teams for uid in ts.team_member_ids(t)]
     annual_targets = await ts.get_targets(db, "user", all_member_ids, year)
 
+    # Names for everyone on the roster — previously a member with no
+    # joining in the period had no name and the UI showed their raw id.
+    # Deactivated accounts are dropped.
+    member_users = await ts.active_users(db, all_member_ids)
+
     team_rows = []
     for t in teams:
-        mids = ts.team_member_ids(t)
+        mids = [uid for uid in ts.team_member_ids(t) if uid in member_users]
         members = []
         for uid in mids:
             r = per_recruiter.get(uid) or {}
+            u = member_users.get(uid) or {}
             target = float((annual_targets.get(uid) or {}).get("target_amount") or 0)
             revenue = round(float(r.get("revenue") or 0), 2)
             members.append({
                 "user_id": uid,
-                "name": r.get("recruiter_name") or "",
+                "name": u.get("name") or r.get("recruiter_name") or u.get("email") or uid,
+                "email": u.get("email") or "",
                 "joinings": int(r.get("joinings") or 0),
                 "revenue": revenue,
                 "annual_target": target,

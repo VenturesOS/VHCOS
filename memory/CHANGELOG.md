@@ -1,3 +1,15 @@
+## 2026-09-18 — Performance Records: member names + deactivated accounts
+
+- Contributor rows showed raw user ids. Root cause: names were only taken from the joinings feed, so
+  any member with zero joinings in the period had no name and the UI fell back to `m.user_id`. The
+  roster is now looked up from `users` (`routes/performance_records.py::build_report`).
+- Team `recruiter_ids` still hold ex-employees (emails prefixed `_deact_`), which padded the
+  contributor tables and the target cards. New `targets_service.active_users()` drops `is_active:false`
+  and `_deact_` accounts; applied to `member_rows`, `company_summary` and the performance report.
+  Bengaluru team went from 10 listed members to the 8 real ones.
+- Backend-only change (no frontend rebuild needed). Verified via API and in the admin UI.
+
+
 ## 2026-09-17 (evening) — Access trim + revenue targets, Joining List → Invoice, Performance Records
 
 ### Access changes (user-specified, hidden in nav AND blocked in the API)
