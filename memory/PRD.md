@@ -64,6 +64,20 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - Production update completed by user on 2026-09-08: merge `7ef8e308`, fallback env setting, successful Vite build, **`vhc-backend` restart active**, and frontend copy. CSV security removal, housekeeping script and dependency lock preserved. Fresh production logs show successful `nvidia_nemotron_super_120b` extraction/persistence and normal live capture processing; Ultra HTTP429 falls through correctly. Main independently retrieved **`https://ventureshrd.com/api/health`**: healthy, MongoDB OK, Redis OK/local, import_failures=0. The previously supplied `app.ventureshrd.com` hostname has a certificate-name mismatch and is NOT the verified health-check hostname. Do not bypass TLS checks. Production badge display still awaits user observation; no repeat pull/build/restart or missed-profile backfill needed.
 - NVIDIA transient overload remains possible; verified retries/fallback handle it. No promise of permanent upstream availability.
 
+## Roles & access (as of 2026-09-17)
+- **Recruiter**: Dashboard, Mandates, Pipeline, Advanced Search, Candidate Bank, Submission Tracker,
+  Attendance, Leaves. Sees their target as a **percentage only**.
+- **Employer / team lead**: Dashboard, Analytics, My Team (sets member revenue targets + already
+  achieved), Joining List (fill CTC + revenue, Raise Invoice), Companies, Pipeline, Trackers, My Jobs,
+  Candidate Bank, Advanced Search, Attendance, Team Attendance, Leaves, Team Insights (own team only),
+  Reports, Salary Benchmark.
+- **Accounts** (accounts@vhc.in): Bills & Invoices + the accounts portal.
+- **Admin**: everything, plus Teams (team-level targets) and Performance Records (monthly/quarterly/
+  annual archive).
+- Revenue targets are one number per calendar year (Jan–Dec). Recruiter revenue Σ = team total,
+  team Σ = company total.
+- Pending from the user: further employer/recruiter access tweaks as they review.
+
 ## Billing module — current state (2026-09-17)
 - Two sender entities: `VENTURE HRD CENTER` (07AAMPY9883D2ZT) and `Ventures HRD Pvt Ltd`
   (07AACCV6268J1ZW), both at Second Floor, D-12/79-80, Rohini Sector 8, New Delhi 110085.

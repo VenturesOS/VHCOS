@@ -59,6 +59,8 @@ export const RevenueTargetsCard = ({ mode = 'team' }) => {
         opening_achieved: opening === '' || opening === undefined ? 0 : Number(opening),
       });
       toast.success('Target saved');
+      // Re-read so the member row AND the roll-up totals reflect the new
+      // number without a page refresh.
       await load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Could not save the target');
@@ -111,15 +113,15 @@ export const RevenueTargetsCard = ({ mode = 'team' }) => {
             <p className="text-xs uppercase tracking-wide text-slate-500">
               {mode === 'company' ? 'Company target' : 'Team target'}
             </p>
-            <p className="text-xl font-semibold" data-testid="targets-total-target">{fmtINR(totalTarget)}</p>
+            <p className="text-xl font-semibold" data-testid="targets-total-target">{loading ? '…' : fmtINR(totalTarget)}</p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Achieved</p>
-            <p className="text-xl font-semibold" data-testid="targets-total-achieved">{fmtINR(totalAchieved)}</p>
+            <p className="text-xl font-semibold" data-testid="targets-total-achieved">{loading ? '…' : fmtINR(totalAchieved)}</p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Achievement</p>
-            <p className="text-xl font-semibold" data-testid="targets-total-pct">{data?.achievement_pct ?? 0}%</p>
+            <p className="text-xl font-semibold" data-testid="targets-total-pct">{loading ? '…' : `${data?.achievement_pct ?? 0}%`}</p>
             <Progress value={Math.min(data?.achievement_pct ?? 0, 100)} className="h-1.5 mt-2" />
           </div>
         </div>

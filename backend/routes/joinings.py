@@ -95,12 +95,26 @@ async def _load_scoped_application(application_id: str, user: dict) -> dict:
     return app
 
 
+async def _freeze_join_date(app: dict) -> str:
+    """Persist the derived joining date the first time a joining is touched.
+
+    Without this, the fallback chain ends at `updated_at` — so saving the
+    CTC or raising an invoice would silently move the DOJ to today.
+    """
+    from services.joinings_service import derive_join_date
+    join_date = derive_join_date(app)
+    if not app.get("join_date") and join_date:
+        await db.applications.update_one({"id": app["id"]}, {"$set": {"join_date": join_date}})
+    return join_date
+
+
 @joinings_router.patch("/{application_id}")
 async def update_joining(application_id: str, payload: JoiningUpdate, user: dict = Depends(get_current_user)):
     """Fill the blanks: joining CTC and the revenue generated. The revenue
     row carries recruiter + join date so target rollups stay cheap."""
     app = await _load_scoped_application(application_id, user)
     now = datetime.now(timezone.utc).isoformat()
+    join_date = await _freeze_join_date(app)
 
     if payload.joined_ctc is not None:
         await db.applications.update_one(
@@ -109,10 +123,9 @@ async def update_joining(application_id: str, payload: JoiningUpdate, user: dict
         )
 
     if payload.revenue is not None or payload.commercial_rate_pct is not None:
-        from services.joinings_service import derive_join_date
         team = await _team_of(app.get("created_by") or "")
         set_doc: dict = {"updated_at": now, "recruiter_id": app.get("created_by") or "",
-                         "team_id": team.get("id") or "", "join_date": derive_join_date(app)}
+                         "team_id": team.get("id") or "", "join_date": join_date}
         if payload.revenue is not None:
             set_doc["final_revenue"] = float(payload.revenue)
             set_doc["revenue_status"] = "booked"
@@ -155,9 +168,8 @@ async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user:
 
     from routes.bills import build_draft_bill
     from models.bill import BillCreate, BillLineItem
-    from services.joinings_service import derive_join_date
 
-    join_date = derive_join_date(app)
+    join_date = await _freeze_join_date(app)
     line = BillLineItem(
         candidate_name=app.get("candidate_name") or "",
         designation=payload.designation or app.get("job_title") or job.get("title") or "",

@@ -1,0 +1,47 @@
+{
+  "summary": "Frontend-only verification of the calendar-year revenue-target + joining-to-invoice workflow. 12/13 spec bullets fully verified. Only the employer raise-invoice UI flow could not be exercised because Krishna's team has zero joinings in any date range (backend team already raised VHC/26-27/2 via curl). One minor UX issue: totals on the RevenueTargetsCard don't refresh in-place after Save (data persists — verified via admin Teams view).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Employer My Team → RevenueTargetsCard totals", "issue": "After clicking Save on a member row, the 'Target saved' toast fires and the value persists in DB (verified via admin Teams page showing Krishna Team ₹10L target / ₹1L achieved / 10%), but the in-page card totals (data-testid=targets-total-target / targets-total-achieved / targets-total-pct) remain ₹0/0% until the page is reloaded. Should refetch team-summary after successful save.", "selector": "[data-testid='targets-total-target']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_working": [
+    "Recruiter hr6 sidebar contains ONLY: Dashboard, Mandates, Pipeline, Advanced Search, Candidate Bank, Submission Tracker, Attendance, Leaves. Referrals / Candidates / Match History / Resume Builder / Activity Feed / Salary Benchmark / LinkedIn are ABSENT.",
+    "Recruiter dashboard exposes data-testid=recruiter-target-box + recruiter-target-pct. For hr6 (no target set) it shows the box with 'Your target has not been set by your team leader yet' and '—' as the percentage — NO rupee amounts.",
+    "hr53@vhc.in dashboard shows 'Target achievement / 2026 (Jan–Dec) · 1 joining counted / 16.2%'. No ₹ / no 'L' rupee-suffixed digits inside the box. Progress bar rendered.",
+    "Employer krishna sidebar contains 'Joining List' entry. Post Job / Approvals / Resume Builder / Match History / Activity Feed / LinkedIn are ABSENT from the sidebar.",
+    "Employer dashboard has data-testid=employer-target-boxes. Team target / Achieved / Achievement stat cards render. Clicking the Achievement card navigates to /employer/joinings.",
+    "Employer My Team shows data-testid=revenue-targets-team card labelled 'Revenue targets — 2026 (Jan–Dec)' with Year=2026, per-member editable Target (₹) and Already achieved (₹) inputs (data-testid=target-input-<uid>, opening-input-<uid>) and Save button (data-testid=target-save-<uid>). Saving fires the 'Target saved' toast and persists (Admin Teams page confirms Krishna Team now shows ₹10L target, ₹1L achieved, 10%).",
+    "Employer /employer/joinings loads with data-testid=joining-list-page, four stat boxes (Joinings in range / Revenue booked / Team target (year) / Team achievement) and Joinings filter block with From/To/Position inputs. Correctly shows 'No joinings in this window yet.' for Krishna's team.",
+    "Admin dashboard has data-testid=admin-target-boxes with stat-company-target=₹30.0L, stat-company-achieved=₹4.2L, stat-company-pct=14.2% (7 teams).",
+    "Admin /admin/teams page shows data-testid=revenue-targets-company card with company totals (COMPANY TARGET ₹30,00,000 / ACHIEVED ₹4,24,970 / ACHIEVEMENT 14.2%) and every team block with data-testid=team-target-input-<team_id> and team-target-save-<team_id>. All 7 teams render with expandable member rows.",
+    "Admin /admin/performance-records loads with data-testid=performance-records-page. record-basis (Monthly/Quarterly/Annual), record-period, record-snapshot-btn and record-archive-table testids all present. Monthly 2026-09 shows Revenue ₹74,970 / 9 joinings / Annual target ₹30,00,000 / STATUS = Live. Switching basis to Quarterly reduces period options to 2026-09. Picking 2026-07 changes STATUS to 'Archived / Period closed'. Team rows (data-testid=record-team-<team_id>) present for all 7 teams. Archive table already contains 2026-07 auto-archived row.",
+    "Regression: recruiter hr6 → /recruiter/pipeline, /recruiter/candidate-bank, /recruiter/submission-tracker all load with content.",
+    "Regression: employer krishna → /employer/pipeline, /employer/jobs (with 'New Job' create button + 'Post to Career Page'), Team Insights (/employer/attendance-insights, correctly scoped to Krishna's 2-member team) all load."
+  ],
+  "not_verified": [
+    "Employer 'Raise Invoice' UI (data-testid=joining-raise-invoice-<application_id> / raise-invoice-dialog / invoice-submit) — Krishna's team has 0 joinings in every date window, so the button never renders. Backend already created VHC/26-27/2 via curl per main agent.",
+    "Accounts (accounts@vhc.in) view of the pre-filled draft bill at /accounts/bills — not exercised because raise-invoice UI could not be reached from Krishna's account and per instructions we must not raise more than one test invoice.",
+    "Joining CTC + Revenue input persistence via UI (data-testid=joining-save-<application_id>) — no joinings visible to save."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Frontend: after PUT /api/targets succeeds inside RevenueTargetsCard, refetch team-summary (or optimistically compute) so targets-total-target/achieved/pct reflect the save without a page reload.",
+    "Main agent: manually verify Raise Invoice UI end-to-end against a team that has actual joinings (e.g. an account that owns the Faridabad/Bengaluru team) since Krishna's team has none. Then confirm the resulting bill shows up in /accounts/bills with candidate line item + client company pre-filled."
+  ],
+  "critical_code_review_comments": [
+    "RevenueTargetsCard save handler on the employer side does not invalidate/refetch the team-summary query — data persists but the header totals stall until reload.",
+    "Sidebar cleanup is thorough for both recruiter and employer; role guards on removed routes were already verified by main agent via curl (403s).",
+    "Direct navigation to /employer/team-insights returns the marketing website (fallback rewrite). The correct sidebar link is /employer/attendance-insights — not a bug, but consider adding a redirect to reduce confusion."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (per request)", "frontend": "~92% (12/13 spec bullets fully verified; raise-invoice UI not reachable from Krishna's team)"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024; krishna@vhc.in / 12345678; hr6@vhc.in / 12345678; hr53@vhc.in / 12345678; accounts@vhc.in / VhcAccounts@2026",
+  "seed_data_creation": "Set revenue target for Madhavi Mancharia (hr61@vhc.in / user_id=a6df364f-cec5-4415-bdc3-c1f0176758cc) in Krishna Team for 2026: target=₹10,00,000, opening=₹1,00,000. No invoices raised, no candidates/applications/teams/bills touched. Main agent may reset this target if needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Preview pages take 15-25s to render. Use domcontentloaded + explicit waits. The employer sidebar 'Team Insights' link routes to /employer/attendance-insights (NOT /employer/team-insights). Direct nav to /employer/team-insights falls through to the marketing website. To test the Raise Invoice flow via UI, pick an employer whose team owns joinings (e.g. account managing the Faridabad or Bengaluru team) — Krishna's team has none. Performance Records record-basis and record-period are shadcn Select buttons (not native <select>), so use click + get_by_role('option') to switch periods."
+}

@@ -1,3 +1,57 @@
+## 2026-09-17 (evening) — Access trim + revenue targets, Joining List → Invoice, Performance Records
+
+### Access changes (user-specified, hidden in nav AND blocked in the API)
+- **Recruiter** keeps Dashboard, Mandates, Pipeline, Advanced Search, Candidate Bank, Submission
+  Tracker, Attendance, Leaves. Removed: Referrals, Candidates, Match History, Resume Builder,
+  Activity Feed, Salary Benchmark, LinkedIn. Verified 403s: `/api/referrals`,
+  `/api/analytics/salary-benchmark`, `/api/activity/feed`, `/api/linkedin/*`,
+  `/api/jobs/pending-approval`; match history is admin-only now.
+- **Employer** keeps everything except Post Job (create still lives inside My Jobs — API untouched),
+  Approvals, Resume Builder, Match History, Activity Feed, LinkedIn.
+- **Team Insights** (`routes/attendance_analytics.py`) previously showed an employer *every* recruiter
+  in the company; now scoped to the employer's own team(s) via `_employer_member_ids`. Verified:
+  krishna@vhc.in sees 2 people instead of the whole company.
+
+### Revenue targets (calendar year, 1 Jan – 31 Dec)
+- `services/targets_service.py` + `routes/targets.py`, collection `revenue_targets`
+  ({scope: user|team, scope_id, year, target_amount, opening_achieved}).
+- Achievement = "already achieved" opening balance + revenue booked against that recruiter's
+  joinings in the year. Recruiter revenue Σ = team total; team Σ = company total.
+- `GET /api/targets/me` returns **percentage only** (no rupee values) — recruiter dashboard box
+  (`recruiter-target-box`). Employer sets member targets on My Team; admin sets team targets on the
+  Teams page (both via the shared `components/targets/RevenueTargetsCard.jsx`).
+- `company-summary` batches all lookups (was 19 s per-team, now ~6 s).
+
+### Joining List → Raise Invoice (employer)
+- `routes/joinings.py`: `GET /api/joinings` (role-scoped: admin=all, employer/team-lead=their team),
+  `PATCH /api/joinings/{id}` (joining CTC + revenue), `POST /api/joinings/{id}/raise-invoice`.
+- Raise Invoice takes CTC **and** commercial rate manually (user choice), builds a draft bill through
+  the refactored `routes/bills.build_draft_bill` (so joining-sourced invoices are identical to
+  hand-made ones) and books the line amount as that recruiter's revenue.
+- Verified end-to-end in the browser: employer bikash@vhc.in → 58 joinings → Raise Invoice
+  (₹8.5L CTC × 8.33%) → bill VHC/26-27/3 appeared in the Accounts portal for JK Cement, the row
+  showed the bill badge, and the team achievement moved 16.2% → 19.8%.
+- **Bug found & fixed during self-test**: the derived joining date falls back to `updated_at`, so
+  saving a CTC or raising an invoice silently moved the DOJ to today. `_freeze_join_date` now persists
+  the derived date on first write; the two rows affected during testing were repaired.
+
+### Performance Records (admin archive)
+- `routes/performance_records.py` + `pages/admin/PerformanceRecordsPage.jsx`, collection
+  `performance_records`. Monthly / quarterly / annual report per team and per contributor with the
+  joinings that made the number, plus `Store record`. Closed periods auto-archive on first view
+  (verified: 2026-07 was archived automatically on read).
+
+### Dashboards
+- Recruiter: percentage-only target box. Employer: team target / achieved / achievement % (links to
+  the Joining List). Admin: company target / revenue achieved / achievement % (links to Teams and
+  Performance Records).
+
+Testing: `test_reports/iteration_195.json` (12/13 flows verified; the raise-invoice UI was re-tested
+by the main agent using an employer whose team actually has joinings). All test artefacts were then
+removed — bills VHC/26-27/2 and /3, every `revenue` row, the demo targets, the archived 2026-07
+snapshot and the test `joined_ctc` values — so the module is back to zero for real use.
+
+
 ## 2026-09-17 (later) — Billing reset, entity/GST details, invoice logo, accounts@vhc.in access
 
 - **Invoice logo fixed for real.** The uploaded `VHC_logo-removebg_edited_edited.png` was an 830×1133
