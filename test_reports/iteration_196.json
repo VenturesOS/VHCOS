@@ -1,0 +1,40 @@
+{
+  "summary": "Backend + Frontend testing of the new Branch & Recruiter Revenue (Performance Records) module. 14/14 backend pytest cases pass. Frontend UI verified end-to-end against the client's Excel numbers: KPI strip, Branch Summary, Recruiter Revenue, Placements search + status filter + recruiter chip, Teams (with ex-member names, no UUIDs), Review, Archive, Export CSV, Store record, period switching, and the admin Dashboard Revenue-achieved card is now synced to ₹5.29 Cr. Recruiter role safety confirmed: hr6 dashboard shows no rupee anywhere, /api/branch-revenue/dashboard and /api/performance-records/report both return 403. Priyanka (hr64) vs Priyanka yadav (hr9) verified as two distinct recruiter_ids.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verified_working": [
+    "Admin /admin/performance-records loads with data-testid=performance-records-page. KPI strip exact match: PLACEMENTS 527 · RECRUITERS 54 · GROSS BILLING ₹5.31 Cr · PAYMENT RECEIVED ₹3.53 Cr · PENDING (PP+IP) ₹1.76 Cr · ACTIVE REVENUE ₹5.29 Cr · REALIZATION 66.7% · RECORDS TO REVIEW 29 (annual 2026).",
+    "Branch Summary tab shows exact 5-branch table: Gurgaon ₹1,77,45,379 (166), Delhi ₹1,76,93,388 (180), Faridabad ₹90,74,939 (127), Bangalore ₹76,11,882 (47), Hyderabad ₹10,01,168 (7) — verified via UI DOM read AND backend test_branch_summary_totals.",
+    "Recruiter Revenue tab lists exactly 54 recruiter rows. Clicking a recruiter row (e.g. Manorma/Prabhat) jumps to Placements tab, filters to 36 placements, and shows data-testid=placements-clear-recruiter chip that removes the filter when clicked.",
+    "Placements tab: data-testid=placements-search 'Royal Enfield' filters to 17 placements · gross ₹12,33,537 (after ~5s debounce). Payment status filter set to 'Payment Received' narrows to 367 placements. data-testid=placements-count updates live. Ledger columns (DOJ, Branch, Recruiter, Client, Candidate, Designation, Location, Offered CTC, Invoice No., Billing Amount, Payment Status) all render.",
+    "Teams & Targets tab shows 7 teams (Gurgaon Team, Delhi Team, Faridabad team, Bengaluru team, Krishna Team, Manorma yadav Team, Jatin Yadav Team) with header revenue + placement count + 'from people who left / unassigned' ex-member subtotal. Expanding Faridabad team renders member table with NAMES (Bikash Das, Indu sagar, Madhuri Singh, Shivani dinkar, Neha matpal, Mukta Kumari, Deepika talwar, Nidhi thakur, Diksha Gupta, Ansh vats) — zero raw UUIDs. Nidhi Singh, Parul Mangla, Lalit kumar appear in the 'Left the company / unassigned' list as required.",
+    "Review tab renders data-testid=review-table with the 29 data-quality rows (matches KPI 'records to review' count).",
+    "Archive tab has data-testid=record-archive-table. 'Store record' button (record-snapshot-btn) creates an archive row and shows a '<period> stored in the archive' success toast. Verified with year=2024 snapshot (later deleted via DELETE /api/performance-records/archive/{id} to keep client archive clean). Auto-archived 2026-07 row was pre-existing and untouched.",
+    "Export button (data-testid=record-export-btn) triggers a download 'vhc-branch-summary-2026.csv' with no JS/console error.",
+    "Period switching works via record-basis + record-period (shadcn Selects). Switching to Monthly and Quarterly reloads with smaller numbers and no error. Branch filter narrowing to a single branch (Delhi) drops KPI placements and returns only Delhi in branches list.",
+    "Number sync: Admin Dashboard 'Revenue achieved' card shows ₹5.29Cr / '527 joinings booked' — matches Active Revenue in Performance Records. No stale hand-typed number.",
+    "Priyanka split: /api/branch-revenue/dashboard year=2026 recruiter list contains TWO different recruiter_ids for 'Priyanka' — verified in test_priyanka_split_two_people.",
+    "Recruiter role safety (hr6@vhc.in): after login the dashboard is scoped to /recruiter, contains ZERO ₹ characters anywhere in the visible body, direct nav to /admin/performance-records is redirected back to /recruiter, and both GET /api/branch-revenue/dashboard and GET /api/performance-records/report return HTTP 403 for hr6's token."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_branch_revenue_and_records.py",
+    "/app/test_reports/pytest/iter196.xml"
+  ],
+  "backend_test_summary": "14 passed / 0 failed in 60s: test_kpis_annual_2026, test_branch_summary_totals, test_priyanka_split_two_people, test_placements_filter_royal_enfield, test_placements_filter_payment_status, test_report_has_branch_revenue_block, test_report_teams_have_names_not_uuids, test_report_faridabad_ex_members, test_snapshot_and_delete, test_recruiter_blocked_from_branch_revenue, test_recruiter_blocked_from_performance_records, test_monthly_smaller_than_annual, test_quarterly_ok, test_branch_filter_narrows.",
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/performance_records.py build_report is ~150 lines and mixes ledger + platform-joinings roll-up + name resolution + ex-member folding. Consider extracting per_recruiter aggregation and team roll-up into smaller helpers (targets_service already exposes canonical_team_members / ex_member_revenue / active_users which is good).",
+    "PerformanceRecordsPage.jsx is 541 lines and holds the tabs, filters, all six views and CSV export inline. Splitting into one component per tab (BranchSummaryTab, RecruiterRevenueTab, PlacementsTab, TeamsTab, ReviewTab, ArchiveTab) would keep files under 700 lines and simplify testing.",
+    "Placements tab search has a noticeable ~5s effective debounce (2.5s wait was too short in automation) — consider a small visual indicator ('searching…') during the debounce so users don't think the search failed.",
+    "Data-testid record-team-<id> is on the toggle button but the test locator [data-testid^='record-team-'] returned 0 hits in one automation pass (possibly because the buttons were still hydrating). Not a bug — text-based selectors worked — but worth double-checking if the testid is applied before the initial paint of the teams list."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_branch_revenue_and_records.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (11/11 spec bullets)"},
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024 ; hr6@vhc.in / 12345678",
+  "seed_data_creation": "Temporarily created a year=2024 performance_records snapshot to exercise the Store record + Archive flow, then DELETED it via /api/performance-records/archive/{id}. Archive now back to the pre-existing auto-archived 2026-07 row only. No mutation to placement_ledger, users, teams, bills or revenue_targets.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The 5 branch gross totals and the 54 recruiter merged groups are locked-in in test_branch_revenue_and_records.py; if the ledger changes those numbers will break. The report endpoint takes ~10-15s; always allow 15s+ after tab-teams click before asserting on team expansion. When picking basis/period on the Performance Records page, use shadcn get_by_role('option', name=...) rather than <select> options. Placements search has ~5s debounce — wait ≥5s before asserting on placements-count."
+}

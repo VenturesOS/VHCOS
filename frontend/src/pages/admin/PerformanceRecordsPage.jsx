@@ -67,8 +67,15 @@ export default function PerformanceRecordsPage() {
   const [rows, setRows] = useState({ items: [], count: 0, totals: null });
   const [rowsLoading, setRowsLoading] = useState(false);
   const [q, setQ] = useState('');
+  const [qInput, setQInput] = useState('');
   const [status, setStatus] = useState('all');
   const [recruiterFilter, setRecruiterFilter] = useState(null);
+
+  // Debounce the search so a query isn't fired on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setQ(qInput), 350);
+    return () => clearTimeout(t);
+  }, [qInput]);
 
   useEffect(() => {
     performanceRecordsAPI.periods().then(({ data }) => {
@@ -356,8 +363,10 @@ export default function PerformanceRecordsPage() {
             <TabsContent value="placements" className="mt-4 space-y-3">
               <div className="flex items-end gap-2 flex-wrap">
                 <div className="flex-1 min-w-[220px]">
-                  <Label className="text-xs text-slate-500 mb-1 block">Search</Label>
-                  <Input value={q} onChange={(e) => setQ(e.target.value)}
+                  <Label className="text-xs text-slate-500 mb-1 block">
+                    Search {qInput !== q && <span className="text-slate-400">· searching…</span>}
+                  </Label>
+                  <Input value={qInput} onChange={(e) => setQInput(e.target.value)}
                          placeholder="Candidate, client, designation, invoice no."
                          data-testid="placements-search" />
                 </div>

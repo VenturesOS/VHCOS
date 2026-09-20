@@ -78,6 +78,19 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
   team Σ = company total.
 - Pending from the user: further employer/recruiter access tweaks as they review.
 
+## Revenue source of truth (2026-09-20)
+- `placement_ledger` (527 placements imported from the client's Excel tracker) is the authoritative
+  record of revenue booked before the platform tracked joinings; new platform joinings add on top.
+- Achievement uses **Active Revenue** = gross − backout − credit note − other/review. Realization % =
+  received ÷ active. Every dashboard, target rollup and the Performance Records tab read this.
+- Performance Records (`/admin/performance-records`) mirrors the sheet: KPI strip + Branch Summary,
+  Recruiter Revenue, Placements, Teams & Targets, Review and Archive tabs, with CSV export.
+- Recruiter spelling variants are merged to one person; anyone who left keeps their revenue in the team
+  they worked for; no-login and blank-recruiter rows sit in the branch total as Ex-employee / Unassigned.
+- Re-import a refreshed sheet with `python3 -m scripts.import_placement_ledger <file.xlsx>` (idempotent).
+- **Open item**: annual targets are all ₹0 — the admin still has to set each recruiter's / team's number
+  before achievement percentages mean anything.
+
 ## Billing module — current state (2026-09-17)
 - Two sender entities: `VENTURE HRD CENTER` (07AAMPY9883D2ZT) and `Ventures HRD Pvt Ltd`
   (07AACCV6268J1ZW), both at Second Floor, D-12/79-80, Rohini Sector 8, New Delhi 110085.

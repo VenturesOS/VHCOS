@@ -563,5 +563,55 @@ RETENTION_PRUNER_ENABLED          # default true; set false to disable
 - No TTL creation, database migration, BGE backfill, or BGE timeout change in this session.
 - No external EC2 production code rollout performed. New fallback env setting must accompany this code when adopted there.
 
+## 2026-09-20 — Branch & Recruiter Revenue reworked; Performance Records rebuilt to the client's sheet
+
+### Source of truth
+- Client uploaded `Reworked_Branch_Recruiter_Revenue.xlsx` (kept at `memory/Reworked_Branch_Recruiter_Revenue.xlsx`).
+- Its `Dashboard` sheet had the branch labels shifted (Bangalore/Gurgaon swapped); `Sorted Data` + `Branch Summary` agree and were used as truth.
+- Imported 527 placements into new collection `placement_ledger` (528 docs — one row is a 50-50 shared credit) via
+  `backend/scripts/import_placement_ledger.py` (idempotent, re-run with a new sheet any time).
+- Verified against the sheet to the rupee: gross 53,126,755.31 · received 35,269,287.77 · PP 12,190,251.99 · IP 5,406,246.05 ·
+  credit note 214,875.50 · other 46,094 · active 52,865,785.81 · realization 66.7% · 527 placements.
+
+### Client mapping decisions (2026-09-20)
+- Target achievement uses **Active Revenue** (gross − backout − credit note − other); all buckets shown in the table.
+- Realization % = received ÷ active (this is how the sheet computes it).
+- Spelling variants merged into one person (Karambir=Karamvir, Abhey=Abhay, Navya=Navya jain in Delhi, Srishti=Srishti Gupta,
+  Bikash=Bikash Das, Indu=Indu sagar, Neha=Neha matpal, Shivani=Shivani dinkar, Mukta=Mukta Kumari, Deepika=Deepika talwar,
+  Jatin=Jatin Yadav, Robin=Robin yadav, Janvi, Rohit=Rohit Yadav). 88 sheet rows → 54 real people.
+- `Priyanka` (hr64) and `Priyanka yadav` (hr9) are two DIFFERENT people. `Nidhi Singh` is NOT `Nidhi thakur`.
+- People who left keep their revenue inside the team they worked for (Simran Gupta → Delhi, Lalit kumar → Faridabad, etc).
+- No-login people (Parul Mangla, Shubham, Jitender, Nikita, Nidhi Singh) and blank-recruiter rows sit in the branch total as
+  "Ex-employee / Unassigned". `Ajit / Avinash` split 50-50 (0.5 placement credit each).
+- Branch → team: Bangalore→Bengaluru team, Delhi→Delhi Team (employer Maneet, per client), Faridabad→Faridabad team,
+  Gurgaon→Gurgaon Team, Hyderabad→Krishna Team. The two empty teams are kept.
+
+### Built
+- `backend/services/branch_revenue.py` — buckets, KPI/branch/recruiter summaries, data-quality rows, per-recruiter and per-team rollups.
+- `backend/routes/branch_revenue.py` — `/api/branch-revenue/dashboard|placements|branches` (admin all branches, employer scoped to own team, recruiter 403).
+- `backend/routes/performance_records.py` — report now merges the ledger with platform joinings, keeps tracker placements and
+  pipeline joinings as separate counts, and embeds the whole sheet (`branch_revenue` block) so snapshots archive it.
+- `backend/services/targets_service.py` — ledger revenue folded into `revenue_by_recruiter`; new `ex_member_revenue` /
+  `roster_ids` so people off the roster count for their team exactly once; account managers (employers) now count as contributors;
+  shared `period_bounds`.
+- `frontend/src/pages/admin/PerformanceRecordsPage.jsx` rebuilt as the sheet: KPI strip + tabs
+  (Branch Summary · Recruiter Revenue · Placements · Teams & Targets · Review · Archive), branch + period filters,
+  sortable tables, recruiter drill-down, debounced search, CSV export. `components/revenue/RevenueTables.jsx` holds the shared table.
+- Cleared the 11 hand-typed `opening_achieved` figures (18 Sept) — they double-counted against the ledger.
+- Fixed `frontend/yarn.lock` being out of sync with `package.json` (the client's `yarn install --frozen-lockfile` deploy step would have failed).
+
+### Sync verified
+- Company achieved = ₹5,28,65,785.81 = sheet Active Revenue; per-team totals equal each branch's active revenue.
+- Admin Dashboard "Revenue achieved" card, employer team cards, `RevenueTargetsCard` and the recruiter's percentage-only box all read the same numbers.
+- Recruiters still get percentage only; `/api/branch-revenue/*` and `/api/performance-records/*` return 403 for them.
+
+### Testing
+- `backend/tests/test_branch_revenue_and_records.py`: 14/14 pass.
+- `test_reports/iteration_196.json`: no backend or frontend issues; every KPI and branch figure matched the sheet in the UI.
+- Targets are all ₹0, so achievement shows "no target" — admin must set targets per recruiter/team.
+
+### Not deployed yet
+Everything above plus the earlier rate-limiter and `index.html` fixes still need the AWS pull + rebuild.
+
 ## Prior history
 See [CHANGELOG_ARCHIVE_PRE_2026_09_08.md](CHANGELOG_ARCHIVE_PRE_2026_09_08.md) for the complete original PRD/history, preserved without losing older requirements.
