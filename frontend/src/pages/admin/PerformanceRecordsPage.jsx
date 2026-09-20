@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Loader2, Archive, Save, Download, AlertTriangle, ChevronRight, X, RotateCcw,
+  Loader2, Archive, Save, Download, AlertTriangle, ChevronRight, X, RotateCcw, Wrench,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { performanceRecordsAPI, branchRevenueAPI } from '../../lib/api';
@@ -17,6 +17,7 @@ import {
   DataTable, StatusChip, Achievement, inr, compactINR, downloadCSV,
 } from '../../components/revenue/RevenueTables';
 import { ReconcilePanel } from '../../components/revenue/ReconcilePanel';
+import { ResolveRowDialog } from '../../components/revenue/ResolveRowDialog';
 
 const KPI = [
   ['placements', 'Placements', (v) => v],
@@ -63,6 +64,7 @@ export default function PerformanceRecordsPage() {
   const [savingSnap, setSavingSnap] = useState(false);
   const [openTeam, setOpenTeam] = useState(null);
   const [tab, setTab] = useState('dashboard');
+  const [resolveRow, setResolveRow] = useState(null);
 
   // Placement list (the sheet's row-level view)
   const [rows, setRows] = useState({ items: [], count: 0, totals: null });
@@ -507,6 +509,18 @@ export default function PerformanceRecordsPage() {
                       </span>
                     ),
                   },
+                  {
+                    key: 'id',
+                    label: '',
+                    align: 'right',
+                    render: (r) => (
+                      <Button size="sm" variant="outline" className="h-8"
+                              onClick={() => setResolveRow(r)}
+                              data-testid={`review-resolve-${r.s_no}`}>
+                        <Wrench className="w-3 h-3 mr-1" /> Resolve
+                      </Button>
+                    ),
+                  },
                 ]}
               />
             </TabsContent>
@@ -546,6 +560,7 @@ export default function PerformanceRecordsPage() {
           </Tabs>
         </>
       )}
+      <ResolveRowDialog row={resolveRow} onClose={() => setResolveRow(null)} onSaved={load} />
     </div>
   );
 }

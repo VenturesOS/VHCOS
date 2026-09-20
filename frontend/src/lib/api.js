@@ -257,6 +257,7 @@ export const teamAPI = {
 // Bills / Invoices — Phase 55.6
 export const billsAPI = {
   list: (params = {}) => api.get('/bills', { params }),
+  worklist: (params = {}) => api.get('/bills/worklist', { params }),
   getById: (id) => api.get(`/bills/${id}`),
   create: (payload) => api.post('/bills', payload),
   update: (id, payload) => api.put(`/bills/${id}`, payload),
@@ -264,7 +265,7 @@ export const billsAPI = {
   pdfUrl: (id) => `${API_BASE}/bills/${id}/pdf`,
   previewMail: (id) => api.post(`/bills/${id}/preview-mail`),
   send: (id, payload = {}) => api.post(`/bills/${id}/send`, payload),
-  markPaid: (id) => api.post(`/bills/${id}/mark-paid`),
+  markPaid: (id, params = {}) => api.post(`/bills/${id}/mark-paid`, null, { params }),
   // Bank accounts (fix.docx 2026-09-15)
   listBankAccounts: () => api.get('/bills/bank-accounts'),
   createBankAccount: (data) => api.post('/bills/bank-accounts', data),
@@ -624,6 +625,8 @@ export const branchRevenueAPI = {
   placements: (params = {}) => api.get('/branch-revenue/placements', { params }),
   branches: () => api.get('/branch-revenue/branches'),
   reconcile: (params = {}) => api.get('/branch-revenue/reconcile', { params }),
+  assignableRecruiters: () => api.get('/branch-revenue/assignable-recruiters'),
+  updatePlacement: (id, body) => api.patch(`/branch-revenue/placements/${id}`, body),
 };
 
 // "Candidates called" tracking (fix.docx) — fire-and-forget. `source` is

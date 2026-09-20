@@ -6,9 +6,11 @@ Admin sees every branch; an employer only ever sees their own team's.
 Recruiters never reach this (they see a percentage on their dashboard).
 """
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from config import db
 from services import branch_revenue as br
@@ -117,6 +119,127 @@ async def placements(
                  "invoice_no", "location")).lower()]
     return {"items": rows[offset:offset + limit], "count": len(rows),
             "totals": br.totals(rows), "range": {"from": start, "to": end}}
+
+
+class PlacementPatch(BaseModel):
+    """Manual resolution of a tracker row. Every field is optional — send
+    only what changed."""
+    recruiter_id: Optional[str] = None
+    revenue: Optional[float] = None
+    payment_status: Optional[str] = None
+    invoice_no: Optional[str] = None
+    payment_date: Optional[str] = None
+    note: Optional[str] = None
+    dismiss_review: Optional[bool] = None
+
+
+async def _editable_row(placement_id: str, user: dict) -> dict:
+    row = await db[br.COLL].find_one({"id": placement_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Placement not found")
+    team_ids = await _scope_team_ids(user)
+    if team_ids is not None and row.get("team_id") not in team_ids:
+        raise HTTPException(status_code=403, detail="That placement belongs to another branch.")
+    return row
+
+
+@branch_revenue_router.patch("/placements/{placement_id}")
+async def update_placement(placement_id: str, payload: PlacementPatch,
+                           user: dict = Depends(require_role(["admin", "accounts", "employer"]))):
+    """Resolve a flagged row or move a payment along.
+
+    Changing the recruiter moves the revenue to that person (and to their
+    team); changing the status moves it between the collected / pending /
+    written-off buckets. Every edit is logged — these are money fields.
+    """
+    row = await _editable_row(placement_id, user)
+    changes: dict = {}
+    set_doc: dict = {}
+
+    if payload.payment_status is not None:
+        if payload.payment_status not in br.BUCKET:
+            raise HTTPException(status_code=400, detail=f"Unknown payment status. Use one of: {', '.join(br.BUCKET)}")
+        set_doc["payment_status"] = payload.payment_status
+        set_doc["payment_status_raw"] = payload.payment_status
+        changes["payment_status"] = [row.get("payment_status"), payload.payment_status]
+        if payload.payment_status == "Payment Received":
+            # The client asked to capture when the money landed.
+            set_doc["payment_date"] = (payload.payment_date or ts.ist_today().date().isoformat())[:10]
+            changes["payment_date"] = [row.get("payment_date"), set_doc["payment_date"]]
+    elif payload.payment_date is not None:
+        set_doc["payment_date"] = payload.payment_date[:10]
+        changes["payment_date"] = [row.get("payment_date"), payload.payment_date]
+
+    if payload.revenue is not None:
+        set_doc["revenue"] = round(float(payload.revenue), 2)
+        changes["revenue"] = [row.get("revenue"), set_doc["revenue"]]
+
+    if payload.invoice_no is not None:
+        set_doc["invoice_no"] = payload.invoice_no.strip()
+        changes["invoice_no"] = [row.get("invoice_no"), set_doc["invoice_no"]]
+
+    if payload.recruiter_id is not None:
+        if payload.recruiter_id:
+            owner = await db.users.find_one(
+                {"id": payload.recruiter_id, "is_active": True}, {"_id": 0, "id": 1, "name": 1, "email": 1})
+            if not owner:
+                raise HTTPException(status_code=400, detail="That recruiter does not exist or is inactive.")
+            team = next((t for t in await ts.live_teams(db)
+                         if payload.recruiter_id in ts.team_member_ids(t)), None)
+            if team_ids := await _scope_team_ids(user):
+                if not team or team["id"] not in team_ids:
+                    raise HTTPException(status_code=403, detail="You can only assign a placement to your own team.")
+            set_doc.update({
+                "recruiter_id": owner["id"],
+                "recruiter_name": owner.get("name") or owner.get("email"),
+                "unassigned": False,
+                "is_ex_employee": False,
+                # Revenue follows the person, so the team follows too.
+                "team_id": (team or {}).get("id") or row.get("team_id") or "",
+            })
+            changes["recruiter"] = [row.get("recruiter_name"), set_doc["recruiter_name"]]
+        else:
+            set_doc.update({"recruiter_id": "", "recruiter_name": "Ex-employee / Unassigned",
+                            "unassigned": True})
+            changes["recruiter"] = [row.get("recruiter_name"), "Ex-employee / Unassigned"]
+
+    if payload.dismiss_review or changes:
+        set_doc["review_resolved"] = True
+        set_doc["review_resolved_at"] = datetime.now(timezone.utc).isoformat()
+        set_doc["review_resolved_by"] = user.get("email") or user.get("id")
+    if payload.note:
+        set_doc["resolution_note"] = payload.note
+
+    if not set_doc:
+        raise HTTPException(status_code=400, detail="Nothing to change.")
+
+    await db[br.COLL].update_one({"id": placement_id}, {
+        "$set": set_doc,
+        "$push": {"edits": {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "by": user.get("email") or user.get("id"),
+            "role": user.get("role"),
+            "changes": changes,
+            "note": payload.note or "",
+        }},
+    })
+    return {"message": "Updated", "id": placement_id, "changes": changes,
+            "row": await db[br.COLL].find_one({"id": placement_id}, {"_id": 0})}
+
+
+@branch_revenue_router.get("/assignable-recruiters")
+async def assignable_recruiters(user: dict = Depends(require_role(["admin", "accounts", "employer"]))):
+    """People a flagged placement can be credited to — the whole roster for
+    Admin/Accounts, only their own team for an account manager."""
+    teams = await ts.live_teams(db) if user.get("role") in ("admin", "accounts") \
+        else await ts.teams_for_employer(db, user["id"])
+    ids = list({uid for t in teams for uid in ts.team_member_ids(t)})
+    people = await db.users.find(
+        {"id": {"$in": ids}, "is_active": True},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
+    ).to_list(500)
+    people.sort(key=lambda u: (u.get("name") or u.get("email") or "").lower())
+    return {"items": people}
 
 
 @branch_revenue_router.get("/reconcile")

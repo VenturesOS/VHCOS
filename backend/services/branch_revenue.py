@@ -13,9 +13,16 @@ Buckets mirror the sheet exactly:
     Realization %   = Payment Received / Gross
 Achievement against a target uses Active Revenue (client decision, 2026-09-20).
 """
+import re
 from typing import Dict, List, Optional
 
 COLL = "placement_ledger"
+
+
+def norm_name(s: str) -> str:
+    """Candidate names are matched on letters only — the sheet and the
+    pipeline disagree on spacing, initials and case."""
+    return re.sub(r"[^a-z]", "", str(s or "").lower())
 
 BUCKET = {
     "Payment Received": "received",
@@ -123,15 +130,18 @@ def summarise(rows: List[dict]) -> dict:
     review = data_quality(rows)
     kpis["records_needing_review"] = sum(1 for r in review if r["blocking"])
     kpis["rows_without_login"] = sum(1 for r in review if not r["blocking"])
+    kpis["records_resolved"] = sum(1 for r in rows if r.get("review_resolved"))
     return {"kpis": kpis, "branches": branch_rows, "recruiters": recruiter_rows}
 
 
-def data_quality(rows: List[dict]) -> List[dict]:
+def data_quality(rows: List[dict], include_resolved: bool = False) -> List[dict]:
     """Rows the tracker flags: blank billing amount, a payment status that
     isn't one of the five, and placements with no recruiter against them.
     Ex-employees without a login are listed too, but not as blockers."""
     out = []
     for r in rows:
+        if r.get("review_resolved") and not include_resolved:
+            continue
         reasons, blocking = [], False
         if not float(r.get("revenue") or 0):
             reasons.append("Billing amount blank — excluded from revenue")
@@ -146,7 +156,10 @@ def data_quality(rows: List[dict]) -> List[dict]:
             reasons.append(f"{r.get('recruiter_name')} has no login — revenue held in the branch total")
         if reasons:
             out.append({
-                "s_no": r.get("s_no"), "branch": r.get("branch"),
+                "id": r.get("id"), "s_no": r.get("s_no"), "branch": r.get("branch"),
+                "recruiter_id": r.get("recruiter_id") or "",
+                "invoice_no": r.get("invoice_no") or "",
+                "resolved": bool(r.get("review_resolved")),
                 "recruiter": r.get("recruiter_name"), "organization": r.get("organization"),
                 "candidate_name": r.get("candidate_name"), "revenue": r.get("revenue"),
                 "payment_status": r.get("payment_status"), "doj": r.get("doj"),
@@ -161,14 +174,13 @@ async def tracker_row_for_candidate(db, candidate_name: str) -> Optional[dict]:
     Guards the money: a hire that exists in both places must never have
     revenue booked twice (once from the tracker, once from the pipeline).
     """
-    import re
-    needle = re.sub(r"[^a-z]", "", str(candidate_name or "").lower())
+    needle = norm_name(candidate_name)
     if not needle:
         return None
     async for row in db[COLL].find({}, {"_id": 0, "candidate_name": 1, "revenue": 1,
                                         "payment_status": 1, "invoice_no": 1, "branch": 1,
                                         "recruiter_name": 1}):
-        if re.sub(r"[^a-z]", "", str(row.get("candidate_name") or "").lower()) == needle:
+        if norm_name(row.get("candidate_name")) == needle:
             return row
     return None
 

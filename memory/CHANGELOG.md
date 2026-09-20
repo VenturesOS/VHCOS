@@ -684,5 +684,38 @@ Everything above plus the earlier rate-limiter and `index.html` fixes still need
 - Pipeline back-fill of the 451 tracker-only hires was scoped (needs ~451 candidates, 43 companies,
   ~400 mandates) and **deferred by the client** — see ROADMAP note below.
 
+## 2026-09-20 (evening) — Review rows resolvable by hand, Invoices & Payments worklist
+
+### Manual resolution of flagged rows
+- `PATCH /api/branch-revenue/placements/{id}` (Admin + Accounts + the employer of that branch, per client
+  choice): credit the placement to a recruiter, correct the billing amount, change the payment status,
+  record an invoice number, capture a payment date, or dismiss the row as "fine as-is".
+- Revenue follows the person — reassigning a recruiter also moves `team_id`, so the team/company rollups
+  stay right. Employers can only assign inside their own team; the picker itself is scoped
+  (`GET /api/branch-revenue/assignable-recruiters`).
+- Every edit appends to an `edits` audit array (who, role, before → after, note). Resolved rows drop out
+  of the Review list (`review_resolved`) and `records_resolved` is reported alongside the review count.
+- UI: `components/revenue/ResolveRowDialog.jsx`, wired into Performance Records → Review (Resolve button)
+  and into the employer Joining List as "Update" on tracker rows.
+
+### Invoices & Payments worklist (in the Bills section)
+- `GET /api/bills/worklist` + `services/invoice_worklist.py` merge three sources into four buckets:
+  **to_raise 94** (59 tracker IP + 35 pipeline joinings awaiting revenue) · **pending 80** ·
+  **received 367** · **written_off 22**. Employers are scoped to their branch.
+- UI: `components/revenue/InvoiceWorklist.jsx`, mounted as the "Invoices & Payments" tab on BillsPage
+  (clickable state cards + tabs + a flat "Everything" view, search, CSV export — the client asked for both).
+- Actions: *Record invoice* on a tracker row (sets the invoice no. and moves it IP → PP), *Mark received*
+  (status + payment date), *Mark paid* on a platform bill (now accepts `paid_on`), and *Raise invoice*
+  for pipeline rows.
+
+### Verified
+- UI click-through: resolving a flagged row moved the review KPI 29 → 28; recording an invoice moved
+  to_raise 94 → 93 and pending 80 → 81. API-level: setting an amount + Payment Received flowed into
+  gross/received/active, company achieved and the worklist in one step.
+- Ledger re-imported afterwards to restore the pristine sheet baseline; reconciliation back to 9/9 at
+  ₹5,28,65,785.81 / 527 placements, review 29, resolved 0.
+- Deleted 3 leftover TEST bills (VHC/26-27/1–3, two cancelled + one paid) so the bills module is clean
+  (0 bills) as the client asked back on 17 Sept.
+
 ## Prior history
 See [CHANGELOG_ARCHIVE_PRE_2026_09_08.md](CHANGELOG_ARCHIVE_PRE_2026_09_08.md) for the complete original PRD/history, preserved without losing older requirements.

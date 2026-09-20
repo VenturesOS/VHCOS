@@ -14,6 +14,7 @@ import { Loader2, RefreshCw, Receipt, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { joiningsAPI, targetsAPI } from '../../lib/api';
 import { StatusChip, inr, compactINR, downloadCSV } from '../../components/revenue/RevenueTables';
+import { ResolveRowDialog } from '../../components/revenue/ResolveRowDialog';
 
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -48,6 +49,7 @@ export default function JoiningListPage() {
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState({});
   const [invoiceFor, setInvoiceFor] = useState(null);
+  const [updateRow, setUpdateRow] = useState(null);
   const [invoiceForm, setInvoiceForm] = useState({ joined_ctc: '', commercial_rate_pct: '', designation: '' });
   const [raising, setRaising] = useState(false);
 
@@ -306,6 +308,22 @@ export default function JoiningListPage() {
                                 <Receipt className="w-3 h-3 mr-1" /> Raise Invoice
                               </Button>
                             </>
+                          ) : row.placement_id ? (
+                            <Button size="sm" variant="outline" className="h-8"
+                                    onClick={() => setUpdateRow({
+                                      id: row.placement_id,
+                                      candidate_name: row.candidate_name,
+                                      branch: row.branch,
+                                      organization: row.client_name,
+                                      revenue: row.revenue,
+                                      payment_status: row.payment_status,
+                                      invoice_no: row.bill_number,
+                                      recruiter_id: row.recruiter_id,
+                                      reasons: ['Recorded in the branch tracker — update the payment as it moves'],
+                                    })}
+                                    data-testid={`joining-update-${row.key}`}>
+                              Update
+                            </Button>
                           ) : (
                             <span className="text-xs text-slate-400">from tracker</span>
                           )}
@@ -322,6 +340,8 @@ export default function JoiningListPage() {
           )}
         </CardContent>
       </Card>
+
+      <ResolveRowDialog row={updateRow} onClose={() => setUpdateRow(null)} onSaved={load} />
 
       <Dialog open={!!invoiceFor} onOpenChange={(o) => !o && setInvoiceFor(null)}>
         <DialogContent data-testid="raise-invoice-dialog">

@@ -11,6 +11,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { InvoiceWorklist } from '../../components/revenue/InvoiceWorklist';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -78,6 +80,7 @@ export default function BillsPage() {
   const [previewBill, setPreviewBill] = useState(null);
   // fix.docx (2026-09-15): bank accounts + client email override
   const [bankAccounts, setBankAccounts] = useState([]);
+  const [mainTab, setMainTab] = useState('invoices');
   const [showBankDialog, setShowBankDialog] = useState(false);
   const [bankForm, setBankForm] = useState({
     id: null, label: '', bank_name: '', beneficiary_name: '',
@@ -360,6 +363,15 @@ export default function BillsPage() {
         </div>
       </div>
 
+      <Tabs value={mainTab} onValueChange={setMainTab}>
+        <TabsList>
+          <TabsTrigger value="invoices" data-testid="bills-tab-invoices">Invoices</TabsTrigger>
+          <TabsTrigger value="worklist" data-testid="bills-tab-worklist">Invoices &amp; Payments</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {mainTab === 'worklist' ? <InvoiceWorklist /> : (<>
+
       {/* Bank accounts strip — always visible so users know they exist */}
       {bankAccounts.length > 0 && (
         <Card data-testid="bank-accounts-strip">
@@ -444,6 +456,7 @@ export default function BillsPage() {
           )}
         </CardContent>
       </Card>
+      </>)}
 
       {/* ── New Bill Dialog ── */}
       <Dialog open={showCreate} onOpenChange={(o) => !o && setShowCreate(false)}>

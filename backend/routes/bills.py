@@ -322,6 +322,37 @@ async def list_bills(
     return {"items": rows, "count": len(rows)}
 
 
+@bills_router.get("/bills/worklist")
+async def bills_worklist(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    state: Optional[str] = None,
+    q: Optional[str] = None,
+    user: dict = Depends(_require_billing_role),
+):
+    """Invoices & Payments: everything waiting to be raised, collected or
+    already collected — tracker rows, platform joinings and bills together.
+
+    Employers only ever see their own branch; Admin and Accounts see all.
+    """
+    from services import targets_service as ts
+    from services.invoice_worklist import worklist
+
+    year = ts.current_year()
+    team_ids = recruiter_ids = None
+    if user.get("role") not in ("admin", "accounts"):
+        teams = await ts.teams_for_employer(db, user["id"])
+        team_ids = [t["id"] for t in teams]
+        recruiter_ids = list({uid for t in teams for uid in ts.team_member_ids(t)})
+
+    start, end = ts.year_bounds(year)
+    return await worklist(
+        db,
+        date_from=date_from or start, date_to=date_to or end,
+        team_ids=team_ids, recruiter_ids=recruiter_ids, state=state, q=q,
+    )
+
+
 @bills_router.get("/bills/{bill_id}")
 async def get_bill(bill_id: str, user: dict = Depends(_require_billing_role)):
     bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
@@ -605,7 +636,8 @@ async def send_bill(bill_id: str, payload: BillSend, user: dict = Depends(_requi
 # Mark paid
 # ──────────────────────────────────────────────────────────────────────
 @bills_router.post("/bills/{bill_id}/mark-paid")
-async def mark_paid(bill_id: str, user: dict = Depends(_require_billing_role)):
+async def mark_paid(bill_id: str, paid_on: Optional[str] = None,
+                    user: dict = Depends(_require_billing_role)):
     bill = await db.bills.find_one({"id": bill_id}, {"_id": 0, "status": 1})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -614,6 +646,7 @@ async def mark_paid(bill_id: str, user: dict = Depends(_require_billing_role)):
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.bills.update_one(
         {"id": bill_id},
-        {"$set": {"status": "paid", "paid_at": now_iso, "updated_at": now_iso}},
+        {"$set": {"status": "paid", "paid_at": (paid_on or now_iso)[:10],
+                  "marked_paid_by": user.get("email"), "updated_at": now_iso}},
     )
     return {"message": "Bill marked as paid", "id": bill_id}

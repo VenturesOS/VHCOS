@@ -60,6 +60,7 @@ async def unified_joinings(
     for r in ledger:
         row = {
             "key": f"ledger:{r['id']}",
+            "placement_id": r["id"],
             "source": "tracker",
             "in_tracker": True,
             "in_pipeline": False,
@@ -97,6 +98,7 @@ async def unified_joinings(
             continue
         rows.append({
             "key": f"app:{p['application_id']}",
+            "placement_id": "",
             "source": "pipeline",
             "in_tracker": False,
             "in_pipeline": True,
