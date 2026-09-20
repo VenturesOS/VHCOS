@@ -11,8 +11,11 @@ User-confirmed model (2026-09-17):
   • Company achievement = Σ all teams.
   • Recruiters only ever receive a percentage — never the rupee amounts.
 """
+from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+
+from services import branch_revenue as br
 
 TARGETS = "revenue_targets"
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -30,6 +33,23 @@ def current_year() -> int:
 
 def year_bounds(year: int) -> tuple:
     return f"{year}-01-01", f"{year}-12-31"
+
+
+def period_bounds(period_type: str, period: str) -> Optional[tuple]:
+    """`2026-09` (month) · `2026-Q3` (quarter) · `2026` (year) → ISO range."""
+    try:
+        if period_type == "month":
+            y, m = int(period[:4]), int(period[5:7])
+            return f"{y}-{m:02d}-01", f"{y}-{m:02d}-{monthrange(y, m)[1]:02d}"
+        if period_type == "quarter":
+            y, q = int(period[:4]), int(period[-1])
+            start_m = (q - 1) * 3 + 1
+            end_m = start_m + 2
+            return f"{y}-{start_m:02d}-01", f"{y}-{end_m:02d}-{monthrange(y, end_m)[1]:02d}"
+        y = int(period[:4])
+        return year_bounds(y)
+    except Exception:
+        return None
 
 
 def period_target(annual_target: float, period_type: str) -> float:
@@ -75,8 +95,11 @@ async def upsert_target(
 async def revenue_by_recruiter(db, year: int, recruiter_ids: Optional[List[str]] = None) -> Dict[str, dict]:
     """Booked revenue per recruiter for the calendar year.
 
-    `revenue` rows carry `recruiter_id` + `join_date` (written when a team
-    leader fills the joining), so this is a small indexed scan.
+    Two sources, added together:
+      • `placement_ledger` — the branch revenue tracker (active revenue).
+      • `revenue` — booked on joinings the platform tracked itself.
+    `revenue` rows carry `recruiter_id` + `join_date`, so this is a small
+    indexed scan.
     """
     start, end = year_bounds(year)
     match: dict = {"join_date": {"$gte": start, "$lte": end}, "final_revenue": {"$gt": 0}}
@@ -90,7 +113,13 @@ async def revenue_by_recruiter(db, year: int, recruiter_ids: Optional[List[str]]
             "joinings": {"$sum": 1},
         }},
     ]).to_list(500)
-    return {r["_id"]: {"revenue": round(r["revenue"], 2), "joinings": r["joinings"]} for r in rows if r["_id"]}
+    out = {r["_id"]: {"revenue": round(r["revenue"], 2), "joinings": r["joinings"]}
+           for r in rows if r["_id"]}
+    for rid, led in (await br.revenue_by_recruiter(db, start, end, recruiter_ids)).items():
+        acc = out.setdefault(rid, {"revenue": 0.0, "joinings": 0})
+        acc["revenue"] = round(acc["revenue"] + led["revenue"], 2)
+        acc["joinings"] += led["joinings"]
+    return out
 
 
 def build_member_rows(member_ids: List[str], targets: Dict[str, dict],
@@ -112,7 +141,7 @@ def build_member_rows(member_ids: List[str], targets: Dict[str, dict],
             "revenue_booked": earned,
             "achieved": achieved,
             "achievement_pct": pct(achieved, target),
-            "joinings": int(b.get("joinings") or 0),
+            "joinings": whole(b.get("joinings") or 0),
         })
     rows.sort(key=lambda r: (-r["achieved"], r["name"]))
     return rows
@@ -162,30 +191,78 @@ def canonical_team_members(teams: List[dict]) -> Dict[str, List[str]]:
 
 
 def team_member_ids(team: dict) -> List[str]:
+    """Roster for revenue purposes: the recruiters, the lead, and the
+    account manager (employer) — AMs place candidates themselves, so their
+    revenue belongs on the team table rather than in the unattributed pot.
+    """
     ids = list(team.get("recruiter_ids") or [])
-    if team.get("team_lead_id") and team["team_lead_id"] not in ids:
-        ids.append(team["team_lead_id"])
+    for extra in (team.get("team_lead_id"), team.get("employer_id")):
+        if extra and extra not in ids:
+            ids.append(extra)
     return ids
 
 
+def whole(n: float) -> float:
+    """Placement counts can be fractional (shared credit) — keep them tidy."""
+    n = round(float(n or 0), 1)
+    return int(n) if n == int(n) else n
+
+
+async def roster_ids(db) -> set:
+    """Every recruiter attributed to a team, across all teams. Used so a
+    person counted on their own team is never also counted as
+    'unattributed' on another team's ledger rows."""
+    teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
+    return {uid for ids in canonical_team_members(teams).values() for uid in ids}
+
+
+async def ex_member_revenue(db, team_id: str, year: int, member_ids: List[str],
+                            people: Optional[Dict[str, Dict[str, dict]]] = None,
+                            exclude_ids: Optional[set] = None) -> dict:
+    """Ledger revenue inside a team that belongs to nobody on the current
+    roster — recruiters who left, and blank-recruiter rows. Client rule:
+    it stays with the team they worked for."""
+    if people is None:
+        people = await br.team_people(db, *year_bounds(year))
+    roster = set(member_ids) | (exclude_ids if exclude_ids is not None else await roster_ids(db))
+    raw = {k: v for k, v in (people.get(team_id) or {}).items() if k not in roster}
+    # Someone who left still has a user id on their ledger rows — resolve it
+    # to a name so the UI never shows a raw id.
+    ids = [k for k in raw if not k.startswith("label:")]
+    names = {}
+    if ids:
+        async for u in db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}):
+            names[u["id"]] = u.get("name") or u.get("email") or u["id"]
+    rows = [{"name": names.get(k, k.split("label:", 1)[-1]), **v} for k, v in raw.items()]
+    return {
+        "revenue": round(sum(r["active"] for r in rows), 2),
+        "joinings": whole(sum(r["placements"] for r in rows)),
+        "people": sorted(rows, key=lambda r: -r["active"]),
+    }
+
+
 async def team_summary(db, team: dict, year: int, *, members: Optional[List[dict]] = None,
-                       team_target_doc: Optional[dict] = None) -> dict:
+                       team_target_doc: Optional[dict] = None,
+                       ledger_people: Optional[Dict[str, Dict[str, dict]]] = None,
+                       all_roster_ids: Optional[set] = None) -> dict:
     """One team: members + rolled-up totals. Team target falls back to the
     sum of member targets when the admin hasn't set an explicit one.
 
-    `members` / `team_target_doc` can be pre-fetched by the caller (see
-    `company_summary`) to avoid one round-trip per team.
+    `members` / `team_target_doc` / `ledger_people` can be pre-fetched by the
+    caller (see `company_summary`) to avoid one round-trip per team.
     """
     if members is None:
         members = await member_rows(db, team_member_ids(team), year)
     if team_target_doc is None:
         team_target_doc = (await get_targets(db, "team", [team["id"]], year)).get(team["id"]) or {}
+    ex = await ex_member_revenue(db, team["id"], year, [m["user_id"] for m in members],
+                                 people=ledger_people, exclude_ids=all_roster_ids)
     members_target = round(sum(m["target_amount"] for m in members), 2)
     members_achieved = round(sum(m["achieved"] for m in members), 2)
     team_opening = float(team_target_doc.get("opening_achieved") or 0)
     explicit_target = float(team_target_doc.get("target_amount") or 0)
     target = explicit_target or members_target
-    achieved = round(members_achieved + team_opening, 2)
+    achieved = round(members_achieved + team_opening + ex["revenue"], 2)
     return {
         "team_id": team["id"],
         "team_name": team.get("name") or "",
@@ -195,10 +272,12 @@ async def team_summary(db, team: dict, year: int, *, members: Optional[List[dict
         "members_achieved": members_achieved,
         "team_target": explicit_target,
         "team_opening_achieved": team_opening,
+        "ex_member_revenue": ex["revenue"],
+        "ex_members": ex["people"],
         "target_amount": target,
         "achieved": achieved,
         "achievement_pct": pct(achieved, target),
-        "joinings": sum(m["joinings"] for m in members),
+        "joinings": whole(sum(m["joinings"] for m in members) + ex["joinings"]),
     }
 
 
@@ -217,13 +296,16 @@ async def company_summary(db, year: int) -> dict:
     user_targets = await get_targets(db, "user", all_member_ids, year)
     team_targets = await get_targets(db, "team", [t["id"] for t in teams], year)
     booked = await revenue_by_recruiter(db, year, all_member_ids)
+    ledger_people = await br.team_people(db, *year_bounds(year))
 
     rows = []
     for t in teams:
         members = build_member_rows(
             [uid for uid in canonical.get(t["id"], []) if uid in users], user_targets, booked, users)
         s = await team_summary(db, t, year, members=members,
-                               team_target_doc=team_targets.get(t["id"]) or {})
+                               team_target_doc=team_targets.get(t["id"]) or {},
+                               ledger_people=ledger_people,
+                               all_roster_ids=set(all_member_ids))
         s["employer_name"] = (users.get(t.get("employer_id")) or {}).get("name") or ""
         rows.append(s)
     rows.sort(key=lambda r: -r["achieved"])
@@ -235,7 +317,7 @@ async def company_summary(db, year: int) -> dict:
         "total_target": total_target,
         "total_achieved": total_achieved,
         "achievement_pct": pct(total_achieved, total_target),
-        "total_joinings": sum(r["joinings"] for r in rows),
+        "total_joinings": whole(sum(r["joinings"] for r in rows)),
     }
 
 

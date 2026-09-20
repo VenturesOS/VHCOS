@@ -8,7 +8,6 @@ period that has not been stored yet.
 """
 import logging
 import uuid
-from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -17,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from config import db
 from utils import require_role
 from services.joinings_service import fetch_joinings
+from services import branch_revenue as br
 from services import targets_service as ts
 
 records_router = APIRouter(prefix="/api/performance-records", tags=["Performance Records"])
@@ -27,19 +27,10 @@ COLL = "performance_records"
 
 def period_bounds(period_type: str, period: str) -> tuple:
     """`2026-09` (month) · `2026-Q3` (quarter) · `2026` (year)."""
-    try:
-        if period_type == "month":
-            y, m = int(period[:4]), int(period[5:7])
-            return f"{y}-{m:02d}-01", f"{y}-{m:02d}-{monthrange(y, m)[1]:02d}"
-        if period_type == "quarter":
-            y, q = int(period[:4]), int(period[-1])
-            start_m = (q - 1) * 3 + 1
-            end_m = start_m + 2
-            return f"{y}-{start_m:02d}-01", f"{y}-{end_m:02d}-{monthrange(y, end_m)[1]:02d}"
-        y = int(period[:4])
-        return f"{y}-01-01", f"{y}-12-31"
-    except Exception:
+    bounds = ts.period_bounds(period_type, period)
+    if not bounds:
         raise HTTPException(status_code=400, detail="Bad period. Use 2026-09, 2026-Q3 or 2026.")
+    return bounds
 
 
 def is_closed(period_type: str, period: str) -> bool:
@@ -60,26 +51,36 @@ def ready_to_archive(period_type: str, period: str) -> bool:
 
 
 async def build_report(period_type: str, period: str) -> dict:
-    """Compute a period report live (same shape as a stored snapshot)."""
+    """Compute a period report live (same shape as a stored snapshot).
+
+    Revenue has two sources, both folded in: the branch revenue tracker
+    (`placement_ledger`, imported from the client's sheet) and joinings the
+    platform tracked itself.
+    """
     start, end = period_bounds(period_type, period)
     year = int(period[:4])
 
     joinings = await fetch_joinings(db, date_from=start, date_to=end, limit=1000)
+    ledger = await br.fetch_rows(db, date_from=start, date_to=end)
+    sheet = br.summarise(ledger)
     teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
     employer_ids = list({t.get("employer_id") for t in teams if t.get("employer_id")})
     employers = {}
     async for u in db.users.find({"id": {"$in": employer_ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}):
         employers[u["id"]] = u
 
-    # Period revenue per recruiter, straight off the joinings in range
+    # Period revenue per recruiter — platform joinings first, then the ledger
     per_recruiter: dict = {}
-    for row in joinings:
-        rid = row.get("recruiter_id") or "unassigned"
-        acc = per_recruiter.setdefault(rid, {
-            "recruiter_id": rid, "recruiter_name": row.get("recruiter_name") or "",
-            "joinings": 0, "revenue": 0.0, "candidates": [],
+
+    def bucket(rid: str, name: str) -> dict:
+        return per_recruiter.setdefault(rid, {
+            "recruiter_id": rid, "recruiter_name": name or "",
+            "placements": 0.0, "pipeline_joinings": 0, "revenue": 0.0, "candidates": [],
         })
-        acc["joinings"] += 1
+
+    for row in joinings:
+        acc = bucket(row.get("recruiter_id") or "unassigned", row.get("recruiter_name"))
+        acc["pipeline_joinings"] += 1
         acc["revenue"] += float(row.get("revenue") or 0)
         acc["candidates"].append({
             "candidate_name": row.get("candidate_name"),
@@ -89,6 +90,28 @@ async def build_report(period_type: str, period: str) -> dict:
             "joined_ctc": row.get("joined_ctc"),
             "revenue": row.get("revenue"),
             "bill_number": row.get("bill_number"),
+            "source": "pipeline",
+        })
+
+    for r in sheet["recruiters"]:
+        if not r["recruiter_id"]:
+            continue
+        acc = bucket(r["recruiter_id"], r["recruiter"])
+        acc["placements"] += r["placements"]
+        acc["revenue"] += r["active"]
+    for row in ledger:
+        if not row.get("recruiter_id"):
+            continue
+        per_recruiter[row["recruiter_id"]]["candidates"].append({
+            "candidate_name": row.get("candidate_name"),
+            "client_name": row.get("organization"),
+            "position": row.get("designation"),
+            "join_date": row.get("doj"),
+            "joined_ctc": row.get("offered_ctc"),
+            "revenue": row.get("revenue"),
+            "bill_number": row.get("invoice_no"),
+            "payment_status": row.get("payment_status"),
+            "source": "tracker",
         })
 
     # Annual targets give context to any period (monthly rows show the
@@ -96,6 +119,7 @@ async def build_report(period_type: str, period: str) -> dict:
     canonical = ts.canonical_team_members(teams)
     all_member_ids = [uid for ids in canonical.values() for uid in ids]
     annual_targets = await ts.get_targets(db, "user", all_member_ids, year)
+    ledger_people = await br.team_people(db, start, end)
 
     # Names for everyone on the roster — previously a member with no
     # joining in the period had no name and the UI showed their raw id.
@@ -116,7 +140,8 @@ async def build_report(period_type: str, period: str) -> dict:
                 "user_id": uid,
                 "name": u.get("name") or r.get("recruiter_name") or u.get("email") or uid,
                 "email": u.get("email") or "",
-                "joinings": int(r.get("joinings") or 0),
+                "joinings": ts.whole(r.get("placements") or 0),
+                "pipeline_joinings": int(r.get("pipeline_joinings") or 0),
                 "revenue": revenue,
                 "annual_target": target,
                 "period_target": p_target,
@@ -128,18 +153,25 @@ async def build_report(period_type: str, period: str) -> dict:
                 "candidates": r.get("candidates") or [],
             })
         members.sort(key=lambda m: -m["revenue"])
+        # Revenue from people who have left, plus blank-recruiter rows —
+        # client rule: it stays with the team they worked for.
+        ex = await ts.ex_member_revenue(db, t["id"], year, mids, people=ledger_people,
+                                        exclude_ids=set(member_users.keys()))
+        team_revenue = round(sum(m["revenue"] for m in members) + ex["revenue"], 2)
         team_rows.append({
             "team_id": t["id"],
             "team_name": t.get("name") or "",
             "employer_id": t.get("employer_id") or "",
             "employer_name": (employers.get(t.get("employer_id")) or {}).get("name") or "",
             "members": members,
-            "joinings": sum(m["joinings"] for m in members),
-            "revenue": round(sum(m["revenue"] for m in members), 2),
+            "ex_members": ex["people"],
+            "ex_member_revenue": ex["revenue"],
+            "joinings": ts.whole(sum(m["joinings"] for m in members) + ex["joinings"]),
+            "revenue": team_revenue,
             "annual_target": round(sum(m["annual_target"] for m in members), 2),
             "period_target": round(sum(m["period_target"] for m in members), 2),
             "period_achievement_pct": ts.pct(
-                sum(m["revenue"] for m in members),
+                team_revenue,
                 sum(m["period_target"] for m in members),
             ),
         })
@@ -149,6 +181,9 @@ async def build_report(period_type: str, period: str) -> dict:
     teamed = {m["user_id"] for r in team_rows for m in r["members"]}
     untracked = [v for k, v in per_recruiter.items() if k not in teamed]
 
+    total_revenue = round(
+        sum(float(j.get("revenue") or 0) for j in joinings) + sheet["kpis"]["active"], 2)
+    total_period_target = round(sum(r["period_target"] for r in team_rows), 2)
     return {
         "period_type": period_type,
         "period": period,
@@ -156,15 +191,17 @@ async def build_report(period_type: str, period: str) -> dict:
         "closed": is_closed(period_type, period),
         "teams": team_rows,
         "untracked_recruiters": untracked,
-        "total_joinings": len(joinings),
-        "total_revenue": round(sum(float(j.get("revenue") or 0) for j in joinings), 2),
+        # Tracker placements and platform joinings are counted separately —
+        # the same hire can exist in both, so adding them would inflate.
+        "total_joinings": sheet["kpis"]["placements"],
+        "pipeline_joinings": len(joinings),
+        "total_revenue": total_revenue,
         "total_annual_target": round(sum(r["annual_target"] for r in team_rows), 2),
-        "total_period_target": round(sum(r["period_target"] for r in team_rows), 2),
-        "period_achievement_pct": ts.pct(
-            sum(float(j.get("revenue") or 0) for j in joinings),
-            sum(r["period_target"] for r in team_rows),
-        ),
+        "total_period_target": total_period_target,
+        "period_achievement_pct": ts.pct(total_revenue, total_period_target),
         "joinings": joinings,
+        # The tracker, exactly as the sheet lays it out
+        "branch_revenue": {**sheet, "data_quality": br.data_quality(ledger)},
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

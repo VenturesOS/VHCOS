@@ -140,6 +140,9 @@ export const RevenueTargetsCard = ({ mode = 'team' }) => {
                   <p className="font-medium text-slate-900">{t.team_name}</p>
                   <p className="text-xs text-slate-500">
                     {t.members.length} members · achieved {fmtINR(t.achieved)} of {fmtINR(t.target_amount)}
+                    {t.ex_member_revenue
+                      ? ` · includes ${fmtINR(t.ex_member_revenue)} from people who left / unassigned`
+                      : ''}
                   </p>
                 </div>
                 <div className="flex items-end gap-2">

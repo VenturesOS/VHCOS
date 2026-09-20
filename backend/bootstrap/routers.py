@@ -72,6 +72,7 @@ bug_reports_router = _safe_import("routes.bug_reports", "bug_reports_router")
 targets_router = _safe_import("routes.targets", "targets_router")
 joinings_router = _safe_import("routes.joinings", "joinings_router")
 performance_records_router = _safe_import("routes.performance_records", "records_router")
+branch_revenue_router = _safe_import("routes.branch_revenue", "branch_revenue_router")
 
 # system_errors gives us log_system_error too — need a working stub if it fails
 try:
@@ -142,6 +143,7 @@ all_routers = [
     targets_router,
     joinings_router,
     performance_records_router,
+    branch_revenue_router,
     tally_router,
     ext_check_router,
     embed_admin_router,

@@ -618,6 +618,13 @@ export const performanceRecordsAPI = {
   deleteRecord: (id) => api.delete(`/performance-records/archive/${id}`),
 };
 
+// Branch & Recruiter Revenue — the offline tracker, shaped like the sheet.
+export const branchRevenueAPI = {
+  dashboard: (params = {}) => api.get('/branch-revenue/dashboard', { params }),
+  placements: (params = {}) => api.get('/branch-revenue/placements', { params }),
+  branches: () => api.get('/branch-revenue/branches'),
+};
+
 // "Candidates called" tracking (fix.docx) — fire-and-forget. `source` is
 // one of badge_expand | profile_modal | called_button.
 export const trackCandidateCalled = (candidateId, source, extra = {}) => {
