@@ -136,11 +136,29 @@ async def _freeze_join_date(app: dict) -> str:
     return join_date
 
 
+async def _block_if_in_tracker(app: dict) -> None:
+    """Refuse to book money on a hire the branch tracker already bills."""
+    from services import branch_revenue as br
+    row = await br.tracker_row_for_candidate(db, app.get("candidate_name") or "")
+    if row:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{row.get('candidate_name')} is already in the {row.get('branch')} revenue tracker "
+                f"({row.get('payment_status')}, ₹{row.get('revenue'):,.0f}"
+                f"{', invoice ' + row['invoice_no'] if row.get('invoice_no') else ''}). "
+                "Booking revenue here as well would count it twice — update the tracker instead."
+            ),
+        )
+
+
 @joinings_router.patch("/{application_id}")
 async def update_joining(application_id: str, payload: JoiningUpdate, user: dict = Depends(get_current_user)):
     """Fill the blanks: joining CTC and the revenue generated. The revenue
     row carries recruiter + join date so target rollups stay cheap."""
     app = await _load_scoped_application(application_id, user)
+    if payload.revenue is not None or payload.commercial_rate_pct is not None:
+        await _block_if_in_tracker(app)
     now = datetime.now(timezone.utc).isoformat()
     join_date = await _freeze_join_date(app)
 
@@ -186,6 +204,7 @@ async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user:
     as that recruiter's revenue for the year.
     """
     app = await _load_scoped_application(application_id, user)
+    await _block_if_in_tracker(app)
     existing = await db.revenue.find_one({"application_id": application_id}, {"_id": 0, "bill_id": 1, "bill_number": 1})
     if existing and existing.get("bill_id"):
         raise HTTPException(status_code=409, detail=f"Invoice {existing.get('bill_number')} was already raised for this joining.")

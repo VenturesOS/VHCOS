@@ -26,6 +26,15 @@ def _h(tok):
     return {"Authorization": f"Bearer {tok}"}
 
 
+def _login_or_skip(creds):
+    """The QA accounts/employer logins are throwaway — recreate them with
+    `python3 -m scripts.qa_role_users create` before running these."""
+    r = requests.post(f"{BASE_URL}/api/auth/login", json=creds, timeout=30)
+    if r.status_code != 200:
+        pytest.skip(f"{creds['email']} does not exist — run `python3 -m scripts.qa_role_users create`")
+    return r.json().get("access_token") or r.json().get("token")
+
+
 @pytest.fixture(scope="module")
 def admin_tok():
     return _login(ADMIN)
@@ -33,12 +42,12 @@ def admin_tok():
 
 @pytest.fixture(scope="module")
 def accounts_tok():
-    return _login(ACCOUNTS)
+    return _login_or_skip(ACCOUNTS)
 
 
 @pytest.fixture(scope="module")
 def employer_tok():
-    return _login(EMPLOYER)
+    return _login_or_skip(EMPLOYER)
 
 
 @pytest.fixture(scope="module")

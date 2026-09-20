@@ -623,6 +623,7 @@ export const branchRevenueAPI = {
   dashboard: (params = {}) => api.get('/branch-revenue/dashboard', { params }),
   placements: (params = {}) => api.get('/branch-revenue/placements', { params }),
   branches: () => api.get('/branch-revenue/branches'),
+  reconcile: (params = {}) => api.get('/branch-revenue/reconcile', { params }),
 };
 
 // "Candidates called" tracking (fix.docx) — fire-and-forget. `source` is

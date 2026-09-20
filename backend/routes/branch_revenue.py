@@ -119,6 +119,15 @@ async def placements(
             "totals": br.totals(rows), "range": {"from": start, "to": end}}
 
 
+@branch_revenue_router.get("/reconcile")
+async def reconcile(year: Optional[int] = None,
+                    user: dict = Depends(require_role(["admin", "accounts"]))):
+    """Re-derives every revenue figure from a different direction and
+    compares — proof that the dashboards, targets and Joining List agree."""
+    from services.revenue_reconcile import reconcile as run
+    return await run(db, year or ts.current_year())
+
+
 @branch_revenue_router.get("/branches")
 async def branches(user: dict = Depends(require_role(["admin", "accounts", "employer"]))):
     team_ids = await _scope_team_ids(user)

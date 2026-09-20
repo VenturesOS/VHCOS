@@ -155,6 +155,24 @@ def data_quality(rows: List[dict]) -> List[dict]:
     return out
 
 
+async def tracker_row_for_candidate(db, candidate_name: str) -> Optional[dict]:
+    """The tracker row for this hire, if the branch sheet already bills them.
+
+    Guards the money: a hire that exists in both places must never have
+    revenue booked twice (once from the tracker, once from the pipeline).
+    """
+    import re
+    needle = re.sub(r"[^a-z]", "", str(candidate_name or "").lower())
+    if not needle:
+        return None
+    async for row in db[COLL].find({}, {"_id": 0, "candidate_name": 1, "revenue": 1,
+                                        "payment_status": 1, "invoice_no": 1, "branch": 1,
+                                        "recruiter_name": 1}):
+        if re.sub(r"[^a-z]", "", str(row.get("candidate_name") or "").lower()) == needle:
+            return row
+    return None
+
+
 async def revenue_by_recruiter(db, date_from: str, date_to: str,
                                recruiter_ids: Optional[List[str]] = None) -> Dict[str, dict]:
     """Active revenue + placement count per recruiter, for target rollups."""

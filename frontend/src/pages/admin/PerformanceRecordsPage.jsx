@@ -16,6 +16,7 @@ import { performanceRecordsAPI, branchRevenueAPI } from '../../lib/api';
 import {
   DataTable, StatusChip, Achievement, inr, compactINR, downloadCSV,
 } from '../../components/revenue/RevenueTables';
+import { ReconcilePanel } from '../../components/revenue/ReconcilePanel';
 
 const KPI = [
   ['placements', 'Placements', (v) => v],
@@ -477,7 +478,8 @@ export default function PerformanceRecordsPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="review" className="mt-4 space-y-3">
+            <TabsContent value="review" className="mt-4 space-y-4">
+              <ReconcilePanel year={Number(period.slice(0, 4)) || new Date().getFullYear()} />
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
                 {kpis.records_needing_review} records need a decision ·{' '}

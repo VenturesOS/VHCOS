@@ -654,5 +654,35 @@ Everything above plus the earlier rate-limiter and `index.html` fixes still need
 - Temporary QA accounts/employer logins were used for the role tests and deleted afterwards
   (`scripts/qa_role_users.py`).
 
+## 2026-09-20 (final) — Overlap closed at the API, reconciliation built in
+
+### The overlap that could have inflated revenue
+- A hire in BOTH the tracker and the pipeline could have revenue booked on the pipeline copy as well,
+  which would have added it to the recruiter's year twice. The UI blocked it; the API did not.
+- `services/branch_revenue.tracker_row_for_candidate()` + `_block_if_in_tracker()` in `routes/joinings.py`
+  now refuse `PATCH /api/joinings/{id}` (revenue) and `POST /api/joinings/{id}/raise-invoice` with a 409 that
+  names the tracker row: *"Manjunath B.S is already in the Faridabad revenue tracker (PP, ₹112,001,
+  invoice VHC/26-27/94)…"*. Matched rows also return `editable: false`.
+
+### Reconciliation (new)
+- `services/revenue_reconcile.py` + `GET /api/branch-revenue/reconcile?year=` (admin + accounts) adds the same
+  revenue up nine ways: by branch, by recruiter, company = tracker + platform, teams → company,
+  members + unattributed = team, one-team-per-person, 12 months = year, no hire billed twice,
+  Joining List = tracker. All 9 pass: ₹5,28,65,785.81 across 527 placements.
+- Shown in Performance Records → Review as the "Number check" panel (`components/revenue/ReconcilePanel.jsx`).
+
+### Change propagation verified live
+- Booked ₹2,50,000 on a pipeline-only joining: recruiter ₹13,95,572 → ₹16,45,572 (23 → 24 placements),
+  Faridabad ₹90,14,963 → ₹92,64,963, company ₹5,28,65,786 → ₹5,31,15,786, Joining List gross
+  ₹5,31,26,755 → ₹5,33,76,755, revenue-pending 35 → 34. Test row then deleted; baseline restored.
+
+### Housekeeping
+- Deleted a stale auto-snapshot (2026-07, archived 18 Sept with ₹0 revenue, predating the ledger); it
+  re-archived correctly at ₹66,11,007 / 62 placements.
+- `tests/test_revenue_reconcile.py` (9 tests) added; `tests/test_joinings_scoping.py` now skips cleanly when the
+  throwaway QA logins are absent. 18 passed, 9 skipped.
+- Pipeline back-fill of the 451 tracker-only hires was scoped (needs ~451 candidates, 43 companies,
+  ~400 mandates) and **deferred by the client** — see ROADMAP note below.
+
 ## Prior history
 See [CHANGELOG_ARCHIVE_PRE_2026_09_08.md](CHANGELOG_ARCHIVE_PRE_2026_09_08.md) for the complete original PRD/history, preserved without losing older requirements.

@@ -93,6 +93,12 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - One team per branch: Delhi = Maneet + Manorma, Gurgaon = Ajit + Jatin + Rohit (`additional_employer_ids`).
 - Visibility: Admin + Accounts see every number, an employer sees only the team(s) they manage, a
   recruiter never sees a rupee value.
+- Overlap is blocked at the API: a hire already in the tracker cannot have revenue booked or an invoice
+  raised from the pipeline (409). `GET /api/branch-revenue/reconcile` proves the books agree (9 checks,
+  surfaced as the "Number check" panel in Performance Records → Review).
+- **Deferred (client, 2026-09-20)**: back-filling the 451 tracker-only hires into the pipeline. It needs
+  ~451 candidate profiles (no phone/email in the sheet), 43 new client companies and ~400 historical
+  mandates; options and trade-offs were put to the client and parked.
 - **Open item**: annual targets are all ₹0 — the admin still has to set each recruiter's / team's number
   before achievement percentages mean anything.
 
