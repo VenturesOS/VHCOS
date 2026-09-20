@@ -88,6 +88,11 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - Recruiter spelling variants are merged to one person; anyone who left keeps their revenue in the team
   they worked for; no-login and blank-recruiter rows sit in the branch total as Ex-employee / Unassigned.
 - Re-import a refreshed sheet with `python3 -m scripts.import_placement_ledger <file.xlsx>` (idempotent).
+- The Joining List (employer + accounts + Admin Analytics) is the tracker and the pipeline merged and
+  deduped, each row showing its payment state. Tracker rows are read-only; pipeline rows stay editable.
+- One team per branch: Delhi = Maneet + Manorma, Gurgaon = Ajit + Jatin + Rohit (`additional_employer_ids`).
+- Visibility: Admin + Accounts see every number, an employer sees only the team(s) they manage, a
+  recruiter never sees a rupee value.
 - **Open item**: annual targets are all ₹0 — the admin still has to set each recruiter's / team's number
   before achievement percentages mean anything.
 

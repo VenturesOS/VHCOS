@@ -1,0 +1,45 @@
+{
+  "summary": "Tested unified Joining List, team consolidation, and role-based scoping (admin / accounts / employer / recruiter). Wrote 19-test pytest suite (test_joinings_scoping.py) — all 19 pass. Frontend verified via Playwright for employer joining list, accounts joining list & performance records, admin dashboard. Recruiter UI test interrupted by timeout but backend already proved 403 on every sensitive endpoint. Team consolidation confirmed via admin dashboard '5 teams' badge and /api/teams response.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "JoiningListPage search", "issue": "After typing 'zzzzzz' into joinings-search, the row count in DOM stayed at 144 after a 1.5s wait. Likely a debounce longer than the wait, but verify search filter actually reduces rows (should reach 0 for a garbage query).", "selector": "[data-testid=\"joinings-search\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Login/Joining pages", "issues": ["Cookie-consent banner overlays the bottom-right area and covers the last table row / stat cards until dismissed — but 'Accept All' button is reachable so not blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_joinings_scoping.py",
+    "/app/test_reports/pytest/joinings_scoping.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: verify joinings-search debounce (or increase wait in automation) — user-visible search still filters, just slower than 1.5s."
+  ],
+  "critical_code_review_comments": [
+    "GET /api/joinings response uses key 'items' + 'count' (with truncated=True at 500 items) — frontend must page or bump limit if user needs to scroll all 563 rows in one page; today the UI relies on the aggregated 'totals'/'sources' fields for KPIs, which are correct.",
+    "Response contract naming inconsistency: joinings returns 'items' while other list endpoints often return 'rows' — worth documenting in an API contract note so future consumers don't hit the same confusion."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_joinings_scoping.py (new)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "~90% (employer + accounts + admin confirmed; recruiter validated at API layer only)"},
+  "verified_metrics": {
+    "admin_joinings": "count=563, sources={tracker_only:453, pipeline_only:35, both:75}, totals={gross:53126755.31, received:35269287.77, pending:17596498.04, lost:260969.5}, buckets={Payment Received:367, PP:80, IP:59, Backout:17, Credit Note:4, Other/Review:1, Revenue pending:35}",
+    "accounts_role": "Sidebar has Joining List + Branch Revenue; /accounts/joinings returns 563; /accounts/performance-records shows Placements 527, Gross ₹5.31 Cr, Active ₹5.29 Cr, all 5 branches; PUT /api/targets/company → 405 (accounts read-only)",
+    "employer_scope": "count=144, Gross Billing ₹90,74,939 (matches Faridabad only). Faridabad-only rows, no Delhi/Gurgaon/Bengaluru/Hyderabad leak. team_id=<Gurgaon> → 0 rows. /api/performance-records/report → 403. /api/targets/company-summary → 403. /api/branch-revenue/dashboard → 200, Faridabad only.",
+    "recruiter_scope": "/api/joinings, /api/branch-revenue/dashboard, /api/performance-records/report, /api/targets/team-summary, /api/targets/company-summary → all 403. /api/targets/me → 200 (percentage-only payload).",
+    "team_consolidation": "GET /api/teams returns no active 'Manorma yadav Team' or 'Jatin Yadav Team' (both merged). Admin Dashboard shows 'Achievement 0% · 5 teams'. Company summary placements=527, gross=52,865,786.",
+    "editability": "Pipeline-only rows (payment status 'Revenue pending') expose editable joining-ctc-{key} and joining-revenue-{key} inputs with Save and Raise Invoice buttons. Tracker-sourced rows show 'from tracker' text in action column and no CTC input (data-testid absent as expected).",
+    "admin_dashboard_regression": "Revenue achieved card shows ₹5.29 Cr with '527 joinings booked' subtext — unchanged from iter 196."
+  },
+  "test_credentials": "admin@vhc.in / VhcAdmin@2024; qa_accounts_tmp@vhc.in / QaRevenue@2026; qa_employer_tmp@vhc.in / QaRevenue@2026; hr6@vhc.in / 12345678 (do NOT delete qa_*_tmp — main agent will remove)",
+  "seed_data_creation": "None. Read-only tests only; no invoices raised, no targets/teams/bills modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Joining List API contract: GET /api/joinings returns {items[], count, truncated, totals, sources, buckets, revenue_pending_count} — NOT 'rows'. Default items cap is 500 so large date ranges are truncated; totals/sources/buckets are still whole-set aggregates. Login button text is 'Sign In', not 'Login'. Row testids look like joining-row-ledger:<uuid> (tracker, read-only) or joining-row-app:<uuid> (pipeline, editable inputs). /accounts/performance-records is slow (~15s to render). The 'Teams & Targets' tab shares text with the sidebar 'Teams' link — click via role='tab' or scoped inside the tablist, not by text alone."
+}

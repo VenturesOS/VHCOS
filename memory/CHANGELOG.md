@@ -613,5 +613,43 @@ RETENTION_PRUNER_ENABLED          # default true; set false to disable
 ### Not deployed yet
 Everything above plus the earlier rate-limiter and `index.html` fixes still need the AWS pull + rebuild.
 
+## 2026-09-20 (later) — Joining Lists unified, branch teams consolidated, role visibility locked
+
+### Joining List = tracker + pipeline, merged
+- `services/joinings_service.unified_joinings()` returns one list per scope: all 528 `placement_ledger`
+  rows plus platform joinings, deduped on the candidate's normalised name (75 hires existed in both and
+  were being counted twice). 563 rows total: 453 tracker-only, 35 pipeline-only, 75 both.
+- Every row carries its payment state — Payment Received (367) · PP pending payment (80) ·
+  IP pending invoice (59) · Backout (17) · Credit Note (4) · Other/Review (1) · Revenue pending (35).
+  Pipeline rows derive it: invoiced → PP, revenue filled → IP, nothing filled → Revenue pending.
+- KPI boxes on the page: joinings, gross, received, pending (PP+IP), backout/credit note, team achievement.
+  Filters: dates, payment status, source (both / tracker only / pipeline only), debounced search, CSV export.
+- Tracker rows are read-only; only pipeline rows keep the editable CTC/revenue inputs + Raise Invoice.
+  `GET /api/joinings` now returns `{items, count, truncated, totals, sources, buckets, revenue_pending_count}`.
+- Admin Analytics → Recent Joinings uses the same merged feed (keyed on `row.key`, payment column added).
+
+### Branch teams consolidated (client instruction)
+- Delhi = Maneet + **Manorma**; Gurgaon = Ajit + **Jatin** + **Rohit**, via `additional_employer_ids`
+  (`scripts/merge_branch_teams.py`). Every account manager on a team now counts as a contributor.
+- The redundant one-person teams (`Manorma yadav Team`, `Jatin Yadav Team`) are `status="merged"` —
+  kept for history, excluded from every roll-up by `targets_service.TEAM_LIVE`. 5 live teams.
+- Company total unchanged at ₹5,28,65,785.81 / 527 placements (verified no double counting).
+
+### Who sees what
+- **Admin + Accounts**: every number — joinings, branch revenue, performance records, company summary.
+  Accounts gained `/accounts/joinings` and `/accounts/performance-records`; it is read-only on targets.
+- **Employer**: only their own team(s), resolved through `teams_for_employer` (so a co-manager sees the
+  branch they run). Verified: Faridabad manager sees 144 rows / ₹90,74,939, `team_id=<other team>` → 0 rows,
+  performance-records and company-summary → 403.
+- **Recruiter**: 403 on joinings, branch-revenue, performance-records, team-summary and company-summary;
+  `/api/targets/me` stays percentage-only.
+
+### Testing
+- `backend/tests/test_joinings_scoping.py`: 19/19 pass. `test_reports/iteration_197.json`: no backend
+  issues, no integration issues. The one LOW note (search seemed not to filter) was the automation's
+  1.5 s wait — re-verified by hand: garbage query → 0 rows, "JK Cement" → 59 rows.
+- Temporary QA accounts/employer logins were used for the role tests and deleted afterwards
+  (`scripts/qa_role_users.py`).
+
 ## Prior history
 See [CHANGELOG_ARCHIVE_PRE_2026_09_08.md](CHANGELOG_ARCHIVE_PRE_2026_09_08.md) for the complete original PRD/history, preserved without losing older requirements.
