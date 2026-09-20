@@ -63,8 +63,9 @@ async def build_report(period_type: str, period: str) -> dict:
     joinings = await fetch_joinings(db, date_from=start, date_to=end, limit=1000)
     ledger = await br.fetch_rows(db, date_from=start, date_to=end)
     sheet = br.summarise(ledger)
-    teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
-    employer_ids = list({t.get("employer_id") for t in teams if t.get("employer_id")})
+    teams = await ts.live_teams(db)
+    employer_ids = list({eid for t in teams
+                         for eid in [t.get("employer_id"), *(t.get("additional_employer_ids") or [])] if eid})
     employers = {}
     async for u in db.users.find({"id": {"$in": employer_ids}}, {"_id": 0, "id": 1, "name": 1, "email": 1}):
         employers[u["id"]] = u
@@ -162,7 +163,12 @@ async def build_report(period_type: str, period: str) -> dict:
             "team_id": t["id"],
             "team_name": t.get("name") or "",
             "employer_id": t.get("employer_id") or "",
-            "employer_name": (employers.get(t.get("employer_id")) or {}).get("name") or "",
+            # A branch can have more than one account manager (Delhi =
+            # Maneet + Manorma, Gurgaon = Ajit + Jatin + Rohit).
+            "employer_name": " + ".join(
+                (employers.get(eid) or {}).get("name") or ""
+                for eid in [t.get("employer_id"), *(t.get("additional_employer_ids") or [])] if eid
+            ).strip(" +"),
             "members": members,
             "ex_members": ex["people"],
             "ex_member_revenue": ex["revenue"],
@@ -210,7 +216,7 @@ async def build_report(period_type: str, period: str) -> dict:
 async def get_report(
     period_type: str = Query("month", pattern="^(month|quarter|year)$"),
     period: Optional[str] = None,
-    user: dict = Depends(require_role(["admin"])),
+    user: dict = Depends(require_role(["admin", "accounts"])),
 ):
     """Live report for any period. Closed periods are auto-archived."""
     if not period:
@@ -263,7 +269,7 @@ async def snapshot(
 
 
 @records_router.get("/archive")
-async def list_archive(user: dict = Depends(require_role(["admin"]))):
+async def list_archive(user: dict = Depends(require_role(["admin", "accounts"]))):
     rows = await db[COLL].find(
         {}, {"_id": 0, "id": 1, "period": 1, "period_type": 1, "range": 1, "total_revenue": 1,
              "total_joinings": 1, "archived_at": 1, "archived_by": 1},
@@ -280,7 +286,7 @@ async def delete_archive(record_id: str, user: dict = Depends(require_role(["adm
 
 
 @records_router.get("/periods")
-async def available_periods(user: dict = Depends(require_role(["admin"]))):
+async def available_periods(user: dict = Depends(require_role(["admin", "accounts"]))):
     now = datetime.now(timezone.utc)
     months: List[str] = []
     y, m = now.year, now.month

@@ -22,14 +22,11 @@ logger = logging.getLogger(__name__)
 async def _visible_teams(user: dict) -> List[dict]:
     """Teams the caller may read/manage."""
     role = user.get("role")
-    q: dict = {"status": {"$ne": "deleted"}}
-    if role == "admin":
-        pass
-    elif role == "employer":
-        q["employer_id"] = user["id"]
-    else:
-        return []
-    return await db.teams.find(q, {"_id": 0}).to_list(200)
+    if role in ("admin", "accounts"):
+        return await ts.live_teams(db)
+    if role == "employer":
+        return await ts.teams_for_employer(db, user["id"])
+    return []
 
 
 async def _require_manager(user: dict = Depends(get_current_user)) -> dict:
@@ -38,9 +35,9 @@ async def _require_manager(user: dict = Depends(get_current_user)) -> dict:
     Team-lead recruiters are deliberately excluded: the rule is that a
     recruiter only ever sees a percentage (`GET /api/targets/me`).
     """
-    if user.get("role") in ("admin", "employer"):
+    if user.get("role") in ("admin", "accounts", "employer"):
         return user
-    raise HTTPException(status_code=403, detail="Revenue targets are managed by Admin and Employer logins.")
+    raise HTTPException(status_code=403, detail="Revenue targets are managed by Admin, Accounts and Employer logins.")
 
 
 class TargetUpsert(BaseModel):
@@ -62,6 +59,9 @@ async def upsert_target(payload: TargetUpsert, user: dict = Depends(_require_man
     year = payload.year or ts.current_year()
     if payload.scope not in ("user", "team"):
         raise HTTPException(status_code=400, detail="scope must be 'user' or 'team'")
+
+    if user.get("role") == "accounts":
+        raise HTTPException(status_code=403, detail="Accounts has read-only access to targets.")
 
     if payload.scope == "team" and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only Admin can set a team-level target.")
@@ -110,9 +110,9 @@ async def team_summary(
 
 @targets_router.get("/company-summary")
 async def company_summary(year: Optional[int] = None, user: dict = Depends(get_current_user)):
-    """Admin view: all teams cumulated into the company number."""
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Admin + Accounts view: all teams cumulated into the company number."""
+    if user.get("role") not in ("admin", "accounts"):
+        raise HTTPException(status_code=403, detail="Admin and Accounts only")
     return await ts.company_summary(db, year or ts.current_year())
 
 

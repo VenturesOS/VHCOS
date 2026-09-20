@@ -34,13 +34,11 @@ def _resolve_period(period_type: str, period: Optional[str]) -> tuple:
 
 
 async def _scope_team_ids(user: dict) -> Optional[list]:
-    """None = every branch (admin). A list = the employer's own teams."""
-    if user.get("role") == "admin":
+    """None = every branch (Admin + Accounts). A list = the account
+    manager's own teams."""
+    if user.get("role") in ("admin", "accounts"):
         return None
-    teams = await db.teams.find(
-        {"employer_id": user["id"], "status": {"$ne": "deleted"}}, {"_id": 0, "id": 1},
-    ).to_list(50)
-    return [t["id"] for t in teams]
+    return [t["id"] for t in await ts.teams_for_employer(db, user["id"])]
 
 
 @branch_revenue_router.get("/dashboard")
@@ -48,7 +46,7 @@ async def dashboard(
     period_type: str = Query("year", pattern="^(month|quarter|year)$"),
     period: Optional[str] = None,
     branch: Optional[str] = None,
-    user: dict = Depends(require_role(["admin", "employer"])),
+    user: dict = Depends(require_role(["admin", "accounts", "employer"])),
 ):
     period, (start, end) = _resolve_period(period_type, period)
     team_ids = await _scope_team_ids(user)
@@ -102,7 +100,7 @@ async def placements(
     q: Optional[str] = None,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(require_role(["admin", "employer"])),
+    user: dict = Depends(require_role(["admin", "accounts", "employer"])),
 ):
     """The tracker's row-level view (one line per placement)."""
     period, (start, end) = _resolve_period(period_type, period)
@@ -122,7 +120,7 @@ async def placements(
 
 
 @branch_revenue_router.get("/branches")
-async def branches(user: dict = Depends(require_role(["admin", "employer"]))):
+async def branches(user: dict = Depends(require_role(["admin", "accounts", "employer"]))):
     team_ids = await _scope_team_ids(user)
     match = {} if team_ids is None else {"team_id": {"$in": team_ids or ["__none__"]}}
     names = await db[br.COLL].distinct("branch", match)

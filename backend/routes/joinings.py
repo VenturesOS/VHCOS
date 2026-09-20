@@ -15,27 +15,28 @@ from pydantic import BaseModel
 
 from config import db
 from utils import get_current_user
-from services.joinings_service import fetch_joinings
+from services.joinings_service import unified_joinings
 from services import targets_service as ts
 
 joinings_router = APIRouter(prefix="/api/joinings", tags=["Joinings"])
 logger = logging.getLogger(__name__)
 
 
-async def _scope(user: dict) -> Optional[list]:
-    """None = every recruiter (admin). Otherwise the recruiter ids the
-    caller owns."""
+async def _scope(user: dict) -> tuple:
+    """(recruiter_ids, team_ids) the caller may see. (None, None) = everything.
+
+    Admin and Accounts see every number; an account manager sees only the
+    teams they run; recruiters never see rupee values at all.
+    """
     role = user.get("role")
-    if role == "admin":
-        return None
-    if role == "employer":
-        teams = await db.teams.find({"employer_id": user["id"], "status": {"$ne": "deleted"}}, {"_id": 0}).to_list(100)
-    else:
+    if role in ("admin", "accounts"):
+        return None, None
+    if role != "employer":
         # Recruiters (team leads included) only ever see percentages, so the
-        # rupee-level joining list stays with Admin + Employer logins.
-        raise HTTPException(status_code=403, detail="The Joining List is available to Admin and Employer logins.")
-    ids = {uid for t in teams for uid in ts.team_member_ids(t)}
-    return list(ids)
+        # rupee-level joining list stays with Admin/Accounts/Employer logins.
+        raise HTTPException(status_code=403, detail="The Joining List is available to Admin, Accounts and Employer logins.")
+    teams = await ts.teams_for_employer(db, user["id"])
+    return list({uid for t in teams for uid in ts.team_member_ids(t)}), [t["id"] for t in teams]
 
 
 async def _team_of(recruiter_id: str) -> dict:
@@ -47,14 +48,14 @@ async def _team_of(recruiter_id: str) -> dict:
     owner the same way the roll-ups do.
     """
     teams = await db.teams.find(
-        {"status": {"$ne": "deleted"}, "$or": [{"recruiter_ids": recruiter_id}, {"team_lead_id": recruiter_id}]},
+        {**ts.TEAM_LIVE, "$or": [{"recruiter_ids": recruiter_id}, {"team_lead_id": recruiter_id}]},
         {"_id": 0},
     ).to_list(20)
     if not teams:
         return {}
     if len(teams) == 1:
         return teams[0]
-    all_teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
+    all_teams = await ts.live_teams(db)
     canonical = ts.canonical_team_members(all_teams)
     for t in all_teams:
         if recruiter_id in canonical.get(t["id"], []):
@@ -69,39 +70,41 @@ async def list_joinings(
     company_id: Optional[str] = None,
     position_q: Optional[str] = None,
     location_q: Optional[str] = None,
+    payment_status: Optional[str] = None,
+    source: Optional[str] = None,
+    q: Optional[str] = None,
     employee_id: Optional[str] = None,
     team_id: Optional[str] = None,
-    limit: int = 200,
+    limit: int = 500,
     user: dict = Depends(get_current_user),
 ):
-    recruiter_ids = await _scope(user)
+    """Every joining — branch tracker + platform pipeline, merged."""
+    recruiter_ids, team_ids = await _scope(user)
     if team_id:
         team = await db.teams.find_one({"id": team_id}, {"_id": 0})
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
-        team_ids = ts.team_member_ids(team)
+        members = ts.team_member_ids(team)
         # An employer can only narrow inside their own scope, never widen it.
         recruiter_ids = (
-            team_ids if recruiter_ids is None
-            else [uid for uid in team_ids if uid in recruiter_ids]
+            members if recruiter_ids is None
+            else [uid for uid in members if uid in recruiter_ids]
+        ) or ["__none__"]
+        team_ids = (
+            [team_id] if team_ids is None
+            else [t for t in team_ids if t == team_id]
         ) or ["__none__"]
     if employee_id:
         if recruiter_ids is not None and employee_id not in recruiter_ids:
             raise HTTPException(status_code=403, detail="That recruiter is not in your team.")
         recruiter_ids = [employee_id]
-    rows = await fetch_joinings(
+        team_ids = None
+    return await unified_joinings(
         db,
         date_from=date_from, date_to=date_to, company_id=company_id,
-        position_q=position_q, location_q=location_q,
-        recruiter_ids=recruiter_ids, limit=limit,
+        position_q=position_q, location_q=location_q, payment_status=payment_status,
+        source=source, q=q, recruiter_ids=recruiter_ids, team_ids=team_ids, limit=limit,
     )
-    pending = sum(1 for r in rows if not r.get("revenue"))
-    return {
-        "items": rows,
-        "count": len(rows),
-        "pending_revenue_count": pending,
-        "total_revenue": round(sum(float(r.get("revenue") or 0) for r in rows), 2),
-    }
 
 
 class JoiningUpdate(BaseModel):
@@ -114,7 +117,7 @@ async def _load_scoped_application(application_id: str, user: dict) -> dict:
     app = await db.applications.find_one({"id": application_id}, {"_id": 0})
     if not app:
         raise HTTPException(status_code=404, detail="Joining not found")
-    recruiter_ids = await _scope(user)
+    recruiter_ids, _ = await _scope(user)
     if recruiter_ids is not None and app.get("created_by") not in recruiter_ids:
         raise HTTPException(status_code=403, detail="That joining belongs to another team.")
     return app

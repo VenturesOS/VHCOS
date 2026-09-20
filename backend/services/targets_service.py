@@ -18,7 +18,27 @@ from typing import Dict, List, Optional
 from services import branch_revenue as br
 
 TARGETS = "revenue_targets"
+TEAMS = "teams"
 IST = timezone(timedelta(hours=5, minutes=30))
+
+# Teams that count. `merged` teams exist only as history — their account
+# manager was folded into another team (Manorma → Delhi, Jatin → Gurgaon),
+# so counting them again would double the company total.
+TEAM_LIVE = {"status": {"$nin": ["deleted", "merged"]}}
+
+
+async def live_teams(db) -> List[dict]:
+    return await db[TEAMS].find(TEAM_LIVE, {"_id": 0}).to_list(500)
+
+
+async def teams_for_employer(db, user_id: str) -> List[dict]:
+    """Teams an account manager owns. A team can have more than one manager
+    (`additional_employer_ids`) — Delhi is run by Maneet + Manorma, Gurgaon
+    by Ajit + Jatin + Rohit."""
+    return await db[TEAMS].find(
+        {**TEAM_LIVE, "$or": [{"employer_id": user_id}, {"additional_employer_ids": user_id}]},
+        {"_id": 0},
+    ).to_list(50)
 
 
 def ist_today() -> datetime:
@@ -191,12 +211,13 @@ def canonical_team_members(teams: List[dict]) -> Dict[str, List[str]]:
 
 
 def team_member_ids(team: dict) -> List[str]:
-    """Roster for revenue purposes: the recruiters, the lead, and the
-    account manager (employer) — AMs place candidates themselves, so their
+    """Roster for revenue purposes: the recruiters, the lead, and every
+    account manager on the team — AMs place candidates themselves, so their
     revenue belongs on the team table rather than in the unattributed pot.
     """
     ids = list(team.get("recruiter_ids") or [])
-    for extra in (team.get("team_lead_id"), team.get("employer_id")):
+    extras = [team.get("team_lead_id"), team.get("employer_id"), *(team.get("additional_employer_ids") or [])]
+    for extra in extras:
         if extra and extra not in ids:
             ids.append(extra)
     return ids
@@ -212,8 +233,7 @@ async def roster_ids(db) -> set:
     """Every recruiter attributed to a team, across all teams. Used so a
     person counted on their own team is never also counted as
     'unattributed' on another team's ledger rows."""
-    teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
-    return {uid for ids in canonical_team_members(teams).values() for uid in ids}
+    return {uid for ids in canonical_team_members(await live_teams(db)).values() for uid in ids}
 
 
 async def ex_member_revenue(db, team_id: str, year: int, member_ids: List[str],
@@ -286,7 +306,7 @@ async def company_summary(db, year: int) -> dict:
 
     All lookups are batched — the per-team version took ~19 s on 7 teams.
     """
-    teams = await db.teams.find({"status": {"$ne": "deleted"}}, {"_id": 0}).to_list(500)
+    teams = await live_teams(db)
     canonical = canonical_team_members(teams)
     all_member_ids = sorted({uid for ids in canonical.values() for uid in ids})
     employer_ids = list({t.get("employer_id") for t in teams if t.get("employer_id")})

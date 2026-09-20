@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Loader2, TrendingUp, Users, CheckCircle2, Award, Target, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { joiningsAPI, userAPI } from '../../lib/api';
+import { StatusChip } from '../../components/revenue/RevenueTables';
 
 const KPI_TILES = [
   { key: 'sourced',              label: 'Sourced',             icon: Users,        color: 'text-slate-600' },
@@ -279,7 +280,8 @@ export default function AdminAnalyticsPage() {
 
 // ─────────────────────────────────────────────────────────────
 // Joinings section (was: Blog Engine → Joinings tab).
-// Reads /api/blog/joinings; filters by date range, position, location.
+// Reads /api/joinings (branch tracker + pipeline, merged); filters by date
+// range, position, location. Only pipeline rows are editable.
 // Team leaders inline-edit joined CTC + revenue.
 // ─────────────────────────────────────────────────────────────
 function JoiningsSection({ scope }) {
@@ -309,21 +311,21 @@ function JoiningsSection({ scope }) {
   useEffect(() => { load(); }, [load]);
 
   const saveEdit = async (row) => {
-    const patch = draft[row.application_id];
+    const patch = draft[row.key];
     if (!patch) return;
-    setSaving(s => ({ ...s, [row.application_id]: true }));
+    setSaving(s => ({ ...s, [row.key]: true }));
     try {
       const body = {};
       if (patch.joined_ctc !== undefined && patch.joined_ctc !== '') body.joined_ctc = parseFloat(patch.joined_ctc);
       if (patch.revenue !== undefined && patch.revenue !== '') body.revenue = parseFloat(patch.revenue);
       await joiningsAPI.update(row.application_id, body);
       toast.success('Saved');
-      setDraft(d => { const c = { ...d }; delete c[row.application_id]; return c; });
+      setDraft(d => { const c = { ...d }; delete c[row.key]; return c; });
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Save failed');
     } finally {
-      setSaving(s => ({ ...s, [row.application_id]: false }));
+      setSaving(s => ({ ...s, [row.key]: false }));
     }
   };
 
@@ -364,17 +366,18 @@ function JoiningsSection({ scope }) {
                   <th className="text-left px-3 py-2">Location</th>
                   <th className="text-right px-3 py-2">CTC (₹)</th>
                   <th className="text-right px-3 py-2">Revenue (₹)</th>
+                  <th className="text-left px-3 py-2">Payment</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map(row => {
-                  const patch = draft[row.application_id] || {};
+                  const patch = draft[row.key] || {};
                   const dirty = ('joined_ctc' in patch) || ('revenue' in patch);
                   const ctcVal = patch.joined_ctc !== undefined ? patch.joined_ctc : (row.joined_ctc || '');
                   const revVal = patch.revenue !== undefined ? patch.revenue : (row.revenue ?? '');
                   return (
-                    <tr key={row.application_id} className="border-t border-slate-100" data-testid={`joining-row-${row.application_id}`}>
+                    <tr key={row.key} className="border-t border-slate-100" data-testid={`joining-row-${row.key}`}>
                       <td className="px-3 py-2 font-mono">{row.join_date}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
@@ -391,8 +394,9 @@ function JoiningsSection({ scope }) {
                           type="number" min="0" step="1000"
                           className="text-right h-8 w-32 ml-auto"
                           value={ctcVal}
-                          onChange={e => setDraft(d => ({ ...d, [row.application_id]: { ...(d[row.application_id] || {}), joined_ctc: e.target.value } }))}
-                          data-testid={`joining-ctc-${row.application_id}`}
+                          disabled={!row.editable}
+                          onChange={e => setDraft(d => ({ ...d, [row.key]: { ...(d[row.key] || {}), joined_ctc: e.target.value } }))}
+                          data-testid={`joining-ctc-${row.key}`}
                         />
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -400,14 +404,20 @@ function JoiningsSection({ scope }) {
                           type="number" min="0" step="100"
                           className="text-right h-8 w-32 ml-auto"
                           value={revVal}
-                          onChange={e => setDraft(d => ({ ...d, [row.application_id]: { ...(d[row.application_id] || {}), revenue: e.target.value } }))}
+                          disabled={!row.editable}
+                          onChange={e => setDraft(d => ({ ...d, [row.key]: { ...(d[row.key] || {}), revenue: e.target.value } }))}
                           placeholder="—"
-                          data-testid={`joining-revenue-${row.application_id}`}
+                          data-testid={`joining-revenue-${row.key}`}
                         />
                       </td>
+                      <td className="px-3 py-2">
+                        <StatusChip status={row.payment_status} />
+                        {!row.in_pipeline && <span className="block text-[10px] text-slate-400">tracker only</span>}
+                        {row.in_pipeline && !row.in_tracker && <span className="block text-[10px] text-sky-600">pipeline only</span>}
+                      </td>
                       <td className="px-3 py-2 text-right">
-                        <Button size="sm" disabled={!dirty || saving[row.application_id]} onClick={() => saveEdit(row)} className="bg-[#7CB342] hover:bg-[#689F38]" data-testid={`joining-save-${row.application_id}`}>
-                          {saving[row.application_id] ? '…' : 'Save'}
+                        <Button size="sm" disabled={!dirty || !row.editable || saving[row.key]} onClick={() => saveEdit(row)} className="bg-[#7CB342] hover:bg-[#689F38]" data-testid={`joining-save-${row.key}`}>
+                          {saving[row.key] ? '…' : 'Save'}
                         </Button>
                       </td>
                     </tr>

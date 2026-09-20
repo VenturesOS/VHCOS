@@ -126,6 +126,8 @@ const navItems = {
     { icon: Building2, label: 'Clients', path: '/accounts/clients' },
     { icon: IndianRupee, label: 'Expenses', path: '/accounts/expenses' },
     { icon: FileText, label: 'Financial Reports', path: '/accounts/reports' },
+    { icon: UserCheck, label: 'Joining List', path: '/accounts/joinings' },
+    { icon: Trophy, label: 'Branch Revenue', path: '/accounts/performance-records' },
     { icon: Clock, label: 'My Attendance', path: '/accounts/my-attendance' },
     { icon: Clock, label: 'Team Attendance', path: '/accounts/attendance' },
     { icon: CalendarDays, label: 'Leave Management', path: '/accounts/leave-management' },

@@ -298,6 +298,8 @@ function App() {
             <Route path="clients" element={<ClientBillingPage />} />
             <Route path="expenses" element={<ExpenseTrackingPage />} />
             <Route path="reports" element={<FinancialReportsPage />} />
+            <Route path="joinings" element={<JoiningListPage />} />
+            <Route path="performance-records" element={<PerformanceRecordsPage />} />
             <Route path="my-attendance" element={<AttendancePage />} />
             <Route path="attendance" element={<AdminAttendancePage />} />
             <Route path="leave-management" element={<AdminLeaveManagementPage />} />
