@@ -1,3 +1,41 @@
+## 2026-09-20 — Production login 429 + corrupted index.html
+
+Two unrelated problems behind the "what's happening?" screenshot on https://ventureshrd.com/login:
+
+**1. `429 Too Many Requests` on /api/auth/login (blocker).**
+- `/api/auth/login` was limited to **30 requests/60 s per IP** — and the whole office sits behind one
+  NAT address, so a handful of people signing in at the same time locked everyone out. The limit was
+  also consumed twice per request (middleware `ROUTE_LIMITS` + the route's
+  `rate_limiter.check_rate_limit(request, "auth")` bucket, which was also 30).
+- Worse, `DEFAULT_LIMIT` was **60/min per IP for every other endpoint** and `/api/admin/` was 45/min —
+  the same shared-IP problem, which explains random 429s across the app.
+- Fixes in `middleware/rate_limiter.py` + `services/rate_limiter.py`:
+  * Buckets now key on the **signed-in user** (`get_client_identity()` = sha1 of the bearer token),
+    falling back to IP for anonymous/login traffic.
+  * Login 30 → **180/min per IP**; default 60 → **240/min**; `/api/admin/` 45 → **240/min**;
+    service buckets raised to match so the lower one can't silently win.
+  * Redis keys prefixed with the environment (`rl:{env}:…`) — preview and production share one Upstash
+    instance and were eating each other's allowance.
+  * `zadd` used `str(now)` as the sorted-set member, so every request inside the same second collided
+    and the window under-counted; members are now unique.
+- Brute force is still contained by the per-account lockout in `routes/auth.py` (5 failures → 15 min).
+  Verified: 40 rapid logins and 80 rapid admin calls from one IP → zero 429s; wrong passwords still 401.
+
+**2. `Uncaught SyntaxError: Unexpected token '}'` (admin:137).**
+- `frontend/index.html` was corrupted: a previous paste left literal line-number prefixes
+  (`186|                    }),`) inside the PostHog inline script AND dropped ~50 lines of it. Every
+  page served that broken inline script, so PostHog never initialised and the console threw on load.
+- Replaced the block with the canonical PostHog loader, stripped the `NNN|` artifacts, and verified all
+  three inline blocks parse (`node --check`) in both the source and the built `build/index.html`.
+  Repo-wide grep confirms no other file carries the same corruption.
+
+Note: `accounts@vhc.in` was changed by the user on 2026-09-18, so the seeded `VhcAccounts@2026` no
+longer works — `memory/test_credentials.md` updated. That 401 was not a bug.
+
+**Deploy required for both**: backend restart picks up the limiter; the index.html fix needs a frontend
+rebuild + copy to /var/www/html.
+
+
 ## 2026-09-18 (later) — Logic review of the targets/joinings/records feature + fixes
 
 A functional review was run over the new modules. Six real defects found, all fixed and verified:

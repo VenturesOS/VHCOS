@@ -14,10 +14,13 @@ logger = logging.getLogger(__name__)
 
 # Named rate limit buckets
 RATE_LIMITS = {
-    "auth": {"requests": 30, "window": 60},
-    "search": {"requests": 100, "window": 60},
-    "ai_match": {"requests": 60, "window": 60},
-    "api": {"requests": 300, "window": 60},
+    # Mirrors ROUTE_LIMITS["/api/auth/login"] — the middleware and this
+    # service-level check both fire on a login, so a lower number here
+    # would silently become the real limit.
+    "auth": {"requests": 180, "window": 60},
+    "search": {"requests": 240, "window": 60},
+    "ai_match": {"requests": 120, "window": 60},
+    "api": {"requests": 600, "window": 60},
     "upload": {"requests": 10, "window": 60},
 }
 
@@ -36,7 +39,8 @@ class RateLimiter:
         config = RATE_LIMITS.get(limit_type, RATE_LIMITS["api"])
         max_requests = config["requests"]
         window_seconds = config["window"]
-        ip = _get_client_ip(request)
+        from middleware.rate_limiter import get_client_identity
+        ip = get_client_identity(request)
         path = f"svc:{limit_type}"
 
         from middleware.rate_limiter import check_limit

@@ -7,6 +7,7 @@ only) when Redis is not configured.
 
 Replaces the old dual in-memory stores that were per-worker and unbounded.
 """
+import hashlib
 import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -16,7 +17,11 @@ logger = logging.getLogger(__name__)
 
 # Route-specific limits: (requests, window_seconds)
 ROUTE_LIMITS = {
-    "/api/auth/login": (30, 60),
+    # 2026-09-18: a whole office shares one public IP behind NAT, so 30/min
+    # locked everybody out at shift start ("429 Too Many Requests" on the
+    # login page). Brute force is already contained by the per-ACCOUNT
+    # lockout in routes/auth.py, so the per-IP allowance is generous.
+    "/api/auth/login": (180, 60),
     "/api/auth/register": (15, 60),
     "/api/public/parse-resume": (10, 60),
     "/api/public/apply": (5, 60),
@@ -51,10 +56,14 @@ POLL_ROUTE_LIMITS = {
 }
 
 PREFIX_LIMITS = {
-    "/api/admin/": (45, 60),
+    "/api/admin/": (240, 60),
 }
 
-DEFAULT_LIMIT = (60, 60)
+# 2026-09-18: limits are now per LOGGED-IN USER (falling back to IP for
+# anonymous traffic). They used to be per IP, and the whole office sits
+# behind one NAT address — so 60/min was shared by every recruiter at once
+# and produced random 429s across the app.
+DEFAULT_LIMIT = (240, 60)
 
 
 def _get_client_ip(request: Request) -> str:
@@ -62,6 +71,19 @@ def _get_client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def get_client_identity(request: Request) -> str:
+    """Bucket key: the signed-in user when we can see a token, else the IP.
+
+    Shared-office IPs made per-IP limits unusable; a token hash gives each
+    logged-in person their own allowance while anonymous/login traffic is
+    still bounded by IP.
+    """
+    auth = request.headers.get("Authorization") or ""
+    if auth.startswith("Bearer ") and len(auth) > 20:
+        return "u:" + hashlib.sha1(auth[7:].encode()).hexdigest()[:16]
+    return "ip:" + _get_client_ip(request)
 
 
 # ── Shared Redis-backed checker ──────────────────────────────────────────────
@@ -88,6 +110,7 @@ def _get_redis():
 # ── Bounded in-memory fallback (capped at 50k keys) ─────────────────────────
 
 import time
+import uuid
 _mem_store: dict[str, list[float]] = {}
 _MAX_MEM_KEYS = 50_000
 
@@ -103,7 +126,9 @@ def _check_redis(key: str, limit: int, window: int) -> bool:
         current = r.zcard(pipe_key)
         if current >= limit:
             return False
-        r.zadd(pipe_key, {str(now): now})
+        # Unique member per request — `str(now)` collided for everything
+        # inside the same second, so the window undercounted.
+        r.zadd(pipe_key, {f"{now}-{uuid.uuid4().hex[:8]}": now})
         r.expire(pipe_key, window + 10)
         return True
     except Exception as e:
@@ -131,9 +156,26 @@ def _check_mem(key: str, limit: int, window: int) -> bool:
     return True
 
 
+def _env_tag() -> str:
+    """Preview and production point at the SAME Upstash instance, so the
+    buckets must not be shared — traffic on one environment was eating the
+    other's allowance. Reuses the app's own environment detection."""
+    global _ENV_TAG
+    if _ENV_TAG is None:
+        try:
+            from utils.environment import ENV_NAME
+            _ENV_TAG = ENV_NAME
+        except Exception:
+            _ENV_TAG = "unknown"
+    return _ENV_TAG
+
+
+_ENV_TAG = None
+
+
 def check_limit(ip: str, path: str, limit: int, window: int) -> bool:
     """Public helper used by both middleware and standalone callers."""
-    key = f"{ip}:{path}"
+    key = f"{_env_tag()}:{ip}:{path}"
     if _get_redis():
         return _check_redis(key, limit, window)
     return _check_mem(key, limit, window)
@@ -142,7 +184,7 @@ def check_limit(ip: str, path: str, limit: int, window: int) -> bool:
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        ip = _get_client_ip(request)
+        ip = get_client_identity(request)
 
         # Resolve applicable limit
         limit, window = DEFAULT_LIMIT

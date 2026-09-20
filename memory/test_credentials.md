@@ -6,7 +6,7 @@
 |------|-------|----------|-------|
 | Admin | admin@vhc.in | VhcAdmin@2024 | Full access |
 | Recruiter | hr6@vhc.in | 12345678 | Pipeline / candidate bank |
-| Accounts | accounts@vhc.in | VhcAccounts@2026 | Bills & Invoices module (`/accounts/bills`). Password reset 2026-09-17 via `python3 -m scripts.reset_billing_module` |
+| Accounts | accounts@vhc.in | **changed by the user on 2026-09-18** | Bills & Invoices module (`/accounts/bills`). The seeded `VhcAccounts@2026` no longer works — ask the user, or re-seed with `ACCOUNTS_USER_PASSWORD=... python3 -m scripts.reset_billing_module --keep-data` (`--keep-data` leaves billing data untouched) |
 
 ## Billing / invoice mail identity (2026-09-17)
 - Invoices are sent **from** `VHC Accounts <accounts@ventureshrd.com>` (Resend-verified domain),
