@@ -627,6 +627,9 @@ Everything above plus the earlier rate-limiter and `index.html` fixes still need
 - Tracker rows are read-only; only pipeline rows keep the editable CTC/revenue inputs + Raise Invoice.
   `GET /api/joinings` now returns `{items, count, truncated, totals, sources, buckets, revenue_pending_count}`.
 - Admin Analytics → Recent Joinings uses the same merged feed (keyed on `row.key`, payment column added).
+- A hire present in BOTH the tracker and the pipeline is intentionally NOT editable (2026-09-20 follow-up):
+  the tracker already holds its billing, so booking revenue on the pipeline copy too would have added it to
+  the recruiter's yearly total twice. Only the 35 pipeline-only rows are editable.
 
 ### Branch teams consolidated (client instruction)
 - Delhi = Maneet + **Manorma**; Gurgaon = Ajit + **Jatin** + **Rohit**, via `additional_employer_ids`

@@ -268,7 +268,7 @@ export default function JoiningListPage() {
                         <td className="px-3 py-2">{row.client_name || '—'}</td>
                         <td className="px-3 py-2">{row.position || '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {row.editable && !row.in_tracker ? (
+                          {row.editable ? (
                             <Input className="h-8 w-28" type="number" placeholder="CTC"
                                    value={d.joined_ctc ?? (row.joined_ctc || '')}
                                    onChange={(e) => setDraft({ ...draft, [row.key]: { ...d, joined_ctc: e.target.value } })}
@@ -276,7 +276,7 @@ export default function JoiningListPage() {
                           ) : inr(row.joined_ctc)}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {row.editable && !row.in_tracker ? (
+                          {row.editable ? (
                             <Input className="h-8 w-28" type="number" placeholder="Revenue"
                                    value={d.revenue ?? (row.revenue || '')}
                                    onChange={(e) => setDraft({ ...draft, [row.key]: { ...d, revenue: e.target.value } })}
@@ -293,7 +293,7 @@ export default function JoiningListPage() {
                           <Badge variant="outline" className={`text-[10px] ${srcTone}`}>{srcLabel}</Badge>
                         </td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">
-                          {row.editable && !row.in_tracker ? (
+                          {row.editable ? (
                             <>
                               <Button size="sm" variant="outline" className="h-8 mr-2"
                                       disabled={saving[row.key]} onClick={() => saveRow(row)}

@@ -88,7 +88,10 @@ async def unified_joinings(
             match["source"] = "both"
             match["in_pipeline"] = True
             match["application_id"] = p["application_id"]
-            match["editable"] = True
+            # Deliberately NOT editable: the tracker already holds this
+            # hire's billing. Letting anyone book revenue on the pipeline
+            # copy as well would add it to the recruiter's total twice.
+            match["editable"] = False
             if not match["position"]:
                 match["position"] = p.get("position") or ""
             continue
