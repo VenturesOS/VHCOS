@@ -1,0 +1,113 @@
+{
+  "description": "Synthetic regression examples, not representative human labels and not evidence for a 99% production claim.",
+  "cases": [
+    {
+      "case_id": "delhi-versus-mumbai",
+      "label_source": "synthetic",
+      "profile": {"name": "Rahul Sharma", "current_employer": "TCS", "location": "Delhi"},
+      "candidates": [
+        {"id": "mumbai", "name": "Rahul Sharma", "current_employer": "TCS", "location": "Mumbai"},
+        {"id": "delhi", "name": "Rahul Sharma", "current_employer": "Tata Consultancy Services", "location": "Delhi"}
+      ],
+      "expected_candidate_id": "delhi",
+      "expected_decision": "probable_match",
+      "retrieval_complete": true
+    },
+    {
+      "case_id": "longitudinal-context-breaks-current-field-tie",
+      "label_source": "synthetic",
+      "profile": {
+        "name": "Rahul Sharma", "current_employer": "TCS", "location": "Delhi",
+        "experience": [{"company": "Infosys", "designation": "Engineer", "location": "Pune"}],
+        "education": [{"degree": "BTech", "institution": "IIT Delhi"}]
+      },
+      "candidates": [
+        {"id": "history-match", "name": "Rahul Sharma", "current_employer": "TCS", "location": "Delhi",
+         "experience": [{"company": "Infosys", "designation": "Engineer", "location": "Pune"}],
+         "education": [{"degree": "BTech", "institution": "IIT Delhi"}]},
+        {"id": "current-only", "name": "Rahul Sharma", "current_employer": "TCS", "location": "Delhi"}
+      ],
+      "expected_candidate_id": "history-match",
+      "expected_decision": "probable_match",
+      "retrieval_complete": true
+    },
+    {
+      "case_id": "common-name-company-city-collision",
+      "label_source": "synthetic",
+      "profile": {"name": "Rahul Sharma", "company": "TCS", "location": "Delhi", "skills": ["Java"]},
+      "candidates": [
+        {"id": "a", "name": "Rahul Sharma", "company": "TCS", "location": "Delhi", "skills": ["Java"]},
+        {"id": "b", "name": "Rahul Sharma", "company": "TCS", "location": "Delhi", "skills": ["Java"]}
+      ],
+      "expected_candidate_id": "b",
+      "expected_decision": "ambiguous",
+      "retrieval_complete": true
+    },
+    {
+      "case_id": "changed-city-and-employer-same-source-profile",
+      "label_source": "synthetic",
+      "profile": {
+        "name": "Rahul Sharma", "company": "Infosys", "location": "Delhi",
+        "identity_evidence": {"source": "naukri", "profile_id": "stable123", "provenance": "data-target-id"}
+      },
+      "candidates": [{
+        "id": "old-record", "name": "Rahul Sharma", "company": "TCS", "location": "Mumbai",
+        "_identity_trusted_anchors": [{"source": "naukri", "id": "stable123", "kind": "source_profile", "provenance": "server_verified"}]
+      }],
+      "expected_candidate_id": "old-record",
+      "expected_decision": "confirmed_duplicate",
+      "retrieval_complete": true
+    },
+    {
+      "case_id": "unverified-source-id-remains-soft",
+      "label_source": "synthetic",
+      "profile": {"name": "Priya Singh", "company": "Acme", "location": "Pune", "naukri_id": "legacy99"},
+      "candidates": [{"id": "legacy", "name": "Priya Singh", "company": "Acme", "location": "Pune", "naukri_profile_id": "legacy99"}],
+      "expected_candidate_id": "legacy",
+      "expected_decision": "probable_match",
+      "retrieval_complete": true
+    },
+    {
+      "case_id": "placeholder-data",
+      "label_source": "synthetic",
+      "profile": {"name": "Unknown", "company": "N/A", "location": "Not disclosed"},
+      "candidates": [{"id": "unknown", "name": "Unknown", "company": "N/A", "location": "Not disclosed"}],
+      "expected_candidate_id": null,
+      "expected_decision": "insufficient_data",
+      "retrieval_complete": true
+    },
+    {
+      "case_id": "truncated-retrieval-cannot-prove-absence",
+      "label_source": "synthetic",
+      "profile": {"name": "Amit Gupta", "company": "TCS", "location": "Noida"},
+      "candidates": [],
+      "expected_candidate_id": "not-retrieved",
+      "expected_decision": "insufficient_data",
+      "retrieval_complete": false
+    },
+    {
+      "case_id": "complete-retrieval-no-supported-match",
+      "label_source": "synthetic",
+      "profile": {"name": "Ananya Rao", "company": "Acme", "location": "Bengaluru"},
+      "candidates": [{"id": "other", "name": "Amit Gupta", "company": "Acme", "location": "Bengaluru"}],
+      "expected_candidate_id": null,
+      "expected_decision": "no_match_found",
+      "retrieval_complete": true
+    },
+    {
+      "case_id": "same-source-anchor-in-two-database-records",
+      "label_source": "synthetic",
+      "profile": {
+        "name": "Neha Patel", "company": "Acme", "location": "Mumbai",
+        "identity_evidence": {"source": "naukri", "profile_id": "duplicate22", "provenance": "data-target-id"}
+      },
+      "candidates": [
+        {"id": "duplicate-a", "name": "Neha Patel", "company": "Acme", "location": "Mumbai", "_identity_trusted_anchors": [{"source": "naukri", "id": "duplicate22", "kind": "source_profile", "provenance": "server_verified"}]},
+        {"id": "duplicate-b", "name": "Neha Patel", "company": "Acme", "location": "Mumbai", "_identity_trusted_anchors": [{"source": "naukri", "id": "duplicate22", "kind": "source_profile", "provenance": "server_verified"}]}
+      ],
+      "expected_candidate_id": "duplicate-a",
+      "expected_decision": "ambiguous",
+      "retrieval_complete": true
+    }
+  ]
+}

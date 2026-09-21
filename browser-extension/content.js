@@ -3930,102 +3930,166 @@
     }, 15000);
   }
 
-  // Set to keep track of cards we've already processed (badge added or checked)
-  // to avoid infinite loops or double badging.
-  const processedCards = new WeakSet();
+  const identityCardStates = new WeakMap();
+  const identityCardInfo = new WeakMap();
+  const identityLinkHandlers = new WeakMap();
+  const IDENTITY_RETRY_DELAYS = [1000, 2500, 6000, 12000];
+  let identityScanTimer = null;
+  let identityScanDue = 0;
   let cardObserver = null;
 
-  /**
-   * Main orchestrator for "Already in Database" indicator on search results.
-   * Scrapes all visible cards, checks local history cache + backend API, and marks matched cards.
-   */
+  function scheduleIdentityScan(delay = 300) {
+    const due = Date.now() + delay;
+    if (identityScanTimer && identityScanDue <= due) return;
+    clearTimeout(identityScanTimer);
+    identityScanDue = due;
+    identityScanTimer = setTimeout(() => {
+      identityScanTimer = null;
+      identityScanDue = 0;
+      checkAndMarkExistingProfiles();
+    }, delay);
+  }
+
+  function identityFingerprint(card, info) {
+    if (info) return JSON.stringify(info);
+    return JSON.stringify([card.getAttribute('data-target-id') || '',
+      (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 8000)]);
+  }
+
+  function clearIdentityBadge(card) {
+    card.querySelectorAll('.vhc-existing-badge, .vhc-identity-status, .vhc-wrong-match-flag, .vhc-identity-alternative')
+      .forEach(node => node.remove());
+    card.classList.remove('vhc-dimmed-card');
+    identityCardInfo.delete(card);
+  }
+
+  function invalidateIdentityCards() {
+    for (const card of findCardElements()) {
+      clearIdentityBadge(card);
+      identityCardStates.delete(card);
+    }
+    scheduleIdentityScan(500);
+  }
+
+  // Capture and account changes can alter matching without a DOM change.
+  // Clearing the state also makes in-flight replies for an old account stale.
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if ((area === 'local' && changes.captureHistory) ||
+        (area === 'sync' && (changes.vhc_user || changes.vhc_api_url ||
+          (changes.vhc_token && !changes.vhc_token.newValue)))) invalidateIdentityCards();
+  });
+
+  function retryIdentityCard(card, state) {
+    if (identityCardStates.get(card) !== state) return;
+    state.status = 'retry';
+    if (state.attempts > IDENTITY_RETRY_DELAYS.length) {
+      state.status = 'exhausted';
+      return;
+    }
+    const delay = IDENTITY_RETRY_DELAYS[state.attempts - 1];
+    state.nextAttemptAt = Date.now() + delay;
+    scheduleIdentityScan(delay);
+  }
+
   async function checkAndMarkExistingProfiles() {
     if (!isExtensionValid()) return;
-    
-    // Find all cards on the page
-    const cards = findCardElements();
-    const unprocessedCards = cards.filter(card => !processedCards.has(card));
-    
-    if (unprocessedCards.length === 0) return;
-    
-    console.log(`[VHC v${VERSION}] checkExisting: scanning ${unprocessedCards.length} new cards (of ${cards.length} total on page)`);
-    // Scrape info from unprocessed cards
-    const candidatesToCheck = [];
-    const cardMap = []; // maps checked candidate index back to its cardEl
-    
-    for (const card of unprocessedCards) {
-      // Mark it as processed so we don't try checking it again in concurrent runs
-      processedCards.add(card);
-      
+    const pending = [];
+    for (const card of findCardElements()) {
       const info = scrapeSearchCardInfo(card);
-      if (info) {
-        candidatesToCheck.push({
-          name: info.name,
-          naukri_id: info.naukri_id || null,
-          headline: info.headline || '',
-          location: info.location || '',
-          profileUrl: info.profileUrl,
-          // Multi-signal corroboration fields (v5.5.4+)
-          current_employer: info.current_employer || null,
-          designation: info.designation || null,
-          experience_years: info.experience_years || null,
-          annual_ctc: info.annual_ctc || null,
-          skills: info.skills || null,
-          education: info.education || null,
-        });
-        cardMap.push({ cardEl: card, info });
-      }
-    }
-    
-    if (candidatesToCheck.length === 0) return;
-    
-    console.log(`[VHC v${VERSION}] Checking ${candidatesToCheck.length} candidates against existing database...`);
-    
-    try {
-      // Send message to background script to check if they exist
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          action: 'checkExisting',
-          candidates: candidatesToCheck
-        }, (res) => {
-          if (chrome.runtime.lastError) {
-            console.warn(`[VHC v${VERSION}] checkExisting message error:`, chrome.runtime.lastError.message);
-            resolve(null);
-          } else {
-            resolve(res);
-          }
-        });
-      });
-      
-      if (response && Array.isArray(response.results)) {
-        // Badge Phase A: forward audit_id from check-existing so we can
-        // wire the "Wrong match?" feedback link on each rendered badge.
-        const auditId = response.audit_id || null;
-        for (const res of response.results) {
-          const match = cardMap[res.index];
-          if (match && res.exists) {
-            console.log(`[VHC v${VERSION}] Found existing candidate: "${match.info.name}"`);
-            markCardAsExisting(match.cardEl, {
-              ...match.info,
-              candidate_id: res.candidate_id,
-              captured_at: res.captured_at,
-              match_confidence: res.match_confidence,
-              // Server-built deep-link — preferred over any client-side guess
-              profile_url: res.profile_url,
-              // Wrong-match flag context (Badge Phase A)
-              audit_id: auditId,
-              card_idx: res.index,
-            });
-          }
+      const fingerprint = identityFingerprint(card, info);
+      let state = identityCardStates.get(card);
+      if (state?.fingerprint === fingerprint) {
+        if (['pending', 'done', 'exhausted'].includes(state.status)) continue;
+        if (state.nextAttemptAt > Date.now()) {
+          scheduleIdentityScan(state.nextAttemptAt - Date.now());
+          continue;
         }
+      } else {
+        clearIdentityBadge(card);
+        state = { fingerprint, attempts: 0, status: 'new' };
+        identityCardStates.set(card, state);
       }
-    } catch (err) {
-      // Remove cards from processedCards so they can be retried on next check
-      for (const { cardEl } of cardMap) {
-        processedCards.delete(cardEl);
+      state.attempts++;
+      if (!info || !info.name || info.name === 'Unknown') {
+        retryIdentityCard(card, state);
+        continue;
       }
-      console.warn(`[VHC v${VERSION}] Error checking existing profiles:`, err.message);
+      state.status = 'pending';
+      pending.push({ card, info, state });
     }
+    if (!pending.length) return;
+    let response = null;
+    try {
+      response = await new Promise(resolve => {
+        let settled = false;
+        const finish = value => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve(value);
+        };
+        const timeout = setTimeout(() => finish(null), 60000);
+        try {
+          chrome.runtime.sendMessage({
+            action: 'checkExisting',
+            candidates: pending.map(({ info }) => ({
+              name: info.name, naukri_id: info.naukri_id || null,
+              source: info.source, source_id_kind: info.source_id_kind,
+              headline: info.headline || '', location: info.location || '',
+              profile_url: info.profileUrl,
+              current_employer: info.current_employer || null,
+              designation: info.designation || null,
+              experience_years: info.experience_years ?? null,
+              annual_ctc: info.annual_ctc ?? null,
+              skills: info.skills || null, education: info.education || null,
+              experience: (info.experience || []).slice(0, 5).map(({ company, title, location }) => ({
+                company, title, ...(location ? { location } : {}),
+              })),
+              education_details: (info.education_details || []).slice(0, 3),
+            })),
+          }, result => finish(chrome.runtime.lastError ? null : result));
+        } catch (_) { finish(null); }
+      });
+    } catch (_) { /* Missing response becomes a bounded retry below. */ }
+    const results = new Map();
+    const duplicateIndices = new Set();
+    if (Array.isArray(response?.results)) {
+      for (const result of response.results) {
+        if (!result || !Number.isInteger(result.index)) continue;
+        if (results.has(result.index)) duplicateIndices.add(result.index);
+        results.set(result.index, result);
+      }
+    }
+    pending.forEach(({ card, info, state }, index) => {
+      if (card.isConnected === false || identityCardStates.get(card) !== state) return;
+      // A virtualized list may reuse the element while the request is in flight.
+      if (identityFingerprint(card, scrapeSearchCardInfo(card)) !== state.fingerprint) {
+        clearIdentityBadge(card);
+        identityCardStates.delete(card);
+        scheduleIdentityScan();
+        return;
+      }
+      const result = !duplicateIndices.has(index) && results.get(index);
+      clearIdentityBadge(card);
+      if (!result || !result.decision || response?.matcher_version !== 'identity-resolution-1' ||
+          (result.decision === 'confirmed_duplicate' && result.exists !== true)) {
+        markCardAsExisting(card, { ...info, decision: 'unavailable' });
+        retryIdentityCard(card, state);
+        return;
+      }
+      markCardAsExisting(card, {
+        ...info, ...result,
+        candidate_id: result.candidate_id || result.top_match?.candidate_id,
+        audit_id: result.audit_id || response.audit_id || null,
+        card_idx: result.audit_index ?? index,
+      });
+      const retryableRetrievalIssue = Array.isArray(result.reason_codes) &&
+        result.reason_codes.some(code => typeof code === 'string' &&
+          (code.startsWith('query_failed:') || code === 'inconsistent_candidate_snapshot'));
+      if ((result.decision === 'unavailable' || result.service_status === 'unavailable' ||
+           retryableRetrievalIssue) && result.service_status !== 'disabled') retryIdentityCard(card, state);
+      else state.status = 'done';
+    });
   }
 
   /**
@@ -4065,42 +4129,36 @@
         'a[href*="preview"], a[href*="profile"], a[href*="resume"], a[href*="resdex"]'
       );
       const profileUrl = linkEl ? linkEl.href : null;
-      if (!profileUrl) return null;
+      if (!profileUrl || profileUrl.length > 2048) return null;
 
-      // ── Extract stable Naukri candidate/profile ID ──
+      const boundedText = (value, maximum) => {
+        const text = cleanText(value || '');
+        return text && text.length <= maximum ? text : null;
+      };
+      // Only an explicitly separated role and company are structured. Keep
+      // multiword company names intact and reject another field's label.
+      const employmentPair = value => {
+        const match = cleanText(value || '').match(/^(.+?)\s+at\s+(.+)$/i);
+        if (!match) return null;
+        const title = boundedText(match[1], 500);
+        const company = boundedText(match[2], 500);
+        if (!title || !company || title.includes(':') ||
+            /(?:\S+@\S+\.\S+|https?:\/\/)/i.test(title + ' ' + company)) return null;
+        return { title, company };
+      };
+
+      // Preserve identifier provenance. Generic checkbox values, pid and sid
+      // often identify a session or UI item and cannot prove person identity.
+      const source = PLATFORM === 'linkedin' ? 'linkedin' : 'naukri';
       let naukri_id = null;
-      // 1. data-attributes on the card element itself
-      naukri_id = cardEl.dataset.targetId || cardEl.dataset.candidateId
-                || cardEl.dataset.profileId || cardEl.getAttribute('data-candidate-id')
-                || cardEl.getAttribute('data-profile-id');
-      // 2. From any checkbox or hidden input inside the card
-      if (!naukri_id) {
-        const checkbox = cardEl.querySelector('input[type="checkbox"][name*="candidateId"], input[type="checkbox"][name*="profileId"], input[type="checkbox"][value]');
-        if (checkbox && checkbox.value && /^[a-zA-Z0-9_-]+$/.test(checkbox.value)) {
-          naukri_id = checkbox.value;
-        }
+      let source_id_kind = 'unverified';
+      if (source === 'naukri' && cardEl.getAttribute('data-target-id')) {
+        naukri_id = cardEl.getAttribute('data-target-id');
+        source_id_kind = 'data-target-id';
       }
-      // 3. From the profile URL query params (candidateId, profileId, pid, sid)
-      if (!naukri_id && profileUrl) {
-        naukri_id = extractIdFromUrl(profileUrl);
-      }
-      // 4. From sibling anchor in the card (Naukri sometimes hides the
-      //    profile URL behind a button click handler and exposes the real
-      //    href on another <a> nearby).
-      if (!naukri_id) {
-        const anyHref = cardEl.querySelectorAll('a[href*="resdex"], a[href*="naukri_"]');
-        for (const a of anyHref) {
-          const tryId = extractIdFromUrl(a.href);
-          if (tryId) { naukri_id = tryId; break; }
-        }
-      }
-      // 5. Diagnostic: when we still can't find an ID, log the card's
-      //    first 200 chars of outerHTML once per page so we can update
-      //    the selectors. Throttled so it doesn't spam.
-      if (!naukri_id && !window.__vhcNaukriIdMissingLogged) {
-        window.__vhcNaukriIdMissingLogged = true;
-        console.warn('[VHC] naukri_id not extracted from card — DOM sample:',
-          (cardEl.outerHTML || '').slice(0, 400));
+      if (naukri_id && naukri_id.length > 256) {
+        naukri_id = null;
+        source_id_kind = 'unverified';
       }
 
       const nameEl = cardEl.querySelector(
@@ -4108,19 +4166,20 @@
         '[class*="name"], h2, h3, [class*="title"]:first-of-type'
       );
       const name = cleanText(nameEl?.innerText) || 'Unknown';
+      if (name.length > 300) return null;
 
       // ── Headline (Naukri's "candidate-profile-summary" e.g. "R&D Engineer with B.Tech in Pune") ──
       const headlineEl = cardEl.querySelector(
         '.candidate-profile-summary, [class*="candidate-headline"], ' +
         '[class*="headline"], [class*="designation"], [class*="currentTitle"]'
       );
-      const headline = cleanText(headlineEl?.innerText) || null;
+      const headline = boundedText(headlineEl?.innerText, 2000);
 
       // ── Location ──
       const locEl = cardEl.querySelector(
         'span.location, [class*="location"], [class*="loc"], [class*="city"]'
       );
-      const location = cleanText(locEl?.innerText) || null;
+      const location = boundedText(locEl?.innerText, 300);
 
       // ── Current employer ──
       // Naukri renders this inside #currentEmp > .employment-detail
@@ -4133,23 +4192,41 @@
         const desigBtn = empWrap.querySelector('button[title*="currently "]');
         if (desigBtn) {
           const m = desigBtn.getAttribute('title').match(/currently\s+(.+)/i);
-          if (m) designation = cleanText(m[1]);
+          if (m) designation = boundedText(m[1], 500);
         }
         // Company button has title="Find candidates from <Company>"
         const compBtn = empWrap.querySelector('button[title*="from "]');
         if (compBtn) {
           const m = compBtn.getAttribute('title').match(/from\s+(.+)/i);
-          if (m) current_employer = cleanText(m[1]);
+          if (m) current_employer = boundedText(m[1], 500);
         }
         if (!current_employer) {
-          // Fallback: parse "<Designation> at <Company>" from inner text
-          const txt = cleanText(empWrap.innerText || '');
-          const m = txt.match(/^(.+?)\s+at\s+(.+?)(?:\s|$)/i);
-          if (m) {
-            if (!designation) designation = m[1];
-            current_employer = m[2];
+          // Preserve line boundaries so a date or the next field cannot become
+          // part of a company. The old lazy regex captured only its first word.
+          const lines = (empWrap.innerText || '').split(/\r?\n/).map(cleanText).filter(Boolean);
+          const pair = lines.map(employmentPair).find(Boolean);
+          if (pair) {
+            if (!designation) designation = pair.title;
+            current_employer = pair.company;
           }
         }
+      }
+
+      // No unverified previous-employer selectors or whole-page scrape. Accept
+      // only explicitly labelled visible lines inside this particular card.
+      const experience = [];
+      const seenEmployment = new Set();
+      const cardLines = (cardEl.innerText || '').split(/\r?\n/).slice(0, 200).map(cleanText).filter(Boolean);
+      for (let i = 0; i < cardLines.length && experience.length < 5; i++) {
+        const label = cardLines[i].match(/^(?:previous(?: employment| experience)?|past employment)\s*:\s*(.*)$/i);
+        const heading = /^(?:previous employment|previous experience|past employment)$/i.test(cardLines[i]);
+        if (!label && !heading) continue;
+        const pair = employmentPair(label?.[1] || cardLines[i + 1]);
+        if (!pair) continue;
+        const key = (pair.title + '|' + pair.company).toLowerCase();
+        if (seenEmployment.has(key)) continue;
+        seenEmployment.add(key);
+        experience.push({ ...pair, relationship: 'previous' });
       }
 
       // ── Experience (parse "2y 7m" from meta-data title="Experience") ──
@@ -4162,6 +4239,7 @@
           const yrs = parseInt(ym[1], 10);
           const mos = ym[2] ? parseInt(ym[2], 10) : 0;
           experience_years = +(yrs + mos / 12).toFixed(2);
+          if (experience_years > 80 || mos > 11) experience_years = null;
         }
       }
 
@@ -4179,6 +4257,8 @@
         }
       }
 
+      if (annual_ctc !== null && (!Number.isFinite(annual_ctc) || annual_ctc < 0)) annual_ctc = null;
+
       // ── Skills (key-skills section: each .cand-skill button) ──
       let skills = null;
       const skillBtns = cardEl.querySelectorAll('.key-skills .cand-skill button, .candidate-skills [class*="skill"] button');
@@ -4193,206 +4273,220 @@
 
       // ── Education ("B.Tech / B.E. Dr Babasaheb Ambedkar... 2023") ──
       let education = null;
+      const education_details = [];
       const eduEl = cardEl.querySelector('#education, [id*="education"], .education');
       if (eduEl) {
-        education = cleanText(eduEl.getAttribute('title') || eduEl.innerText) || null;
+        const rawEducation = eduEl.getAttribute('title') || eduEl.innerText || '';
+        education = boundedText(rawEducation, 2000);
+        // Unlabelled degree/institution strings remain raw. Only explicit labels
+        // justify splitting a credential into fields; dates are never guessed.
+        let detail = {};
+        const appendDetail = () => {
+          if (Object.keys(detail).length && education_details.length < 3) education_details.push(detail);
+          detail = {};
+        };
+        for (const line of rawEducation.split(/\r?\n|[;|]/).slice(0, 30)) {
+          const match = cleanText(line).match(/^(degree|qualification|course|institution|institute|university|college|graduation(?: year)?|year of graduation)\s*:\s*(.+)$/i);
+          if (!match) continue;
+          const label = match[1].toLowerCase();
+          const field = /^(degree|qualification|course)$/.test(label) ? 'degree'
+            : /^(graduation|year of graduation)/.test(label) ? 'graduation_year' : 'institution';
+          const value = field === 'graduation_year'
+            ? (/^(19|20)\d{2}$/.test(match[2]) ? Number(match[2]) : null)
+            : boundedText(match[2], field === 'degree' ? 300 : 500);
+          if (value === null) continue;
+          if (detail[field] !== undefined && detail[field] !== value) appendDetail();
+          detail[field] = value;
+        }
+        appendDetail();
       }
 
       return {
-        profileUrl, naukri_id, name, headline, location,
+        profileUrl, naukri_id, source, source_id_kind, name, headline, location,
         current_employer, designation,
         experience_years, annual_ctc,
-        skills, education,
+        skills, education, experience, education_details,
       };
     } catch (_) {
       return null;
     }
   }
 
-  /**
-   * Add green badge, dim card, and inject confirmation interceptor.
-   */
+  function safeIdentityLink(value) {
+    try {
+      const url = new URL(value);
+      return /^https?:$/.test(url.protocol) ? url.href : null;
+    } catch (_) { return null; }
+  }
+
   function markCardAsExisting(cardEl, info) {
-    if (!cardEl) return;
-    
-    // 1. Add dimming class
-    cardEl.classList.add('vhc-dimmed-card');
-    
-    // 2. Create and inject "Already in Database" badge
+    if (!cardEl || info.decision === 'no_match_found' || info.service_status === 'disabled') return;
+    const confirmed = info.decision === 'confirmed_duplicate' && info.exists === true;
+    const labels = {
+      confirmed_duplicate: 'Already in database',
+      probable_match: 'Possible database match',
+      ambiguous: 'Multiple possible matches',
+      conflicting_records: 'Conflicting profile details',
+      insufficient_data: 'Not enough profile details',
+      unavailable: 'Database check unavailable',
+    };
+    const label = labels[info.decision];
+    if (!label) return;
     const nameEl = cardEl.querySelector(
       '[class*="name"], [class*="candidateName"], h2, h3, [class*="title"]:first-of-type'
     );
-    
-    if (nameEl && !cardEl.querySelector('.vhc-existing-badge')) {
-      // Render badge as an anchor so it's directly clickable + middle-click + ctrl-click work
-      const badge = document.createElement('a');
-      badge.className = 'vhc-existing-badge';
-
-      const confidence = info.match_confidence || 'high';
-      if (confidence === 'high') {
-        badge.innerText = 'ALREADY IN DATABASE';
-        badge.classList.add('vhc-confidence-high');
-      } else {
-        badge.innerText = 'LIKELY IN DATABASE';
-        badge.classList.add('vhc-confidence-medium');
-      }
-      badge.title = `${confidence === 'high' ? 'Definite' : 'Likely'} match — Saved on ${info.captured_at ? new Date(info.captured_at).toLocaleDateString() : 'unknown date'} — click to open in VHC`;
+    if (!nameEl?.parentNode) return;
+    const badge = document.createElement(info.candidate_id ? 'a' : 'span');
+    // The hover preview binds only to .vhc-existing-badge and needs a real ID.
+    badge.className = info.candidate_id ? 'vhc-existing-badge' : 'vhc-identity-status';
+    badge.classList.add(confirmed ? 'vhc-confidence-high'
+      : ['probable_match', 'ambiguous', 'conflicting_records'].includes(info.decision)
+        ? 'vhc-confidence-medium' : 'vhc-confidence-unavailable');
+    badge.innerText = label;
+    const signals = Array.isArray(info.matched_signals) ? info.matched_signals.join(', ') : '';
+    const conflicts = Array.isArray(info.conflicts) ? info.conflicts.join(', ') : '';
+    const context = info.top_match?.context || {};
+    const contextList = (value, limit = 3) => Array.isArray(value)
+      ? value.filter(item => typeof item === 'string' && item.trim()).slice(0, limit).join(', ')
+      : '';
+    const contextSummary = [
+      context.employer && `employer: ${context.employer}`,
+      context.designation && `title: ${context.designation}`,
+      context.location && `location: ${context.location}`,
+      context.work_history?.length && `history: ${contextList(context.work_history)}`,
+      context.education?.length && `education: ${contextList(context.education)}`,
+      context.certifications?.length && `certifications: ${contextList(context.certifications)}`,
+      context.projects?.length && `projects: ${contextList(context.projects)}`,
+      context.languages?.length && `languages: ${contextList(context.languages)}`,
+      context.skills?.length && `skills: ${contextList(context.skills)}`,
+      context.experience_years != null && `experience: ${context.experience_years}y`,
+    ].filter(Boolean).join(' · ');
+    badge.title = label + (signals ? ' — Matching fields: ' + signals : '') +
+      (conflicts ? ' — Conflicts: ' + conflicts : '') +
+      (contextSummary ? ' — Database context: ' + contextSummary : '');
+    if (info.candidate_id) {
+      badge.dataset.vhcCandidateId = String(info.candidate_id);
       badge.target = '_blank';
       badge.rel = 'noopener noreferrer';
-      badge.dataset.vhcCandidateId = info.candidate_id || '';
-
-      // Prefer the server-provided deep-link (avoids guessing the frontend
-      // URL from a proxied API host). Fall back to background-derived URL.
-      if (info.profile_url) {
-        badge.href = info.profile_url;
-      } else {
-        badge.href = '#';
-        if (info.candidate_id) {
-          chrome.runtime.sendMessage(
-            { action: 'getCandidateBankUrl', candidate_id: info.candidate_id },
-            (res) => {
-              if (chrome.runtime.lastError) return;
-              if (res && res.url) badge.href = res.url;
-            }
-          );
-        }
+      badge.href = safeIdentityLink(info.profile_url || info.top_match?.profile_url) || '#';
+      if (badge.getAttribute('href') === '#') {
+        chrome.runtime.sendMessage(
+          { action: 'getCandidateBankUrl', candidate_id: info.candidate_id },
+          result => {
+            if (chrome.runtime.lastError) return;
+            const url = safeIdentityLink(result?.url);
+            if (url) badge.href = url;
+          }
+        );
       }
-
-      // Hard-stop propagation so the row's parent click handlers don't fire
-      badge.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // fix.docx: opening the DB record behind the badge reveals the
-        // contact details — that's a "candidate called" event.
-        if (info.candidate_id) {
-          try {
-            chrome.runtime.sendMessage({
-              action: 'trackCandidateCalled',
-              candidate_id: info.candidate_id,
-              source: 'badge_expand',
-              candidate_name: info.name || null,
-              naukri_id: info.naukri_id || null,
-              page_url: window.location.href,
-            });
-          } catch (_) { /* telemetry must stay silent */ }
-        }
-        // Fallback: if href is still "#" (rare race), open via message
-        if (badge.getAttribute('href') === '#' && info.candidate_id) {
-          e.preventDefault();
+      badge.addEventListener('click', event => {
+        event.stopPropagation();
+        // Preserve the existing badge-open activity tracking.
+        try {
           chrome.runtime.sendMessage({
-            action: 'openCandidateProfile',
+            action: 'trackCandidateCalled',
             candidate_id: info.candidate_id,
+            source: 'badge_expand',
+            candidate_name: info.name || null,
+            naukri_id: info.naukri_id || null,
+            page_url: window.location.href,
+          });
+        } catch (_) { /* telemetry must stay silent */ }
+        if (badge.getAttribute('href') === '#') {
+          event.preventDefault();
+          chrome.runtime.sendMessage({ action: 'openCandidateProfile', candidate_id: info.candidate_id });
+        }
+      });
+    }
+    nameEl.parentNode.insertBefore(badge, nameEl.nextSibling);
+
+    if (info.decision === 'ambiguous' && info.second_match?.candidate_id) {
+      const alternative = document.createElement('a');
+      alternative.className = 'vhc-identity-alternative';
+      alternative.textContent = 'Other possible match';
+      alternative.href = safeIdentityLink(info.second_match.profile_url) || '#';
+      alternative.target = '_blank';
+      alternative.rel = 'noopener noreferrer';
+      alternative.addEventListener('click', event => {
+        event.stopPropagation();
+        if (alternative.getAttribute('href') === '#') {
+          event.preventDefault();
+          chrome.runtime.sendMessage({
+            action: 'openCandidateProfile', candidate_id: info.second_match.candidate_id,
           });
         }
       });
+      badge.parentNode.insertBefore(alternative, badge.nextSibling);
+    }
 
-      // Insert badge after the name element
-      if (nameEl.nextSibling) {
-        nameEl.parentNode.insertBefore(badge, nameEl.nextSibling);
-      } else {
-        nameEl.parentNode.appendChild(badge);
-      }
-
-      // Badge Phase A (2026-06-15): tiny "✗ Wrong match?" link rendered
-      // next to the green badge. One click → silent POST to
-      // /api/extension/audit/wrong-match. No popup, no confirmation —
-      // recruiter just flags it and continues working. We swap the link
-      // for a discreet "Thanks" once recorded so they don't double-tap.
+    if (info.candidate_id && info.audit_id && info.provenance === 'backend') {
       const flag = document.createElement('a');
       flag.className = 'vhc-wrong-match-flag';
       flag.href = '#';
-      flag.innerText = '✗ Wrong match?';
-      flag.title = 'Flag this badge as a wrong match. Silent — used to tune accuracy.';
-      flag.style.cssText = (
-        'display:inline-flex;align-items:center;gap:3px;' +
-        'margin-left:6px;padding:2px 7px;' +
-        'font-size:11px;font-weight:500;color:#dc2626;' +
-        'background:#fef2f2;' +
-        'text-decoration:none;cursor:pointer;line-height:1.2;' +
-        'border:1px solid #fecaca;border-radius:11px;vertical-align:middle;' +
-        'transition:all 120ms ease;'
-      );
-      flag.addEventListener('mouseenter', () => {
-        flag.style.background = '#fee2e2';
-        flag.style.borderColor = '#dc2626';
-        flag.style.transform = 'scale(1.05)';
-      });
-      flag.addEventListener('mouseleave', () => {
-        flag.style.background = '#fef2f2';
-        flag.style.borderColor = '#fecaca';
-        flag.style.transform = 'scale(1)';
-      });
-      flag.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (flag.dataset.vhcFlagged === '1') return;
+      flag.textContent = 'Wrong match?';
+      flag.title = 'Report this suggestion for review.';
+      flag.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (flag.dataset.vhcFlagged) return;
         flag.dataset.vhcFlagged = '1';
-        flag.innerText = '✓ Thanks';
-        flag.style.color = '#059669';
-        flag.style.borderColor = '#a7f3d0';
-        try {
-          chrome.runtime.sendMessage({
-            action: 'reportWrongMatch',
-            audit_id: info.audit_id || null,
-            card_idx: info.card_idx,
-            badge_candidate_id: info.candidate_id || '',
-            card_name: info.name || null,
-            card_headline: info.headline || null,
-            card_employer: info.current_employer || null,
-            card_location: info.location || null,
-            page_url: window.location.href,
-          });
-        } catch (_) { /* swallow — flag must stay silent */ }
-        // Fade out the flagged badge so the recruiter visually knows the
-        // (likely wrong) match is no longer "blocking" their workflow.
-        if (badge) badge.style.opacity = '0.45';
-        setTimeout(() => { if (flag.parentNode) flag.parentNode.removeChild(flag); }, 4000);
+        flag.textContent = 'Sending…';
+        chrome.runtime.sendMessage({
+          action: 'reportWrongMatch', audit_id: info.audit_id, card_idx: info.card_idx,
+          badge_candidate_id: info.candidate_id, card_name: info.name || null,
+          card_headline: info.headline || null, card_employer: info.current_employer || null,
+          card_location: info.location || null, page_url: window.location.href,
+        }, response => {
+          if (chrome.runtime.lastError || !response?.ok) {
+            delete flag.dataset.vhcFlagged;
+            flag.textContent = 'Report failed — retry';
+            return;
+          }
+          flag.textContent = 'Reported';
+          badge.innerText = 'Match flagged for review';
+          badge.classList.remove('vhc-confidence-high');
+          badge.classList.add('vhc-confidence-medium');
+          cardEl.classList.remove('vhc-dimmed-card');
+          identityCardInfo.delete(cardEl);
+        });
       });
       badge.parentNode.insertBefore(flag, badge.nextSibling);
     }
-    
-    // 3. Inject click interceptor on all profile link elements inside this card
-    injectClickInterceptor(cardEl, info);
+    if (confirmed) {
+      cardEl.classList.add('vhc-dimmed-card');
+      identityCardInfo.set(cardEl, info);
+      injectClickInterceptor(cardEl);
+    }
   }
 
-  /**
-   * Intercepts clicks on candidate cards to ask confirmation before viewing a duplicate.
-   */
-  function injectClickInterceptor(cardEl, info) {
+  // Listeners read the current card decision so a recycled card or a failed
+  // recheck cannot retain an old duplicate confirmation dialog.
+  function injectClickInterceptor(cardEl) {
     const links = cardEl.querySelectorAll('a[href*="profile"], a[href*="resume"], a[href*="preview"], a[href*="resdex"]');
-    
     for (const link of links) {
-      if (link.dataset.vhcIntercepted) continue;
-      link.dataset.vhcIntercepted = 'true';
-      
-      link.addEventListener('click', (e) => {
-        // Stop default browser behavior immediately
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Show our confirmation dialog
+      if (link.classList.contains('vhc-existing-badge') || identityLinkHandlers.has(link)) continue;
+      const handler = event => {
+        const info = identityCardInfo.get(cardEl);
+        if (!info || (event.type === 'auxclick' && event.button !== 1)) return;
+        const state = identityCardStates.get(cardEl);
+        if (!state || identityFingerprint(cardEl, scrapeSearchCardInfo(cardEl)) !== state.fingerprint) {
+          clearIdentityBadge(cardEl);
+          scheduleIdentityScan();
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
         showExistingConfirmDialog(info, () => {
-          // User clicked "Yes" (Open anyway) -> proceed to navigate
-          const target = link.getAttribute('target') || '_self';
-          const href = link.href;
-          
-          if (e.ctrlKey || e.metaKey || target === '_blank') {
-            window.open(href, '_blank');
+          if (event.type === 'auxclick' || event.ctrlKey || event.metaKey || link.target === '_blank') {
+            window.open(link.href, '_blank', 'noopener');
           } else {
-            window.location.href = href;
+            window.location.href = link.href;
           }
         });
-      }, true); // Use capture phase to intercept before Naukri's own handlers
-
-      // Also intercept middle-click (opens in new tab)
-      link.addEventListener('auxclick', (e) => {
-        if (e.button === 1) { // Middle click
-          e.preventDefault();
-          e.stopPropagation();
-          showExistingConfirmDialog(info, () => {
-            window.open(link.href, '_blank');
-          });
-        }
-      }, true);
+      };
+      identityLinkHandlers.set(link, handler);
+      link.addEventListener('click', handler, true);
+      link.addEventListener('auxclick', handler, true);
     }
   }
 
@@ -4468,57 +4562,30 @@
     
     console.log(`[VHC v${VERSION}] Setting up MutationObserver for new candidate cards...`);
     
-    cardObserver = new MutationObserver((mutations) => {
-      let cardsAdded = false;
+    const cardSelector = '.tuple-card, [class*="tuple-card"], [class*="candidateCard"], ' +
+      '[class*="candidate-card"], [class*="resumeCard"], [class*="srp-tuple"], ' +
+      '[class*="srpTuple"], .tupleCard, [data-target-id]';
+    cardObserver = new MutationObserver(mutations => {
       for (const mutation of mutations) {
-        if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-          for (const node of mutation.addedNodes) {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              if (
-                node.matches && (
-                  node.matches('.tuple-card') ||
-                  node.matches('[class*="tuple-card"]') ||
-                  node.matches('[class*="candidateCard"]') ||
-                  node.matches('[class*="candidate-card"]') ||
-                  node.matches('[class*="resumeCard"]') ||
-                  node.matches('[class*="srp-tuple"]') ||
-                  node.matches('[class*="srpTuple"]') ||
-                  node.matches('.tupleCard')
-                )
-              ) {
-                cardsAdded = true;
-                break;
-              }
-              
-              if (
-                node.querySelector && node.querySelector(
-                  '.tuple-card, [class*="tuple-card"], [class*="candidateCard"], [class*="candidate-card"], [class*="resumeCard"], [class*="srp-tuple"], [class*="srpTuple"], .tupleCard'
-                )
-              ) {
-                cardsAdded = true;
-                break;
-              }
-            }
-          }
+        const element = mutation.target.nodeType === Node.ELEMENT_NODE
+          ? mutation.target : mutation.target.parentElement;
+        if (element?.closest?.('.vhc-existing-badge, .vhc-identity-status, .vhc-wrong-match-flag, .vhc-identity-alternative')) continue;
+        // Observe changes inside existing cards as well as newly inserted cards.
+        // This catches lazy names and virtualized list elements being reused.
+        if (element?.closest?.(cardSelector) ||
+            Array.from(mutation.addedNodes || []).some(node =>
+              node.nodeType === Node.ELEMENT_NODE &&
+              (node.matches?.(cardSelector) || node.querySelector?.(cardSelector)))) {
+          scheduleIdentityScan();
+          break;
         }
-        if (cardsAdded) break;
-      }
-      
-      if (cardsAdded) {
-        setTimeout(() => {
-          checkAndMarkExistingProfiles();
-        }, 300);
       }
     });
-    
-    cardObserver.observe(document.body, { childList: true, subtree: true });
-
-    // Initial scan — the observer only fires on NEW cards. The 40 cards already
-    // rendered when this function runs would never get checked otherwise.
-    setTimeout(() => {
-      console.log(`[VHC v${VERSION}] Initial badge scan firing on already-rendered cards...`);
-      checkAndMarkExistingProfiles();
-    }, 500);
+    cardObserver.observe(document.body, {
+      childList: true, subtree: true, characterData: true, attributes: true,
+      attributeFilter: ['href', 'data-target-id', 'data-candidate-id', 'data-profile-id', 'title'],
+    });
+    scheduleIdentityScan(500);
   }
 
   function showToast(message, type = 'info') {

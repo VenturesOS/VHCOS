@@ -2,8 +2,7 @@
 
 Powers the admin Badge Audit page. Every call to
 `/api/extension/check-existing` from an audited user writes ONE document
-to the `badge_audit` collection (fire-and-forget — does not block the
-response).
+to the `badge_audit` collection with a bounded best-effort wait.
 
 That document captures everything needed to reproduce + judge any
 decision retrospectively:
@@ -32,15 +31,39 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from config import db
-from utils.auth import get_current_user
+from utils.auth import get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/admin/badge-audit", tags=["Badge Audit"])
+# Every route under this prefix exposes cross-user audit payloads and lets a
+# caller label decisions. Keep the role gate on the router so a newly added
+# admin endpoint cannot accidentally ship with only authentication.
+router = APIRouter(
+    prefix="/api/admin/badge-audit", tags=["Badge Audit"],
+    dependencies=[Depends(require_role(["admin"]))],
+)
 ext_feedback_router = APIRouter(prefix="/api/extension", tags=["Browser Extension"])
+
+
+def _read(value, key: str, default=None):
+    """Read a field from either a Pydantic result or a plain test/dict row."""
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _audit_input(profile) -> dict:
+    raw = profile.model_dump() if hasattr(profile, "model_dump") else profile
+    if not isinstance(raw, dict):
+        return {}
+    keys = ("name", "headline", "location", "source", "source_id_kind", "naukri_id",
+            "profile_url", "profileUrl", "current_employer", "designation",
+            "experience_years", "skills", "education", "experience",
+            "education_details", "certifications", "projects", "languages")
+    return {key: raw[key] for key in keys if key in raw}
 
 
 # ── Helpers used by /api/extension/check-existing ─────────────────────
@@ -56,8 +79,7 @@ async def write_audit_doc(
     page_url: Optional[str],
     took_ms: int,
 ) -> Optional[str]:
-    """Persist one audit doc. Fire-and-forget — caller wraps in
-    `asyncio.create_task(...)` so request latency is untouched.
+    """Persist one audit doc; the caller bounds the wait to two seconds.
 
     Returns the audit_id (uuid) which extension feedback later
     references, or None on failure.
@@ -68,25 +90,39 @@ async def write_audit_doc(
 
         cards = []
         for r in results_out:
-            idx = r.index if hasattr(r, "index") else r.get("index")
+            idx = _read(r, "index")
             c_in = candidates_in[idx] if idx < len(candidates_in) else None
             best_doc = docs_by_idx.get(idx)
             cards.append({
                 "card_idx": idx,
+                "input_profile": _audit_input(c_in),
                 # Card payload (what extension scraped from Naukri DOM)
-                "card_name": getattr(c_in, "name", None),
-                "card_headline": getattr(c_in, "headline", None),
-                "card_location": getattr(c_in, "location", None),
-                "card_naukri_id": getattr(c_in, "naukri_id", None),
-                "card_employer": getattr(c_in, "current_employer", None),
-                "card_designation": getattr(c_in, "designation", None),
-                "card_experience_years": getattr(c_in, "experience_years", None),
+                "card_name": _read(c_in, "name"),
+                "card_headline": _read(c_in, "headline"),
+                "card_location": _read(c_in, "location"),
+                "card_naukri_id": _read(c_in, "naukri_id"),
+                "card_employer": _read(c_in, "current_employer"),
+                "card_designation": _read(c_in, "designation"),
+                "card_experience_years": _read(c_in, "experience_years"),
                 # Backend decision
-                "exists": bool(getattr(r, "exists", None) or (r.get("exists") if isinstance(r, dict) else False)),
-                "match_confidence": getattr(r, "match_confidence", None) or (r.get("match_confidence") if isinstance(r, dict) else None),
-                "match_score": getattr(r, "match_score", None) or (r.get("match_score") if isinstance(r, dict) else None),
-                "matched_signals": list(getattr(r, "matched_signals", None) or (r.get("matched_signals") if isinstance(r, dict) else None) or []),
-                "matched_candidate_id": getattr(r, "candidate_id", None) or (r.get("candidate_id") if isinstance(r, dict) else None),
+                "exists": bool(_read(r, "exists", False)),
+                "match_confidence": _read(r, "match_confidence"),
+                "match_score": _read(r, "match_score"),
+                "matched_signals": list(_read(r, "matched_signals", []) or []),
+                "decision": _read(r, "decision"),
+                "matcher_version": _read(r, "matcher_version"),
+                "score_kind": _read(r, "score_kind"),
+                "top_match": _read(r, "top_match"),
+                "second_match": _read(r, "second_match"),
+                "margin": _read(r, "margin"),
+                "reason_codes": _read(r, "reason_codes", []),
+                "missing_fields": _read(r, "missing_fields", []),
+                "retrieval_complete": _read(r, "retrieval_complete"),
+                "retrieval_paths": _read(r, "retrieval_paths", []),
+                "retrieval_stats": _read(r, "retrieval_stats"),
+                "context_fields_observed": _read(r, "context_fields_observed", []),
+                "ranked_matches": _read(r, "ranked_matches", []),
+                "matched_candidate_id": _read(r, "candidate_id"),
                 "matched_candidate_name": (best_doc.get("name") if best_doc else None),
                 "matched_candidate_employer": (best_doc.get("current_employer") if best_doc else None),
                 "matched_candidate_location": (best_doc.get("location") if best_doc else None),
@@ -117,6 +153,7 @@ async def write_audit_doc(
             "ts": now,
             "expires_at": now + timedelta(days=30),  # backstop for TTL
             "used_v2": used_v2,
+            "matcher_version": _read(results_out[0], "matcher_version") if results_out else None,
             "page_url": page_url,
             "batch_size": len(candidates_in),
             "took_ms": took_ms,
@@ -164,9 +201,7 @@ async def list_audit_batches(
     
 ):
     """List recent audit batches. Newest first.
-    Admin-only — restricted by upstream auth role check would be nicer,
-    but we rely on the auth_unified dependency for now (every admin
-    user is `admin@vhc.in` in this deployment).
+    Admin-only through the router role dependency.
     """
     q: dict = {}
     if user_email:
@@ -528,17 +563,17 @@ async def trigger_weekly_digest_now(
     return await send_weekly_digest(dry_run=False)
 
 
-# ── Extension feedback (no auth checking version handles it) ──────────
+# ── Extension feedback (authenticated and scoped to the submitting user) ──
 
 class ClientCardFeedback(BaseModel):
-    card_idx: int
+    card_idx: int = Field(ge=0, le=49)
     rendered: bool          # did the extension actually draw a green badge?
     skip_reason: Optional[str] = None  # set when rendered=False
 
 
 class FeedbackRequest(BaseModel):
-    audit_id: str
-    cards: List[ClientCardFeedback]
+    audit_id: str = Field(min_length=1, max_length=100)
+    cards: List[ClientCardFeedback] = Field(max_length=50)
 
 
 @ext_feedback_router.post("/audit/feedback")
@@ -565,7 +600,8 @@ async def submit_feedback(
     updates["client_feedback_at"] = datetime.now(timezone.utc)
 
     res = await db.badge_audit.update_one(
-        {"id": req.audit_id, "user_email": (user.get("email") or "").lower()},
+        {"id": req.audit_id, "user_email": (user.get("email") or "").lower(),
+         **{f"cards.{c.card_idx}.card_idx": c.card_idx for c in req.cards}},
         {"$set": updates},
     )
     return {"ok": True, "updated": res.modified_count}
@@ -588,9 +624,9 @@ async def submit_feedback(
 # direction — recruiters should NOT see a confirmation prompt.
 
 class WrongMatchReport(BaseModel):
-    audit_id: Optional[str] = None         # links to the originating audit doc
-    card_idx: Optional[int] = None         # which card in the batch
-    badge_candidate_id: str                # the DB candidate the badge pointed to
+    audit_id: Optional[str] = Field(default=None, max_length=100)
+    card_idx: Optional[int] = Field(default=None, ge=0, le=49)
+    badge_candidate_id: str = Field(min_length=1, max_length=256)
     card_name: Optional[str] = None        # what name was on the Naukri card
     card_headline: Optional[str] = None
     card_employer: Optional[str] = None
@@ -641,7 +677,9 @@ async def report_wrong_match(
         # surfaces it without an extra collection lookup.
         if req.audit_id and req.card_idx is not None:
             await db.badge_audit.update_one(
-                {"id": req.audit_id, f"cards.{req.card_idx}.card_idx": req.card_idx},
+                {"id": req.audit_id, "user_email": (user.get("email") or "").lower(),
+                 f"cards.{req.card_idx}.card_idx": req.card_idx,
+                 f"cards.{req.card_idx}.matched_candidate_id": req.badge_candidate_id},
                 {"$set": {
                     f"cards.{req.card_idx}.user_flagged_wrong": True,
                     f"cards.{req.card_idx}.user_flagged_at": now,
@@ -651,8 +689,8 @@ async def report_wrong_match(
         return {"ok": True, "stored": True}
     except Exception as e:
         logger.warning(f"[BadgeFeedback] wrong-match store failed: {e}")
-        # Never bubble errors to the extension popup.
-        return {"ok": True, "stored": False}
+        # The client must not acknowledge feedback that was never stored.
+        raise HTTPException(status_code=503, detail="Could not save match feedback") from None
 
 
 # ── Admin: list / stats for wrong-match feedback ─────────────────────

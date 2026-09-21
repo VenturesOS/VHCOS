@@ -93,7 +93,8 @@
 }
 
 /* Already in Database Feature Styling */
-.vhc-existing-badge {
+.vhc-existing-badge,
+.vhc-identity-status {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -146,6 +147,26 @@
 .vhc-existing-badge.vhc-confidence-medium:hover {
   box-shadow: 0 4px 10px rgba(245, 158, 11, 0.4);
 }
+
+.vhc-existing-badge.vhc-confidence-unavailable,
+.vhc-identity-status {
+  background: #64748b;
+  box-shadow: none;
+  cursor: default;
+}
+
+.vhc-wrong-match-flag,
+.vhc-identity-alternative {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px 6px;
+  font: 500 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  border-radius: 6px;
+  text-decoration: underline;
+}
+
+.vhc-wrong-match-flag { color: #b91c1c !important; background: #fef2f2; }
+.vhc-identity-alternative { color: #92400e !important; background: #fffbeb; }
 
 @keyframes badgeFadeIn {
   from { opacity: 0; transform: scale(0.9); }

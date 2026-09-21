@@ -31,7 +31,6 @@ from models.extension import (
     AIExtractRequest, AIExtractResponse,
 )
 from services.extension_service import (
-    normalize_phone, _names_are_similar,
     evaluate_skills as _evaluate_skills,
     evaluate_experience as _evaluate_experience,
     evaluate_salary as _evaluate_salary,
@@ -40,9 +39,11 @@ from services.extension_service import (
     evaluate_data_completeness as _evaluate_data_completeness,
     ai_comprehensive_evaluation as _ai_comprehensive_evaluation,
     log_capture as _log_capture,
-    build_team_visibility, build_complete_candidate, build_complete_update,
+    build_team_visibility, build_complete_candidate,
 )
-from services.activity_log_service import log_activity, ACTION_CAPTURED, ACTION_UPDATED, ACTION_CV_UPLOADED
+from services.identity_store import refresh_candidate_identity, refresh_candidate_identity_sync
+from services.identity_observations import record_capture_observation, ObservationConflict
+from services.capture_jobs import submit_capture_job, CaptureRequestConflict
 
 # Phone + work-experience extraction — routes through Nemotron → Nemotron Super 120B → Emergent Haiku via llm_fallback_service
 from services.llm_fallback_service import extract_phone_and_work_experience_fallback as extract_phone_and_work_experience_groq
@@ -56,6 +57,32 @@ TEST_LOCAL_LLM_EMAIL = "DISABLED_admin@vhc.in"  # Set to invalid email to disabl
 USE_GROQ_ENRICHMENT = os.getenv('USE_GROQ_ENRICHMENT', 'true').lower() == 'true'
 
 extension_router = APIRouter(prefix="/api/extension", tags=["Browser Extension"])
+
+
+async def _refresh_capture_identity(candidate_id: str) -> None:
+    """Index the complete persisted record, including preserved hidden fields.
+
+    Capture has already succeeded at this point. A derived-index outage must
+    not report capture failure and cause a retry/duplicate side effect. The
+    matcher checks raw records, and the explicit backfill repairs missed work.
+    """
+    try:
+        result = await asyncio.wait_for(refresh_candidate_identity(db, candidate_id), timeout=3.0)
+        if result["status"] in {"missing", "stale"}:
+            logger.warning("[Identity] Capture signature deferred: status=%s", result["status"])
+    except Exception as exc:
+        # Do not include raw profile evidence or connection strings in logs.
+        logger.warning("[Identity] Capture signature deferred: %s", type(exc).__name__)
+
+
+def _refresh_enriched_identity(sync_db, candidate_id: str) -> None:
+    """Refresh codes with the worker's own PyMongo connection after enrichment."""
+    try:
+        result = refresh_candidate_identity_sync(sync_db, candidate_id)
+        if result["status"] in {"missing", "stale"}:
+            logger.warning("[Identity] Enrichment signature deferred: status=%s", result["status"])
+    except Exception as exc:
+        logger.warning("[Identity] Enrichment signature deferred: %s", type(exc).__name__)
 
 
 # ============== VERSION CHECK ==============
@@ -1583,6 +1610,7 @@ async def _background_regex_enrich(
             updates["ai_enriched_at"] = datetime.now(timezone.utc).isoformat()
             updates["ai_enrichment_source"] = "regex_zero_cost"
             sync_db.candidate_bank.update_one({"id": candidate_id}, {"$set": updates})
+            _refresh_enriched_identity(sync_db, candidate_id)
             logger.warning(
                 f"[BG-Regex] Enriched {candidate_name} ({candidate_id[:12]}): "
                 f"{list(updates.keys())}"
@@ -1766,6 +1794,7 @@ def _apply_bg_enrichment(candidate_id: str, candidate_name: str, ai: dict,
             applied = sync_db.candidate_bank.update_one(query, operation)
             if not applied.matched_count:
                 return False
+            _refresh_enriched_identity(sync_db, candidate_id)
             logger.info(f"[BG-Apply] Enriched {candidate_name} via {source}: {list(updates.keys())}")
         else:
             logger.info(f"[BG-Apply] No fields to update for {candidate_name}")
@@ -1967,13 +1996,14 @@ async def capture_profile(
     _mem: None = Depends(_force_memory_release_after_response),
 ):
     """
-    Capture and save/update a COMPLETE Naukri profile.
-    Stores ALL available data for 1:1 profile matching.
+    Capture a dated observation. Identity review is separate from field capture.
+    Uncertain captures neither create nor overwrite canonical candidate records.
     """
     import re as re_module
     import time as _time
     capture_start = _time.time()
     now = datetime.now(timezone.utc).isoformat()
+    submitted_profile = profile.model_dump(mode="json")
     
     # === DATA VALIDATION & CLEANING ===
     
@@ -2119,9 +2149,6 @@ async def capture_profile(
             f"[Extension] Built enrichment text: {len(ai_enrichment_combined)} chars from structured data"
         )
     
-    ai_recruiter_phone = profile.recruiter_phone or current_user.get("phone")
-    ai_recruiter_email = current_user.get("email")
-
     # ═══ FULL INLINE REGEX EXTRACTION (FREE, instant — fills ALL fields) ═══
     # Runs the battle-tested naukri_regex_parser (168 tests) to populate skills,
     # work experience, education, CTC, notice period, location, employer, etc.
@@ -2324,495 +2351,31 @@ async def capture_profile(
             logger.warning(f"[Sanitize] Rejected garbage summary ({len(_summ)} chars) for {profile.name}")
             profile.profile_summary = None
 
-    # ═══ DEDUP CHECKS ═══
-    # Check for existing profile by naukri_profile_id (strongest match — same Naukri profile)
-    # CRITICAL: Skip lookup when naukri_profile_id is None/empty to prevent overwriting unrelated records
-    existing = None
-    if profile.naukri_profile_id:
-        existing = await db.candidate_bank.find_one(
-            {"naukri_profile_id": profile.naukri_profile_id},
-            {"_id": 0}
-        )
-        if existing:
-            # SAFETY: If naukri_profile_id matched but names are completely different,
-            # this is a different person (e.g. stale/shared session ID). Do NOT overwrite.
-            if not _names_are_similar(profile.name, existing.get("name", "")):
-                logger.warning(
-                    f"[Extension] BLOCKED OVERWRITE: naukri_id match but names differ! "
-                    f"Incoming='{profile.name}' vs Existing='{existing.get('name')}' ({existing.get('id','?')[:12]}). "
-                    f"Treating as new profile."
-                )
-                existing = None
-            else:
-                logger.warning(f"[Extension] MATCH by naukri_id: '{profile.name}' -> existing '{existing.get('name')}' ({existing.get('id','?')[:12]})")
-    else:
-        logger.warning(f"[Extension] SKIP MATCH: naukri_profile_id is null/empty for '{profile.name}' -> will force insert if no name/email/phone match")
-    
-    # HIGH PRIORITY: Check by name + source
-    # SAFETY (Feb 2026): Never merge on name+source alone — 3-different-people-
-    # named-"Pritam Kumar" all landed on the same candidate_id via this shortcut
-    # and each recapture overwrote the previous person's employer/phone/summary.
-    # Require ONE corroborating signal before treating as the same person:
-    #   • phone matches (normalized), OR
-    #   • email matches (case-insensitive), OR
-    #   • current_employer matches (case-insensitive substring, ≥4 chars overlap)
-    if not existing and profile.name:
-        # Fast equality lookup on the indexed lowercased name field (name_lower_idx).
-        # Old regex `/^Name$/i` on `name` forced a case-insensitive index scan of
-        # ~70k keys → 49s. Direct equality on name_lower drops that to <100ms.
-        # ~142 legacy docs (0.1%) lack name_lower and will miss dedup — acceptable.
-        import re  # kept locally — _employer_ok below still uses it
-        name_lower = profile.name.lower().strip()
-        source_pattern = f"{profile.source_platform or 'naukri'}_extension"
-        candidates_same_name = await db.candidate_bank.find(
-            {"name_lower": name_lower, "source": {"$in": [source_pattern, "naukri_extension"]}},
-            {"_id": 0}
-        ).to_list(20)
-
-        def _employer_ok(a: str, b: str) -> bool:
-            if not a or not b:
-                return False
-            a_l, b_l = a.lower().strip(), b.lower().strip()
-            if a_l == b_l:
-                return True
-            # Require ≥4 chars overlap of meaningful tokens (skip legal suffixes)
-            _strip = lambda s: re.sub(r"\b(ltd|limited|pvt|private|inc|llp|llc|corp|group|company|india|the)\b", "", s, flags=re.I).strip()
-            a_core, b_core = _strip(a_l), _strip(b_l)
-            if not a_core or not b_core:
-                return False
-            return len(a_core) >= 4 and (a_core in b_core or b_core in a_core)
-
-        incoming_phone = normalize_phone(profile.phone) if profile.phone else ""
-        incoming_email = (profile.email or "").lower().strip()
-        # Pydantic input model uses `current_company` (not `current_employer`).
-        # The DB uses `current_employer`. Read from the input model, compare against DB.
-        incoming_emp = (getattr(profile, "current_company", None) or
-                        getattr(profile, "current_employer", None) or "").strip()
-
-        for cand in candidates_same_name:
-            phone_hit = bool(incoming_phone) and normalize_phone(cand.get("phone", "")) == incoming_phone
-            email_hit = bool(incoming_email) and (cand.get("email") or "").lower().strip() == incoming_email
-            emp_hit = _employer_ok(incoming_emp, cand.get("current_employer", ""))
-            if phone_hit or email_hit or emp_hit:
-                existing = cand
-                logger.warning(
-                    f"[Extension] Dedup: name+source+({'phone' if phone_hit else 'email' if email_hit else 'employer'}) "
-                    f"match for '{profile.name}' -> updating {cand.get('id','?')[:12]}"
-                )
-                break
-
-        if not existing and candidates_same_name:
-            logger.warning(
-                f"[Extension] Dedup BLOCKED: {len(candidates_same_name)} same-name record(s) exist for "
-                f"'{profile.name}' but no phone/email/employer corroboration — treating incoming as NEW person "
-                f"(prevents cross-contamination of same-name candidates)"
-            )
-
-    # ═══ DOUBLE-MATCH EARLY EXIT (Phase 56.1, Feb 2026) ═══
-    # If both email AND phone independently match the SAME existing record,
-    # it's almost certainly the same person — merge unconditionally regardless
-    # of name variation ("A J I T H" vs "Ajith Kumar", "Yash" vs "Yash Vardhan",
-    # nickname changes, etc). This catches a class of duplicates the
-    # name-gated lookups below would miss when `_names_are_similar` is
-    # tripped by spacing / format quirks in the incoming name.
-    if not existing and profile.email and profile.phone:
-        import re as _re_dm
-        phone_normalized_dm = normalize_phone(profile.phone)
-        if phone_normalized_dm and len(phone_normalized_dm) >= 10:
-            # Case-insensitive email match + phone_normalized match in a single query
-            double_candidate = await db.candidate_bank.find_one(
-                {
-                    "email": _re_dm.compile(f"^{_re_dm.escape(profile.email)}$", _re_dm.IGNORECASE),
-                    "phone_normalized": phone_normalized_dm,
-                },
-                {"_id": 0},
-            )
-            if double_candidate:
-                existing = double_candidate
-                logger.warning(
-                    f"[Extension] Dedup: DOUBLE-MATCH (email+phone) for '{profile.name}' "
-                    f"-> updating '{existing.get('name')}' ({existing.get('id','?')[:12]}). "
-                    f"Bypassed name-similarity check."
-                )
-
-    # If not found, try email — but ONLY if the name is similar
-    if not existing and profile.email:
-        email_candidate = await db.candidate_bank.find_one(
-            {"email": profile.email.lower()},
-            {"_id": 0}
-        )
-        if email_candidate and _names_are_similar(profile.name, email_candidate.get("name", "")):
-            existing = email_candidate
-        elif email_candidate:
-            logger.warning(
-                f"[Extension] STALE EMAIL blocked: '{profile.email}' belongs to '{email_candidate.get('name')}' "
-                f"not '{profile.name}'. Email cleared."
-            )
-            profile.email = None
-    
-    # If not found, try phone — but ONLY if the name is similar
-    if not existing and profile.phone:
-        phone_normalized = normalize_phone(profile.phone)
-        phone_candidate = await db.candidate_bank.find_one(
-            {"phone_normalized": phone_normalized},
-            {"_id": 0}
-        )
-        if phone_candidate and _names_are_similar(profile.name, phone_candidate.get("name", "")):
-            existing = phone_candidate
-        elif phone_candidate:
-            logger.warning(
-                f"[Extension] STALE PHONE blocked: '{profile.phone}' belongs to '{phone_candidate.get('name')}' "
-                f"not '{profile.name}'. Phone cleared."
-            )
-            profile.phone = None
-    
-    if existing:
-        # Update existing record
-        # ═══ CLEAN SKILLS before persisting (apply full garbage filter) ═══
-        if profile.key_skills:
-            profile.key_skills = _clean_skills(profile.key_skills)
-        
-        update_data = build_complete_update(profile, current_user, now)
-        
-        # Store dom_scraped flag for zero-LLM extension tracking
-        if profile.dom_scraped:
-            update_data["dom_scraped"] = True
-        
-        # Store combined raw text for future re-enrichment
-        if ai_enrichment_combined:
-            update_data["raw_text_for_enrichment"] = ai_enrichment_combined
-        
-        # Ensure visibility for the capturing user's team
-        visibility_update = await build_team_visibility(current_user)
-        if visibility_update:
-            update_data.update(visibility_update)
-        
-        from utils.db_retry import retry_write
-        await retry_write(db.candidate_bank.update_one,
-            {"id": existing["id"]},
-            {"$set": update_data}
-        )
-
-        # Multi-mandate linking: add new mandate without removing old ones
-        if profile.mandate_id:
-            await db.candidate_bank.update_one(
-                {"id": existing["id"]},
-                {"$addToSet": {"linked_mandates": profile.mandate_id}}
-            )
-
-            # Auto-create application (link candidate to mandate) if not already linked
-            existing_app = await db.applications.find_one(
-                {"candidate_id": existing["id"], "job_id": profile.mandate_id},
-                {"_id": 0, "id": 1}
-            )
-            if not existing_app:
-                import uuid as _uuid
-                app_id = str(_uuid.uuid4())
-                application = {
-                    "id": app_id,
-                    "job_id": profile.mandate_id,
-                    "candidate_id": existing["id"],
-                    "candidate_name": profile.name or existing.get("name", ""),
-                    "candidate_email": profile.email or existing.get("email", ""),
-                    "candidate_phone": profile.phone or existing.get("phone", ""),
-                    "stage": "sourced",
-                    "status": "active",
-                    "source": "extension_capture",
-                    "created_by": current_user["id"],
-                    "created_at": now,
-                    "updated_at": now,
-                    "stage_history": [{
-                        "stage": "sourced",
-                        "moved_by": current_user["id"],
-                        "moved_by_name": current_user.get("name", ""),
-                        "timestamp": now,
-                    }],
-                }
-                await db.applications.insert_one(application)
-                logger.warning(f"[Extension] Auto-linked '{profile.name}' to mandate {profile.mandate_id[:12]} (new application {app_id[:12]})")
-        
-        # Invalidate search cache so new data appears immediately
-        cache.invalidate_search_cache()
-
-        # Auto-regenerate LaTeX resume on update
-        try:
-            from routes.resume import build_latex, _format_bank_profile_for_resume
-            updated_doc = await db.candidate_bank.find_one({"id": existing["id"]}, {"_id": 0})
-            if updated_doc:
-                profile_data = _format_bank_profile_for_resume(updated_doc)
-                latex = build_latex(profile_data, "ats_clean")
-                await db.candidate_bank.update_one(
-                    {"id": existing["id"]},
-                    {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
-                )
-                logger.info(f"[Extension] Re-generated LaTeX resume for {profile.name}")
-        except Exception as latex_err:
-            logger.warning(f"[Extension] LaTeX re-gen failed for {profile.name}: {latex_err}")
-
-        # Safety log: count total profiles
-        total = await db.candidate_bank.count_documents({"source": {"$regex": "_extension$"}})
-        logger.warning(f"[Extension] UPDATE: '{profile.name}' -> existing record {existing['id'][:12]}. Total extension profiles: {total}")
-        
-        await _log_capture(profile, current_user, "success", "updated", existing["id"], None, None, capture_start)
-        await log_activity(
-            candidate_id=existing["id"], action=ACTION_UPDATED,
-            description=f"Profile updated via {profile.source_platform or 'extension'} capture",
-            performed_by=current_user.get("id"), performed_by_name=current_user.get("name"),
-            performed_by_role=current_user.get("role"), candidate_name=profile.name,
-            details={"source": profile.source_platform, "url": profile.naukri_profile_url},
-        )
-        # 🚀 FULL GROQ ENRICHMENT (Unconditional, like old "Full Haiku" blueprint)
-        # Fire-and-forget background enrichment (non-blocking, separate thread)
-        logger.warning(f"[Extension-UPDATE] Enrichment trigger: name={bool(profile.name)} ({profile.name}), ai_text_len={len(ai_enrichment_combined)}")
-        if profile.name and ai_enrichment_combined:
-            # Phase 52: skip LLM + embedding when this exact profile was
-            # enriched in the last DEDUP_FRESH_DAYS days with identical text.
-            # The candidate is ALREADY tagged to the chosen mandate above.
-            _skip, _reason = _should_skip_enrichment(existing, ai_enrichment_combined)
-            if _skip:
-                logger.warning(
-                    f"[Dedup] SKIP_LLM '{profile.name}' "
-                    f"(reason={_reason}, candidate_id={existing['id'][:12]})"
-                )
-            else:
-                logger.info(
-                    f"[Extension-UPDATE] ⚡ Triggering FULL GROQ enrichment for "
-                    f"'{profile.name}' (dedup_decision={_reason})"
-                )
-                _fire_and_forget(_background_full_groq_enrich(
-                    existing["id"], profile.name,
-                    ai_enrichment_combined, ai_recruiter_phone, ai_recruiter_email,
-                    user_role=current_user.get("role", ""),
-                    user_email=current_user.get("email", ""),
-                ))
-        return CaptureResponse(
-            success=True,
-            action="updated",
-            candidate_id=existing["id"],
-            message=f"Profile updated for {profile.name}"
-        )
-    
-    else:
-        # ═══ AUTO-MERGE CHECK (2/3 matching: name + email + phone) ═══
-        # Before creating a new record, check if there's a mergeable existing profile
-        # This catches cross-source duplicates (extension + Excel + manual + CV upload)
-        from services.candidate_merge import find_merge_candidate, merge_profiles, log_merge_audit
-
-        merge_target = await find_merge_candidate(
-            name=profile.name,
-            email=profile.email,
-            phone=profile.phone,
-            current_employer=getattr(profile, "current_employer", None) or getattr(profile, "current_company", None),
-            designation=getattr(profile, "designation", None) or getattr(profile, "current_designation", None),
-            location=getattr(profile, "location", None) or getattr(profile, "current_location", None),
-            experience_years=getattr(profile, "experience_years", None),
-        )
-
-        if merge_target:
-            # Build the incoming data to merge
-            incoming_data = build_complete_candidate(profile, "temp", current_user, now)
-            merge_updates = merge_profiles(merge_target, incoming_data)
-
-            if merge_updates:
-                from utils.db_retry import retry_write
-                await retry_write(db.candidate_bank.update_one,
-                    {"id": merge_target["id"]},
-                    {"$set": merge_updates}
-                )
-
-                # Add team visibility
-                visibility_update = await build_team_visibility(current_user)
-                if visibility_update:
-                    await db.candidate_bank.update_one(
-                        {"id": merge_target["id"]},
-                        {"$set": visibility_update}
-                    )
-
-                # Multi-mandate linking + application creation (with dedup check)
-                if profile.mandate_id:
-                    await db.candidate_bank.update_one(
-                        {"id": merge_target["id"]},
-                        {"$addToSet": {"linked_mandates": profile.mandate_id}}
-                    )
-                    # Create application record if not already linked
-                    existing_app = await db.applications.find_one(
-                        {"candidate_id": merge_target["id"], "job_id": profile.mandate_id},
-                        {"_id": 0, "id": 1}
-                    )
-                    if not existing_app:
-                        import uuid as _uuid
-                        app_id = str(_uuid.uuid4())
-                        application = {
-                            "id": app_id,
-                            "job_id": profile.mandate_id,
-                            "candidate_id": merge_target["id"],
-                            "candidate_name": profile.name or merge_target.get("name", ""),
-                            "candidate_email": profile.email or merge_target.get("email", ""),
-                            "candidate_phone": profile.phone or merge_target.get("phone", ""),
-                            "stage": "sourced",
-                            "status": "active",
-                            "source": "extension_capture",
-                            "created_by": current_user["id"],
-                            "created_at": now,
-                            "updated_at": now,
-                            "stage_history": [{
-                                "stage": "sourced",
-                                "moved_by": current_user["id"],
-                                "moved_by_name": current_user.get("name", ""),
-                                "timestamp": now,
-                            }],
-                        }
-                        await db.applications.insert_one(application)
-                        logger.warning(f"[AutoMerge] Auto-linked '{profile.name}' to mandate {profile.mandate_id[:12]}")
-
-                # Audit trail
-                await log_merge_audit(
-                    merge_target["id"], incoming_data, merge_updates,
-                    merged_by=current_user.get("email", "system")
-                )
-
-                logger.warning(
-                    f"[AutoMerge] MERGED '{profile.name}' into existing '{merge_target.get('name')}' "
-                    f"(id={merge_target['id'][:12]}, fields_updated={len(merge_updates)})"
-                )
-
-                cache.invalidate_search_cache()
-                await _log_capture(profile, current_user, "success", "auto_merged", merge_target["id"], None, None, capture_start)
-                
-                # 🚀 FULL GROQ ENRICHMENT for auto-merged profiles (with dedup)
-                logger.warning(f"[Extension-Merge] Enrichment trigger: name={bool(profile.name)}, ai_text_len={len(ai_enrichment_combined)}")
-                if ai_enrichment_combined and profile.name:
-                    # Phase 52 dedup — same rules as the UPDATE path.
-                    _skip, _reason = _should_skip_enrichment(merge_target, ai_enrichment_combined)
-                    if _skip:
-                        logger.warning(
-                            f"[Dedup] SKIP_LLM '{profile.name}' "
-                            f"(reason={_reason}, candidate_id={merge_target['id'][:12]}, "
-                            f"path=auto_merge)"
-                        )
-                    else:
-                        logger.info(
-                            f"[Extension-Merge] ⚡ Triggering FULL GROQ enrichment for "
-                            f"'{profile.name}' (dedup_decision={_reason}, auto-merged)"
-                        )
-                        _fire_and_forget(_background_full_groq_enrich(
-                            merge_target["id"], profile.name,
-                            ai_enrichment_combined, ai_recruiter_phone, ai_recruiter_email,
-                            user_role=current_user.get("role", ""),
-                            user_email=current_user.get("email", ""),
-                        ))
-                
-                return CaptureResponse(
-                    success=True,
-                    action="auto_merged",
-                    candidate_id=merge_target["id"],
-                    message=f"Profile auto-merged with existing record for {merge_target.get('name', profile.name)}"
-                )
-
-        # Create new candidate with ALL data
-        candidate_id = str(uuid.uuid4())
-        
-        # ═══ CLEAN SKILLS before persisting (apply full garbage filter) ═══
-        if profile.key_skills:
-            profile.key_skills = _clean_skills(profile.key_skills)
-        
-        candidate_data = build_complete_candidate(profile, candidate_id, current_user, now)
-        
-        # Track enrichment lifecycle
-        candidate_data["enrichment_status"] = "pending"
-        
-        # Store dom_scraped flag for zero-LLM extension tracking
-        if profile.dom_scraped:
-            candidate_data["dom_scraped"] = True
-        
-        # Store combined raw text for future re-enrichment
-        if ai_enrichment_combined:
-            candidate_data["raw_text_for_enrichment"] = ai_enrichment_combined
-        
-        # Add team visibility
-        visibility_update = await build_team_visibility(current_user)
-        if visibility_update:
-            candidate_data.update(visibility_update)
-        
-        try:
-            from utils.db_retry import retry_write
-            await retry_write(db.candidate_bank.insert_one, candidate_data)
-        except Exception as insert_err:
-            logger.error(f"[Extension] Insert FAILED for {profile.name}: {insert_err}")
-            await _log_capture(profile, current_user, "failed", "insert_failed", candidate_id, str(insert_err)[:300], "save_to_bank", capture_start)
-            raise
-        
-        # Invalidate search cache so new profile appears immediately
-        cache.invalidate_search_cache()
-
-        # Auto-link new candidate to mandate (create application)
-        if profile.mandate_id:
-            import uuid as _uuid
-            app_id = str(_uuid.uuid4())
-            application = {
-                "id": app_id,
-                "job_id": profile.mandate_id,
-                "candidate_id": candidate_id,
-                "candidate_name": profile.name or "",
-                "candidate_email": profile.email or "",
-                "candidate_phone": profile.phone or "",
-                "stage": "sourced",
-                "status": "active",
-                "source": "extension_capture",
-                "created_by": current_user["id"],
-                "created_at": now,
-                "updated_at": now,
-                "stage_history": [{
-                    "stage": "sourced",
-                    "moved_by": current_user["id"],
-                    "moved_by_name": current_user.get("name", ""),
-                    "timestamp": now,
-                }],
-            }
-            await db.applications.insert_one(application)
-            logger.warning(f"[Extension] Auto-linked new '{profile.name}' to mandate {profile.mandate_id[:12]}")
-
-        # Auto-generate LaTeX resume using Resume Builder engine
-        try:
-            from routes.resume import build_latex, _format_bank_profile_for_resume
-            profile_data = _format_bank_profile_for_resume(candidate_data)
-            latex = build_latex(profile_data, "ats_clean")
-            await db.candidate_bank.update_one(
-                {"id": candidate_id},
-                {"$set": {"resume_latex": latex, "resume_template": "ats_clean"}}
-            )
-            logger.info(f"[Extension] Auto-generated LaTeX resume for {profile.name}")
-        except Exception as latex_err:
-            logger.warning(f"[Extension] LaTeX auto-gen failed for {profile.name}: {latex_err}")
-
-        # Safety log: count total profiles
-        total = await db.candidate_bank.count_documents({"source": {"$regex": "_extension$"}})
-        logger.warning(f"[Extension] INSERT: New profile '{profile.name}' ({candidate_id[:12]}). Total extension profiles: {total}")
-        
-        await _log_capture(profile, current_user, "success", "created", candidate_id, None, None, capture_start)
-        await log_activity(
-            candidate_id=candidate_id, action=ACTION_CAPTURED,
-            description=f"Profile captured from {profile.source_platform or 'extension'}",
-            performed_by=current_user.get("id"), performed_by_name=current_user.get("name"),
-            performed_by_role=current_user.get("role"), candidate_name=profile.name,
-            details={"source": profile.source_platform, "url": profile.naukri_profile_url},
-        )
-        # 🚀 FULL GROQ ENRICHMENT for new profiles (Unconditional, like "Full Haiku" blueprint)
-        logger.warning(f"[Extension-CREATE] Enrichment trigger: name={bool(profile.name)} ({profile.name}), ai_text_len={len(ai_enrichment_combined)}")
-        if profile.name and ai_enrichment_combined:
-            logger.info(f"[Extension-CREATE] ⚡ Triggering FULL GROQ enrichment for NEW '{profile.name}'")
-            _fire_and_forget(_background_full_groq_enrich(
-                candidate_id, profile.name,
-                ai_enrichment_combined, ai_recruiter_phone, ai_recruiter_email,
-                user_role=current_user.get("role", ""),
-                user_email=current_user.get("email", ""),
-            ))
-        return CaptureResponse(
-            success=True,
-            action="created",
-            candidate_id=candidate_id,
-            message=f"{profile.name} added to VHC Talent OS"
-        )
+    # Evidence is persisted before any person-identity decision. Do not fall
+    # through to the legacy candidate auto-merger or insert a new bank row.
+    if profile.key_skills:
+        profile.key_skills = _clean_skills(profile.key_skills)
+    template = build_complete_candidate(profile, "unresolved-observation", current_user, now)
+    visibility = await build_team_visibility(current_user)
+    if visibility:
+        template.update(visibility)
+    try:
+        observation = await asyncio.wait_for(record_capture_observation(
+            db, submitted_profile, template, current_user, datetime.now(timezone.utc),
+        ), timeout=12)
+    except ObservationConflict:
+        raise HTTPException(409, "Capture operation already used with different data") from None
+    except Exception:
+        raise HTTPException(503, "Observation could not be saved; retry the same capture operation") from None
+    candidate_id = observation.get("candidate_id") if observation.get("status") == "linked" else None
+    action = "exists" if candidate_id else "pending_review"
+    await _log_capture(profile, current_user, "success", action, candidate_id, None, None, capture_start)
+    return CaptureResponse(
+        success=True, action=action, candidate_id=candidate_id,
+        observation_id=observation["id"], identity_status=observation["status"],
+        message=("Observation saved for the linked candidate" if candidate_id
+                 else "Observation saved for identity review; no candidate created or overwritten"),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2886,24 +2449,15 @@ async def capture_profile_async(
 
     Backward-compat: the existing POST /capture (sync) endpoint is untouched.
     """
-    job_id = str(uuid.uuid4())
-    now_iso = datetime.now(timezone.utc).isoformat()
-    await db.extension_capture_jobs.insert_one({
-        "_id": job_id,
-        "status": "pending",
-        "user_id": current_user.get("id", ""),
-        "user_email": current_user.get("email", ""),
-        "candidate_name": (profile.name or "")[:200],
-        "naukri_profile_id": profile.naukri_profile_id,
-        "created_at": now_iso,
-        "updated_at": now_iso,
-        # BSON date for the TTL index (services/lifecycle.py) — jobs are
-        # poll-state only; nothing references them after completion.
-        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
-    })
-    background_tasks.add_task(_run_capture_job, job_id, profile, current_user)
-    logger.info(f"[capture-async] queued job_id={job_id} for {profile.name} (user={current_user.get('email')})")
-    return {"job_id": job_id, "status": "pending"}
+    try:
+        job, should_dispatch = await submit_capture_job(
+            db, profile.model_dump(mode="json"), current_user, datetime.now(timezone.utc),
+        )
+    except CaptureRequestConflict:
+        raise HTTPException(status_code=409, detail="Capture request ID was already used with different data") from None
+    if should_dispatch:
+        background_tasks.add_task(_run_capture_job, job["_id"], profile, current_user)
+    return {"job_id": job["_id"], "status": job["status"]}
 
 
 @extension_router.get("/capture/status/{job_id}")
@@ -3469,6 +3023,7 @@ async def re_enrich_candidate(
             updates["ai_enriched_at"] = datetime.now(timezone.utc).isoformat()
             updates["ai_enrichment_source"] = "anthropic_direct" if _used_claude else "regex_hybrid"
             await db.candidate_bank.update_one({"id": candidate_id}, {"$set": updates})
+            await _refresh_capture_identity(candidate_id)
 
         return {
             "success": True,

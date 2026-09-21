@@ -111,8 +111,10 @@ async function postCaptureAsync(auth, payload) {
 let isDraining = false;          // prevent concurrent drain loops
 
 // ─── Install ──────────────────────────────────────────────────────────────────
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   console.log(`[VHC BG v${VERSION}] Installed`);
+  // Updates retain queues, capture history, preferences and usage statistics.
+  if (details.reason === 'install') {
   chrome.storage.sync.set({
     enabled: true,
     showNotifications: true,
@@ -126,6 +128,7 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   });
   chrome.storage.local.set({ captureQueue: [], offlineQueue: [], deadLetterQueue: [], captureHistory: [] });
+  }
   chrome.alarms.create('drainCaptureQueue', { periodInMinutes: CONFIG.SYNC_ALARM_MINUTES });
   chrome.alarms.create('syncOfflineQueue',  { periodInMinutes: CONFIG.SYNC_ALARM_MINUTES });
   chrome.alarms.create('sessionPing',       { periodInMinutes: CONFIG.SESSION_PING_MINUTES });
@@ -277,500 +280,157 @@ function normalizeProfileUrl(url) {
   }
 }
 
-/**
- * Computes a composite match score (0–100) between a search-card candidate
- * and a capture-history entry. Uses weighted signals so common names alone
- * can never trigger the badge — at least one corroborating signal is required.
- *
- * Score weights:
- *   Naukri ID   → 100 (definitive, short-circuits)
- *   Name        → 30
- *   Employer    → 25
- *   Designation → 15
- *   Location    → 10
- *   Education   → 10
- *   Experience  → 10
- *   -------------------
- *   Max         = 100
- */
-function computeMatchScore(card, hist) {
-  // ── Signal 0: Naukri ID match (100% definitive) ──
-  const cardNaukriId = card.naukri_id || null;
-  const histNaukriId = hist.profileId || hist.naukri_profile_id || null;
-  if (cardNaukriId && histNaukriId) {
-    if (cardNaukriId === histNaukriId) return 100;
-    // Different IDs = definitely different people
-    return 0;
-  }
+// Identity badges trust a documented server decision, never a numeric score.
+const IDENTITY_MATCHER_VERSION = 'identity-resolution-1';
+const IDENTITY_BATCH_SIZE = 50;
+const IDENTITY_DECISIONS = new Set([
+  'confirmed_duplicate', 'probable_match', 'ambiguous', 'no_match_found',
+  'insufficient_data', 'conflicting_records', 'unavailable',
+]);
 
-  let score = 0;
-
-  // ── Signal 1: Name match (weight: 30) ──
-  const cleanName = (n) => (n || '').toLowerCase()
-    .replace(/\b(mr|ms|mrs|dr|shri|smt|prof)\.?\s+/gi, '')
-    .replace(/[^a-z\s]/g, '').trim();
-
-  const cardName = cleanName(card.name);
-  const histName = cleanName(hist.name);
-
-  if (cardName && histName) {
-    if (cardName === histName) {
-      score += 30;
-    } else {
-      // Jaccard similarity on name tokens (handles reordering, middle-name presence)
-      const cardTokens = new Set(cardName.split(/\s+/).filter(t => t.length > 1));
-      const histTokens = new Set(histName.split(/\s+/).filter(t => t.length > 1));
-      const intersection = [...cardTokens].filter(t => histTokens.has(t));
-      const union = new Set([...cardTokens, ...histTokens]);
-      if (union.size > 0) {
-        const jaccard = intersection.length / union.size;
-        score += Math.round(jaccard * 30);
-      }
-    }
-  }
-
-  // ── Signal 2: Current Employer (weight: 25) ──
-  if (card.current_employer && hist.current_employer) {
-    const ce1 = (card.current_employer || '').toLowerCase()
-      .replace(/\b(pvt|ltd|llp|inc|corp|limited|private|co|company)\b/g, '').trim();
-    const ce2 = (hist.current_employer || '').toLowerCase()
-      .replace(/\b(pvt|ltd|llp|inc|corp|limited|private|co|company)\b/g, '').trim();
-    if (ce1 && ce2) {
-      if (ce1 === ce2) score += 25;
-      else if (ce1.includes(ce2) || ce2.includes(ce1)) score += 20;
-    }
-  }
-
-  // ── Signal 3: Designation / Role (weight: 15) ──
-  if (card.designation && hist.designation) {
-    const d1 = (card.designation || '').toLowerCase().trim();
-    const d2 = (hist.designation || '').toLowerCase().trim();
-    if (d1 && d2) {
-      if (d1 === d2) score += 15;
-      else if (d1.includes(d2) || d2.includes(d1)) score += 10;
-    }
-  }
-
-  // ── Signal 4: Location (weight: 10) ──
-  if (card.location && hist.location) {
-    const l1 = (card.location || '').toLowerCase().split(',')[0].trim();
-    const l2 = (hist.location || '').toLowerCase().split(',')[0].trim();
-    if (l1 && l2 && (l1 === l2 || l1.includes(l2) || l2.includes(l1))) {
-      score += 10;
-    }
-  }
-
-  // ── Signal 5: Education (weight: 10) ──
-  if (card.education && hist.education) {
-    const e1 = (card.education || '').toLowerCase();
-    const e2 = (hist.education || '').toLowerCase();
-    if (e1 && e2) {
-      if (e1 === e2) score += 10;
-      else if (e1.includes(e2) || e2.includes(e1)) score += 7;
-    }
-  }
-
-  // ── Signal 6: Experience within 1 year (weight: 10) ──
-  if (card.experience_years != null && hist.experience_years != null) {
-    const diff = Math.abs(card.experience_years - hist.experience_years);
-    if (diff <= 0.5) score += 10;
-    else if (diff <= 1.5) score += 5;
-  }
-
-  return score;
+function unavailableIdentityResult(index, reason, serviceStatus = 'unavailable') {
+  return {
+    index, exists: false, decision: 'unavailable', service_status: serviceStatus,
+    matcher_version: IDENTITY_MATCHER_VERSION, reason_codes: [reason],
+    matched_signals: [], conflicts: [], missing_fields: [],
+  };
 }
 
-/**
- * Match-score threshold: a candidate must score at least this to be badged.
- * 70 = name (30) + employer (25) + designation (15)  — safe minimum.
- */
-const MATCH_THRESHOLD = 70;
-
-/**
- * Checks a list of candidates against the local captureHistory using
- * multi-signal composite scoring. Replaces the old name-only fuzzy match.
- */
-function checkLocalHistory(candidates, history) {
-  const results = [];
-  for (let i = 0; i < candidates.length; i++) {
-    const cand = candidates[i];
-    let bestMatch = null;
-    let bestScore = 0;
-    let matchType = 'none';
-
-    // Normalize input URL if present
-    const normUrl = cand.profileUrl ? normalizeProfileUrl(cand.profileUrl) : null;
-
-    for (const hist of history) {
-      if (hist.action === 'failed') continue;
-
-      // 1. Match by normalized URL (definitive)
-      if (normUrl && hist.profileUrl) {
-        const histNormUrl = normalizeProfileUrl(hist.profileUrl);
-        if (normUrl === histNormUrl) {
-          bestMatch = hist;
-          bestScore = 100;
-          matchType = 'url';
-          break;
-        }
-      }
-
-      // 2. Multi-signal composite scoring
-      const score = computeMatchScore(cand, hist);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = hist;
-        matchType = score === 100 ? 'naukri_id' : 'composite';
-      }
-    }
-
-    // Only mark as existing if score meets threshold
-    if (bestMatch && bestScore >= MATCH_THRESHOLD) {
-      const confidence = bestScore >= 85 ? 'high'
-                       : bestScore >= MATCH_THRESHOLD ? 'medium'
-                       : 'low';
-      results.push({
-        index: i,
-        exists: true,
-        candidate_id: bestMatch.candidate_id,
-        captured_at: bestMatch.timestamp,
-        match_confidence: confidence,
-        match_score: bestScore,
-      });
-    } else {
-      results.push({ index: i, exists: false });
-    }
-  }
-  return results;
+// History remains an activity log. Rotating/reused source URLs cannot identify
+// a candidate, even as an outage fallback.
+function identityHistoryScope(auth) {
+  if (!auth?.apiUrl || !auth?.userEmail) return null;
+  return auth.apiUrl.replace(/\/+$/, '').toLowerCase() + '|' + auth.userEmail.trim().toLowerCase();
 }
 
-/**
- * Merges local match results with backend check-existing API results.
- */
-function mergeCheckResults(localResults, apiResults) {
-  const merged = [];
-  const apiMap = new Map();
-  if (Array.isArray(apiResults)) {
-    for (const r of apiResults) {
-      if (r && typeof r.index === 'number') apiMap.set(r.index, r);
-    }
-  }
-  
-  for (let i = 0; i < localResults.length; i++) {
-    const local = localResults[i];
-    const api = apiMap.get(i) || null;
-    
-    if (api && api.exists) {
-      merged.push({
-        index: i,
-        exists: true,
-        candidate_id: api.candidate_id || local.candidate_id,
-        captured_at: api.captured_at || local.captured_at,
-        match_confidence: api.match_confidence || local.match_confidence || 'high'
-      });
-    } else if (local.exists) {
-      merged.push(local);
-    } else {
-      merged.push({
-        index: i,
-        exists: false
-      });
-    }
-  }
-  return { results: merged };
+function checkLocalHistory(candidates) {
+  return candidates.map((_, index) => unavailableIdentityResult(index, 'database_check_unavailable'));
 }
 
-/**
- * High-level orchestrator to check if candidates already exist in the database.
- * Calls local history matching and backend API, falling back gracefully to local on failures.
- */
-async function checkExistingCandidates(candidates) {
-  if (!candidates || candidates.length === 0) return { results: [] };
-  const auth = await getAuth();
-  
-  // 1. Read local history
-  const storage = await new Promise(resolve => {
-    chrome.storage.local.get(['captureHistory'], (r) => resolve(r.captureHistory || []));
-  });
-  
-  const localResults = checkLocalHistory(candidates, storage);
-  
-  // If not authenticated, return local results
-  if (!auth) {
-    console.log(`[VHC BG v${VERSION}] checkExisting: No auth. Returning local results.`);
-    return { results: localResults };
+function validateIdentityResponse(candidates, envelope) {
+  if (!envelope || envelope.matcher_version !== IDENTITY_MATCHER_VERSION) {
+    return candidates.map((_, index) => unavailableIdentityResult(index, 'unsupported_matcher_contract'));
   }
-  
-  try {
-    console.log(`[VHC BG v${VERSION}] checkExisting: Sending batch of ${candidates.length} to API...`);
-    
-    const response = await fetch(`${auth.apiUrl}/api/extension/check-existing`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${auth.token}`
-      },
-      body: JSON.stringify({ candidates })
-    });
-    
-    if (response.status === 401) {
-      const refreshed = await refreshAccessToken(auth.apiUrl);
-      if (refreshed) {
-        const newAuth = await getAuth();
-        const retryResponse = await fetch(`${newAuth.apiUrl}/api/extension/check-existing`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${newAuth.token}`
-          },
-          body: JSON.stringify({ candidates })
-        });
-        if (retryResponse.ok) {
-          const apiData = await retryResponse.json();
-          return { results: postValidateApiResults(candidates, apiData.results || [], storage) };
-        }
-      }
-      console.warn(`[VHC BG v${VERSION}] checkExisting: API Auth failed, using local fallback.`);
-      return { results: localResults };
-    }
-    
-    if (!response.ok) {
-      console.warn(`[VHC BG v${VERSION}] checkExisting: API returned HTTP ${response.status}, using local fallback.`);
-      return { results: localResults };
-    }
-    
-    const apiData = await response.json();
-    // v5.5.10 — defensive debug: surface the API → client picture so we can
-    // diagnose missing-badge bugs without diving into the Network tab.
-    const apiHitCount = (apiData.results || []).filter(r => r && r.exists).length;
-    console.log(`[VHC BG v${VERSION}] checkExisting: API returned ${apiHitCount} hits / ${candidates.length} candidates (audit_id=${apiData.audit_id || 'none'})`);
-    // Show first 3 hits with their signals so we can see V2 working
-    (apiData.results || []).filter(r => r && r.exists).slice(0, 3).forEach(r => {
-      const c = candidates[r.index] || {};
-      console.log(
-        `[VHC BG v${VERSION}]   • API hit: idx=${r.index} card="${c.name}" → ` +
-        `db="${(r.matched_candidate || {}).name || '?'}" ` +
-        `score=${r.match_score} signals=${JSON.stringify(r.matched_signals)} conf=${r.match_confidence}`
-      );
-    });
-
-    // Post-validate: the API may match by name alone, causing false positives
-    // on common names (e.g. two different "Shubham Rawat"). We cross-check each
-    // API match against local history using multi-signal composite scoring.
-    const finalResults = postValidateApiResults(candidates, apiData.results || [], storage);
-    const finalHitCount = finalResults.filter(r => r && r.exists).length;
-    if (finalHitCount < apiHitCount) {
-      console.warn(`[VHC BG v${VERSION}] checkExisting: post-validation dropped ${apiHitCount - finalHitCount} hits (API ${apiHitCount} → client ${finalHitCount})`);
-    }
-    // Forward audit_id so content.js can wire the per-badge "Wrong match?"
-    // flag back to /api/extension/audit/wrong-match (Badge Phase A).
-    return { results: finalResults, audit_id: apiData.audit_id || null };
-  } catch (err) {
-    console.warn(`[VHC BG v${VERSION}] checkExisting API call failed:`, err.message, "— falling back to local history.");
-    return { results: localResults };
+  if (envelope.service_status !== 'ready') {
+    const disabled = envelope.service_status === 'disabled';
+    return candidates.map((_, index) => unavailableIdentityResult(index,
+      disabled ? 'matching_disabled' : 'database_check_unavailable', disabled ? 'disabled' : 'unavailable'));
   }
-}
-
-/**
- * Post-validates API "exists" results against card data + local history.
- *
- * The API may match candidates by name alone, which produces false positives
- * for common Indian names (Rahul Sharma, Shubham Rawat, Amit Kumar etc.).
- * This function cross-checks each API match:
- *
- * 1. If API matched by URL/profile-ID → trust (definitive)
- * 2. If we find the matched candidate_id in local history with multi-signal
- *    fields → run computeMatchScore; reject if below threshold
- * 3. If local history has no multi-signal data, check for obvious conflicts
- *    between card fields and whatever the API returned
- * 4. If we can't validate at all → downgrade to 'medium' confidence
- */
-function postValidateApiResults(candidates, apiResults, localHistory) {
-  if (!Array.isArray(apiResults)) return [];
-
-  // Helper: extract Naukri candidateId from a URL (same logic as content.js extractIdFromUrl)
-  function extractNaukriId(url) {
-    if (!url) return null;
-    const m = url.match(/[?&](?:candidateId|profileId|pid)=([^&]+)/i);
-    return m ? m[1] : null;
+  const rows = Array.isArray(envelope.results) ? envelope.results : [];
+  const byIndex = new Map();
+  const duplicates = new Set();
+  for (const row of rows) {
+    if (!row || !Number.isInteger(row.index) || row.index < 0 || row.index >= candidates.length) continue;
+    if (byIndex.has(row.index)) duplicates.add(row.index);
+    byIndex.set(row.index, row);
   }
-
-  return apiResults.map(result => {
-    // Non-matches pass through unchanged
-    if (!result || !result.exists) return result;
-
-    const card = candidates[result.index];
-    if (!card) return result;
-
-    // ── Trust definitive matches (URL or Naukri profile ID) ──
-    const matchType = (result.matched_by || result.match_type || '').toLowerCase();
-    if (matchType === 'url' || matchType === 'profile_id' || matchType === 'naukri_id') {
-      return { ...result, match_confidence: 'high' };
+  return candidates.map((_, index) => {
+    const row = byIndex.get(index);
+    if (!row || duplicates.has(index)) return unavailableIdentityResult(index, 'incomplete_match_response');
+    const confirmed = row.decision === 'confirmed_duplicate';
+    const candidateId = row.candidate_id || row.top_match?.candidate_id;
+    const hardConflict = Array.isArray(row.conflicts) && row.conflicts.some(code =>
+      ['source_anchor_name_conflict', 'verified_id_conflict', 'confirmed_different'].includes(code));
+    if (row.matcher_version !== IDENTITY_MATCHER_VERSION ||
+        !IDENTITY_DECISIONS.has(row.decision) || row.exists !== confirmed ||
+        row.score_kind !== 'evidence_points' ||
+        !Number.isFinite(row.match_score) ||
+        !Array.isArray(row.matched_signals) || !Array.isArray(row.conflicts) ||
+        (confirmed && (!candidateId || hardConflict))) {
+      return unavailableIdentityResult(index, 'invalid_match_response');
     }
-
-    // ── Also trust if the API returned a profile_url that matches the card URL ──
-    if (result.profile_url && card.profileUrl) {
-      const apiNormUrl  = normalizeProfileUrl(result.profile_url);
-      const cardNormUrl = normalizeProfileUrl(card.profileUrl);
-      if (apiNormUrl && cardNormUrl && apiNormUrl === cardNormUrl) {
-        return { ...result, match_confidence: 'high' };
-      }
-    }
-
-    // ── TRUST V2 BACKEND ──
-    // The V2 scorer (Phase 56.4+) already does multi-signal composite scoring
-    // server-side and only emits `matched_signals` when ≥2 strong signals
-    // corroborate the name match. Running the OLD client-side computeMatchScore
-    // on top of V2 was double-scoring and rejecting valid matches (it was
-    // designed to filter false positives from the loose V1 backend).
-    //
-    // Signature of a V2 response: `matched_signals` is a populated array AND
-    // the backend's `match_score` is a positive number. In that case the
-    // backend has already done the verification — skip client post-validation.
-    const isV2Response =
-      Array.isArray(result.matched_signals) &&
-      result.matched_signals.length > 0 &&
-      typeof result.match_score === 'number';
-    if (isV2Response) {
-      // Map V2 confidence directly — server already chose high/medium/low.
-      return result;
-    }
-
-    // ── PRIMARY (V1 fallback): Server-returned matched_candidate cross-check ──
-    // The /api/extension/check-existing V1 endpoint matches loosely on name.
-    // Run the composite scorer locally to drop the obvious false positives.
-    if (result.matched_candidate) {
-      const mc = result.matched_candidate;
-      // Map server fields → the shape expected by computeMatchScore
-      const histEntry = {
-        name: mc.name,
-        current_employer: mc.current_employer,
-        designation: mc.designation,
-        location: mc.location,
-        experience_years: mc.experience_years,
-        education: mc.education,
-        profileId: mc.naukri_profile_id,
-        naukri_profile_id: mc.naukri_profile_id,
-      };
-
-      // 1. Definitive Naukri ID match short-circuits in computeMatchScore (=100)
-      // 2. Otherwise compute composite — same threshold as local-history path
-      const score = computeMatchScore(card, histEntry);
-      if (score < MATCH_THRESHOLD) {
-        console.log(
-          `[VHC BG v${VERSION}] Post-validation REJECTED (server cross-check): ` +
-          `card="${card.name}" (${card.current_employer || '?'} / ${card.designation || '?'}) ` +
-          `≠ db="${mc.name}" (${mc.current_employer || '?'} / ${mc.designation || '?'}) ` +
-          `→ score ${score} < ${MATCH_THRESHOLD}`
-        );
-        return { index: result.index, exists: false };
-      }
-      // Confirmed via server — preserve any deep-link / metadata from the API
-      return {
-        ...result,
-        match_confidence: score >= 85 ? 'high' : 'medium',
-        match_score: score,
-      };
-    }
-
-    // ── Try to find matched candidate in local history by candidate_id ──
-    const resultCandId = result.candidate_id != null ? String(result.candidate_id) : null;
-    let histEntry = null;
-
-    if (resultCandId) {
-      histEntry = localHistory.find(h =>
-        h.candidate_id != null &&
-        String(h.candidate_id) === resultCandId &&
-        h.action !== 'failed'
-      );
-    }
-
-    // Fallback: try matching by profileUrl in history
-    if (!histEntry && result.profile_url) {
-      const apiNorm = normalizeProfileUrl(result.profile_url);
-      if (apiNorm) {
-        histEntry = localHistory.find(h =>
-          h.profileUrl &&
-          normalizeProfileUrl(h.profileUrl) === apiNorm &&
-          h.action !== 'failed'
-        );
-      }
-    }
-
-    if (histEntry) {
-      // Check if history entry has multi-signal fields (captured after v5.5.6 changes)
-      const hasMultiSignal = !!(histEntry.current_employer || histEntry.designation || histEntry.location);
-
-      if (hasMultiSignal) {
-        // Full multi-signal validation — reliable
-        const score = computeMatchScore(card, histEntry);
-        if (score < MATCH_THRESHOLD) {
-          console.log(
-            `[VHC BG v${VERSION}] Post-validation REJECTED: card="${card.name}" ` +
-            `(${card.current_employer || '?'} / ${card.designation || '?'}) ` +
-            `≠ history="${histEntry.name}" ` +
-            `(${histEntry.current_employer || '?'} / ${histEntry.designation || '?'}) ` +
-            `→ score ${score} < ${MATCH_THRESHOLD}`
-          );
-          return { index: result.index, exists: false };
-        }
-        return {
-          ...result,
-          match_confidence: score >= 85 ? 'high' : 'medium',
-          match_score: score,
-        };
-      }
-
-      // ── Old history entry (no multi-signal fields) ──
-      // Compare Naukri profile IDs — these are definitive even without multi-signal data
-      const cardNaukriId = card.naukri_id || extractNaukriId(card.profileUrl);
-      const histNaukriId = histEntry.profileId || null;
-
-      if (cardNaukriId && histNaukriId) {
-        if (String(cardNaukriId) === String(histNaukriId)) {
-          // Same Naukri ID → definitely same person
-          console.log(
-            `[VHC BG v${VERSION}] Post-validation CONFIRMED (Naukri ID match): ` +
-            `card="${card.name}" id=${cardNaukriId}`
-          );
-          return { ...result, match_confidence: 'high' };
-        } else {
-          // Different Naukri IDs → definitely different people
-          console.log(
-            `[VHC BG v${VERSION}] Post-validation REJECTED (different Naukri IDs): ` +
-            `card="${card.name}" cardId=${cardNaukriId} vs histId=${histNaukriId}`
-          );
-          return { index: result.index, exists: false };
-        }
-      }
-
-      // Can't compare IDs — trust API for this old entry
-      return { ...result, match_confidence: result.match_confidence || 'high' };
-    }
-
-    // ── No local history — check card fields vs API response for conflicts ──
-    const apiEmployer  = (result.current_employer || result.company || '').toLowerCase().trim();
-    const cardEmployer = (card.current_employer || '').toLowerCase().trim();
-
-    if (apiEmployer && cardEmployer && apiEmployer.length > 2 && cardEmployer.length > 2) {
-      const empClean = (s) => s.replace(/\b(pvt|ltd|llp|inc|corp|limited|private|co|company)\b/g, '').trim();
-      const ae = empClean(apiEmployer);
-      const ce = empClean(cardEmployer);
-      if (ae && ce && !ae.includes(ce) && !ce.includes(ae)) {
-        console.log(
-          `[VHC BG v${VERSION}] Post-validation REJECTED (employer conflict): card="${card.name}" ` +
-          `employer="${cardEmployer}" vs API="${apiEmployer}"`
-        );
-        return { index: result.index, exists: false };
-      }
-    }
-
-    // No evidence of conflict — trust API with medium confidence
     return {
-      ...result,
-      match_confidence: 'medium',
+      ...row, candidate_id: candidateId || null, provenance: 'backend',
+      service_status: row.decision === 'unavailable' ? 'unavailable' : 'ready',
+      audit_id: envelope.audit_id || null, audit_index: index,
     };
   });
+}
+
+async function checkExistingCandidates(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return { results: [], matcher_version: IDENTITY_MATCHER_VERSION, service_status: 'ready' };
+  }
+  let auth = await getAuth();
+  if (!auth) {
+    return { results: candidates.map((_, i) => unavailableIdentityResult(i, 'authentication_required', 'disabled')),
+      matcher_version: IDENTITY_MATCHER_VERSION, service_status: 'disabled' };
+  }
+  const results = new Array(candidates.length);
+  let refreshPromise = null;
+  let accessDenied = false;
+  async function requestBatch(batch, requestAuth) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(`${requestAuth.apiUrl}/api/extension/check-existing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requestAuth.token}` },
+        body: JSON.stringify({ candidates: batch }),
+        signal: controller.signal,
+      });
+      // Keep the timeout active until the response body has finished arriving.
+      return { status: response.status, ok: response.ok, data: response.ok ? await response.json() : null };
+    } finally { clearTimeout(timeout); }
+  }
+  async function runBatch(offset) {
+    const batch = candidates.slice(offset, offset + IDENTITY_BATCH_SIZE);
+    let rows;
+    let permissionPending = false;
+    try {
+      if (accessDenied) {
+        rows = batch.map((_, i) => unavailableIdentityResult(i, 'access_denied', 'disabled'));
+      } else {
+        let response = await requestBatch(batch, auth);
+        if (response.status === 401) {
+          permissionPending = true;
+          if (!refreshPromise) refreshPromise = refreshAccessToken(auth.apiUrl).then(async refreshed => {
+            if (refreshed) auth = await getAuth();
+            return refreshed && auth;
+          });
+          if (await refreshPromise) response = await requestBatch(batch, auth);
+        }
+        permissionPending = response.status === 401 || response.status === 403;
+        if (response.status === 401 || response.status === 403) {
+          accessDenied = true;
+          rows = batch.map((_, i) => unavailableIdentityResult(i, 'access_denied', 'disabled'));
+        } else if (!response.ok) {
+          // An outage cannot recover identity from a rotating source URL.
+          rows = response.status >= 500 || response.status === 429
+            ? checkLocalHistory(batch)
+            : batch.map((_, i) => unavailableIdentityResult(i, 'match_request_rejected'));
+        } else {
+          rows = validateIdentityResponse(batch, response.data);
+          if (rows.some(row => row.service_status === 'disabled')) accessDenied = true;
+        }
+      }
+    } catch (_) {
+      if (permissionPending) {
+        accessDenied = true;
+        rows = batch.map((_, i) => unavailableIdentityResult(i, 'access_denied', 'disabled'));
+      } else {
+        rows = checkLocalHistory(batch);
+      }
+    }
+    rows.forEach((row, i) => { results[offset + i] = { ...row, index: offset + i }; });
+  }
+  // Bounded parallelism keeps large result pages responsive without truncation.
+  for (let offset = 0; offset < candidates.length; offset += IDENTITY_BATCH_SIZE * 3) {
+    const offsets = [offset, offset + IDENTITY_BATCH_SIZE, offset + IDENTITY_BATCH_SIZE * 2]
+      .filter(value => value < candidates.length);
+    await Promise.all(offsets.map(runBatch));
+  }
+  // A permission failure invalidates the whole logical check, including an
+  // earlier local reminder or successful batch from this request.
+  if (accessDenied) {
+    return { results: candidates.map((_, i) => unavailableIdentityResult(i, 'access_denied', 'disabled')),
+      matcher_version: IDENTITY_MATCHER_VERSION, service_status: 'disabled' };
+  }
+  return {
+    results, matcher_version: IDENTITY_MATCHER_VERSION,
+    service_status: results.some(row => row.service_status === 'unavailable') ? 'unavailable'
+      : results.every(row => row.service_status === 'disabled') ? 'disabled' : 'ready',
+  };
 }
 
 /**
@@ -1062,8 +722,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // ═══ REPORT WRONG-MATCH BADGE (Badge Phase A telemetry) ═══
   // Content.js calls this when a recruiter clicks the small "Wrong match?"
-  // link next to the green "Already in Database" badge. Silent — we never
-  // surface success/error in the UI, just log to /api/extension/audit/wrong-match.
+  // link beside a match suggestion. Acknowledge only after the API accepts it.
   if (request.action === 'reportWrongMatch') {
     (async () => {
       try {
@@ -1072,7 +731,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ ok: false });
           return;
         }
-        await fetch(`${auth.apiUrl}/api/extension/audit/wrong-match`, {
+        const response = await fetch(`${auth.apiUrl}/api/extension/audit/wrong-match`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${auth.token}`,
@@ -1091,7 +750,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             reason: request.reason || null,
           }),
         });
-        sendResponse({ ok: true });
+        sendResponse({ ok: response.ok });
       } catch (e) {
         console.warn(`[VHC BG v${VERSION}] reportWrongMatch failed:`, e.message);
         // Never bubble error to popup — flag stays silent per product spec.
@@ -1139,7 +798,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(sendResponse)
       .catch(e => {
         console.error(`[VHC BG v${VERSION}] checkExisting error:`, e.message);
-        sendResponse({ success: false, error: e.message, results: (request.candidates || []).map((_, i) => ({ index: i, exists: false })) });
+        sendResponse({ success: false, matcher_version: IDENTITY_MATCHER_VERSION, service_status: 'unavailable',
+          results: (request.candidates || []).map((_, i) => unavailableIdentityResult(i, 'database_check_unavailable')) });
       });
     return true; // Keep message channel open for async response
   }
@@ -1378,7 +1038,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'clearHistory') {
-    chrome.storage.local.set({ captureHistory: [] }, () => sendResponse({ success: true }));
+    serializeCaptureMutation(() => writeQueueStorage({ captureHistory: [] }))
+      .then(() => sendResponse({ success: true }))
+      .catch(e => sendResponse({ success: false, error: e.message }));
     return true;
   }
 
@@ -1388,12 +1050,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'clearDeadLetter') {
-    chrome.storage.local.set({ deadLetterQueue: [] }, () => sendResponse({ success: true }));
+    serializeCaptureMutation(() => writeQueueStorage({ deadLetterQueue: [] }))
+      .then(() => sendResponse({ success: true }))
+      .catch(e => sendResponse({ success: false, error: e.message }));
     return true;
   }
 
   if (request.action === 'retryDeadLetter') {
-    retryDeadLetter().then(sendResponse);
+    retryDeadLetter().then(sendResponse).catch(e => sendResponse({ success: false, error: e.message }));
     return true;
   }
 
@@ -1570,94 +1234,147 @@ async function addCandidateToMandate(candidateId, jobId) {
  * Add a raw profile (just-scraped, not yet AI-processed) to the captureQueue.
  * Returns immediately — processing happens asynchronously in drainCaptureQueue().
  */
+function serializeCaptureMutation(work) {
+  const pending = (serializeCaptureMutation._tail || Promise.resolve()).then(work, work);
+  serializeCaptureMutation._tail = pending.then(() => undefined, () => undefined);
+  return pending;
+}
+
+function readQueueStorage(keys) {
+  return new Promise((resolve, reject) => chrome.storage.local.get(keys, result => {
+    if (chrome.runtime.lastError) reject(new Error('Queue storage read failed'));
+    else resolve(result);
+  }));
+}
+
+function writeQueueStorage(values) {
+  return new Promise((resolve, reject) => chrome.storage.local.set(values, () => {
+    if (chrome.runtime.lastError) reject(new Error('Queue storage write failed'));
+    else resolve();
+  }));
+}
+
+async function freezeCapturePayload(item, payload) {
+  if (!item?._queueId || !/^[A-Za-z0-9_-]{8,128}$/.test(item._queueId)) {
+    throw new Error('Capture operation ID is missing or invalid');
+  }
+  return serializeCaptureMutation(async () => {
+    const stored = await readQueueStorage(['captureQueue', 'offlineQueue']);
+    const capture = stored.captureQueue || [];
+    const offline = stored.offlineQueue || [];
+    const queued = [...capture, ...offline].find(entry => entry._queueId === item._queueId);
+    if (!queued) throw new Error('Capture operation is no longer queued');
+    const existing = queued._capturePayload || item._capturePayload;
+    if (existing && existing.capture_request_id !== item._queueId) {
+      throw new Error('Frozen capture operation ID does not match');
+    }
+    const frozen = JSON.parse(JSON.stringify(existing || sanitizeDeep({ ...payload, capture_request_id: item._queueId })));
+    if (!queued._capturePayload) {
+      const retain = entry => entry._queueId === item._queueId ? { ...entry, _capturePayload: frozen } : entry;
+      await writeQueueStorage({ captureQueue: capture.map(retain), offlineQueue: offline.map(retain) });
+    }
+    // Assign only after successful persistence: storage failure must stop POST.
+    item._capturePayload = JSON.parse(JSON.stringify(frozen));
+    return JSON.parse(JSON.stringify(frozen));
+  });
+}
+
+function isSavedCaptureResult(result) {
+  if (!result || result.success !== true) return false;
+  if (typeof result.observation_id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.observation_id)) return false;
+  if (result.action === 'pending_review') return result.candidate_id === null;
+  return result.action === 'exists' && typeof result.candidate_id === 'string' && !!result.candidate_id.trim();
+}
+
 async function enqueueCapture(profileData) {
-  return new Promise((resolve) => {
-    // Read active mandate at queue time so the correct mandate is stamped
-    chrome.storage.sync.get(['vhc_active_mandate'], (syncResult) => {
+  if (!profileData || typeof profileData !== 'object' || Array.isArray(profileData)) {
+    return { success: false, error: 'Invalid profile payload' };
+  }
+  // An operation ID identifies a delivery/retry, never a candidate. A caller
+  // retrying the same delivery may provide the returned queueId as _queueId.
+  const suppliedId = profileData._queueId;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (suppliedId !== undefined && (typeof suppliedId !== 'string' || !uuidPattern.test(suppliedId))) {
+    return { success: false, error: 'Invalid operation ID: _queueId must be a UUID' };
+  }
+  const operationId = suppliedId ? suppliedId.toLowerCase() : crypto.randomUUID();
+  const payload = { ...profileData, _queueId: operationId };
+
+  const write = () => new Promise(resolve => {
+    chrome.storage.sync.get(['vhc_active_mandate'], syncResult => {
+      if (chrome.runtime.lastError) {
+        resolve({ success: false, error: 'Storage read failed', queueId: operationId });
+        return;
+      }
       const activeMandateId = syncResult.vhc_active_mandate || null;
-
-      chrome.storage.local.get(['captureQueue'], (result) => {
+      chrome.storage.local.get(['captureQueue', 'offlineQueue', 'deadLetterQueue'], result => {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, error: 'Storage read failed', queueId: operationId });
+          return;
+        }
+        if (['captureQueue', 'offlineQueue', 'deadLetterQueue'].some(key => result[key] != null && !Array.isArray(result[key]))) {
+          resolve({ success: false, error: 'Invalid capture queue data', queueId: operationId });
+          return;
+        }
         const queue = result.captureQueue || [];
-
-        // Dedup by profile ID
-        if (queue.some(item => item.naukri_profile_id === profileData.naukri_profile_id)) {
-          console.log(`[VHC BG v${VERSION}] Skipping duplicate: ${profileData.naukri_profile_id}`);
-          return resolve({ success: true, action: 'duplicate', queued: queue.length });
+        const allOperations = [...queue, ...(result.offlineQueue || []), ...(result.deadLetterQueue || [])];
+        if (suppliedId && allOperations.some(item => item._queueId === operationId)) {
+          resolve({ success: true, action: 'duplicate', queued: queue.length, queueId: operationId });
+          return;
         }
-
         if (queue.length >= CONFIG.MAX_CAPTURE_QUEUE_SIZE) {
-          console.warn(`[VHC BG v${VERSION}] Capture queue full (${queue.length})`);
-          return resolve({ success: false, error: 'Queue full', queued: queue.length });
+          resolve({ success: false, error: 'Queue full', queued: queue.length, queueId: operationId });
+          return;
         }
-
+        // A generated UUID collision is not permission to discard a profile.
+        if (allOperations.some(item => item._queueId === operationId)) {
+          resolve({ success: false, error: 'Operation ID collision; retry with a new operation', queued: queue.length });
+          return;
+        }
         const entry = {
-          ...profileData,
-          _queueId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          _attempts: 0,
-          _queued_at: new Date().toISOString(),
-          _status: 'pending',
-          _mandate_id: activeMandateId,
+          ...payload, _attempts: 0, _queued_at: new Date().toISOString(),
+          _status: 'pending', _mandate_id: activeMandateId,
         };
-
-        queue.push(entry);
-        chrome.storage.local.set({ captureQueue: queue }, () => {
-          console.log(`[VHC BG v${VERSION}] Enqueued: ${profileData.name || profileData.naukri_profile_id} (queue: ${queue.length}, mandate: ${activeMandateId || 'none'})`);
-          resolve({ success: true, action: 'queued', queued: queue.length, queueId: entry._queueId });
+        chrome.storage.local.set({ captureQueue: [...queue, entry] }, () => {
+          if (chrome.runtime.lastError) {
+            resolve({ success: false, error: 'Storage write failed', queueId: operationId });
+            return;
+          }
+          resolve({ success: true, action: 'queued', queued: queue.length + 1, queueId: operationId });
         });
       });
     });
   });
+  // Chrome storage has no atomic append. Serialize all enqueueCapture/bulkEnqueue
+  // deliveries in this worker so simultaneous additions do not overwrite each other.
+  return serializeCaptureMutation(write);
 }
 
 /**
- * Bulk enqueue an array of raw profiles from a search/list page.
- * Deduplicates, respects queue limits, returns summary.
+ * Bulk enqueue distinct capture operations, preserving profiles with missing,
+ * reused or rotating provider identifiers. Summary includes per-input queue IDs.
  */
 async function bulkEnqueue(profiles) {
   if (!Array.isArray(profiles) || profiles.length === 0) {
     return { success: false, error: 'No profiles provided' };
   }
-
-  return new Promise((resolve) => {
-    // Read active mandate at queue time
-    chrome.storage.sync.get(['vhc_active_mandate'], (syncResult) => {
-      const activeMandateId = syncResult.vhc_active_mandate || null;
-
-      chrome.storage.local.get(['captureQueue'], (result) => {
-        const queue = result.captureQueue || [];
-        const existingIds = new Set(queue.map(i => i.naukri_profile_id));
-
-        let queued = 0, duplicates = 0, dropped = 0;
-        const newItems = [];
-
-        for (const profileData of profiles) {
-          if (!profileData.naukri_profile_id) { dropped++; continue; }
-          if (existingIds.has(profileData.naukri_profile_id)) { duplicates++; continue; }
-          if (queue.length + newItems.length >= CONFIG.MAX_CAPTURE_QUEUE_SIZE) { dropped++; continue; }
-
-          const entry = {
-            ...profileData,
-            _queueId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            _attempts: 0,
-            _queued_at: new Date().toISOString(),
-            _status: 'pending',
-            _bulk: true,
-            _mandate_id: activeMandateId,
-          };
-          newItems.push(entry);
-          existingIds.add(profileData.naukri_profile_id);
-          queued++;
-        }
-
-        const merged = [...queue, ...newItems];
-        chrome.storage.local.set({ captureQueue: merged }, () => {
-          console.log(`[VHC BG v${VERSION}] Bulk enqueue: +${queued} queued, ${duplicates} dupes, ${dropped} dropped (mandate: ${activeMandateId || 'none'})`);
-          notifyPopup({ action: 'queueUpdated' });
-          resolve({ success: true, queued, duplicates, dropped, total: merged.length });
-        });
-      });
-    });
-  });
+  let queued = 0, duplicates = 0, dropped = 0, total = 0;
+  const results = [];
+  for (let index = 0; index < profiles.length; index++) {
+    const profile = profiles[index];
+    const result = await enqueueCapture(profile && typeof profile === 'object' && !Array.isArray(profile)
+      ? { ...profile, _bulk: true } : profile);
+    results.push({ index, ...result });
+    if (result.action === 'queued') queued++;
+    else if (result.action === 'duplicate') duplicates++;
+    else dropped++;
+    if (Number.isInteger(result.queued)) total = result.queued;
+  }
+  notifyPopup({ action: 'queueUpdated' });
+  const storageFailed = results.some(result => result.error?.startsWith('Storage'));
+  return { success: !storageFailed, queued, duplicates, dropped, total, results,
+    ...(storageFailed ? { error: 'One or more capture operations could not be saved' } : {}) };
 }
 
 /**
@@ -1715,7 +1432,12 @@ async function processSingleCapture(item, auth) {
     let finalName = item.name || 'Unknown';
 
     // ═══ 3-LAYER PATH: DOM fields available → skip AI-extract entirely ═══
-    if (item.dom_fields && item.dom_fields._dom_scraped) {
+    if (item._capturePayload) {
+      // A retry resumes the exact submitted operation, without re-extracting
+      // a potentially different person or generating a new AI interpretation.
+      capturePayload = item._capturePayload;
+      finalName = capturePayload.name;
+    } else if (item.dom_fields && item.dom_fields._dom_scraped) {
       console.log(`[VHC BG v${VERSION}] 3-LAYER: Using DOM-scraped fields for ${label} (${item.dom_fields._dom_field_count} fields)`);
 
       const d = item.dom_fields;
@@ -1867,6 +1589,7 @@ async function processSingleCapture(item, auth) {
     }
 
     // ── Step 3: POST to databank (async + poll, v5.5.10) ──
+    capturePayload = await freezeCapturePayload(item, capturePayload);
     const asyncResult = await postCaptureAsync(auth, capturePayload);
 
     if (asyncResult._httpResponse?.status === 401) {
@@ -1880,49 +1603,39 @@ async function processSingleCapture(item, auth) {
     }
 
     const captureResult = asyncResult._result;
+    if (!isSavedCaptureResult(captureResult)) throw new Error('Capture response did not confirm a saved candidate or observation');
 
-    // ── Step 4: Success — remove from queue, update stats, log history ──
-    await removeFromCaptureQueue(item._queueId);
-    await updateStats(captureResult.action);
-    await addToHistory({
+    // A review observation is saved successfully but is not a candidate record.
+    const historyResult = await addToHistory({
       name:              finalName,
+      queue_id:          item._queueId,
+      history_scope:     identityHistoryScope(auth),
       naukri_profile_id: item.naukri_profile_id,
       naukri_profile_url: item.naukri_profile_url,
       action:            captureResult.action,
       candidate_id:      captureResult.candidate_id,
+      observation_id:    captureResult.observation_id,
+      message:           captureResult.message,
       email:             item.email || null,
       phone:             item.phone || null,
       _bulk:             item._bulk || false,
-      // Multi-signal fields for offline composite matching (v5.5.6+)
+      // Context for the activity log only; never offline identity evidence.
       current_employer:  item.dom_fields?.current_company || capturePayload?.current_company || null,
       designation:       item.dom_fields?.current_designation || capturePayload?.current_designation || null,
       location:          item.dom_fields?.current_location || capturePayload?.career_preferences?.current_location || null,
       education:         Array.isArray(capturePayload?.education) ? (capturePayload.education[0]?.degree || capturePayload.education[0]?.institution || null) : null,
       experience_years:  item.dom_fields?.total_experience_years || capturePayload?.total_experience_years || null,
     });
+    if (historyResult.added) await updateStats(captureResult.action);
+    await removeFromCaptureQueue(item._queueId);
 
-    const candidateId = captureResult.candidate_id;
+    const candidateId = captureResult.action === 'pending_review' ? null : captureResult.candidate_id;
 
-    // ── Step 5: CV file upload (if a download URL was found on the page) ──
-    if (candidateId && item.cv_download_url) {
-      uploadCVFile(item.cv_download_url, candidateId, auth).catch(err => {
-        console.warn(`[VHC BG v${VERSION}] CV upload failed for ${finalName}:`, err.message);
-      });
-    }
+    // Saving/replaying an observation authorizes no candidate side effects.
+    // Even `exists` can be a late retry after manual review. Resume uploads,
+    // shortlisting and fit evaluation require a separate explicit workflow.
 
-    // ── Step 6: Job shortlist (if recruiter has an active job open) ──
-    if (candidateId && item.active_job_id && captureResult.action !== 'exists') {
-      shortlistCandidate(candidateId, item.active_job_id, auth).catch(err => {
-        console.warn(`[VHC BG v${VERSION}] Shortlist failed for ${finalName}:`, err.message);
-      });
-    }
-
-    // ── Step 7: Evaluate fit against active mandate (non-blocking) ──
-    triggerEvaluation(item, candidateId, auth).catch(err => {
-      console.warn(`[VHC BG v${VERSION}] Evaluate-fit skipped for ${finalName}:`, err.message);
-    });
-
-    const actionLabels = { created: '✅ Added', updated: '🔄 Updated', exists: '✓ Already saved' };
+    const actionLabels = { created: '✅ Added', updated: '🔄 Updated', exists: '✓ Already saved', pending_review: 'Saved for identity review' };
     console.log(`[VHC BG v${VERSION}] ${actionLabels[captureResult.action] || '✅'}: ${finalName}`);
 
     // Notify any open popup
@@ -1930,7 +1643,9 @@ async function processSingleCapture(item, auth) {
       action: 'captureComplete',
       name: finalName,
       result: captureResult.action,
-      candidate_id: captureResult.candidate_id
+      candidate_id: candidateId,
+      observation_id: captureResult.observation_id || null,
+      message: captureResult.message || null,
     });
 
   } catch (err) {
@@ -1939,8 +1654,11 @@ async function processSingleCapture(item, auth) {
     const isNetworkError = err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('network');
 
     if (isNetworkError) {
-      await moveToOfflineQueue(item);
-      await removeFromCaptureQueue(item._queueId);
+      try {
+        await moveToOfflineQueue(item);
+      } catch (storageError) {
+        await requeueWithFailure(item, storageError.message);
+      }
     } else {
       await requeueWithFailure(item, err.message);
       // Log to history on final failure (dead-letter)
@@ -2102,65 +1820,56 @@ async function pickPendingBatch(count) {
  * Update status of queue items by queueId
  */
 async function markStatus(queueIds, status, extra = {}) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['captureQueue'], (result) => {
-      const queue = (result.captureQueue || []).map(item => {
-        if (queueIds.includes(item._queueId)) {
-          return { ...item, _status: status, ...extra };
-        }
-        return item;
-      });
-      chrome.storage.local.set({ captureQueue: queue }, resolve);
-    });
+  return serializeCaptureMutation(async () => {
+    const result = await readQueueStorage(['captureQueue']);
+    const queue = (result.captureQueue || []).map(item =>
+      queueIds.includes(item._queueId) ? { ...item, ...extra, _queueId: item._queueId, _status: status } : item);
+    await writeQueueStorage({ captureQueue: queue });
   });
 }
 
-/**
- * Remove a processed item from captureQueue
- */
+/** Remove only this operation, preserving concurrent appends and frozen bodies. */
 async function removeFromCaptureQueue(queueId) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['captureQueue'], (result) => {
-      const queue = (result.captureQueue || []).filter(i => i._queueId !== queueId);
-      chrome.storage.local.set({ captureQueue: queue }, resolve);
-    });
+  return serializeCaptureMutation(async () => {
+    const result = await readQueueStorage(['captureQueue']);
+    await writeQueueStorage({ captureQueue: (result.captureQueue || []).filter(item => item._queueId !== queueId) });
   });
 }
 
-/**
- * Increment retry counter; move to deadLetter if exceeded max retries
- */
 async function requeueWithFailure(item, reason) {
   const attempts = (item._attempts || 0) + 1;
-
   if (attempts >= CONFIG.RETRY_MAX) {
-    console.warn(`[VHC BG v${VERSION}] Dead-lettering after ${attempts} attempts: ${item.name || item._queueId}`);
-    await removeFromCaptureQueue(item._queueId);
-    await addToDeadLetter({ ...item, _attempts: attempts, _fail_reason: reason, _failed_at: new Date().toISOString() });
+    await serializeCaptureMutation(async () => {
+      const result = await readQueueStorage(['captureQueue', 'deadLetterQueue']);
+      const current = (result.captureQueue || []).find(entry => entry._queueId === item._queueId) || item;
+      const failed = { ...current, _attempts: attempts, _fail_reason: reason, _failed_at: new Date().toISOString() };
+      const dead = (result.deadLetterQueue || []).filter(entry => entry._queueId !== item._queueId);
+      await writeQueueStorage({
+        captureQueue: (result.captureQueue || []).filter(entry => entry._queueId !== item._queueId),
+        deadLetterQueue: [...dead, failed].slice(-50),
+      });
+    });
     return;
   }
-
-  const backoffMs = CONFIG.RETRY_BACKOFF_MS * attempts;
-  console.log(`[VHC BG v${VERSION}] Retry ${attempts}/${CONFIG.RETRY_MAX} in ${backoffMs}ms: ${item.name || item._queueId} (${reason})`);
-
   await markStatus([item._queueId], 'retry', {
-    _attempts: attempts,
-    _last_error: reason,
-    _retry_after: Date.now() + backoffMs
+    _attempts: attempts, _last_error: reason,
+    _retry_after: Date.now() + CONFIG.RETRY_BACKOFF_MS * attempts,
   });
 }
 
-/**
- * Add fully-processed but network-failed profile to offline queue
- */
+/** Transfer one operation atomically; provider IDs never determine uniqueness. */
 async function moveToOfflineQueue(item) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['offlineQueue'], (result) => {
-      const queue = result.offlineQueue || [];
-      if (queue.some(i => i.naukri_profile_id === item.naukri_profile_id)) return resolve();
-      if (queue.length >= CONFIG.MAX_OFFLINE_QUEUE_SIZE) return resolve();
-      queue.push({ ...item, _offline_queued_at: new Date().toISOString() });
-      chrome.storage.local.set({ offlineQueue: queue }, resolve);
+  return serializeCaptureMutation(async () => {
+    const result = await readQueueStorage(['captureQueue', 'offlineQueue']);
+    const capture = result.captureQueue || [];
+    const offline = result.offlineQueue || [];
+    const current = capture.find(entry => entry._queueId === item._queueId) || item;
+    if (!current._queueId) throw new Error('Offline operation ID missing');
+    const existing = offline.find(entry => entry._queueId === current._queueId);
+    if (!existing && offline.length >= CONFIG.MAX_OFFLINE_QUEUE_SIZE) throw new Error('Offline queue full');
+    await writeQueueStorage({
+      captureQueue: capture.filter(entry => entry._queueId !== current._queueId),
+      offlineQueue: existing ? offline : [...offline, { ...current, _offline_queued_at: new Date().toISOString() }],
     });
   });
 }
@@ -2169,12 +1878,10 @@ async function moveToOfflineQueue(item) {
  * Add to dead letter queue (failed after max retries — reviewable in popup)
  */
 async function addToDeadLetter(item) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['deadLetterQueue'], (result) => {
-      const queue = result.deadLetterQueue || [];
-      queue.push(item);
-      chrome.storage.local.set({ deadLetterQueue: queue.slice(-50) }, resolve); // keep last 50
-    });
+  return serializeCaptureMutation(async () => {
+    const result = await readQueueStorage(['deadLetterQueue']);
+    const queue = (result.deadLetterQueue || []).filter(entry => entry._queueId !== item._queueId);
+    await writeQueueStorage({ deadLetterQueue: [...queue, item] });
   });
 }
 
@@ -2182,30 +1889,25 @@ async function addToDeadLetter(item) {
  * Re-enqueue dead letter items back into captureQueue for retry
  */
 async function retryDeadLetter() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['deadLetterQueue'], (result) => {
-      const dead = result.deadLetterQueue || [];
-      if (dead.length === 0) return resolve({ success: true, requeued: 0 });
-
-      const requeued = dead.map(item => ({
-        ...item,
-        _attempts: 0,
-        _status: 'pending',
-        _fail_reason: null,
-        _retry_after: null
-      }));
-
-      // Re-add to captureQueue
-      chrome.storage.local.get(['captureQueue'], (r2) => {
-        const cq = r2.captureQueue || [];
-        const merged = [...cq, ...requeued];
-        chrome.storage.local.set({ captureQueue: merged, deadLetterQueue: [] }, () => {
-          drainCaptureQueue();
-          resolve({ success: true, requeued: requeued.length });
-        });
-      });
-    });
+  const outcome = await serializeCaptureMutation(async () => {
+    const stored = await readQueueStorage(['captureQueue', 'offlineQueue', 'deadLetterQueue']);
+    const capture = stored.captureQueue || [];
+    const activeIds = new Set([...capture, ...(stored.offlineQueue || [])].map(item => item._queueId));
+    const remaining = [];
+    let requeued = 0;
+    for (const item of stored.deadLetterQueue || []) {
+      if (activeIds.has(item._queueId)) continue;
+      if (capture.length >= CONFIG.MAX_CAPTURE_QUEUE_SIZE) { remaining.push(item); continue; }
+      const operationId = item._queueId || crypto.randomUUID();
+      capture.push({ ...item, _queueId: operationId, _attempts: 0, _status: 'pending', _fail_reason: null, _retry_after: null });
+      activeIds.add(operationId);
+      requeued++;
+    }
+    await writeQueueStorage({ captureQueue: capture, deadLetterQueue: remaining });
+    return { success: true, requeued, remaining: remaining.length };
   });
+  if (outcome.requeued) drainCaptureQueue();
+  return outcome;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2358,79 +2060,100 @@ async function silentReLogin(apiUrl) {
 
 /**
  * Append a completed capture result to the local history log.
- * action: 'created' | 'updated' | 'exists' | 'failed'
+ * action: 'pending_review' | 'exists' | 'failed' (legacy history may contain created/updated)
  */
 async function addToHistory(entry) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['captureHistory'], (r) => {
-      const history = r.captureHistory || [];
-      history.push({
-        name:         entry.name || 'Unknown',
-        profileId:    entry.naukri_profile_id || null,
-        profileUrl:   entry.naukri_profile_url || null,
-        action:       entry.action,           // created | updated | exists | failed
-        error:        entry.error || null,
-        candidate_id: entry.candidate_id || null,
-        email:        entry.email || null,    // captured email (null = hidden/missing)
-        phone:        entry.phone || null,    // captured phone (null = hidden/missing)
-        timestamp:    new Date().toISOString(),
-        bulk:         entry._bulk || false,
-        // Multi-signal fields for offline composite matching (v5.5.6+)
-        current_employer:  entry.current_employer || null,
-        designation:       entry.designation || null,
-        location:          entry.location || null,
-        education:         entry.education || null,
-        experience_years:  entry.experience_years || null,
-      });
-      // Keep only the latest MAX_HISTORY_ITEMS
-      const trimmed = history.slice(-CONFIG.MAX_HISTORY_ITEMS);
-      chrome.storage.local.set({ captureHistory: trimmed }, resolve);
+  return serializeCaptureMutation(async () => {
+    const result = await readQueueStorage(['captureHistory']);
+    const history = result.captureHistory || [];
+    if (entry.queue_id && history.some(row => row.queue_id === entry.queue_id && row.action !== 'failed')) {
+      return { added: false };
+    }
+    history.push({
+      queue_id: entry.queue_id || null, name: entry.name || 'Unknown',
+      history_scope: entry.history_scope || null,
+      profileId: entry.naukri_profile_id || null, profileUrl: entry.naukri_profile_url || null,
+      action: entry.action, error: entry.error || null,
+      candidate_id: entry.action === 'pending_review' ? null : entry.candidate_id || null,
+      observation_id: entry.observation_id || null, message: entry.message || null,
+      email: entry.email || null, phone: entry.phone || null,
+      timestamp: new Date().toISOString(), bulk: entry._bulk || false,
+      current_employer: entry.current_employer || null, designation: entry.designation || null,
+      location: entry.location || null, education: entry.education || null,
+      experience_years: entry.experience_years ?? null,
     });
+    await writeQueueStorage({ captureHistory: history.slice(-CONFIG.MAX_HISTORY_ITEMS) });
+    return { added: true };
   });
 }
 
-/**
- * Process offline queue (network-failed profiles) when back online
- */
+/** Retry frozen operations without losing authentication failures or new appends. */
 async function processOfflineQueue() {
-  if (!navigator.onLine) return;
-  const auth = await getAuth();
-  if (!auth) return;
-
-  chrome.storage.local.get(['offlineQueue'], async (result) => {
-    const queue = result.offlineQueue || [];
-    if (queue.length === 0) return;
-
-    console.log(`[VHC BG v${VERSION}] Syncing ${queue.length} offline profiles`);
-    const newQueue = [];
-
-    for (const item of queue) {
+  if (!navigator.onLine || processOfflineQueue._running) return;
+  processOfflineQueue._running = true;
+  try {
+    let auth = await getAuth();
+    if (!auth) return;
+    const stored = await readQueueStorage(['offlineQueue']);
+    for (const item of stored.offlineQueue || []) {
       try {
-        // Map internal _mandate_id to the backend's expected field name
-        const payload = { ...item, mandate_id: item._mandate_id || item.mandate_id || null };
-        const asyncResult = await postCaptureAsync(auth, payload);
-
-        if (asyncResult._httpResponse?.status === 401) {
-          // Don't re-queue on auth failure — caller-level token refresh will retry
-        } else if (asyncResult._result) {
-          await updateStats(asyncResult._result.action);
-          console.log(`[VHC BG v${VERSION}] Offline sync OK: ${item.name}`);
-          notifyPopup({ action: 'captureComplete', name: item.name, result: asyncResult._result.action });
-        } else {
-          newQueue.push(item); // Unknown shape — keep for later
+        if (!item._capturePayload) {
+          // Old offline entries may contain only raw DOM text. Restore the
+          // preparation path instead of posting a different body with the same key.
+          await serializeCaptureMutation(async () => {
+            const latest = await readQueueStorage(['captureQueue', 'offlineQueue']);
+            const capture = latest.captureQueue || [];
+            const offline = latest.offlineQueue || [];
+            const current = offline.find(entry => entry._queueId === item._queueId);
+            if (!current || capture.length >= CONFIG.MAX_CAPTURE_QUEUE_SIZE) return;
+            const operationId = current._queueId || crypto.randomUUID();
+            if (!capture.some(entry => entry._queueId === operationId)) {
+              capture.push({ ...current, _queueId: operationId, _status: 'pending' });
+            }
+            await writeQueueStorage({
+              captureQueue: capture,
+              offlineQueue: offline.filter(entry => entry !== current),
+            });
+          });
+          continue;
         }
-      } catch (_) {
-        newQueue.push(item); // Network still down or job failed
-      }
-      await sleep(300);
+        const payload = await freezeCapturePayload(item, item._capturePayload);
+        let asyncResult = await postCaptureAsync(auth, payload);
+        if (asyncResult._httpResponse?.status === 401) {
+          const refreshed = await refreshAccessToken(auth.apiUrl);
+          if (!refreshed) break;
+          auth = await getAuth();
+          if (!auth) break;
+          asyncResult = await postCaptureAsync(auth, payload);
+          if (asyncResult._httpResponse?.status === 401) break;
+        }
+        const result = asyncResult._result;
+        if (!isSavedCaptureResult(result)) continue;
+        const historyResult = await addToHistory({
+          queue_id: item._queueId, name: payload.name || item.name,
+          history_scope: identityHistoryScope(auth), action: result.action,
+          candidate_id: result.candidate_id, observation_id: result.observation_id,
+          message: result.message, _bulk: item._bulk,
+          naukri_profile_id: item.naukri_profile_id, naukri_profile_url: item.naukri_profile_url,
+          email: item.email, phone: item.phone,
+        });
+        if (historyResult.added) await updateStats(result.action);
+        await serializeCaptureMutation(async () => {
+          const latest = await readQueueStorage(['offlineQueue']);
+          await writeQueueStorage({ offlineQueue: (latest.offlineQueue || []).filter(entry => entry._queueId !== item._queueId) });
+        });
+        console.log(`[VHC BG v${VERSION}] ${result.action === 'pending_review' ? 'Saved for identity review' : 'Offline capture saved'}: ${payload.name || item.name || 'Profile'}`);
+        notifyPopup({
+          action: 'captureComplete', name: payload.name || item.name, result: result.action,
+          candidate_id: result.action === 'pending_review' ? null : result.candidate_id,
+          observation_id: result.observation_id || null, message: result.message || null,
+        });
+      } catch (_) { /* Retain this operation and its exact frozen body for retry. */ }
     }
-
-    chrome.storage.local.set({ offlineQueue: newQueue }, () => {
-      if (newQueue.length < queue.length) {
-        notifyPopup({ action: 'queueUpdated' });
-      }
-    });
-  });
+    notifyPopup({ action: 'queueUpdated' });
+  } finally {
+    processOfflineQueue._running = false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2596,6 +2319,7 @@ async function updateStats(action) {
       }
 
       if (action === 'created')  { stats.captured_today++; stats.captured_week++; stats.captured_total++; }
+      else if (action === 'pending_review') { stats.pending_review_total = (stats.pending_review_total || 0) + 1; }
       else if (action === 'updated') { stats.updated_total++; }
       else if (action === 'failed')  { stats.failed_total++; }
 
@@ -2820,9 +2544,9 @@ function previewSet(key, data) {
 
 async function getAuth() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['vhc_token', 'vhc_api_url'], (result) => {
+    chrome.storage.sync.get(['vhc_token', 'vhc_api_url', 'vhc_user'], (result) => {
       resolve(result.vhc_token && result.vhc_api_url
-        ? { token: result.vhc_token, apiUrl: result.vhc_api_url }
+        ? { token: result.vhc_token, apiUrl: result.vhc_api_url, userEmail: result.vhc_user?.email || null }
         : null);
     });
   });

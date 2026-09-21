@@ -271,8 +271,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (document.getElementById('tab-history').classList.contains('active')) {
         refreshHistory();
       }
-      const label = { created: '✅ Added', updated: '🔄 Updated', exists: '✓ Up-to-date' };
-      showQueueToast(`${label[msg.result] || '✅'} ${msg.name || 'Profile'}`);
+      const label = { created: '✅ Added', updated: '🔄 Updated', exists: '✓ Observation linked', pending_review: 'Awaiting identity review:' };
+      showQueueToast(`${label[msg.result] || 'Capture result:'} ${msg.name || 'Profile'}`);
     }
     if (msg.action === 'sessionRefreshed') {
       // Token was silently refreshed — show a subtle indicator
@@ -517,6 +517,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    * @returns {'green'|'yellow'|'red'}
    */
   function emState(value, action) {
+    if (action === 'pending_review') return 'yellow';
     const hasValue = value && value.trim().length > 0;
 
     // Missing / hidden on Naukri → yellow
@@ -541,12 +542,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const listEl = document.getElementById('historyList');
 
     // Summary chips
-    const counts = { created: 0, updated: 0, exists: 0, failed: 0 };
+    const counts = { created: 0, updated: 0, exists: 0, pending_review: 0, failed: 0 };
     history.forEach(h => { if (counts[h.action] !== undefined) counts[h.action]++; });
     document.getElementById('historySummary').innerHTML = `
       <span class="hist-chip chip-added">${counts.created} Added</span>
       <span class="hist-chip chip-updated">${counts.updated} Updated</span>
       <span class="hist-chip chip-exists">${counts.exists} Exists</span>
+      <span class="hist-chip chip-updated">${counts.pending_review} Awaiting review</span>
       <span class="hist-chip chip-failed">${counts.failed} Failed</span>
     `;
 
@@ -555,8 +557,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const icons   = { created: '✓', updated: '↑', exists: '=', failed: '✕' };
-    const labels  = { created: 'Added', updated: 'Updated', exists: 'Exists', failed: 'Failed' };
+    const icons   = { created: '✓', updated: '↑', exists: '=', pending_review: '…', failed: '✕' };
+    const labels  = { created: 'Added', updated: 'Updated', exists: 'Exists', pending_review: 'Awaiting review', failed: 'Failed' };
 
     listEl.innerHTML = history.map(item => {
       const action = item.action || 'exists';
@@ -568,11 +570,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const eState = emState(item.email, action);
       const mState = emState(item.phone, action);
 
-      const eTooltip = eState === 'green'  ? `Email: ${item.email}` :
+      const eTooltip = action === 'pending_review' ? 'Identity review pending; no person assigned' : eState === 'green'  ? `Email: ${item.email}` :
                        eState === 'yellow' ? 'Email: hidden / not captured' :
                        `Email: ${item.email || 'unknown'} — duplicate/suspicious`;
 
-      const mTooltip = mState === 'green'  ? `Mobile: ${item.phone}` :
+      const mTooltip = action === 'pending_review' ? 'Identity review pending; no person assigned' : mState === 'green'  ? `Mobile: ${item.phone}` :
                        mState === 'yellow' ? 'Mobile: hidden / not captured' :
                        `Mobile: ${item.phone || 'unknown'} — duplicate/suspicious`;
 

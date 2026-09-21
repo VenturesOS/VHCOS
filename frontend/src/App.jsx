@@ -66,6 +66,7 @@ const BatchUploadPage = React.lazy(() => import("./pages/admin/BatchUploadPage")
 const AdminAnalyticsPage = React.lazy(() => import("./pages/admin/AdminAnalyticsPage"));
 const AnalyticsHubPage = React.lazy(() => import("./pages/admin/AnalyticsHubPage"));
 const BadgeAuditPage = React.lazy(() => import("./pages/admin/BadgeAuditPage"));
+const IdentityReviewPage = React.lazy(() => import("./pages/admin/IdentityReviewPage"));
 const TallyHealthPage = React.lazy(() => import("./pages/admin/TallyHealthPage"));
 const DailyDigestPage = React.lazy(() => import("./pages/admin/DailyDigestPage"));
 const SalaryBenchmarkPage = React.lazy(() => import("./pages/admin/SalaryBenchmarkPage"));
@@ -199,6 +200,7 @@ function App() {
             <Route path="performance-records" element={<PerformanceRecordsPage />} />
             <Route path="analytics-hub" element={<AnalyticsHubPage />} />
             <Route path="badge-audit" element={<BadgeAuditPage />} />
+            <Route path="identity-review" element={<IdentityReviewPage />} />
             <Route path="tally-health" element={<TallyHealthPage />} />
             <Route path="salary-benchmark" element={<SalaryBenchmarkPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />

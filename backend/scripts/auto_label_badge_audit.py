@@ -94,6 +94,11 @@ async def main() -> None:
         query = {"ts": {"$gte": since_dt}}
     else:
         query = {}
+    # This historical heuristic labels matches using name/employer agreement.
+    # It cannot supply independent ground truth for the versioned identity
+    # resolver. Keep both current and future versioned observations for human
+    # adjudication instead of auto-certifying the matcher's own input signals.
+    query["matcher_version"] = {"$in": [None, ""]}
     audits = await db.badge_audit.find(query).to_list(5000)
     print(f"Analyzing {len(audits)} audits" + (f" since {SINCE}" if SINCE else " (all time)"))
 
@@ -124,6 +129,8 @@ async def main() -> None:
         cards = a.get("cards") or []
         changed = False
         for c in cards:
+            if c.get("matcher_version"):
+                continue
             exists = bool(c.get("exists"))
             card_name = c.get("card_name") or ""
             key = _norm(card_name)

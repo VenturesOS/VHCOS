@@ -63,6 +63,7 @@ const navItems = {
     { icon: Trophy, label: 'Performance Records', path: '/admin/performance-records' },
     { icon: TrendingUp, label: 'Analytics Hub', path: '/admin/analytics-hub' },
     { icon: ShieldCheck, label: 'Badge Audit', path: '/admin/badge-audit' },
+    { icon: UserCircle, label: 'Identity Review', path: '/admin/identity-review' },
     { icon: IndianRupee, label: 'Salary Benchmark', path: '/admin/salary-benchmark' },
     { icon: Search, label: 'Advanced Search', path: '/admin/advanced-search' },
     { icon: Database, label: 'Candidate Bank', path: '/admin/candidate-bank' },
