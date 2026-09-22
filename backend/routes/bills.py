@@ -23,9 +23,11 @@ from models.bill import (
     BankAccountUpdate,
     BillBankSnapshot,
     BillCreate,
+    BillLineItem,
     BillRecord,
     BillSend,
     BillUpdate,
+    ConsolidatedInvoiceRequest,
 )
 from services.bill_llm_body import generate_send_body, plain_to_html
 from services.bill_mailer import build_cc_list, send_bill_email
@@ -320,6 +322,121 @@ async def list_bills(
     async for r in db.bills.find(q, {"_id": 0}).sort("created_at", -1).limit(limit):
         rows.append(r)
     return {"items": rows, "count": len(rows)}
+
+
+@bills_router.post("/bills/consolidated-invoice")
+async def consolidated_invoice(payload: ConsolidatedInvoiceRequest,
+                               user: dict = Depends(_require_billing_role)):
+    """One invoice for several candidates of the same client.
+
+    Six people joining the same client in a month used to mean six invoices
+    and six payments to chase. Billed together, the client gets one document
+    and marking it paid clears every candidate on it in one go.
+    """
+    from routes.joinings import book_joining_revenue, load_joining_for_invoice
+    from services import branch_revenue as br
+
+    lines: List[BillLineItem] = []
+    joinings: List[tuple] = []      # (application, line index, rate, ctc)
+    placements: List[str] = []
+    company_ids: set = set()
+    if payload.client_company_id:
+        company_ids.add(payload.client_company_id)
+
+    for item in payload.items:
+        if item.application_id:
+            app, job, join_date = await load_joining_for_invoice(item.application_id, user)
+            if not item.line_amount and not (item.annual_ctc and item.commercial_rate_pct):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{app.get('candidate_name')}: enter the CTC and commercial rate (or a line amount).")
+            company_ids.add(job["company_id"])
+            lines.append(BillLineItem(
+                candidate_name=app.get("candidate_name") or "",
+                designation=item.designation or app.get("job_title") or job.get("title") or "",
+                joining_date=join_date,
+                annual_ctc=float(item.annual_ctc or 0),
+                commercial_rate_pct=float(item.commercial_rate_pct or 0),
+                line_amount=item.line_amount,
+                application_id=item.application_id,
+            ))
+            joinings.append((app, len(lines) - 1, float(item.commercial_rate_pct or 0),
+                             float(item.annual_ctc or 0), join_date))
+        elif item.placement_id:
+            row = await db[br.COLL].find_one({"id": item.placement_id, "void": {"$ne": True}}, {"_id": 0})
+            if not row:
+                raise HTTPException(status_code=404, detail="Placement not found")
+            if row.get("invoice_no"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"{row.get('candidate_name')} already carries invoice {row['invoice_no']}.")
+            company = await db.companies.find_one(
+                {"$or": [{"name": row.get("organization")}, {"legal_name": row.get("organization")}]},
+                {"_id": 0, "id": 1})
+            if not company and not payload.client_company_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No client company named '{row.get('organization')}' — add it under Companies first, "
+                           "or pick the client explicitly.")
+            company_ids.add((company or {}).get("id") or payload.client_company_id)
+            lines.append(BillLineItem(
+                candidate_name=row.get("candidate_name") or "",
+                designation=item.designation or row.get("designation") or "",
+                joining_date=row.get("doj") or "",
+                annual_ctc=float(item.annual_ctc or row.get("offered_ctc") or 0),
+                commercial_rate_pct=float(item.commercial_rate_pct or 0),
+                line_amount=item.line_amount if item.line_amount is not None else float(row.get("revenue") or 0),
+                placement_id=item.placement_id,
+            ))
+            placements.append(item.placement_id)
+        else:
+            raise HTTPException(status_code=400, detail="Each item needs an application_id or a placement_id.")
+
+    company_ids.discard(None)
+    if len(company_ids) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="All candidates on one invoice must belong to the same client. "
+                   "Raise separate invoices per client.")
+
+    bill = await build_draft_bill(
+        BillCreate(
+            client_company_id=company_ids.pop(),
+            sender_variant=payload.sender_variant,
+            gst_kind=payload.gst_kind,
+            bank_account_id=payload.bank_account_id,
+            bill_date=payload.bill_date,
+            due_date=payload.due_date,
+            line_items=lines,
+            notes=payload.notes,
+        ),
+        user,
+    )
+    await db.bills.insert_one(dict(bill))
+    bill.pop("_id", None)
+
+    # Book each candidate's revenue against the same invoice
+    for app, idx, rate, ctc, join_date in joinings:
+        await book_joining_revenue(
+            app, bill, float(bill["line_items"][idx]["line_amount"]), rate, ctc, join_date, user)
+
+    now = datetime.now(timezone.utc).isoformat()
+    if placements:
+        await db[br.COLL].update_many({"id": {"$in": placements}}, {
+            "$set": {"invoice_no": bill["bill_number"], "bill_id": bill["id"],
+                     "payment_status": "PP", "payment_status_raw": "PP", "updated_at": now},
+            "$push": {"edits": {"at": now, "by": user.get("email"), "role": user.get("role"),
+                                "changes": {"invoice_no": bill["bill_number"], "payment_status": "PP"},
+                                "note": "Billed on a consolidated invoice"}},
+        })
+
+    return {
+        "message": f"Invoice {bill['bill_number']} raised for {len(lines)} candidates",
+        "bill_id": bill["id"],
+        "bill_number": bill["bill_number"],
+        "candidates": [li["candidate_name"] for li in bill["line_items"]],
+        "total": bill["totals"]["grand_total"],
+    }
 
 
 @bills_router.get("/bills/worklist")
@@ -644,9 +761,34 @@ async def mark_paid(bill_id: str, paid_on: Optional[str] = None,
     if bill["status"] == "paid":
         return {"message": "Already marked paid", "id": bill_id}
     now_iso = datetime.now(timezone.utc).isoformat()
+    paid_date = (paid_on or now_iso)[:10]
     await db.bills.update_one(
         {"id": bill_id},
-        {"$set": {"status": "paid", "paid_at": (paid_on or now_iso)[:10],
+        {"$set": {"status": "paid", "paid_at": paid_date,
                   "marked_paid_by": user.get("email"), "updated_at": now_iso}},
     )
-    return {"message": "Bill marked as paid", "id": bill_id}
+
+    # One payment clears every candidate on the invoice — that is the whole
+    # point of billing them together.
+    full = await db.bills.find_one({"id": bill_id}, {"_id": 0, "line_items": 1, "bill_number": 1}) or {}
+    lines = full.get("line_items") or []
+    placement_ids = [li["placement_id"] for li in lines if li.get("placement_id")]
+    application_ids = [li["application_id"] for li in lines if li.get("application_id")]
+    cleared = 0
+    if placement_ids:
+        res = await db.placement_ledger.update_many({"id": {"$in": placement_ids}}, {
+            "$set": {"payment_status": "Payment Received", "payment_status_raw": "Payment Received",
+                     "payment_date": paid_date, "updated_at": now_iso},
+            "$push": {"edits": {"at": now_iso, "by": user.get("email"), "role": user.get("role"),
+                                "changes": {"payment_status": "Payment Received", "payment_date": paid_date},
+                                "note": f"Paid on invoice {full.get('bill_number')}"}},
+        })
+        cleared += res.modified_count
+    if application_ids:
+        res = await db.revenue.update_many(
+            {"application_id": {"$in": application_ids}},
+            {"$set": {"revenue_status": "received", "payment_date": paid_date, "updated_at": now_iso}},
+        )
+        cleared += res.modified_count
+    return {"message": "Bill marked as paid", "id": bill_id,
+            "candidates_cleared": cleared, "line_count": len(lines)}

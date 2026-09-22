@@ -258,6 +258,7 @@ export const teamAPI = {
 export const billsAPI = {
   list: (params = {}) => api.get('/bills', { params }),
   worklist: (params = {}) => api.get('/bills/worklist', { params }),
+  consolidatedInvoice: (body) => api.post('/bills/consolidated-invoice', body),
   getById: (id) => api.get(`/bills/${id}`),
   create: (payload) => api.post('/bills', payload),
   update: (id, payload) => api.put(`/bills/${id}`, payload),

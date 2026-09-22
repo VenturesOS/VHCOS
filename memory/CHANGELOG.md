@@ -751,5 +751,41 @@ Realization moved 66.7% → 66.8% between sessions. The `edits` log showed why: 
 marked Puneet Kumar's ₹64,974 as received on 2026-09-21 10:17** via the new worklist — a real user, correctly
 scoped to his own branch. Not drift.
 
+## 2026-09-22 (b) — Consolidated invoices: many candidates, one bill, one payment
+
+Client: six candidates joining the same client in a month meant six invoices and six payments to chase.
+
+### Built
+- `POST /api/bills/consolidated-invoice` (`models/bill.py`: `ConsolidatedItem`, `ConsolidatedInvoiceRequest`)
+  — bill any mix of pipeline joinings (`application_id`) and tracker rows (`placement_id`) on ONE invoice.
+  All items must resolve to the same client company, else 400 with a plain message. `BillLineItem` gained
+  `placement_id` so each line links back to its source row.
+- `routes/joinings.py` split into `load_joining_for_invoice()` (scope + tracker-duplicate guard +
+  existing-invoice check + client company) and `book_joining_revenue()`, both shared by the single and
+  consolidated routes, so a consolidated line behaves identically to a single one.
+- **One payment clears everyone**: `POST /api/bills/{id}/mark-paid?paid_on=` now cascades to every line —
+  tracker rows go to Payment Received with the payment date (audited in `edits`), pipeline revenue rows go
+  to `revenue_status: received`. Returns `candidates_cleared`.
+- UI: checkboxes in the worklist's "Invoice to be raised" bucket + a selection bar
+  ("Bill N on one invoice", disabled across different clients) and
+  `components/revenue/ConsolidatedInvoiceDialog.jsx` — per-candidate CTC/rate/amount, live subtotal,
+  sender entity and bank account.
+- `book_joining_revenue` now preserves any hand-typed figure it replaces
+  (`previous_booked_revenue`), so an invoice never silently changes a number without a trace.
+
+### Verified (then cleaned up)
+- 2 JCB pipeline joinings → VHC/26-27/3, ₹1,47,441 (₹74,970 + ₹49,980 + 18% GST). Mark-paid cleared both.
+- 2 VECV tracker rows awaiting invoice → VHC/26-27/4, ₹2,00,600. Mark-paid flipped both ledger rows to
+  Payment Received with the date and invoice no.
+- Mixed clients refused with 400. Reconciliation back to 9/9 afterwards.
+
+### MISTAKE MADE AND FIXED — read before testing on this database again
+The client was working in the app at the same time. My test raised an invoice for an application that
+already had a hand-booked revenue row (Rajendra Singh Negi, ₹1,04,125, entered by accounts@vhc.in on
+21 Sept 12:09). The invoice overwrote it (expected) but my cleanup then deleted the row **by bill_id**,
+destroying the client's entry. Restored to the exact original values and disclosed to the client.
+**Rule: never delete `revenue` rows by bill_id after a test — only delete rows this session created
+(check `created_at`), or snapshot the doc before writing.** This is live production data on shared Atlas.
+
 ## Prior history
 See [CHANGELOG_ARCHIVE_PRE_2026_09_08.md](CHANGELOG_ARCHIVE_PRE_2026_09_08.md) for the complete original PRD/history, preserved without losing older requirements.

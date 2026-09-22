@@ -105,6 +105,8 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - Duplicate hires are detected (spelling variants, transposed letters, same name + same client/amount) and
   reviewed by hand in Performance Records → Review: merge, void the copy, or mark as different people.
   Near-name matches are blocked from double-booking revenue.
+- Several candidates of one client can be billed on a single invoice (Bills → Invoices & Payments →
+  tick the rows → "Bill N on one invoice"); marking that invoice paid clears every candidate on it.
 - **Open item**: the client still has to judge the 8 flagged pairs, incl. Puneet Kumar (₹64,974, two invoice nos).
 - **Open item**: annual targets are all ₹0 — the admin still has to set each recruiter's / team's number
   before achievement percentages mean anything.

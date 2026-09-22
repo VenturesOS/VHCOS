@@ -16,6 +16,8 @@ import { Loader2, Download, RotateCcw, Receipt, IndianRupee } from 'lucide-react
 import { toast } from 'sonner';
 import api, { billsAPI } from '../../lib/api';
 import { inr, compactINR, downloadCSV, DataTable } from './RevenueTables';
+import { Checkbox } from '../ui/checkbox';
+import { ConsolidatedInvoiceDialog } from './ConsolidatedInvoiceDialog';
 
 const TABS = [
   ['to_raise', 'Invoice to be raised'],
@@ -42,6 +44,8 @@ export function InvoiceWorklist() {
   const [acting, setActing] = useState(null);   // row being edited
   const [form, setForm] = useState({ invoice_no: '', payment_date: today(), mode: 'invoice' });
   const [saving, setSaving] = useState(false);
+  const [picked, setPicked] = useState({});        // key -> row, for one-invoice-many-candidates
+  const [billing, setBilling] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setQ(search), 350);
@@ -101,9 +105,26 @@ export function InvoiceWorklist() {
   };
 
   const rows = (data?.items || []).map((r) => ({ ...r, _key: r.key }));
+  const chosen = Object.values(picked);
+  const clients = [...new Set(chosen.map((r) => r.client_name || '—'))];
+  const canBillTogether = chosen.length > 1 && clients.length === 1;
+  const toggle = (row) => setPicked((p) => {
+    const next = { ...p };
+    if (next[row.key]) delete next[row.key]; else next[row.key] = row;
+    return next;
+  });
   const states = data?.states || {};
 
   const cols = [
+    ...(state === 'to_raise' ? [{
+      key: 'pick',
+      label: '',
+      render: (r) => (
+        <Checkbox checked={!!picked[r.key]} onCheckedChange={() => toggle(r)}
+                  aria-label={`Select ${r.candidate_name}`}
+                  data-testid={`wl-pick-${r.key}`} />
+      ),
+    }] : []),
     { key: 'date', label: 'Date' },
     {
       key: 'candidate_name',
@@ -196,6 +217,27 @@ export function InvoiceWorklist() {
         </Button>
       </div>
 
+      {chosen.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[#7CB342]/40 bg-[#7CB342]/5 px-4 py-3"
+             data-testid="wl-selection-bar">
+          <p className="text-sm text-slate-700">
+            <span className="font-medium">{chosen.length} selected</span>
+            {clients.length === 1
+              ? ` · ${clients[0]} · ${inr(chosen.reduce((s, r) => s + (r.amount || 0), 0))}`
+              : ` · ${clients.length} different clients — an invoice can only cover one client`}
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setPicked({})} data-testid="wl-clear-selection">
+              Clear
+            </Button>
+            <Button size="sm" disabled={!canBillTogether} onClick={() => setBilling(chosen)}
+                    className="bg-[#7CB342] hover:bg-[#6aa037]" data-testid="wl-bill-together">
+              <Receipt className="w-3 h-3 mr-1" /> Bill {chosen.length} on one invoice
+            </Button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
       ) : (
@@ -208,6 +250,9 @@ export function InvoiceWorklist() {
                      empty="Nothing in this bucket." />
         </>
       )}
+
+      <ConsolidatedInvoiceDialog rows={billing} onClose={() => setBilling(null)}
+                                 onDone={() => { setPicked({}); load(); }} />
 
       <Dialog open={!!acting} onOpenChange={(o) => !o && setActing(null)}>
         <DialogContent data-testid="wl-dialog">

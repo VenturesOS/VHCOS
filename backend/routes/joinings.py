@@ -197,6 +197,64 @@ class RaiseInvoiceRequest(BaseModel):
     notes: Optional[str] = None
 
 
+async def load_joining_for_invoice(application_id: str, user: dict) -> tuple:
+    """Shared by the single and the consolidated invoice routes: scope check,
+    the tracker-duplicate guard, an existing-invoice check, and the client
+    company off the mandate."""
+    app = await _load_scoped_application(application_id, user)
+    await _block_if_in_tracker(app)
+    existing = await db.revenue.find_one({"application_id": application_id},
+                                         {"_id": 0, "bill_id": 1, "bill_number": 1})
+    if existing and existing.get("bill_id"):
+        raise HTTPException(status_code=409,
+                            detail=f"Invoice {existing.get('bill_number')} was already raised for "
+                                   f"{app.get('candidate_name')}.")
+    job = await db.jobs.find_one({"id": app.get("job_id")}, {"_id": 0, "company_id": 1, "title": 1}) or {}
+    if not job.get("company_id"):
+        raise HTTPException(status_code=400,
+                            detail=f"{app.get('candidate_name')}'s mandate has no client company — "
+                                   "cannot raise an invoice.")
+    return app, job, await _freeze_join_date(app)
+
+
+async def book_joining_revenue(app: dict, bill: dict, line_amount: float, rate: float,
+                               ctc: float, join_date: str, user: dict) -> None:
+    """Book the invoice line as that recruiter's revenue for the year.
+
+    If someone had already typed a revenue figure by hand, the invoice amount
+    wins (the invoice is what the client owes) — but the old number is kept on
+    the row so the change is never silent.
+    """
+    team = await _team_of(app.get("created_by") or "")
+    now = datetime.now(timezone.utc).isoformat()
+    prior = await db.revenue.find_one({"application_id": app["id"]},
+                                      {"_id": 0, "final_revenue": 1}) or {}
+    keep_prior = {}
+    if prior.get("final_revenue") and float(prior["final_revenue"]) != line_amount:
+        keep_prior = {"previous_booked_revenue": float(prior["final_revenue"]),
+                      "previous_booked_replaced_at": now,
+                      "previous_booked_replaced_by": user.get("email")}
+    await db.applications.update_one({"id": app["id"]},
+                                     {"$set": {"joined_ctc": ctc, "updated_at": now}})
+    await db.revenue.update_one(
+        {"application_id": app["id"]},
+        {"$set": {
+            "final_revenue": line_amount,
+            "commercial_rate_pct": rate,
+            "revenue_status": "invoiced",
+            "recruiter_id": app.get("created_by") or "",
+            "team_id": team.get("id") or "",
+            "join_date": join_date,
+            "bill_id": bill["id"],
+            "bill_number": bill["bill_number"],
+            "updated_at": now,
+            **keep_prior,
+        },
+         "$setOnInsert": {"application_id": app["id"], "created_at": now, "created_by": user.get("id")}},
+        upsert=True,
+    )
+
+
 @joinings_router.post("/{application_id}/raise-invoice")
 async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user: dict = Depends(get_current_user)):
     """Create a pre-filled DRAFT bill for Accounts/Admin from a joining.
@@ -205,20 +263,11 @@ async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user:
     2026-09-17) — nothing is guessed. The resulting line amount is booked
     as that recruiter's revenue for the year.
     """
-    app = await _load_scoped_application(application_id, user)
-    await _block_if_in_tracker(app)
-    existing = await db.revenue.find_one({"application_id": application_id}, {"_id": 0, "bill_id": 1, "bill_number": 1})
-    if existing and existing.get("bill_id"):
-        raise HTTPException(status_code=409, detail=f"Invoice {existing.get('bill_number')} was already raised for this joining.")
-
-    job = await db.jobs.find_one({"id": app.get("job_id")}, {"_id": 0, "company_id": 1, "title": 1}) or {}
-    if not job.get("company_id"):
-        raise HTTPException(status_code=400, detail="This joining has no client company on its mandate — cannot raise an invoice.")
+    app, job, join_date = await load_joining_for_invoice(application_id, user)
 
     from routes.bills import build_draft_bill
     from models.bill import BillCreate, BillLineItem
 
-    join_date = await _freeze_join_date(app)
     line = BillLineItem(
         candidate_name=app.get("candidate_name") or "",
         designation=payload.designation or app.get("job_title") or job.get("title") or "",
@@ -239,28 +288,8 @@ async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user:
     bill.pop("_id", None)
 
     line_amount = float(bill["line_items"][0]["line_amount"])
-    team = await _team_of(app.get("created_by") or "")
-    now = datetime.now(timezone.utc).isoformat()
-    await db.applications.update_one(
-        {"id": application_id},
-        {"$set": {"joined_ctc": float(payload.joined_ctc), "updated_at": now}},
-    )
-    await db.revenue.update_one(
-        {"application_id": application_id},
-        {"$set": {
-            "final_revenue": line_amount,
-            "commercial_rate_pct": float(payload.commercial_rate_pct),
-            "revenue_status": "invoiced",
-            "recruiter_id": app.get("created_by") or "",
-            "team_id": team.get("id") or "",
-            "join_date": join_date,
-            "bill_id": bill["id"],
-            "bill_number": bill["bill_number"],
-            "updated_at": now,
-        },
-         "$setOnInsert": {"application_id": application_id, "created_at": now, "created_by": user.get("id")}},
-        upsert=True,
-    )
+    await book_joining_revenue(app, bill, line_amount, float(payload.commercial_rate_pct),
+                               float(payload.joined_ctc), join_date, user)
     return {
         "message": "Invoice draft created",
         "bill_id": bill["id"],

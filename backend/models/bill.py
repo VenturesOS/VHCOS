@@ -67,6 +67,7 @@ class BillLineItem(BaseModel):
                                           # survive round-trips.
     hsn_sac: str = "998512"  # placement consultancy default
     application_id: Optional[str] = None  # FK to applications, optional
+    placement_id: Optional[str] = None  # FK to placement_ledger, optional
 
 
 class BillTotals(BaseModel):
@@ -184,3 +185,27 @@ class BillSend(BaseModel):
     mail_body_html: Optional[str] = None
     mail_body_plain: Optional[str] = None
     test_mode: bool = False  # if true, only sends to the requester
+
+
+class ConsolidatedItem(BaseModel):
+    """One candidate on a consolidated invoice. Either a pipeline joining
+    (`application_id`) or a row from the branch tracker (`placement_id`)."""
+    application_id: Optional[str] = None
+    placement_id: Optional[str] = None
+    designation: Optional[str] = None
+    annual_ctc: float = 0
+    commercial_rate_pct: float = 0
+    line_amount: Optional[float] = None
+
+
+class ConsolidatedInvoiceRequest(BaseModel):
+    """Bill several candidates of the SAME client on one invoice, so the
+    payment can be received — and marked — in one go."""
+    items: List[ConsolidatedItem] = Field(..., min_length=1)
+    client_company_id: Optional[str] = None
+    sender_variant: Optional[str] = None
+    gst_kind: Optional[str] = None
+    bank_account_id: Optional[str] = None
+    bill_date: Optional[str] = None
+    due_date: Optional[str] = None
+    notes: Optional[str] = None
