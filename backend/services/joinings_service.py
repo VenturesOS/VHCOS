@@ -81,7 +81,9 @@ async def unified_joinings(
             "editable": False,
         }
         rows.append(row)
-        by_name.setdefault(_norm_name(row["candidate_name"]), row)
+        # Aliases hold spellings an admin has confirmed are the same person
+        for name in [r.get("candidate_name"), *(r.get("name_aliases") or [])]:
+            by_name.setdefault(_norm_name(name), row)
 
     for p in pipeline:
         match = by_name.get(_norm_name(p.get("candidate_name")))

@@ -227,6 +227,74 @@ async def update_placement(placement_id: str, payload: PlacementPatch,
             "row": await db[br.COLL].find_one({"id": placement_id}, {"_id": 0})}
 
 
+class DuplicateResolution(BaseModel):
+    action: str                      # same_hire | void_duplicate | different_people
+    placement_id: str                # the tracker row being kept (or voided)
+    application_id: Optional[str] = None   # the pipeline copy, for same_hire
+    other_placement_id: Optional[str] = None   # the tracker copy, for void/different
+    alias: Optional[str] = None      # spelling to remember, for same_hire
+    note: Optional[str] = None
+
+
+@branch_revenue_router.get("/duplicates")
+async def duplicates(year: Optional[int] = None,
+                     user: dict = Depends(require_role(["admin", "accounts"]))):
+    """Possible duplicate hires for review — nothing is merged automatically."""
+    from services.duplicate_hires import find_duplicates
+    start, end = ts.year_bounds(year or ts.current_year())
+    return await find_duplicates(db, start, end)
+
+
+@branch_revenue_router.post("/duplicates/resolve")
+async def resolve_duplicate(payload: DuplicateResolution,
+                            user: dict = Depends(require_role(["admin", "accounts"]))):
+    """Three outcomes, all reversible and all logged:
+
+    same_hire        remember the pipeline spelling on the tracker row, so the
+                     two are merged from now on (money stays on the tracker row)
+    void_duplicate   the row really was entered twice — void the copy so it
+                     drops out of every total
+    different_people stop flagging this pair
+    """
+    row = await _editable_row(payload.placement_id, user)
+    now = datetime.now(timezone.utc).isoformat()
+    stamp = {"at": now, "by": user.get("email") or user.get("id"), "role": user.get("role"),
+             "changes": {"duplicate": payload.action}, "note": payload.note or ""}
+
+    if payload.action == "same_hire":
+        alias = (payload.alias or "").strip()
+        if not alias:
+            raise HTTPException(status_code=400, detail="Send the other spelling as `alias`.")
+        await db[br.COLL].update_one({"id": payload.placement_id}, {
+            "$addToSet": {"name_aliases": alias},
+            "$set": {"updated_at": now},
+            "$push": {"edits": stamp},
+        })
+        return {"message": f"Merged — '{alias}' now resolves to {row.get('candidate_name')}"}
+
+    if payload.action == "void_duplicate":
+        target = payload.other_placement_id or payload.placement_id
+        await _editable_row(target, user)
+        await db[br.COLL].update_one({"id": target}, {"$set": {
+            "void": True, "void_reason": payload.note or "Duplicate entry",
+            "voided_by": user.get("email"), "voided_at": now, "review_resolved": True,
+        }, "$push": {"edits": stamp}})
+        return {"message": "Voided — it no longer counts in any total", "id": target}
+
+    if payload.action == "different_people":
+        other = payload.other_placement_id or payload.application_id
+        if not other:
+            raise HTTPException(status_code=400, detail="Send the other row's id.")
+        await db[br.COLL].update_one({"id": payload.placement_id}, {
+            "$addToSet": {"not_duplicate_of": other},
+            "$push": {"edits": stamp},
+        })
+        return {"message": "Noted — this pair won't be flagged again"}
+
+    raise HTTPException(status_code=400,
+                        detail="action must be same_hire, void_duplicate or different_people")
+
+
 @branch_revenue_router.get("/assignable-recruiters")
 async def assignable_recruiters(user: dict = Depends(require_role(["admin", "accounts", "employer"]))):
     """People a flagged placement can be credited to — the whole roster for

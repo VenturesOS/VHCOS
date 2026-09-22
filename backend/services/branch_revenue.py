@@ -44,7 +44,7 @@ async def fetch_rows(
     team_ids: Optional[List[str]] = None,
     recruiter_ids: Optional[List[str]] = None,
 ) -> List[dict]:
-    q: dict = {}
+    q: dict = {"void": {"$ne": True}}
     if date_from or date_to:
         q["doj"] = {}
         if date_from:
@@ -174,15 +174,27 @@ async def tracker_row_for_candidate(db, candidate_name: str) -> Optional[dict]:
     Guards the money: a hire that exists in both places must never have
     revenue booked twice (once from the tracker, once from the pipeline).
     """
+    from difflib import SequenceMatcher
+
     needle = norm_name(candidate_name)
     if not needle:
         return None
-    async for row in db[COLL].find({}, {"_id": 0, "candidate_name": 1, "revenue": 1,
-                                        "payment_status": 1, "invoice_no": 1, "branch": 1,
-                                        "recruiter_name": 1}):
-        if norm_name(row.get("candidate_name")) == needle:
-            return row
-    return None
+    near = None
+    async for row in db[COLL].find({"void": {"$ne": True}},
+                                   {"_id": 0, "id": 1, "candidate_name": 1, "revenue": 1,
+                                    "payment_status": 1, "invoice_no": 1, "branch": 1,
+                                    "recruiter_name": 1, "name_aliases": 1}):
+        names = [row.get("candidate_name"), *(row.get("name_aliases") or [])]
+        if any(norm_name(n) == needle for n in names):
+            return {**row, "match": "exact"}
+        # Transposed letters and initials slip past an exact match
+        # ("Muadillar"/"Maudillar"), and the money must not be booked twice.
+        for n in names:
+            other = norm_name(n)
+            score = 1.0 if sorted(other) == sorted(needle) else SequenceMatcher(None, needle, other).ratio()
+            if score >= 0.9 and (near is None or score > near["score"]):
+                near = {**row, "match": "near", "score": score}
+    return near
 
 
 async def revenue_by_recruiter(db, date_from: str, date_to: str,

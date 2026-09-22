@@ -102,6 +102,10 @@ Configuration: existing `NEMOTRON_API_KEY`, `NEMOTRON_BASE_URL`, `NEMOTRON_MODEL
 - Flagged review rows are resolvable by hand (assign recruiter / fix amount / move payment / dismiss),
   audited, and reflected everywhere instantly. Bills → **Invoices & Payments** is the Accounts worklist:
   invoice to be raised · payment pending · payment received · backout/credit note.
+- Duplicate hires are detected (spelling variants, transposed letters, same name + same client/amount) and
+  reviewed by hand in Performance Records → Review: merge, void the copy, or mark as different people.
+  Near-name matches are blocked from double-booking revenue.
+- **Open item**: the client still has to judge the 8 flagged pairs, incl. Puneet Kumar (₹64,974, two invoice nos).
 - **Open item**: annual targets are all ₹0 — the admin still has to set each recruiter's / team's number
   before achievement percentages mean anything.
 

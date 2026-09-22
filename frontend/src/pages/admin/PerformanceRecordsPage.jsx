@@ -18,6 +18,7 @@ import {
 } from '../../components/revenue/RevenueTables';
 import { ReconcilePanel } from '../../components/revenue/ReconcilePanel';
 import { ResolveRowDialog } from '../../components/revenue/ResolveRowDialog';
+import { DuplicatePanel } from '../../components/revenue/DuplicatePanel';
 
 const KPI = [
   ['placements', 'Placements', (v) => v],
@@ -481,6 +482,7 @@ export default function PerformanceRecordsPage() {
             </TabsContent>
 
             <TabsContent value="review" className="mt-4 space-y-4">
+              <DuplicatePanel year={Number(period.slice(0, 4)) || new Date().getFullYear()} onResolved={load} />
               <ReconcilePanel year={Number(period.slice(0, 4)) || new Date().getFullYear()} />
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />

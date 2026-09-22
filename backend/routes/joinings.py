@@ -141,13 +141,15 @@ async def _block_if_in_tracker(app: dict) -> None:
     from services import branch_revenue as br
     row = await br.tracker_row_for_candidate(db, app.get("candidate_name") or "")
     if row:
+        looks_like = "" if row.get("match") == "exact" else " (spelled slightly differently)"
         raise HTTPException(
             status_code=409,
             detail=(
-                f"{row.get('candidate_name')} is already in the {row.get('branch')} revenue tracker "
-                f"({row.get('payment_status')}, ₹{row.get('revenue'):,.0f}"
-                f"{', invoice ' + row['invoice_no'] if row.get('invoice_no') else ''}). "
-                "Booking revenue here as well would count it twice — update the tracker instead."
+                f"{row.get('candidate_name')} is already in the {row.get('branch')} revenue tracker"
+                f"{looks_like} — {row.get('payment_status')}, ₹{row.get('revenue'):,.0f}"
+                f"{', invoice ' + row['invoice_no'] if row.get('invoice_no') else ''}. "
+                "Booking revenue here as well would count it twice — update the tracker instead, "
+                "or mark them as different people in Performance Records → Review."
             ),
         )
 

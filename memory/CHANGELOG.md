@@ -717,5 +717,39 @@ Everything above plus the earlier rate-limiter and `index.html` fixes still need
 - Deleted 3 leftover TEST bills (VHC/26-27/1–3, two cancelled + one paid) so the bills module is clean
   (0 bills) as the client asked back on 17 Sept.
 
+## 2026-09-22 — Duplicate hires: detection, review and a tighter double-billing guard
+
+Client spotted two rows for the same person in the Joining List ("Deepak Muadillar" tracker vs
+"Deepak Maudillar" pipeline). Exact letter-normalised matching can't see a transposed letter.
+
+### Found (scan: `scripts/find_duplicate_hires.py`)
+- 8 suspect pairs in 2026: 7 pipeline↔tracker spelling variants (Deepak Muadillar/Maudillar,
+  Robin Kumar Sinha/SINGHA, Vishal Viswakarma/VISHWAKARMA, Vignesh.S/Vignesh, Dhruval Vadiya/VATIYA,
+  Kunal Kumar Jha/Kunal Kumar, Anuj Singh/Anuj Singh Rai) and 1 inside the tracker
+  (Puneet Kumar, VECV, ₹64,974 twice — different invoice nos. VHC/26-27/82 and /34, so the client must judge).
+- Same-name-different-person is common in this data (Sandeep Kumar, Manish Kumar, Rahul Kumar…), so
+  nothing is merged automatically — only pairs sharing a client or an identical amount are surfaced.
+- Money impact today: none from the cross-system pairs (the pipeline copies carry ₹0). ₹64,974 is at risk
+  if the Puneet Kumar pair turns out to be one hire.
+
+### Built
+- `services/duplicate_hires.py` + `GET /api/branch-revenue/duplicates` — pairs with a confidence score and
+  a plain-English reason. `POST /api/branch-revenue/duplicates/resolve` takes three decisions:
+  `same_hire` (stores the other spelling in `name_aliases`, so the Joining List merges them from then on),
+  `void_duplicate` (sets `void: true` — `fetch_rows` now excludes voided rows from every total),
+  `different_people` (`not_duplicate_of`, stops the flag). All logged in the row's `edits` array.
+- `unified_joinings` matches on `name_aliases` too.
+- The double-billing guard now also blocks NEAR matches (≥0.90 similarity or same letters reordered), so
+  revenue can't be booked on "Deepak Maudillar" while "Deepak Muadillar" is billed. Verified: 409 with
+  "(spelled slightly differently)".
+- UI: `components/revenue/DuplicatePanel.jsx` at the top of Performance Records → Review — pairs side by
+  side with the three buttons. Verified 8 pairs rendered; merging one dropped it to 7 and the Joining List
+  collapsed the two rows into one.
+
+### Audit trail proved itself
+Realization moved 66.7% → 66.8% between sessions. The `edits` log showed why: **ajit@vhc.in (employer)
+marked Puneet Kumar's ₹64,974 as received on 2026-09-21 10:17** via the new worklist — a real user, correctly
+scoped to his own branch. Not drift.
+
 ## Prior history
 See [CHANGELOG_ARCHIVE_PRE_2026_09_08.md](CHANGELOG_ARCHIVE_PRE_2026_09_08.md) for the complete original PRD/history, preserved without losing older requirements.
