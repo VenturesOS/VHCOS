@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VHC extension test report</title>
+<style>
+body{font:16px/1.55 system-ui,sans-serif;background:#f3f6fa;color:#182333;margin:0}main{max-width:920px;margin:36px auto;padding:24px}h1{margin:0}h2{font-size:20px}section{background:white;border:1px solid #d9e2ec;border-radius:12px;padding:22px;margin-top:20px}button{background:#2447a8;color:white;border:0;border-radius:6px;padding:10px 16px;margin:4px;cursor:pointer}button:disabled{opacity:.5}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;border-bottom:1px solid #e4e9ef;padding:10px}input{width:80px;padding:8px;border:1px solid #bbc8d8;border-radius:5px}label{display:inline-block;margin:8px 18px 8px 0}.muted{color:#526277;font-size:14px}.tag{color:#7c4200;font-weight:700}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}#status{min-height:25px}a{color:#2447a8}
+</style></head><body><main>
+<span class="tag">TEST BUILD · EMERGENT PREVIEW</span><h1>Extension performance report</h1>
+<p>Open candidate search pages with this extension enabled, then refresh this report.</p>
+<p id="build" class="muted"></p><p id="connection" class="muted"></p>
+<button id="health">Check preview connection</button><button id="refresh">Refresh report</button><button id="export">Download report</button>
+<p id="status" role="status"></p>
+<section><h2>Observed response times</h2><div id="timing"></div>
+<p class="muted">Matching measures a complete extension lookup, including its batches and retries; it excludes page scraping/rendering. Capture measures submission and polling, excluding earlier AI extraction. P95 means 95% of recorded calls completed within this time. These are observed timings, not performance guarantees. Last 300 calls retained locally; earlier calls roll off.</p>
+<h2>Matching outcomes</h2><pre id="decisions">No calls recorded.</pre></section>
+<section><h2>Your accuracy check</h2><p>Inspect a sample with independently known identities. Count wrong suggestions, missed existing people and cases where the extension cannot decide.</p>
+<label>Correct top suggestions <input id="correct" type="number" min="0" max="100000" value="0"></label>
+<label>Wrong top suggestions <input id="wrong" type="number" min="0" max="100000" value="0"></label>
+<label>Missed existing people <input id="missed" type="number" min="0" max="100000" value="0"></label>
+<label>Uncertain / no suggestion <input id="uncertain" type="number" min="0" max="100000" value="0"></label>
+<p class="muted">Enter mutually exclusive counts for the same reviewed sample. For example, put a known existing person with no suggestion in “Missed”, not also in “Uncertain”. These manual counts describe your sample; they cannot certify 99% production accuracy. They are included only when you download the report.</p></section>
+<section><h2>Check these cases before deployment</h2><ol>
+<li>Same name and employer, different cities: inspect the evidence and alternatives.</li>
+<li>Identical visible details: expect ambiguity rather than identity confirmation.</li>
+<li>Changed job or city: check reviewed historical context in Identity Review.</li>
+<li>Hidden contact details: no invented email or phone evidence.</li>
+<li>Capture and retry: expect “Awaiting review” and no duplicate observation for the same operation.</li>
+<li>Disconnected backend: expect unavailable/incomplete, never proof of absence.</li>
+</ol><p>Test a small page, then a larger page using your normal browsing workflow. This kit does not generate artificial load.</p></section>
+<section><h2>Setup</h2><p>Use a separate Chrome profile or disable the production extension while testing. Log into this test extension with your Emergent preview base URL (without <code>/api</code>). The preview must run branch <code>codex/identity-resolution</code> with your email enabled in <code>EXTENSION_CHECK_EXISTING_ALLOWLIST</code>. Confirm it uses a test database.</p>
+<p>Auto-capture defaults to off; use the capture button for deliberate tests. Matching still runs on supported search cards. Known production portal addresses are blocked in this package. A preview address alone does not guarantee its backend uses a test database.</p>
+<p class="muted">Downloaded reports contain timings, outcome counts and build details. They exclude candidate names, IDs, page URLs, contact details and authentication tokens. The underlying extension retains its normal capture/login storage separately.</p></section>
+<script src="test-config.js"></script><script src="test-runtime.js"></script><script src="test-report.js"></script>
+</main></body></html>

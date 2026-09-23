@@ -3,6 +3,34 @@
 This branch adds extension identity suggestions, immutable capture observations,
 and an administrator review screen at `/admin/identity-review`.
 
+## Downloadable test extension
+
+Build the separate unpacked test package from the repository root:
+
+```bash
+python backend/scripts/build_test_extension.py --out /path/to/test-artifacts
+```
+
+Optionally add `--backend-url https://your-preview.example` to prefill a custom
+preview origin. Otherwise enter an Emergent preview URL in the popup. The output
+is `VHC-Identity-Test-7.0.0.1.zip`; extract it and use Chrome's Load unpacked
+with the folder containing `manifest.json`. Use a separate browser profile or
+disable the normal VHC extension to avoid duplicate page injections.
+
+The popup links to a local performance report with matching median/P95 times,
+submission/poll timing, outcome counts, and JSON export. Manual accuracy totals
+can be included in the export. Matching excludes DOM extraction/rendering;
+capture timing excludes earlier AI extraction. Metrics retain the last 300 calls
+and do not contain candidate details or credentials. See the bundled
+`START-HERE.txt` for the complete checklist.
+
+This build keeps the production source files untouched, removes the update URL,
+uses a TEST name, defaults to manual capture and blocks known production portal
+API addresses. Emergent preview domains and localhost are allowed; custom preview
+origins must be explicitly supplied to the builder. Redirects fail in the test
+wrapper instead of forwarding requests to another origin. The test extension
+still requires this branch's backend in Emergent and an isolated test database.
+
 ## Behavior to expect
 
 - Profile URLs are navigation metadata; they are not identity references.
