@@ -597,12 +597,20 @@ async def _load_logo_bytes(url: Optional[str]) -> Optional[bytes]:
     return _load_local_logo_bytes()
 
 
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 _LOCAL_LOGO_PATHS = (
     os.environ.get("BILLING_SENDER_LOGO_PATH") or "",
+    # Preview container (Emergent hosted) keeps the repo at /app.
     "/app/frontend/public/assets/vhc_logo_invoice.png",
     "/app/frontend/build/assets/vhc_logo_invoice.png",
     "/app/frontend/public/assets/vhc_logo.png",
     "/app/frontend/build/assets/vhc_logo.png",
+    # AWS / any other checkout — resolve relative to this file (routes/bills.py).
+    os.path.join(_REPO_ROOT, "frontend", "public", "assets", "vhc_logo_invoice.png"),
+    os.path.join(_REPO_ROOT, "frontend", "build",  "assets", "vhc_logo_invoice.png"),
+    os.path.join(_REPO_ROOT, "frontend", "public", "assets", "vhc_logo.png"),
+    os.path.join(_REPO_ROOT, "frontend", "build",  "assets", "vhc_logo.png"),
 )
 
 

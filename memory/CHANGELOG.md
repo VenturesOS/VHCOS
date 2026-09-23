@@ -1,3 +1,16 @@
+## 2026-02 — Invoice letterhead logo + AWS-safe path resolution
+
+- Added the green-V logo at `frontend/public/assets/vhc_logo_invoice.png` (cropped and
+  padded from the uploaded artwork so the letterhead draws it tight, not floating in
+  transparent space).
+- `services/bill_pdf.py::_make_letterhead_painter` already draws the logo at 22×22 mm to
+  the left of the centred entity name; verified end-to-end by generating both invoices —
+  the green V now sits neatly beside "Ventures HRD Centre" / "Ventures HRD Centre Pvt. Ltd."
+- `routes/bills.py::_LOCAL_LOGO_PATHS`: added AWS-safe fallbacks that resolve the logo
+  relative to the repo root (`os.path.join(_REPO_ROOT, "frontend", ...)`) so production
+  finds the file at `/home/ubuntu/vhc-platform/frontend/public/assets/…` — the old paths
+  were hard-coded to `/app/...` which only exists in the preview container.
+
 ## 2026-02 — Two-entity invoice letterhead (VHC.docx / VHCPL.docx)
 
 **Invoices now paint the right letterhead based on the selected sender entity.**
