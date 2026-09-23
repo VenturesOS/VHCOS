@@ -100,7 +100,77 @@ async def worklist(
         })
 
     if include_bills:
-        async for b in db.bills.find({}, {"_id": 0}):
+        bills = [b async for b in db.bills.find({}, {"_id": 0})]
+        # Resolve the actual recruiter behind each bill's candidates, not the accounts
+        # user who typed the invoice in. Line items may point at an application (pipeline
+        # joining) or a placement (tracker row); both know their own recruiter. When
+        # neither is set on the line item (standalone bill), the `revenue` collection
+        # still carries `recruiter_id ↔ bill_id`, so we fall back to that.
+        bill_ids = [b["id"] for b in bills]
+        app_ids: set = set()
+        placement_ids: set = set()
+        for b in bills:
+            for li in (b.get("line_items") or []):
+                if li.get("application_id"):
+                    app_ids.add(li["application_id"])
+                if li.get("placement_id"):
+                    placement_ids.add(li["placement_id"])
+        rev_by_bill: dict = {}
+        if bill_ids:
+            async for r in db.revenue.find(
+                {"bill_id": {"$in": bill_ids}},
+                {"_id": 0, "bill_id": 1, "recruiter_id": 1, "application_id": 1},
+            ):
+                rev_by_bill.setdefault(r["bill_id"], []).append(r)
+                if r.get("application_id"):
+                    app_ids.add(r["application_id"])
+        apps_by_id: dict = {}
+        if app_ids:
+            async for a in db.applications.find(
+                {"id": {"$in": list(app_ids)}},
+                {"_id": 0, "id": 1, "created_by": 1},
+            ):
+                apps_by_id[a["id"]] = a
+        user_ids = {a.get("created_by") for a in apps_by_id.values() if a.get("created_by")}
+        for revs in rev_by_bill.values():
+            for r in revs:
+                if r.get("recruiter_id"):
+                    user_ids.add(r["recruiter_id"])
+        users_by_id: dict = {}
+        if user_ids:
+            async for u in db.users.find(
+                {"id": {"$in": list(user_ids)}},
+                {"_id": 0, "id": 1, "name": 1, "email": 1},
+            ):
+                users_by_id[u["id"]] = u
+        placements_by_id: dict = {}
+        if placement_ids:
+            async for p in db[br.COLL].find(
+                {"id": {"$in": list(placement_ids)}},
+                {"_id": 0, "id": 1, "recruiter_name": 1},
+            ):
+                placements_by_id[p["id"]] = p
+
+        def _bill_recruiters(bill: dict) -> str:
+            names: List[str] = []
+            def add(name: str):
+                if name and name not in names:
+                    names.append(name)
+            for li in (bill.get("line_items") or []):
+                if li.get("application_id"):
+                    app = apps_by_id.get(li["application_id"]) or {}
+                    u = users_by_id.get(app.get("created_by")) or {}
+                    add(u.get("name") or u.get("email") or "")
+                elif li.get("placement_id"):
+                    add((placements_by_id.get(li["placement_id"]) or {}).get("recruiter_name") or "")
+            # Fallback for standalone bills (no line-item link): revenue collection
+            if not names:
+                for r in rev_by_bill.get(bill.get("id")) or []:
+                    u = users_by_id.get(r.get("recruiter_id")) or {}
+                    add(u.get("name") or u.get("email") or "")
+            return ", ".join(names)
+
+        for b in bills:
             items.append({
                 "key": f"bill:{b['id']}",
                 "kind": "bill",
@@ -112,7 +182,7 @@ async def worklist(
                 "client_name": b.get("client_legal_name") or "",
                 "candidate_name": ", ".join(
                     li.get("candidate_name") or "" for li in (b.get("line_items") or [])) or "—",
-                "recruiter_name": b.get("created_by_email") or "",
+                "recruiter_name": _bill_recruiters(b),
                 "branch": "",
                 "date": (b.get("bill_date") or b.get("created_at") or "")[:10],
                 "amount": float((b.get("totals") or {}).get("grand_total") or 0),

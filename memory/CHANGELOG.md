@@ -1,4 +1,15 @@
-## 2026-02 — Target visibility tightened + same-client invoice guard
+## 2026-02 — Target visibility tightened + same-client invoice guard + bill recruiter fix
+
+**0. Bill rows no longer mis-label Accounts as the recruiter.**
+- `services/invoice_worklist.py`: for `kind='bill'` rows, the Recruiter column now resolves
+  the *actual* recruiter — from the linked application's `created_by`, the placement's
+  `recruiter_name`, or (for standalone bills where the line item carries neither) from
+  the `revenue` collection's `recruiter_id ↔ bill_id`. The previous fallback of the bill's
+  `created_by_email` meant any invoice raised from the Accounts login was tagged as
+  `accounts@vhc.in`, which read as "Accounts is the recruiter" in the worklist.
+- Verified against VHC/26-27/2 (JK Paints (Max) · Maya Ganeshrao Patange): recruiter now
+  reads **"Nidhi thakur"** end-to-end. Also fixed a duplicated bill row that slipped in
+  during the same refactor.
 
 **1. Recruiter target box removed; targets are Admin + Employer only.**
 - `pages/recruiter/RecruiterDashboard.jsx`: removed the "Target achievement" card
