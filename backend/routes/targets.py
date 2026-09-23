@@ -1,9 +1,10 @@
 """Revenue targets & achievement APIs.
 
-Who sees what (user-confirmed 2026-09-17):
-  • recruiter → `GET /api/targets/me` — percentage only, no amounts.
-  • employer  → their own team(s): set member targets, see target/achieved.
+Who sees what (user choice 2026-02, tightened):
   • admin     → every team + the company rollup, set team targets.
+  • employer  → their own team(s): set member targets, see target/achieved.
+  • recruiter → nothing. Rupee targets and achievement % are hidden.
+  • accounts  → nothing. Targets are a delivery / leadership metric.
 """
 import logging
 from typing import List, Optional
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 async def _visible_teams(user: dict) -> List[dict]:
     """Teams the caller may read/manage."""
     role = user.get("role")
-    if role in ("admin", "accounts"):
+    if role == "admin":
         return await ts.live_teams(db)
     if role == "employer":
         return await ts.teams_for_employer(db, user["id"])
@@ -30,14 +31,10 @@ async def _visible_teams(user: dict) -> List[dict]:
 
 
 async def _require_manager(user: dict = Depends(get_current_user)) -> dict:
-    """Rupee-level target data is Admin + Employer only.
-
-    Team-lead recruiters are deliberately excluded: the rule is that a
-    recruiter only ever sees a percentage (`GET /api/targets/me`).
-    """
-    if user.get("role") in ("admin", "accounts", "employer"):
+    """Target data is Admin + Employer only."""
+    if user.get("role") in ("admin", "employer"):
         return user
-    raise HTTPException(status_code=403, detail="Revenue targets are managed by Admin, Accounts and Employer logins.")
+    raise HTTPException(status_code=403, detail="Revenue targets are visible to Admin and Employer only.")
 
 
 class TargetUpsert(BaseModel):
@@ -50,7 +47,9 @@ class TargetUpsert(BaseModel):
 
 @targets_router.get("/me")
 async def my_target(year: Optional[int] = None, user: dict = Depends(get_current_user)):
-    """Recruiter dashboard box — percentage only, by design."""
+    """Admin/Employer can look up their own achievement %. Recruiters/Accounts denied."""
+    if user.get("role") not in ("admin", "employer"):
+        raise HTTPException(status_code=403, detail="Revenue targets are visible to Admin and Employer only.")
     return await ts.my_achievement_pct(db, user["id"], year or ts.current_year())
 
 
@@ -61,7 +60,7 @@ async def upsert_target(payload: TargetUpsert, user: dict = Depends(_require_man
         raise HTTPException(status_code=400, detail="scope must be 'user' or 'team'")
 
     if user.get("role") == "accounts":
-        raise HTTPException(status_code=403, detail="Accounts has read-only access to targets.")
+        raise HTTPException(status_code=403, detail="Targets are managed by Admin and Employer only.")
 
     if payload.scope == "team" and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only Admin can set a team-level target.")
@@ -110,9 +109,9 @@ async def team_summary(
 
 @targets_router.get("/company-summary")
 async def company_summary(year: Optional[int] = None, user: dict = Depends(get_current_user)):
-    """Admin + Accounts view: all teams cumulated into the company number."""
-    if user.get("role") not in ("admin", "accounts"):
-        raise HTTPException(status_code=403, detail="Admin and Accounts only")
+    """Admin only: all teams cumulated into the company number."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Revenue targets are visible to Admin and Employer only.")
     return await ts.company_summary(db, year or ts.current_year())
 
 

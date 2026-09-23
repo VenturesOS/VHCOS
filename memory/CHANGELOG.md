@@ -1,3 +1,23 @@
+## 2026-02 — Target visibility tightened + same-client invoice guard
+
+**1. Recruiter target box removed; targets are Admin + Employer only.**
+- `pages/recruiter/RecruiterDashboard.jsx`: removed the "Target achievement" card
+  and its `targetsAPI.me()` call. Recruiters never see rupee targets or achievement %.
+- `routes/targets.py`:
+  * `GET /api/targets/me` → returns **403** for recruiter and accounts; admin/employer only.
+  * `_require_manager` no longer includes `accounts`; upsert and `team-summary` are admin/employer only.
+  * `GET /api/targets/company-summary` → **admin only** (accounts removed).
+- Verified: recruiter (`hr6@vhc.in`) gets HTTP 403 on `/api/targets/me`; admin still gets 200
+  on `/me` and `/company-summary`.
+
+**2. Bill consolidator locks selection to one client.**
+- `components/revenue/InvoiceWorklist.jsx`: the first picked row anchors the client; every
+  other client's checkbox is `disabled` with a "Locked to {client}" title. `toggle()` also
+  refuses to add a differently-clientеled row defensively. Selection bar shows the anchor
+  client and the running total.
+- Backend `/api/bills/consolidated-invoice` already rejects mixed-client payloads with 400,
+  so this is defense in depth — the UI now stops the user before they can submit.
+
 ## 2026-09-20 — Production login 429 + corrupted index.html
 
 Two unrelated problems behind the "what's happening?" screenshot on https://ventureshrd.com/login:

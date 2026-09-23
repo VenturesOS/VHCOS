@@ -106,11 +106,22 @@ export function InvoiceWorklist() {
 
   const rows = (data?.items || []).map((r) => ({ ...r, _key: r.key }));
   const chosen = Object.values(picked);
+  const anchorClient = chosen[0]?.client_name || null;
   const clients = [...new Set(chosen.map((r) => r.client_name || '—'))];
   const canBillTogether = chosen.length > 1 && clients.length === 1;
+  const rowLocked = (row) => {
+    // Once one row is picked, only rows of the same client are selectable.
+    // An invoice can only bill one client, so this hard-guards against
+    // accidentally putting another client's candidate on the wrong invoice.
+    if (!anchorClient) return false;
+    if (picked[row.key]) return false;
+    return (row.client_name || '—') !== anchorClient;
+  };
   const toggle = (row) => setPicked((p) => {
     const next = { ...p };
-    if (next[row.key]) delete next[row.key]; else next[row.key] = row;
+    if (next[row.key]) delete next[row.key];
+    else if (rowLocked(row)) return p; // silently ignore, checkbox is also disabled
+    else next[row.key] = row;
     return next;
   });
   const states = data?.states || {};
@@ -119,11 +130,21 @@ export function InvoiceWorklist() {
     ...(state === 'to_raise' ? [{
       key: 'pick',
       label: '',
-      render: (r) => (
-        <Checkbox checked={!!picked[r.key]} onCheckedChange={() => toggle(r)}
-                  aria-label={`Select ${r.candidate_name}`}
-                  data-testid={`wl-pick-${r.key}`} />
-      ),
+      render: (r) => {
+        const locked = rowLocked(r);
+        return (
+          <Checkbox
+            checked={!!picked[r.key]}
+            disabled={locked}
+            onCheckedChange={() => toggle(r)}
+            aria-label={locked
+              ? `Locked — invoice is for ${anchorClient}`
+              : `Select ${r.candidate_name}`}
+            title={locked ? `Locked to ${anchorClient} — clear the selection to pick another client` : undefined}
+            data-testid={`wl-pick-${r.key}`}
+          />
+        );
+      },
     }] : []),
     { key: 'date', label: 'Date' },
     {
@@ -222,9 +243,13 @@ export function InvoiceWorklist() {
              data-testid="wl-selection-bar">
           <p className="text-sm text-slate-700">
             <span className="font-medium">{chosen.length} selected</span>
-            {clients.length === 1
-              ? ` · ${clients[0]} · ${inr(chosen.reduce((s, r) => s + (r.amount || 0), 0))}`
-              : ` · ${clients.length} different clients — an invoice can only cover one client`}
+            {' · '}
+            <span className="font-medium">{anchorClient || '—'}</span>
+            {' · '}
+            {inr(chosen.reduce((s, r) => s + (r.amount || 0), 0))}
+            <span className="ml-2 text-xs text-slate-500">
+              (locked to this client — clear to pick another)
+            </span>
           </p>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setPicked({})} data-testid="wl-clear-selection">
