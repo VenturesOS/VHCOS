@@ -1,6 +1,28 @@
+## 2026-02 — Two-entity invoice letterhead (VHC.docx / VHCPL.docx)
+
+**Invoices now paint the right letterhead based on the selected sender entity.**
+- `routes/bills.py`: fixed the entity legal names in `_SENDER_PRESETS`:
+  * `VENTURE HRD CENTER` → **"Ventures HRD Centre"** (proprietor, GSTIN 07AAMPY9883D2ZT)
+  * `VENTURES HRD PVT LTD` → **"Ventures HRD Centre Pvt. Ltd."** (company, GSTIN 07AACCV6268J1ZW)
+  * Address updated to the on-letterhead form: `Ventures House, D-12/79-80, 2nd Floor, Sector-8, Rohini, New Delhi - 110085`.
+  * Added extra alias entries so older drafts still resolve.
+- `services/bill_pdf.py`: added `_make_letterhead_painter()` that draws the entity name
+  (top-centre, dark navy 20pt) + "For Complete HR Solutions" tagline + a thin `#7CB342` rule
+  as the page header, and the address + `E-mail : bsy@vhc.in | Web : www.ventureshrd.com`
+  strip as the page footer. Wired via `doc.build(onFirstPage, onLaterPages)`. The redundant
+  inline sender block is removed to avoid a duplicate entity name; GSTIN/PAN moved into a
+  compact line at the top of the invoice body. Body content (Invoice meta, Bill To, line
+  items with HSN/CTC/%/Amount, totals, Amount-in-words, Bank Details, Declaration and
+  signature block) is unchanged.
+- Frontend labels: `BillsPage.jsx` and `ConsolidatedInvoiceDialog.jsx` dropdowns now show
+  the correct entity names ("Ventures HRD Centre" / "Ventures HRD Centre Pvt. Ltd.").
+- Verified by generating a PDF for each entity via `render_bill_pdf` — both render cleanly,
+  the letterhead and footer switch, cheque-payee note and "for <entity>" signature block
+  match the selected entity.
+
 ## 2026-02 — Admin joining list + target visibility tightened + same-client invoice guard + bill recruiter fix
 
-**Admin now has a Joining List (employers stay scoped to their team).**
+
 - `App.jsx`: added `/admin/joinings` route mounting the existing `JoiningListPage`.
 - `Sidebar.jsx`: added a "Joining List" entry in the admin nav (right below Performance Records).
 - Backend already scopes `/api/joinings` correctly via `routes/joinings.py::_scope`: admin

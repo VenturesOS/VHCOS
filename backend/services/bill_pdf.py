@@ -136,6 +136,55 @@ def _fmt_inr(n: float) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Letterhead — drawn as a page background on every page.
+# The two entities (Ventures HRD Centre / Ventures HRD Centre Pvt. Ltd.)
+# share this exact layout; only the top-centre legal name changes.
+# ──────────────────────────────────────────────────────────────────────
+def _make_letterhead_painter(sender_name: str, tagline: str, address: str,
+                              logo_png_bytes: Optional[bytes] = None):
+    def _paint(canvas, doc):
+        canvas.saveState()
+        page_w, page_h = A4
+
+        # ── Top-of-page letterhead ─────────────────────────────────
+        if logo_png_bytes:
+            try:
+                from reportlab.lib.utils import ImageReader
+                img = ImageReader(io.BytesIO(logo_png_bytes))
+                canvas.drawImage(img, 15 * mm, page_h - 30 * mm,
+                                 width=22 * mm, height=22 * mm,
+                                 preserveAspectRatio=True, mask="auto")
+            except Exception:
+                pass
+        canvas.setFillColor(colors.HexColor("#0B1F3A"))
+        canvas.setFont("Helvetica-Bold", 20)
+        canvas.drawCentredString(page_w / 2, page_h - 18 * mm, sender_name)
+        canvas.setFont("Helvetica-Oblique", 10)
+        canvas.setFillColor(colors.HexColor("#7A8794"))
+        canvas.drawCentredString(page_w / 2, page_h - 24 * mm, tagline)
+        # Thin brand rule below the letterhead.
+        canvas.setStrokeColor(colors.HexColor("#7CB342"))
+        canvas.setLineWidth(1.2)
+        canvas.line(15 * mm, page_h - 27 * mm, page_w - 15 * mm, page_h - 27 * mm)
+
+        # ── Bottom-of-page footer strip ────────────────────────────
+        canvas.setStrokeColor(colors.HexColor("#7CB342"))
+        canvas.setLineWidth(0.8)
+        canvas.line(15 * mm, 17 * mm, page_w - 15 * mm, 17 * mm)
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.setFillColor(colors.HexColor("#0B1F3A"))
+        canvas.drawCentredString(page_w / 2, 12 * mm, address)
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#556270"))
+        canvas.drawCentredString(
+            page_w / 2, 7 * mm,
+            "E-mail : bsy@vhc.in    |    Web : www.ventureshrd.com",
+        )
+        canvas.restoreState()
+    return _paint
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Renderer
 # ──────────────────────────────────────────────────────────────────────
 def render_bill_pdf(bill: Dict, signature_png_bytes: Optional[bytes] = None,
@@ -143,44 +192,41 @@ def render_bill_pdf(bill: Dict, signature_png_bytes: Optional[bytes] = None,
     """Render a tax invoice PDF and return the bytes.
 
     `bill` matches the shape of `models.bill.BillRecord.model_dump()`.
+    Uses the two-entity letterhead (VHC.docx / VHCPL.docx) as a page background
+    picked from `bill["sender_legal_name"]`; the invoice body content is
+    unchanged from the pre-template renderer.
     """
+    # Entity tagline is fixed for both sender variants (user templates 2026-02).
+    sender_name = bill.get("sender_legal_name", "Ventures HRD Centre")
+    tagline = "For Complete HR Solutions"
+    address = bill.get("sender_address", "")
+
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=18 * mm, rightMargin=18 * mm,
-        topMargin=15 * mm, bottomMargin=15 * mm,
+        # Top margin must clear the letterhead (name + tagline + rule ≈ 30 mm).
+        # Bottom margin must clear the footer strip (rule + address + web ≈ 22 mm).
+        topMargin=32 * mm, bottomMargin=24 * mm,
         title=f"Bill {bill.get('bill_number')}",
-        author=bill.get("sender_legal_name", "VHC"),
+        author=sender_name,
     )
     S = _styles()
     story = []
+    paint = _make_letterhead_painter(sender_name, tagline, address, logo_png_bytes)
 
-    # ── Header / letterhead ──
-    header_cells = []
-    if logo_png_bytes:
-        try:
-            img = Image(io.BytesIO(logo_png_bytes), width=28 * mm, height=28 * mm)
-            header_cells.append(img)
-        except Exception:
-            header_cells.append(Paragraph("", S["body"]))
-    else:
-        header_cells.append(Paragraph("", S["body"]))
-
-    sender_html = (
-        f'<b><font size=13>{bill.get("sender_legal_name","")}</font></b><br/>'
-        f'{bill.get("sender_address","")}<br/>'
-        f'GSTIN: <b>{bill.get("sender_gstin","")}</b>'
-        + (f' &nbsp; PAN: <b>{bill.get("sender_pan","")}</b>' if bill.get("sender_pan") else "")
-    )
-    header_cells.append(Paragraph(sender_html, S["body"]))
-
-    htbl = Table([header_cells], colWidths=[32 * mm, None])
-    htbl.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(htbl)
-    story.append(Spacer(1, 4 * mm))
+    # The sender name + tagline + address are now painted as the page
+    # letterhead (see `_make_letterhead_painter`). We keep the GSTIN / PAN
+    # here so the tax details still sit inside the invoice body — the legacy
+    # renderer's inline sender header is intentionally removed to avoid a
+    # visual duplicate of the entity name.
+    if bill.get("sender_gstin") or bill.get("sender_pan"):
+        gp_html = (
+            f'GSTIN: <b>{bill.get("sender_gstin","")}</b>'
+            + (f' &nbsp;&nbsp; PAN: <b>{bill.get("sender_pan","")}</b>' if bill.get("sender_pan") else "")
+        )
+        story.append(Paragraph(gp_html, S["body"]))
+        story.append(Spacer(1, 3 * mm))
 
     # ── Title ──
     story.append(Paragraph("<b>TAX INVOICE</b>", S["h1"]))
@@ -367,5 +413,5 @@ def render_bill_pdf(bill: Dict, signature_png_bytes: Optional[bytes] = None,
     ]))
     story.append(sig_tbl)
 
-    doc.build(story)
+    doc.build(story, onFirstPage=paint, onLaterPages=paint)
     return buf.getvalue()

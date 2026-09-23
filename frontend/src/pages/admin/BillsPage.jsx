@@ -483,8 +483,8 @@ export default function BillsPage() {
                 <Select value={newBill.sender_variant} onValueChange={(v) => setNewBill({ ...newBill, sender_variant: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="VENTURE HRD CENTER">VENTURE HRD CENTER (07AAMPY9883D2ZT)</SelectItem>
-                    <SelectItem value="VENTURES HRD PVT LTD">Ventures HRD Pvt Ltd (07AACCV6268J1ZW)</SelectItem>
+                    <SelectItem value="VENTURE HRD CENTER">Ventures HRD Centre (07AAMPY9883D2ZT)</SelectItem>
+                    <SelectItem value="VENTURES HRD PVT LTD">Ventures HRD Centre Pvt. Ltd. (07AACCV6268J1ZW)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

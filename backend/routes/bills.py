@@ -55,14 +55,18 @@ async def _require_billing_role(current_user: dict = Depends(get_current_user)) 
 # Sender variants — frozen at creation time
 # ──────────────────────────────────────────────────────────────────────
 # Both entities share one registered office (user-confirmed 2026-09-17).
+# The address string here matches the letterhead footer used on both templates
+# (Ventures House · D-12/79-80 · 2nd Floor · Sector-8 · Rohini · New Delhi 110085).
 _SENDER_ADDRESS = (
-    "Second Floor, D-12/79-80, Rohini, Rohini Sector 8, "
-    "New Delhi, North West Delhi, Delhi, 110085"
+    "Ventures House, D-12/79-80, 2nd Floor, Sector-8, "
+    "Rohini, New Delhi - 110085"
 )
 
 _SENDER_PRESETS = {
     "VENTURE HRD CENTER": {
-        "legal_name": "VENTURE HRD CENTER",
+        # Proprietor firm — GSTIN starts with individual PAN pattern (…P…).
+        "legal_name": "Ventures HRD Centre",
+        "tagline": "For Complete HR Solutions",
         "address": _SENDER_ADDRESS,
         "gstin": os.environ.get("BILLING_SENDER_GSTIN") or "07AAMPY9883D2ZT",
         "pan": os.environ.get("BILLING_SENDER_PAN") or "AAMPY9883D",
@@ -70,7 +74,9 @@ _SENDER_PRESETS = {
         "logo_url": os.environ.get("BILLING_SENDER_LOGO_URL") or "",
     },
     "VENTURES HRD PVT LTD": {
-        "legal_name": "Ventures HRD Pvt Ltd",
+        # Company — GSTIN starts with company PAN pattern (…C…).
+        "legal_name": "Ventures HRD Centre Pvt. Ltd.",
+        "tagline": "For Complete HR Solutions",
         "address": _SENDER_ADDRESS,
         "gstin": os.environ.get("BILLING_SENDER_PVT_GSTIN") or "07AACCV6268J1ZW",
         "pan": os.environ.get("BILLING_SENDER_PVT_PAN") or "AACCV6268J",
@@ -82,8 +88,11 @@ _SENDER_PRESETS = {
 # Legacy spellings stored on older drafts still resolve.
 _SENDER_ALIASES = {
     "VENTURE HRD CENTRE": "VENTURE HRD CENTER",
+    "VENTURES HRD CENTRE": "VENTURE HRD CENTER",
     "VENTURE HRD CENTRE PVT LTD": "VENTURES HRD PVT LTD",
     "VENTURE HRD CENTER PVT LTD": "VENTURES HRD PVT LTD",
+    "VENTURES HRD CENTRE PVT LTD": "VENTURES HRD PVT LTD",
+    "VENTURES HRD CENTRE PVT. LTD.": "VENTURES HRD PVT LTD",
     "VENTURES HRD PVT. LTD.": "VENTURES HRD PVT LTD",
 }
 

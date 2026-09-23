@@ -22,8 +22,8 @@ import { billsAPI } from '../../lib/api';
 import { inr } from './RevenueTables';
 
 const SENDERS = [
-  ['Ventures HRD Pvt Ltd', 'Ventures HRD Pvt Ltd · 07AACCV6268J1ZW'],
-  ['VENTURE HRD CENTER', 'VENTURE HRD CENTER · 07AAMPY9883D2ZT'],
+  ['VENTURES HRD PVT LTD', 'Ventures HRD Centre Pvt. Ltd. · 07AACCV6268J1ZW'],
+  ['VENTURE HRD CENTER',   'Ventures HRD Centre · 07AAMPY9883D2ZT'],
 ];
 
 export function ConsolidatedInvoiceDialog({ rows, onClose, onDone }) {
