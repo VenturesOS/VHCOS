@@ -1,4 +1,11 @@
-## 2026-02 — Target visibility tightened + same-client invoice guard + bill recruiter fix
+## 2026-02 — Admin joining list + target visibility tightened + same-client invoice guard + bill recruiter fix
+
+**Admin now has a Joining List (employers stay scoped to their team).**
+- `App.jsx`: added `/admin/joinings` route mounting the existing `JoiningListPage`.
+- `Sidebar.jsx`: added a "Joining List" entry in the admin nav (right below Performance Records).
+- Backend already scopes `/api/joinings` correctly via `routes/joinings.py::_scope`: admin
+  and accounts get every row, employers get only their own team(s), recruiters are 403'd.
+  Verified live: admin call returns all 566 rows; recruiter (`hr6@vhc.in`) gets 403.
 
 **0. Bill rows no longer mis-label Accounts as the recruiter.**
 - `services/invoice_worklist.py`: for `kind='bill'` rows, the Recruiter column now resolves

@@ -214,6 +214,7 @@ function App() {
             <Route path="companies" element={<CompaniesPage />} />
             <Route path="teams" element={<TeamsTabsPage />} />
             <Route path="bills" element={<BillsPage />} />
+            <Route path="joinings" element={<JoiningListPage />} />
             <Route path="pipeline" element={<AdminPipelinePage />} />
             <Route path="settings" element={<SettingsTabsPage />} />
             <Route path="bulk-import" element={<NaukriImportTabsPage />} />

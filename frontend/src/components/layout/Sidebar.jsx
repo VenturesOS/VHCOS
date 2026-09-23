@@ -61,6 +61,7 @@ const navItems = {
     { icon: FileText, label: 'Submission Tracker', path: '/admin/submission-tracker' },
     { icon: BarChart3, label: 'Analytics', path: '/admin/analytics' },
     { icon: Trophy, label: 'Performance Records', path: '/admin/performance-records' },
+    { icon: UserCheck, label: 'Joining List', path: '/admin/joinings' },
     { icon: TrendingUp, label: 'Analytics Hub', path: '/admin/analytics-hub' },
     { icon: ShieldCheck, label: 'Badge Audit', path: '/admin/badge-audit' },
     { icon: IndianRupee, label: 'Salary Benchmark', path: '/admin/salary-benchmark' },
