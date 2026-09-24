@@ -1,3 +1,12 @@
+## 2026-02 — Leadership photo update + New Bill picker
+
+**Manorma Yadav photo swapped on the public About page.**
+- `frontend/public/website/team/manorma-yadav.jpg` — new headshot saved as a local asset.
+- `frontend/public/website/about.html` — Card 4's `<img>` src switched from the old
+  Emergent-hosted URL to `/website/team/manorma-yadav.jpg`. Existing
+  `.team-img.manorama-img { object-position: center 30% }` still frames the face correctly.
+- Verified on the preview: image loads, natural size 927×1365, correctly cropped on the card.
+
 ## 2026-02 — New Bill: one-click add for pending candidates
 
 - `pages/admin/BillsPage.jsx`: when a **Client Company** is picked in the New Bill dialog,
