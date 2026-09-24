@@ -155,6 +155,55 @@ export default function BillsPage() {
     line_items: [emptyLine()],
   });
 
+  // "Invoice to be raised" candidates for the currently picked client — so the
+  // user can add them into the new bill with one click instead of retyping
+  // name / DOJ / CTC / rate% (user ask 2026-02).
+  const [pending, setPending] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  useEffect(() => {
+    if (!showCreate || !newBill.client_company_id) {
+      setPending([]);
+      return;
+    }
+    const company = companies.find((c) => c.id === newBill.client_company_id);
+    if (!company) return;
+    const target = (company.legal_name || company.name || '').trim().toLowerCase();
+    setPendingLoading(true);
+    billsAPI.worklist({ state: 'to_raise' })
+      .then(({ data }) => {
+        const rows = (data.items || [])
+          .filter((r) => r.kind !== 'bill'
+                     && (r.client_name || '').trim().toLowerCase() === target);
+        setPending(rows);
+      })
+      .catch(() => setPending([]))
+      .finally(() => setPendingLoading(false));
+  }, [showCreate, newBill.client_company_id, companies]);
+
+  const addPendingCandidate = (row) => {
+    // A tracker row already has the billed amount; a pipeline row has the
+    // CTC/rate to compute the line total — we pre-fill 8.33% (typical) so
+    // the amount renders immediately, but the user can still edit both.
+    const li = {
+      candidate_name: row.candidate_name || '',
+      designation: row.designation || '',
+      joining_date: (row.date || new Date().toISOString().slice(0, 10)).slice(0, 10),
+      annual_ctc: 0,
+      commercial_rate_pct: row.kind === 'tracker' ? 0 : 8.33,
+      line_amount: Number(row.amount || 0),
+      hsn_sac: '998512',
+      _source_key: row.key,
+    };
+    setNewBill((b) => {
+      // Drop the placeholder empty first row if present.
+      const items = (b.line_items.length === 1 && !b.line_items[0].candidate_name && !b.line_items[0].line_amount)
+        ? [li]
+        : [...b.line_items, li];
+      return { ...b, line_items: items };
+    });
+    setPending((p) => p.filter((r) => r.key !== row.key));
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -521,6 +570,64 @@ export default function BillsPage() {
                 )}
               </div>
             </div>
+
+            {/* Pending candidates picker — appears once a client is selected */}
+            {newBill.client_company_id && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50/40" data-testid="pending-candidates-panel">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">Invoice to be raised — for this client</p>
+                    <p className="text-xs text-slate-500">
+                      {pendingLoading ? 'Loading…' : `${pending.length} candidate${pending.length === 1 ? '' : 's'} pending — click Add to bill them here`}
+                    </p>
+                  </div>
+                </div>
+                {!pendingLoading && pending.length > 0 && (
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-100 sticky top-0">
+                        <tr>
+                          <th className="text-left p-2">Name</th>
+                          <th className="text-left p-2">Designation</th>
+                          <th className="text-left p-2">DOJ</th>
+                          <th className="text-right p-2">Annual CTC</th>
+                          <th className="text-right p-2">Rate %</th>
+                          <th className="text-right p-2">Amount</th>
+                          <th className="text-right p-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pending.map((r) => (
+                          <tr key={r.key} className="border-t border-slate-200 hover:bg-white">
+                            <td className="p-2 font-medium text-slate-800">{r.candidate_name || '—'}</td>
+                            <td className="p-2 text-slate-600">{r.designation || '—'}</td>
+                            <td className="p-2 text-slate-600">{(r.date || '').slice(0, 10) || '—'}</td>
+                            <td className="p-2 text-right text-slate-500">
+                              {r.kind === 'tracker' ? '—' : (r.amount && r.commercial_rate_pct
+                                ? inr(r.amount / (r.commercial_rate_pct / 100)) : '—')}
+                            </td>
+                            <td className="p-2 text-right text-slate-500">{r.kind === 'tracker' ? '—' : '8.33'}</td>
+                            <td className="p-2 text-right font-medium text-slate-800">{inr(r.amount || 0)}</td>
+                            <td className="p-2 text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => addPendingCandidate(r)}
+                                data-testid={`add-pending-${r.key}`}
+                              >
+                                <Plus className="w-3 h-3 mr-1" /> Add
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label>Line Items (each candidate billed)</Label>

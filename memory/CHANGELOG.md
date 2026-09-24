@@ -1,3 +1,16 @@
+## 2026-02 — New Bill: one-click add for pending candidates
+
+- `pages/admin/BillsPage.jsx`: when a **Client Company** is picked in the New Bill dialog,
+  the "Invoice to be raised" candidates for that client now render as a picker below the
+  header form (columns: Name · Designation · DOJ · Annual CTC · Rate % · Amount · [Add]).
+  Clicking **Add** drops the row into the invoice as a pre-filled line item (candidate,
+  designation, DOJ and amount; rate defaults to 8.33% for pipeline rows, and the placeholder
+  empty first line is auto-replaced). The row disappears from the picker so it cannot be
+  added twice. `billsAPI.worklist({ state: 'to_raise' })` is filtered on the frontend to the
+  chosen company's legal_name / name — no backend changes needed.
+- Verified live: `/api/bills/worklist?state=to_raise` returns 82 non-bill pending rows across
+  clients (Royal Enfield 16, JK Cement 9, VECV 9, Volvo 9, Hero MotoCorp 8, JK Paints 4).
+
 ## 2026-02 — Invoice letterhead logo + AWS-safe path resolution
 
 - Added the green-V logo at `frontend/public/assets/vhc_logo_invoice.png` (cropped and
