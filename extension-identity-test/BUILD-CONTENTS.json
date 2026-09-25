@@ -1,0 +1,34 @@
+{
+  "config": {
+    "commit": "7f6fa5a83d351a76a147f538a649f1c03aae838f",
+    "backendOrigin": "",
+    "test_build": true,
+    "version": "7.0.0.1"
+  },
+  "sha256": {
+    "START-HERE.txt": "c2b4884786091925e918207fc6aa1e00383fe2c8a40b066b27e526c21b687142",
+    "background.js": "91475735a94ce41433b7fad6562872eb9ef24d09b6e443167b2735199691cb9c",
+    "bg-visibility-shim.js": "d4d436f68727eaf73f912a62f021e87ac8b5383a2010e57018a72fae13bb2f46",
+    "content.css": "cfdd54615f9d350bea669ca0800d1c44da8163dcd1d28a1e52c08ececfdfa492",
+    "content.js": "39718a1827c13c0ccf81729aa7c08000c2d027dd2094fc8e5c6dacdfc288328c",
+    "hover-preview.js": "9c3502cf82b9df3053cde530a181897d3aed0ed75326ca31c1353c2e70694356",
+    "icons/icon128.png": "bfd21d297ab20de78f08254644118e21a2e80a4e6baf32fe6e6bd236e9fcb1f9",
+    "icons/icon128.svg": "a4c3a4b9148faba1a2ff0203b36dbb716178a87ddf98136123deddc659bbc1de",
+    "icons/icon16.png": "1bfdc1b5fdba602eab9039bdb78e0c742c8d6ac448cc4ee2275a8c5221893a10",
+    "icons/icon16.svg": "d8f0a07d9f9dd7765c5600253d301dd662b0b72802686e10e4d306bf58b2b9fc",
+    "icons/icon32.png": "53483b80e0268eebc8645f9af228458f28039d9794a1d7cf321a6b00c405f4f8",
+    "icons/icon32.svg": "7e2d7bc3353868a272c66592f84355bececc304e0650198947c0f2648ccb5a66",
+    "icons/icon48.png": "e577efbc5b4c82108e84b07d58af725abae4d479327755834061c4d9fbc0c620",
+    "icons/icon48.svg": "79db61e76f287e66896b22b7a125f7d06d8bb64ab10dbfbb4af962cc6d124858",
+    "manifest.json": "1134e4c3fa113c2a55cd4abf9876900b21b923982edde14c80ed79de35260f66",
+    "popup.html": "af3896c6e4f8debc655385060607f5897548bc17aee486a86d858c6f3e093ce5",
+    "popup.js": "3b4077dd1d69e4f1bfa97391241cb9c2528400e0a2b14f21d1711466e009db89",
+    "test-config.js": "1af5f16168ab1547b583173b3a9cd51ee0057806179ea3c276b7c66bf3ae49a1",
+    "test-instrumentation.js": "9f0bfeba9f5c076dab2a8e1a6c7d3609e0b6c490289b42248ec10647471d48e0",
+    "test-report.html": "1f7858259f3a2aa4f777038b4f6722221c3947234877d43de6c7332ec62e35e2",
+    "test-report.js": "ca4c276d1e1bbc8b4250f1b280636886b47c164bb67ab0c3cb5e901bd7a4172f",
+    "test-runtime.js": "dcb2a830746e79b2ef6bc6cf324c9b0f9bddf17ba880b8bb76c8773b98732c24",
+    "test-worker.js": "fda16d26fb2f4d88ba224bbf5400e126a472e0262f1fd5f9f2896003d925706c",
+    "vendor/pdf.min.js": "80729b656e8acbe9be080ab7283229f523f6d62e2159c81261f07b3d45bea790"
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "manifest_version": 3,
+  "name": "VHC Identity TEST - Emergent",
+  "version": "7.0.0.1",
+  "description": "Preview-only identity matching and capture test with local performance report.",
+  "permissions": [
+    "alarms",
+    "contextMenus",
+    "notifications",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.naukri.com/*",
+    "https://naukri.com/*",
+    "https://*.naukri.com/*",
+    "https://www.linkedin.com/*",
+    "https://linkedin.com/*",
+    "https://www.foundit.in/*",
+    "https://foundit.in/*",
+    "https://*.foundit.in/*",
+    "https://www.foundit.sg/*",
+    "https://*.foundit.sg/*",
+    "https://www.foundit.my/*",
+    "https://*.foundit.my/*",
+    "https://www.monster.com/*",
+    "https://*.monster.com/*",
+    "https://*.emergentagent.com/*",
+    "https://*.emergent.host/*",
+    "https://*.emergent.sh/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "VHC Identity TEST"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "test-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.naukri.com/*",
+        "https://naukri.com/*",
+        "https://*.naukri.com/*"
+      ],
+      "js": [
+        "bg-visibility-shim.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "https://www.naukri.com/*",
+        "https://naukri.com/*",
+        "https://*.naukri.com/*"
+      ],
+      "js": [
+        "content.js",
+        "hover-preview.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://linkedin.com/*"
+      ],
+      "js": [
+        "content.js",
+        "hover-preview.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.foundit.in/*",
+        "https://foundit.in/*",
+        "https://*.foundit.in/*",
+        "https://www.foundit.sg/*",
+        "https://*.foundit.sg/*",
+        "https://www.foundit.my/*",
+        "https://www.monster.com/*",
+        "https://*.monster.com/*"
+      ],
+      "js": [
+        "content.js",
+        "hover-preview.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*"
+      ],
+      "matches": [
+        "https://*.naukri.com/*",
+        "https://*.linkedin.com/*",
+        "https://*.foundit.in/*"
+      ]
+    }
+  ],
+  "minimum_chrome_version": "111",
+  "version_name": "7.0.0.1 test",
+  "options_page": "test-report.html"
+}
