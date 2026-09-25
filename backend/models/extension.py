@@ -5,7 +5,7 @@ Models for browser extension capture, CV upload, AI extraction, and mandate eval
 import re
 import unicodedata
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 
 # Lone UTF-16 surrogates (Python keeps unpaired \ud800-\udfff from JSON) crash
@@ -192,6 +192,9 @@ class CompleteNaukriProfileInput(BaseModel):
         return sanitize_unicode(v)
 
     # Source Identification
+    # Identity of one capture operation, never identity of a person or URL.
+    # Older clients may omit it; new queues persist it across transport retries.
+    capture_request_id: Optional[str] = Field(default=None, min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     naukri_profile_id: Optional[str] = None
     naukri_profile_url: Optional[str] = None
     naukri_resume_id: Optional[str] = None
@@ -323,7 +326,9 @@ class CompleteNaukriProfileInput(BaseModel):
 class CaptureResponse(BaseModel):
     success: bool
     action: str
-    candidate_id: str
+    candidate_id: Optional[str] = None
+    observation_id: Optional[str] = None
+    identity_status: Optional[str] = None
     message: str
 
 

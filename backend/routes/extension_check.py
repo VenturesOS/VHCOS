@@ -1,43 +1,15 @@
-"""Extension — "Already in database" check endpoint (Phase 55.9 / Feb 2026).
+"""Versioned identity decisions for extension search cards.
 
-Powers the v5.4.1 Chrome extension's green-badge feature on Naukri/LinkedIn
-search results: shows recruiters which candidates they (or anyone) have
-already captured, preventing wasted profile-view credits.
+POST /api/extension/check-existing returns one result per input, maximum 50.
+The backend owns canonicalization, candidate retrieval, ranking and decisions.
+URLs are navigation-only, including URL-derived identifiers. No trusted
+provider verifier is enabled, so this adapter returns review suggestions,
+never `exists=true`. Scores are evidence points, not probabilities.
 
-Endpoint: POST /api/extension/check-existing
-
-Request:
-    {
-      "candidates": [
-        {"name": "...", "headline": "...", "location": "..."},
-        ...
-      ]
-    }
-
-Response (index in each result MATCHES the input array index):
-    {
-      "results": [
-        {"index": 0, "exists": true, "candidate_id": "...",
-         "captured_at": "ISO", "match_confidence": "high|medium"},
-        {"index": 1, "exists": false},
-        ...
-      ]
-    }
-
-Behavior:
-  * Searches `candidate_bank` by case-insensitive first-token prefix
-    (uses existing name_1 index), then post-filters with `_names_are_similar`
-    — the same fuzzy logic that powers auto-merge dedupe.
-  * Confidence:
-      - `high`   = name matches AND (headline mentions current_employer
-                    OR designation OR location matches)
-      - `medium` = name matches alone
-
-Allowlist:
-  Controlled by env `EXTENSION_CHECK_EXISTING_ALLOWLIST` (comma-separated
-  emails, or `*` for everyone). Default: empty → only the allowlisted users
-  get real results; everyone else gets `exists:false` for every input
-  (the extension falls back to its local cache, which is zero-risk).
+The existing EXTENSION_CHECK_EXISTING_ALLOWLIST controls rollout. Disabled
+checks are explicit (`service_status=disabled`), never false database negatives.
+Earlier pure scoring helpers remain for historical regression/benchmark tests;
+the HTTP handler does not call the legacy matcher or its name-bucket cache.
 """
 from __future__ import annotations
 
@@ -46,14 +18,12 @@ import logging
 import os
 import random
 import re
-from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Literal, Annotated
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from config import db
-from services.extension_service import _names_are_similar
 from utils.auth import get_current_user
 
 
@@ -230,32 +200,60 @@ def _is_user_allowed(user: dict) -> bool:
 
 
 # ── Schemas ──────────────────────────────────────────────────────────
+class ExperienceContextIn(BaseModel):
+    """Bounded, non-contact slice of a prior employment entry."""
+    company: Optional[str] = Field(default=None, max_length=500)
+    company_name: Optional[str] = Field(default=None, max_length=500)
+    employer: Optional[str] = Field(default=None, max_length=500)
+    designation: Optional[str] = Field(default=None, max_length=500)
+    title: Optional[str] = Field(default=None, max_length=500)
+    role: Optional[str] = Field(default=None, max_length=500)
+    location: Optional[str] = Field(default=None, max_length=300)
+    city: Optional[str] = Field(default=None, max_length=300)
+
+
+class EducationContextIn(BaseModel):
+    """Only labelled education components; free text stays in education."""
+    degree: Optional[str] = Field(default=None, max_length=300)
+    institution: Optional[str] = Field(default=None, max_length=500)
+    graduation_year: Optional[int] = Field(default=None, ge=1900, le=2100)
+
+
 class CandidateIn(BaseModel):
-    name: str
-    headline: Optional[str] = None
-    location: Optional[str] = None
-    # Stable Naukri Resdex candidate ID (from card `data-target-id` /
-    # checkbox value — NOT the rotating URL `pid` query param). When
-    # present, the badge endpoint resolves the card via a single indexed
-    # `$in` lookup, skipping the fuzzy name-prefix scan entirely.
-    naukri_id: Optional[str] = None
+    name: str = Field(default="", max_length=300)
+    headline: Optional[str] = Field(default=None, max_length=2000)
+    location: Optional[str] = Field(default=None, max_length=300)
+    source: Optional[Literal["naukri", "linkedin"]] = None
+    source_id_kind: Optional[Literal["data-target-id", "profile-url", "unverified"]] = None
+    profile_url: Optional[str] = Field(default=None, max_length=2048)
+    profileUrl: Optional[str] = Field(default=None, max_length=2048)
+    # Source identifier hint with explicit provenance. Capturing an ID does
+    # not verify its stability; raw pid/sid values cannot confirm identity.
+    naukri_id: Optional[str] = Field(default=None, max_length=256)
     # Corroborating signals (any subset — extension sends what's visible
-    # on the Naukri/LinkedIn card). The badge now REQUIRES name + at
-    # least one strong signal match to fire.
-    current_employer: Optional[str] = None
-    designation: Optional[str] = None
-    experience_years: Optional[float] = None  # e.g. 2.07 from "2y 7m"
-    annual_ctc: Optional[float] = None        # in INR (₹ 4.20 Lacs → 420000)
-    skills: Optional[List[str]] = None
-    education: Optional[str] = None
-    notice_period: Optional[str] = None
+    # on the source card). Ordinary fields support review suggestions only.
+    current_employer: Optional[str] = Field(default=None, max_length=500)
+    designation: Optional[str] = Field(default=None, max_length=500)
+    experience_years: Optional[float] = Field(default=None, ge=0, le=80, allow_inf_nan=False)
+    annual_ctc: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    skills: Optional[List[Annotated[str, Field(max_length=200)]]] = Field(default=None, max_length=100)
+    education: Optional[str] = Field(default=None, max_length=2000)
+    notice_period: Optional[str] = Field(default=None, max_length=300)
+    # Optional longitudinal context.  Search cards usually omit these, but a
+    # richer source adapter may provide bounded prior-employment and credential
+    # values.  They are corroboration only and never identity proofs.
+    experience: Optional[List[ExperienceContextIn]] = Field(default=None, max_length=30)
+    education_details: Optional[List[EducationContextIn]] = Field(default=None, max_length=10)
+    certifications: Optional[List[Annotated[str, Field(max_length=200)]]] = Field(default=None, max_length=50)
+    projects: Optional[List[Annotated[str, Field(max_length=200)]]] = Field(default=None, max_length=50)
+    languages: Optional[List[Annotated[str, Field(max_length=100)]]] = Field(default=None, max_length=30)
 
 
 class CheckExistingRequest(BaseModel):
-    candidates: List[CandidateIn] = Field(default_factory=list)
+    candidates: List[CandidateIn] = Field(default_factory=list, max_length=50)
     # Optional — the current Naukri/LinkedIn URL the extension is scanning.
     # Used only for the audit log (helps admin reproduce the search).
-    page_url: Optional[str] = None
+    page_url: Optional[str] = Field(default=None, max_length=2048)
 
 
 class MatchedCandidate(BaseModel):
@@ -273,11 +271,27 @@ class MatchedCandidate(BaseModel):
 class CheckResult(BaseModel):
     index: int
     exists: bool
+    decision: str = "unavailable"
+    matcher_version: str = "identity-resolution-1"
+    score_kind: str = "evidence_points"
+    top_match: Optional[dict] = None
+    second_match: Optional[dict] = None
+    ranked_matches: List[dict] = Field(default_factory=list)
+    margin: Optional[float] = None
+    reason_codes: List[str] = Field(default_factory=list)
+    conflicts: List[str] = Field(default_factory=list)
+    missing_fields: List[str] = Field(default_factory=list)
+    retrieval_complete: bool = False
+    retrieval_paths: List[str] = Field(default_factory=list)
+    retrieval_stats: Optional[dict] = None
+    context_fields_observed: List[str] = Field(default_factory=list)
+    corpus_frequencies_available: bool = False
+    frequency_adjustments: List[dict] = Field(default_factory=list)
     candidate_id: Optional[str] = None
     captured_at: Optional[str] = None
     match_confidence: Optional[str] = None  # "high" | "medium"
     matched_signals: Optional[List[str]] = None  # debug: which signals fired
-    match_score: Optional[float] = None  # 0.0–1.0
+    match_score: Optional[float] = None  # Uncalibrated evidence points, NOT a probability.
     # Server-built deep-link so the extension never has to guess the
     # frontend URL from a (possibly proxied) backend API host.
     profile_url: Optional[str] = None
@@ -287,6 +301,8 @@ class CheckResult(BaseModel):
 
 class CheckExistingResponse(BaseModel):
     results: List[CheckResult]
+    matcher_version: str = "identity-resolution-1"
+    service_status: str = "ready"
     # ID into `badge_audit` for this batch — extension v5.5.10+ uses this
     # in /api/extension/audit/feedback to report which results it actually
     # rendered. Null when no audit was written (audit is opt-in).
@@ -460,29 +476,37 @@ def _score_match(c: CandidateIn, doc: dict) -> tuple[float, List[str]]:
     score = _SIGNAL_WEIGHTS["name"]
 
     if _employer_matches(c.current_employer, doc.get("current_employer")):
-        score += _SIGNAL_WEIGHTS["employer"]; signals.append("employer")
+        score += _SIGNAL_WEIGHTS["employer"]
+        signals.append("employer")
     elif _headline_mentions_employer(c.headline, doc.get("current_employer")):
         # Weaker — headline cross-reference when employer field wasn't parsed
-        score += _SIGNAL_WEIGHTS["headline_employer"]; signals.append("headline_employer")
+        score += _SIGNAL_WEIGHTS["headline_employer"]
+        signals.append("headline_employer")
 
     if _designation_matches(c.designation, doc.get("designation")):
-        score += _SIGNAL_WEIGHTS["designation"]; signals.append("designation")
+        score += _SIGNAL_WEIGHTS["designation"]
+        signals.append("designation")
 
     if _ctc_matches(c.annual_ctc, doc.get("annual_ctc") or doc.get("current_ctc")):
-        score += _SIGNAL_WEIGHTS["ctc"]; signals.append("ctc")
+        score += _SIGNAL_WEIGHTS["ctc"]
+        signals.append("ctc")
 
     if _experience_matches(c.experience_years, doc.get("experience_years")
                             or doc.get("total_experience")):
-        score += _SIGNAL_WEIGHTS["experience"]; signals.append("experience")
+        score += _SIGNAL_WEIGHTS["experience"]
+        signals.append("experience")
 
     if _skills_overlap(c.skills, doc.get("skills")):
-        score += _SIGNAL_WEIGHTS["skills"]; signals.append("skills")
+        score += _SIGNAL_WEIGHTS["skills"]
+        signals.append("skills")
 
     if _education_matches(c.education, doc.get("education")):
-        score += _SIGNAL_WEIGHTS["education"]; signals.append("education")
+        score += _SIGNAL_WEIGHTS["education"]
+        signals.append("education")
 
     if _location_matches(c.location, doc.get("location")):
-        score += _SIGNAL_WEIGHTS["location"]; signals.append("location")
+        score += _SIGNAL_WEIGHTS["location"]
+        signals.append("location")
 
     return score, signals
 
@@ -682,36 +706,46 @@ def _score_match_v2(c: CandidateIn, doc: dict) -> tuple[float, List[str]]:
 
     # Direct employer (best) or headline-extracted (fallback)
     if _employer_matches(c.current_employer, doc.get("current_employer")):
-        score += _V2_SIGNAL_WEIGHTS["employer"]; signals.append("employer")
+        score += _V2_SIGNAL_WEIGHTS["employer"]
+        signals.append("employer")
     elif _headline_mentions_employer(c.headline, doc.get("current_employer")):
-        score += _V2_SIGNAL_WEIGHTS["headline_employer"]; signals.append("headline_employer")
+        score += _V2_SIGNAL_WEIGHTS["headline_employer"]
+        signals.append("headline_employer")
 
     # Direct designation
     if _designation_matches(c.designation, doc.get("designation")):
-        score += _V2_SIGNAL_WEIGHTS["designation"]; signals.append("designation")
+        score += _V2_SIGNAL_WEIGHTS["designation"]
+        signals.append("designation")
     # NEW: headline-extracted designation (e.g. "ML Engineer at TCS - Pune")
     elif _headline_contains(c.headline, doc.get("designation"), min_len=4):
-        score += _V2_SIGNAL_WEIGHTS["headline_designation"]; signals.append("headline_designation")
+        score += _V2_SIGNAL_WEIGHTS["headline_designation"]
+        signals.append("headline_designation")
 
     if _ctc_matches(c.annual_ctc, doc.get("annual_ctc") or doc.get("current_ctc")):
-        score += _V2_SIGNAL_WEIGHTS["ctc"]; signals.append("ctc")
+        score += _V2_SIGNAL_WEIGHTS["ctc"]
+        signals.append("ctc")
 
     if _experience_matches(c.experience_years,
                            doc.get("experience_years") or doc.get("total_experience")):
-        score += _V2_SIGNAL_WEIGHTS["experience"]; signals.append("experience")
+        score += _V2_SIGNAL_WEIGHTS["experience"]
+        signals.append("experience")
 
     if _skills_overlap(c.skills, doc.get("skills")):
-        score += _V2_SIGNAL_WEIGHTS["skills"]; signals.append("skills")
+        score += _V2_SIGNAL_WEIGHTS["skills"]
+        signals.append("skills")
 
     if _education_matches(c.education, doc.get("education")):
-        score += _V2_SIGNAL_WEIGHTS["education"]; signals.append("education")
+        score += _V2_SIGNAL_WEIGHTS["education"]
+        signals.append("education")
 
     # Direct location
     if _location_matches(c.location, doc.get("location")):
-        score += _V2_SIGNAL_WEIGHTS["location"]; signals.append("location")
+        score += _V2_SIGNAL_WEIGHTS["location"]
+        signals.append("location")
     # NEW: DB location keyword in card headline ("...- Pune")
     elif _headline_contains(c.headline, doc.get("location"), min_len=3):
-        score += _V2_SIGNAL_WEIGHTS["headline_location"]; signals.append("headline_location")
+        score += _V2_SIGNAL_WEIGHTS["headline_location"]
+        signals.append("headline_location")
 
     return score, signals
 
@@ -932,355 +966,89 @@ async def check_existing(
     payload: CheckExistingRequest,
     user: dict = Depends(get_current_user),
 ):
-    """Bulk check which candidates from a Naukri/LinkedIn search are already in our bank."""
-    candidates = payload.candidates or []
-    if not candidates:
-        return CheckExistingResponse(results=[])
+    """Resolve search cards with one explicit decision per input (maximum 50).
 
-    # Gate: testing phase — only allowlisted users (default `admin@vhc.in`) see real matches
+    The existing rollout allowlist remains authoritative. Disabling a lookup is
+    reported as unavailable rather than a negative identity decision. New clients
+    batch requests; oversize legacy requests receive a validation error, never a
+    silently shortened response. No legacy score can generate a green badge.
+    """
+    import time
+    from services.identity_lookup import lookup_profiles, unavailable_result
+
     if not _is_user_allowed(user):
-        logger.info(
-            "[CheckExisting] user=%s not in allowlist — returning all-false (extension falls back to local cache)",
-            user.get("email"),
-        )
         return CheckExistingResponse(
-            results=[CheckResult(index=i, exists=False) for i in range(len(candidates))]
+            service_status="disabled",
+            results=[CheckResult(index=i, **unavailable_result("feature_disabled"))
+                     for i in range(len(payload.candidates))],
         )
-
-    # Cap batch size to keep DB load predictable
-    MAX_BATCH = 50
-    candidates = candidates[:MAX_BATCH]
-
-    import time as _time
-
-    t0 = _time.time()
-    web_base = (os.environ.get("SITE_URL") or "https://ventureshrd.com").rstrip("/")
-
-    # V2 dark-launch (Phase 56.2) — admin-only smarter recall path
-    use_v2 = _is_v2_user(user)
-    name_match_fn = _loose_name_match_v2 if use_v2 else _strict_name_match
-    score_fn = _score_match_v2 if use_v2 else _score_match
-    badge_thr = _V2_BADGE_THRESHOLD if use_v2 else _BADGE_THRESHOLD
-    high_thr = _V2_HIGH_THRESHOLD if use_v2 else _HIGH_THRESHOLD
-
-    # Pre-allocate results list — fast-path fills some indices, fuzzy fills the rest.
-    results_by_idx: dict[int, CheckResult] = {}
-    # Audit tracking — populated by both fast-path and fuzzy-path branches
-    best_doc_by_idx: dict[int, Optional[dict]] = {}
-    conflicts_by_idx: dict[int, Optional[str]] = {}
-
-    # ── FAST PATH: stable Naukri Resdex ID ($in indexed lookup) ──
-    # Naukri search cards expose a stable `data-target-id` Resdex ID that
-    # survives the rotating URL `pid` token. The extension scrapes it
-    # into `candidate.naukri_id`. When present, ONE indexed $in lookup on
-    # both `naukri_profile_id` (used by the capture path) and `naukri_id`
-    # (used by some legacy writes) resolves most cards on a typical page,
-    # bypassing the fuzzy name-prefix scan entirely.
-    # Typical impact: 25-card page goes from 300-600ms → 20-40ms.
-    naukri_id_to_idx: dict[str, list[int]] = {}
-    for i, c in enumerate(candidates):
-        if c.naukri_id:
-            naukri_id_to_idx.setdefault(c.naukri_id, []).append(i)
-
-    if naukri_id_to_idx:
-        # Canonicalization fix: legacy candidate_bank records store the id
-        # as `naukri_<raw>` while the extension sends raw. Include both
-        # forms in the $in list so the fast-path matches either shape.
-        raw_ids = list(naukri_id_to_idx.keys())
-        prefixed_ids = [f"naukri_{n}" if not n.startswith("naukri_") else n for n in raw_ids]
-        stripped_ids = [n[len("naukri_"):] if n.startswith("naukri_") else n for n in raw_ids]
-        nids = list(set(raw_ids + prefixed_ids + stripped_ids))
-
-        # Reverse-map every stored form back to the extension's raw form
-        # so `naukri_id_to_idx[doc_nid]` still resolves.
-        for pid in prefixed_ids + stripped_ids:
-            base = pid[len("naukri_"):] if pid.startswith("naukri_") else pid
-            if base in naukri_id_to_idx:
-                naukri_id_to_idx.setdefault(pid, []).extend(naukri_id_to_idx[base])
-        projection = {
-            "_id": 0, "id": 1, "name": 1, "name_lower": 1,
-            "current_employer": 1, "designation": 1,
-            "location": 1, "headline": 1,
-            "experience_years": 1, "total_experience": 1,
-            "annual_ctc": 1, "current_ctc": 1,
-            "skills": 1, "education": 1,
-            "created_at": 1, "captured_at": 1,
-            "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
-        }
-        fast_hits = await db.candidate_bank.find(
-            {"$or": [
-                {"naukri_profile_id": {"$in": nids}},
-                {"naukri_id": {"$in": nids}},
-            ]},
-            projection,
-        ).to_list(len(nids) * 2)
-
-        # Map each hit back to every candidate-index that shared that nid
-        for doc in fast_hits:
-            doc_nid = (
-                doc.get("naukri_profile_id")
-                or doc.get("naukri_id")
-                or doc.get("profile_id")
-            )
-            if not doc_nid or doc_nid not in naukri_id_to_idx:
-                continue
-            for idx in naukri_id_to_idx[doc_nid]:
-                if idx in results_by_idx:
-                    continue  # already resolved (first-write-wins)
-                # Stable Naukri ID match = definitive — score it for
-                # completeness but always badge as 'high' confidence.
-                score, signals = score_fn(candidates[idx], doc)
-                signals = (signals or []) + ["naukri_id"]
-                results_by_idx[idx] = _build_match_result(
-                    idx, candidates[idx], doc, max(score, high_thr),
-                    signals, web_base, high_threshold=high_thr,
-                )
-                best_doc_by_idx[idx] = doc  # audit trail
-
-    # ── FUZZY PATH: per-card refined name queries (parallel) ──
-    # Phase 57 (Jun 2026) recall fix. The previous implementation ran ONE
-    # $or query over every first-name token in the batch with a SHARED
-    # 800-doc cap. On a page mixing popular first names ("akash" alone
-    # has ~580 docs, "rahul" ~1,237) the cap was exhausted by the
-    # alphabetically-first index ranges and later names got EMPTY buckets
-    # — which were then TTL-cached for 5 minutes. Net effect: candidates
-    # demonstrably in the DB never badged ("Ramesh Kannan" bug). Now every
-    # unresolved card gets its OWN small indexed query (see
-    # `_bucket_query_for`), all fired in parallel via asyncio.gather —
-    # no shared cap, no starvation, less data on the wire.
-    unresolved: list[tuple[int, CandidateIn]] = [
-        (i, c) for i, c in enumerate(candidates) if i not in results_by_idx
-    ]
-    n_cache_hits = 0
-
-    _FUZZY_PROJECTION = {
-        "_id": 0, "id": 1, "name": 1, "name_lower": 1,
-        "current_employer": 1, "designation": 1,
-        "location": 1, "headline": 1,
-        "experience_years": 1, "total_experience": 1,
-        "annual_ctc": 1, "current_ctc": 1,
-        "skills": 1, "education": 1,
-        "created_at": 1, "captured_at": 1,
-        "naukri_profile_id": 1, "naukri_id": 1, "profile_id": 1,
-    }
-
-    async def _fetch_bucket(c: CandidateIn) -> list[dict]:
-        nonlocal n_cache_hits
-        key, query, lim = _bucket_query_for(c.name)
-        if query is None:
-            return []
-        cached = _cache_get(key)
-        if cached is not None:
-            n_cache_hits += 1
-            return cached
-        # `.hint("name_lower_idx")` forces the prefix index — without it
-        # Atlas's planner occasionally picks COLLSCAN for $or queries.
-        try:
-            docs = await db.candidate_bank.find(
-                query, _FUZZY_PROJECTION,
-            ).hint("name_lower_idx").limit(lim).to_list(lim)
-        except Exception:
-            # Index missing (e.g. fresh deploy before create_indexes ran)
-            # → fall back to unhinted query so the endpoint still works.
-            docs = await db.candidate_bank.find(
-                query, _FUZZY_PROJECTION,
-            ).limit(lim).to_list(lim)
-        _cache_put(key, docs)
-        return docs
-
-    buckets: list[list[dict]] = (
-        await asyncio.gather(*[_fetch_bucket(c) for _, c in unresolved])
-        if unresolved else []
-    )
-
-    # Score each unresolved candidate against its own bucket of docs
-    # PHASE 1: collect best matches WITHOUT building results yet — so we
-    # can run Badge Phase C (medium-band BGE re-verification) on the
-    # ones that need it in a single batched embedding call.
-    _v2_pending: dict[int, tuple[dict, float, list[str]]] = {}
-    for (idx, c), bucket in zip(unresolved, buckets):
-        best_doc: Optional[dict] = None
-        best_score: float = 0.0
-        best_signals: List[str] = []
-        best_grade: int = 0
-        last_conflict: Optional[str] = None
-        for doc in bucket:
-            grade = name_match_fn(c.name, doc.get("name") or "")
-            if not grade:
-                continue
-            # V2: reject docs with explicit field-level conflicts (employer
-            # mismatch, experience > 5y apart) BEFORE scoring. Cheaper than
-            # scoring then rejecting; also keeps the precision floor intact.
-            if use_v2:
-                conflict = _has_explicit_conflict_v2(c, doc)
-                if conflict:
-                    last_conflict = conflict  # remember last rejection reason for audit
-                    continue
-            score, signals = score_fn(c, doc)
-            if score > best_score:
-                best_score = score
-                best_signals = signals
-                best_doc = doc
-                best_grade = int(grade)
-                if score >= high_thr:
-                    break
-
-        best_doc_by_idx[idx] = best_doc
-        conflicts_by_idx[idx] = last_conflict if best_doc is None else None
-
-        # V2 guard: at least one corroborating signal beyond `name` must
-        # fire. Prevents the lower threshold (0.85) from badging on name
-        # alone (which never happens at 1.0 V1 threshold because
-        # `name` weight is only 0.5).
-        v2_has_corroborator = use_v2 and best_signals and len(best_signals) >= 2
-        # Phase 57.2 precision gate: WEAK-grade name matches (single-token
-        # side / fuzzy typo-tolerance) additionally need a STRONG
-        # corroborator. Benchmark showed experience/education/ctc
-        # coincidences alone produced wrong-person badges.
-        if use_v2 and v2_has_corroborator and best_grade < 2:
-            v2_has_corroborator = any(s in _V2_STRONG_CORROBS for s in best_signals)
-
-        if best_doc is None or best_score < badge_thr or (use_v2 and not v2_has_corroborator):
-            results_by_idx[idx] = CheckResult(
-                index=idx,
-                exists=False,
-                match_score=round(best_score, 2) if best_doc else None,
-                matched_signals=best_signals if best_doc else None,
-            )
-            continue
-
-        # Defer building the result so Phase C can gate medium-band matches.
-        _v2_pending[idx] = (best_doc, best_score, best_signals)
-
-    # ── Badge Phase C: medium-band BGE re-verification ───────────────
-    phase_c_results: dict[int, dict] = {}
-    if use_v2 and _phase_c_enabled() and _v2_pending:
-        medium_pairs: list[tuple[int, CandidateIn, dict]] = [
-            (idx, candidates[idx], doc)
-            for idx, (doc, score, _sig) in _v2_pending.items()
-            if badge_thr <= score < high_thr
-        ]
-        if medium_pairs:
-            phase_c_results = await _phase_c_verify_medium_band(
-                medium_pairs, _phase_c_threshold()
-            )
-            n_rej = sum(1 for v in phase_c_results.values() if v["decision"] == "reject")
-            if n_rej:
-                logger.info(
-                    "[PhaseC] medium-band rejects=%d/%d (T=%.2f)",
-                    n_rej, len(medium_pairs), _phase_c_threshold(),
-                )
-
-    # PHASE 2: finalise results (apply Phase C decisions)
-    for idx, (best_doc, best_score, best_signals) in _v2_pending.items():
-        pc = phase_c_results.get(idx)
-        if pc and pc["decision"] == "reject":
-            # Audit-friendly rejection — surface the cosine so the
-            # admin Badge Audit UI / auto-labeler can inspect tuning.
-            results_by_idx[idx] = CheckResult(
-                index=idx,
-                exists=False,
-                match_score=round(best_score, 2),
-                matched_signals=(best_signals or []) + [
-                    f"phase_c_reject:{pc['cosine']}"
-                ],
-            )
-            # Clear best_doc so the audit log shows this was rejected
-            best_doc_by_idx[idx] = None
-            conflicts_by_idx[idx] = f"phase_c_low_cosine:{pc['cosine']}"
-            continue
-
-        # Phase C kept (or wasn't applicable) → build the badge as normal.
-        signals = best_signals or []
-        if pc and pc["decision"] == "keep":
-            signals = signals + [f"phase_c_keep:{pc['cosine']}"]
-        results_by_idx[idx] = _build_match_result(
-            idx, candidates[idx], best_doc, best_score, signals, web_base,
-            high_threshold=high_thr,
-        )
-
-    # Re-emit results in input order
-    results: list[CheckResult] = [results_by_idx[i] for i in range(len(candidates))]
-
-    took_ms = int((_time.time() - t0) * 1000)
-    n_exists = sum(1 for r in results if r.exists)
-    n_fast = sum(1 for r in results if r.exists and r.matched_signals and "naukri_id" in r.matched_signals)
-    logger.info(
-        "[CheckExisting%s] user=%s batch=%d hits=%d (fast=%d) cache_hits=%d/%d took=%dms",
-        "-V2" if use_v2 else "",
-        user.get("email"), len(candidates), n_exists, n_fast,
-        n_cache_hits, len(unresolved),
-        took_ms,
-    )
-
-    # ─── Badge view counter (per-day rolling) ──────────────────────────
-    # Each call writes ONE upsert recording how many candidates were
-    # scanned and how many showed the "Already in DB" badge to the user.
-    # Read aggregate on the admin Badge Audit page so recruiters see how
-    # many duplicate-saves the extension prevented.
+    t0 = time.monotonic()
+    base = (os.environ.get("SITE_URL") or "https://ventureshrd.com").rstrip("/")
+    raw = await lookup_profiles(db, [c.model_dump() for c in payload.candidates], base)
+    results = [CheckResult(**row) for row in raw]
+    unavailable = [r for r in results if r.decision == "unavailable"]
+    status = "unavailable" if results and len(unavailable) == len(results) else "ready"
+    # Preserve the existing admin badge-view counters without putting a slow
+    # analytics write on the identity decision's critical path.  Counter
+    # failures are deliberately non-fatal and never alter the response.
     try:
-        from datetime import date as _date
-        today = _date.today().isoformat()
-        await db.badge_view_stats.update_one(
-            {"day": today},
-            {
-                "$inc": {
-                    "scanned_count": len(candidates),  # candidates scanned today
-                    "shown_count":   n_exists,         # badges actually shown
-                    "scan_calls":    1,                # API calls
-                },
-                "$set":  {"last_seen_at": datetime.now(timezone.utc).isoformat()},
-                "$setOnInsert": {"day": today, "created_at": datetime.now(timezone.utc).isoformat()},
-            },
-            upsert=True,
-        )
-        # Per-user breakdown (optional — useful for picking power users)
-        await db.badge_view_stats_user.update_one(
-            {"day": today, "user_email": user.get("email")},
-            {
-                "$inc": {"scanned_count": len(candidates), "shown_count": n_exists},
-                "$setOnInsert": {
-                    "day": today, "user_email": user.get("email"),
-                    "user_id": user.get("id"),
-                },
-            },
-            upsert=True,
-        )
-    except Exception as _e:
-        logger.warning(f"[BadgeView] counter update failed: {_e}")
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).date().isoformat()
+        shown = sum(1 for result in results if result.exists)
 
-    # ─── Phase 56.3 audit log (fire-and-forget) ────────────────────────
-    # Same allowlist as V2. With the team-wide rollout
-    # (EXTENSION_CHECK_V2_USERS=*) audit docs are ~16KB each, so
-    # EXTENSION_CHECK_AUDIT_SAMPLE (0.0-1.0, default 1.0) caps storage
-    # growth: 0.3 ≈ every 3rd scan audited — plenty for benchmarking.
-    # Audit write — fires for BOTH V1 (fast path) and V2 (precision) so the
-    # `badge_audit` collection reflects real production traffic, not just
-    # the V2 sample. Earlier this was gated on `use_v2`, which meant the
-    # auto-labeler never saw enough rows to converge despite heavy usage.
-    audit_id: Optional[str] = None
-    try:
-        _sample = float(os.environ.get("EXTENSION_CHECK_AUDIT_SAMPLE", "1.0") or 1.0)
-    except ValueError:
-        _sample = 1.0
-    if _sample >= 1.0 or random.random() < _sample:
-        try:
-            import asyncio as _asyncio
-            from routes.badge_audit import write_audit_doc
-            # Synchronous so we get the audit_id back into the response
-            # (extension uses it to call /audit/feedback later). The
-            # write itself is ~5ms — well within tolerance.
-            audit_id = await write_audit_doc(
-                user=user,
-                used_v2=use_v2,
-                candidates_in=candidates,
-                results_out=results,
-                docs_by_idx=best_doc_by_idx,
-                conflicts_by_idx=conflicts_by_idx,
-                page_url=getattr(payload, "page_url", None),
-                took_ms=took_ms,
+        async def record_view_stats():
+            await db.badge_view_stats.update_one(
+                {"day": today},
+                {"$inc": {"scanned_count": len(results), "shown_count": shown, "scan_calls": 1},
+                 "$set": {"last_seen_at": datetime.now(timezone.utc).isoformat()},
+                 "$setOnInsert": {"day": today, "created_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
             )
-        except Exception as _e:
-            logger.warning(f"[CheckExisting] audit write failed: {_e}")
+            await db.badge_view_stats_user.update_one(
+                {"day": today, "user_email": (user.get("email") or "").lower()},
+                {"$inc": {"scanned_count": len(results), "shown_count": shown},
+                 "$setOnInsert": {"day": today, "user_email": (user.get("email") or "").lower(),
+                                  "user_id": user.get("id")}},
+                upsert=True,
+            )
 
-    return CheckExistingResponse(results=results, audit_id=audit_id)
+        await asyncio.wait_for(record_view_stats(), timeout=0.5)
+    except Exception:
+        logger.debug("Badge view counter unavailable", exc_info=True)
+    audit_id = None
+    # Retain the existing review workflow with versioned evidence. The logging
+    # operation is bounded and cannot turn a successful lookup into a failure.
+    if results:
+        try:
+            sample = min(1.0, max(0.0, float(os.environ.get("EXTENSION_CHECK_AUDIT_SAMPLE", "1"))))
+        except ValueError:
+            sample = 1.0
+        if random.random() < sample:
+            try:
+                from routes.badge_audit import write_audit_doc
+
+                def audit_context(result):
+                    context = ((result.top_match or {}).get("context")
+                               if isinstance(result.top_match, dict) else {}) or {}
+                    return {
+                        "name": (result.top_match or {}).get("name") if result.top_match else None,
+                        "current_employer": context.get("employer"),
+                        "designation": context.get("designation"),
+                        "location": context.get("location"),
+                        "skills": context.get("skills", []),
+                        "education": context.get("education", []),
+                        "experience_years": context.get("experience_years"),
+                    }
+
+                audit_id = await asyncio.wait_for(write_audit_doc(
+                    user=user, used_v2=False, candidates_in=payload.candidates,
+                    results_out=results,
+                    docs_by_idx={r.index: audit_context(r)
+                                 for r in results if r.top_match},
+                    conflicts_by_idx={r.index: ",".join(r.conflicts) or None for r in results},
+                    page_url=payload.page_url,
+                    took_ms=int((time.monotonic() - t0) * 1000),
+                ), timeout=2)
+            except Exception:
+                logger.warning("Identity decision audit unavailable")
+    return CheckExistingResponse(results=results, service_status=status, audit_id=audit_id)

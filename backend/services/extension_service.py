@@ -11,6 +11,7 @@ from typing import Optional
 
 from config import db
 from models.extension import CompleteNaukriProfileInput
+from services.identity_capture import normalized_phone as normalized_capture_phone
 
 logger = logging.getLogger(__name__)
 
@@ -629,7 +630,7 @@ async def log_capture(profile, user, status, action, candidate_id, failure_reaso
         "failure_reason": failure_reason,
         "failed_step": failed_step,
         "data_missing_fields": missing,
-        "captured_to_bank": status == "success",
+        "captured_to_bank": status == "success" and bool(candidate_id),
         "is_recovered": False,
         "retry_count": 0,
         "capture_duration_ms": duration_ms,
@@ -693,7 +694,7 @@ def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: 
     career_prefs = profile.career_preferences.model_dump() if profile.career_preferences else {}
     personal = profile.personal_details.model_dump() if profile.personal_details else {}
 
-    return {
+    doc = {
         "id": candidate_id,
         "name": profile.name,
         "name_lower": (profile.name or "").strip().lower(),
@@ -704,7 +705,7 @@ def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: 
         "email": profile.email.lower() if profile.email else None,
         "alternate_email": profile.alternate_email,
         "phone": profile.phone,
-        "phone_normalized": normalize_phone(profile.phone) if profile.phone else None,
+        "phone_normalized": normalized_capture_phone(profile.phone),
         "alternate_phone": profile.alternate_phone,
         "headline": profile.headline,
         "resume_headline": profile.resume_headline,
@@ -829,6 +830,10 @@ def build_complete_candidate(profile: CompleteNaukriProfileInput, candidate_id: 
         "bulk_import_type": None,
         "bulk_import_restricted": False,
     }
+    observation = _capture_source_observation(profile, now)
+    if observation:
+        doc["source_details"]["identity_observation"] = observation
+    return doc
 
 
 def _should_overwrite(value) -> bool:
@@ -854,36 +859,73 @@ def _should_overwrite(value) -> bool:
     return True
 
 
-def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: str) -> dict:
-    """Build update document with ALL changed fields"""
+def _capture_source_observation(profile: CompleteNaukriProfileInput, observed_at: str) -> Optional[dict]:
+    """Record where an identifier was observed without claiming verification.
 
-    career_prefs = profile.career_preferences.model_dump() if profile.career_preferences else {}
-    personal = profile.personal_details.model_dump() if profile.personal_details else {}
+    The capture adapter currently mixes profile IDs with pid/sid and URL hashes.
+    Successful persistence validates none of those identifier semantics. Keep
+    this observation for diagnosis; it must never create a trusted anchor.
+    """
+    source = str(getattr(profile, "source_platform", None) or "naukri").lower()
+    source = "naukri" if source.startswith("naukri") else source
+    identifier = getattr(profile, "naukri_profile_id", None)
+    if source != "naukri" or not isinstance(identifier, str):
+        return None
+    identifier = identifier.strip()
+    if not identifier or len(identifier) > 256 or not re.fullmatch(r"[A-Za-z0-9_.-]+", identifier):
+        return None
+    return {
+        "source": "naukri", "id": identifier,
+        "kind": "unverified_identifier", "provenance": "capture_observed",
+        "observed_at": observed_at,
+    }
+
+
+def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: str, existing: Optional[dict] = None) -> dict:
+    """Build captured changes while preserving omitted values and provenance.
+
+    Pydantic defaults are not observations: an omitted ``has_resume`` or
+    ``is_negotiable`` must not erase a previously captured True value.
+    Explicit False/zero values remain meaningful updates.
+    """
+
+    supplied = profile.model_fields_set
+    career_prefs = profile.career_preferences.model_dump(exclude_unset=True) if profile.career_preferences else {}
+    personal = profile.personal_details.model_dump(exclude_unset=True) if profile.personal_details else {}
+    old_details = (existing or {}).get("source_details")
+    source_details = dict(old_details) if isinstance(old_details, dict) else {}
+    source_details.update({
+        "captured_by": user["id"],
+        "captured_by_name": user.get("name", user.get("email")),
+        "captured_by_role": user.get("role"),
+        "captured_at": profile.scraped_at,
+    })
+    for field in ("extension_version", "contact_hidden", "mandate_id"):
+        value = getattr(profile, field)
+        if field in supplied and _should_overwrite(value):
+            source_details[field] = value
+    observation = _capture_source_observation(profile, now)
+    if observation:
+        source_details["identity_observation"] = observation
 
     update = {
         "updated_at": now,
         "last_updated_by": user["id"],
-        "naukri_profile_id": profile.naukri_profile_id,
-        "naukri_profile_url": profile.naukri_profile_url,
-        "naukri_profile_updated": profile.profile_last_updated,
-        "naukri_last_active": profile.last_active,
-        "source": f"{profile.source_platform or 'naukri'}_extension",
-        "source_platform": profile.source_platform or "naukri",
-        "source_details": {
-            "captured_by": user["id"],
-            "captured_by_name": user.get("name", user.get("email")),
-            "captured_by_role": user.get("role"),
-            "captured_at": profile.scraped_at,
-            "extension_version": profile.extension_version or "unknown",
-            "contact_hidden": profile.contact_hidden or False,
-            "mandate_id": profile.mandate_id,
-        },
+        "source_details": source_details,
     }
+    if "source_platform" in supplied and _should_overwrite(profile.source_platform):
+        update["source"] = f"{profile.source_platform}_extension"
+        update["source_platform"] = profile.source_platform
 
     # Track mandate_id in source_details but DON'T overwrite top-level mandate_id
     # (multi-mandate linking is handled via $addToSet in the capture endpoint)
 
     field_mapping = {
+        "naukri_profile_id": profile.naukri_profile_id,
+        "naukri_profile_url": profile.naukri_profile_url,
+        "naukri_resume_id": profile.naukri_resume_id,
+        "naukri_profile_updated": profile.profile_last_updated,
+        "naukri_last_active": profile.last_active,
         "name": profile.name,
         "name_lower": (profile.name or "").strip().lower() if profile.name else None,
         "first_name": profile.first_name,
@@ -893,7 +935,7 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
         "photo_url": profile.photo_url,
         "alternate_email": profile.alternate_email,
         "phone": profile.phone,
-        "phone_normalized": normalize_phone(profile.phone) if profile.phone else None,
+        "phone_normalized": normalized_capture_phone(profile.phone),
         "alternate_phone": profile.alternate_phone,
         "headline": profile.headline,
         "resume_headline": profile.resume_headline,
@@ -904,7 +946,7 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
         "industry": profile.current_industry,
         "role_category": profile.current_role_category,
         "employment_status": profile.employment_status,
-        "experience_years": float(profile.total_experience_years) if profile.total_experience_years else None,
+        "experience_years": float(profile.total_experience_years) if profile.total_experience_years is not None else None,
         "experience_months": profile.total_experience_months,
         "experience_display": profile.total_experience_display,
         "highest_qualification": profile.highest_qualification,
@@ -919,7 +961,7 @@ def build_complete_update(profile: CompleteNaukriProfileInput, user: dict, now: 
         "accomplishments": profile.accomplishments,
         "about_me": profile.about_me,
         "additional_info": profile.additional_info,
-        "has_resume": profile.has_resume,
+        "has_resume": profile.has_resume if "has_resume" in supplied else None,
         "resume_title": profile.resume_title,
         "resume_format": profile.resume_format,
         "naukri_response_rate": profile.response_rate,
