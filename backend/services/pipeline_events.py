@@ -25,11 +25,7 @@ PIPELINE_STAGES = [
 # Parallel statuses shown at the bottom. `rejected` auto-hides after 7 days (display filter).
 PARALLEL_STATUSES = ["rejected", "on_hold"]
 
-# Legacy stages kept in valid set so historical records still pass validation,
-# but they no longer appear in new pipelines.
-LEGACY_STAGES = ["applied", "employer_approved", "employer_rejected"]
-
-ALL_VALID_STAGES = PIPELINE_STAGES + PARALLEL_STATUSES + LEGACY_STAGES
+ALL_VALID_STAGES = PIPELINE_STAGES + PARALLEL_STATUSES
 
 # Revenue probability mapping
 STAGE_REVENUE_PROBABILITY = {
@@ -42,10 +38,6 @@ STAGE_REVENUE_PROBABILITY = {
     "joined": 100,
     "rejected": 0,
     "on_hold": 0,
-    # Legacy — kept so historical reports don't KeyError
-    "applied": 0,
-    "employer_approved": 25,
-    "employer_rejected": 0,
 }
 
 
@@ -60,23 +52,15 @@ def get_stage_index(stage: str) -> int:
 def pipeline_display_filter() -> dict:
     """MongoDB filter to hide noise from pipeline views.
 
-    Rules (per user spec, Apr 2026):
-      1. Only "Added as Applicant" candidates appear in the Sourced column —
-         extension auto-captures (source='extension_capture') stay in the
-         Candidate Bank and DO NOT clutter the pipeline.
-      2. Rejected applications auto-disappear after 7 days (data retained,
-         just hidden from the board).
+    Extension captures ARE part of the pipeline: a profile captured against
+    the selected mandate lands in that mandate's Sourced column (user spec,
+    Sep 2026). The only thing hidden is a rejection older than 7 days —
+    the data stays, it just leaves the board.
     """
     from datetime import timedelta
     seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     return {
         "$nor": [
-            # Rule 1 — extension sourced clutter
-            {"$and": [
-                {"stage": "sourced"},
-                {"source": "extension_capture"},
-            ]},
-            # Rule 2 — stale rejections
             {"$and": [
                 {"stage": "rejected"},
                 {"updated_at": {"$lt": seven_days_ago}},
@@ -118,48 +102,6 @@ async def log_pipeline_event(
         logger.info(
             f"[PipelineEvent] {application_id}: {previous_stage} → {new_stage} (source={source})"
         )
-        
-        # Notify employer when recruiter shortlists a candidate
-        if new_stage == "shortlisted" and previous_stage != "shortlisted":
-            try:
-                # Find the job to get the employer/team info
-                application = await db.applications.find_one({"id": application_id}, {"_id": 0})
-                if application:
-                    job = await db.jobs.find_one({"id": application.get("job_id")}, {"_id": 0})
-                    if job:
-                        # Find employer(s) in the team
-                        team_id = job.get("team_id")
-                        employer_ids = []
-                        if team_id:
-                            team = await db.teams.find_one({"id": team_id}, {"_id": 0})
-                            if team and team.get("employer_id"):
-                                employer_ids.append(team["employer_id"])
-                        
-                        # Also notify the job poster if they're an employer
-                        if job.get("posted_by_role") == "employer" and job.get("posted_by") not in employer_ids:
-                            employer_ids.append(job["posted_by"])
-                        
-                        # Create in-app notifications for employers
-                        candidate_name = application.get("candidate_name", "A candidate")
-                        job_title = job.get("title", "a job")
-                        
-                        for emp_id in employer_ids:
-                            notification = {
-                                "id": str(uuid.uuid4()),
-                                "user_id": emp_id,
-                                "type": "candidate_shortlisted",
-                                "title": "Candidate Shortlisted - Approval Needed",
-                                "message": f"{user_name} shortlisted {candidate_name} for '{job_title}'. Please review and approve/reject.",
-                                "application_id": application_id,
-                                "job_id": application.get("job_id"),
-                                "read": False,
-                                "created_at": datetime.now(timezone.utc).isoformat(),
-                            }
-                            await db.notifications.insert_one(notification)
-                        
-                        logger.info(f"[PipelineEvent] Notified {len(employer_ids)} employer(s) about shortlisted candidate")
-            except Exception as notify_err:
-                logger.error(f"[PipelineEvent] Failed to send employer notification: {notify_err}")
     except Exception as e:
         logger.error(f"[PipelineEvent] Failed to log event: {e}")
     return event

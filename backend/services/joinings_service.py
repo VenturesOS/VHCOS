@@ -49,7 +49,14 @@ async def unified_joinings(
     """
     from services import branch_revenue as br
 
-    ledger = await br.fetch_rows(db, date_from=date_from, date_to=date_to, team_ids=team_ids)
+    # The tracker is scoped by team; when the caller is scoped to individual
+    # recruiters instead (a recruiter looking at their own list, or a
+    # recruiter filter), the tracker has to be filtered the same way or it
+    # would leak every branch joining.
+    ledger = await br.fetch_rows(
+        db, date_from=date_from, date_to=date_to, team_ids=team_ids,
+        recruiter_ids=recruiter_ids if team_ids is None else None,
+    )
     pipeline = await fetch_joinings(
         db, date_from=date_from, date_to=date_to, company_id=company_id,
         recruiter_ids=recruiter_ids, limit=1000,
@@ -261,4 +268,28 @@ async def fetch_joinings(
         if location_q and location_q.lower() not in (row["location"] or "").lower():
             continue
         rows.append(row)
-    return rows
+    return _dedupe_by_candidate(rows)
+
+
+def _dedupe_by_candidate(rows: List[dict]) -> List[dict]:
+    """One row per joined candidate.
+
+    A candidate re-linked to a new mandate (or left behind on a mandate that
+    was later deleted) has more than one `joined` application, which showed
+    the same joining twice — once complete, once with no client or position.
+    The most complete row wins: a live client first, then money already
+    recorded, then the most recent joining.
+    """
+    def score(r: dict) -> tuple:
+        return (
+            1 if r.get("client_name") else 0,
+            1 if (r.get("bill_number") or r.get("revenue")) else 0,
+            r.get("join_date") or "",
+        )
+
+    best: dict = {}
+    for r in rows:
+        key = _norm_name(r.get("candidate_name")) or r.get("candidate_id")
+        if key not in best or score(r) > score(best[key]):
+            best[key] = r
+    return sorted(best.values(), key=lambda r: r.get("join_date") or "", reverse=True)

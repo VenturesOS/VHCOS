@@ -241,6 +241,7 @@ function App() {
             <Route path="jobs/new" element={<CreateJobPage />} />
             <Route path="jobs/:jobId/applicants" element={<JobApplicantsPage />} />
             <Route path="pipeline" element={<PipelinePage />} />
+            <Route path="joinings" element={<JoiningListPage />} />
             <Route path="candidate-bank" element={<RecruiterCandidateBankPage />} />
             <Route path="candidate-bank/batch-upload" element={<BatchUploadPage />} />
             <Route path="advanced-search" element={<AdvancedSearchPage />} />

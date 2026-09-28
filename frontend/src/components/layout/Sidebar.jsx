@@ -86,6 +86,7 @@ const navItems = {
     { icon: LayoutDashboard, label: 'Dashboard', path: '/recruiter' },
     { icon: Briefcase, label: 'Mandates', path: '/recruiter/jobs' },
     { icon: ClipboardList, label: 'Pipeline', path: '/recruiter/pipeline' },
+    { icon: UserCheck, label: 'Joining List', path: '/recruiter/joinings' },
     { icon: Search, label: 'Advanced Search', path: '/recruiter/advanced-search' },
     { icon: Database, label: 'Candidate Bank', path: '/recruiter/candidate-bank' },
     { icon: FileText, label: 'Submission Tracker', path: '/recruiter/submission-tracker' },

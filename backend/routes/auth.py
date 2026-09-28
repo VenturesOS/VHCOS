@@ -345,6 +345,7 @@ async def forgot_password(req: ForgotPasswordRequest, request: Request):
 
     from services.email_service import send_email
     await send_email(
+        category="password_reset",
         recipient_email=user["email"],
         subject="Reset Your Password — Ventures HRD",
         html_content=f"""

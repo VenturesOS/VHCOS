@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 import aiofiles
 from routes.notifications import create_notification
 from models.application import (
-    ApplicantReviewResponse, CandidateApprovalRequest,
+    ApplicantReviewResponse,
     ShortlistRequest, LinkCandidateRequest,
 )
 
@@ -210,7 +210,7 @@ async def create_application(app_data: ApplicationCreate, current_user: dict = D
         "company_name": company_name,
         "cover_letter": app_data.cover_letter,
         "status": "active",
-        "stage": "applied",
+        "stage": "sourced",
         "source": "self",
         "notes": [],
         "edit_history": [],
@@ -276,7 +276,7 @@ async def create_application(app_data: ApplicationCreate, current_user: dict = D
             "company_name": company_name,
             "source": "self",
             "created_at": now,
-            "stage": "applied"
+            "stage": "sourced"
         })
     
     return ApplicationResponse(**app_doc)
@@ -351,6 +351,21 @@ def _build_pipeline_window_filter(window: Optional[str],
     }
 
 
+async def _recruiter_scope(user_id: str) -> dict:
+    """A recruiter's pipeline = what they sourced + the mandates they own.
+
+    Without this a recruiter sees every capture in the company on their
+    board; the extension tags each capture to the mandate it was captured
+    against, so scoping by mandate ownership keeps the board theirs.
+    """
+    jobs = await db.jobs.find(
+        {"$or": [{"posted_by": user_id}, {"assigned_recruiters": user_id},
+                 {"assigned_recruiter_id": user_id}]},
+        {"_id": 0, "id": 1},
+    ).to_list(3000)
+    return {"$or": [{"created_by": user_id}, {"job_id": {"$in": [j["id"] for j in jobs]}}]}
+
+
 @applications_router.get("/applications/pipeline-stats")
 async def get_pipeline_stage_stats(
     job_id: Optional[str] = None,
@@ -367,6 +382,8 @@ async def get_pipeline_stage_stats(
     elif current_user["role"] == "employer":
         jobs = await db.jobs.find({"posted_by": current_user["id"]}, {"id": 1, "_id": 0}).to_list(1000)
         base_query["job_id"] = {"$in": [j["id"] for j in jobs]}
+    elif current_user["role"] == "recruiter":
+        base_query = await _recruiter_scope(current_user["id"])
     if job_id:
         base_query["job_id"] = job_id
 
@@ -427,6 +444,8 @@ async def get_applications(
             jobs = await db.jobs.find({"posted_by": current_user["id"]}, {"id": 1, "_id": 0}).to_list(1000)
             job_ids = [j["id"] for j in jobs]
             query["job_id"] = {"$in": job_ids}
+        elif current_user["role"] == "recruiter":
+            query = await _recruiter_scope(current_user["id"])
         
         if job_id:
             query["job_id"] = job_id
@@ -447,7 +466,7 @@ async def get_applications(
 
         _limit = max(1, min(limit, 500))
         _skip = (max(1, page) - 1) * _limit
-        applications = await db.applications.find(query, {"_id": 0}).skip(_skip).limit(_limit).to_list(_limit)
+        applications = await db.applications.find(query, {"_id": 0}).sort("updated_at", -1).skip(_skip).limit(_limit).to_list(_limit)
 
         # Enrich with candidate_bank fields so the pipeline card/detail dialog
         # shows the real CTC / experience / location / employer rather than the
@@ -510,60 +529,6 @@ async def get_applications(
     except Exception as e:
         logger.error(f"[Applications] Error fetching applications: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch applications. Please try again.")
-
-
-@applications_router.get("/applications/pending-approval")
-async def get_pending_employer_approval(
-    job_id: Optional[str] = None,
-    current_user: dict = Depends(require_role(["admin", "employer"]))
-):
-    """
-    Get all candidates pending employer approval (at 'shortlisted' stage).
-    Employer sees candidates shortlisted by their team recruiters.
-    """
-    query = {"stage": "shortlisted"}
-    
-    if job_id:
-        query["job_id"] = job_id
-    
-    # Employer sees only their team's jobs
-    if current_user["role"] == "employer":
-        team = await db.teams.find_one({"employer_id": current_user["id"], "status": "active"}, {"_id": 0})
-        if team:
-            team_jobs = await db.jobs.find(
-                {"$or": [
-                    {"team_id": team["id"]},
-                    {"posted_by": current_user["id"]},
-                    {"assigned_recruiter_id": {"$in": team.get("recruiter_ids", [])}},
-                ]},
-                {"_id": 0, "id": 1}
-            ).to_list(1000)
-            job_ids = [j["id"] for j in team_jobs]
-            query["job_id"] = {"$in": job_ids}
-        else:
-            query["job_id"] = {"$in": []}
-    
-    applications = await db.applications.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
-    
-    # Batch-fetch job info in one query instead of N individual find_ones
-    job_ids = list({a.get("job_id") for a in applications if a.get("job_id")})
-    jobs_map = {}
-    if job_ids:
-        jobs = await db.jobs.find(
-            {"id": {"$in": job_ids}},
-            {"_id": 0, "id": 1, "title": 1, "job_public_id": 1, "company_name": 1}
-        ).to_list(len(job_ids))
-        jobs_map = {j["id"]: j for j in jobs}
-    
-    for app in applications:
-        job = jobs_map.get(app.get("job_id"), {})
-        if job:
-            app["job_title"] = job.get("title")
-            app["job_public_id"] = job.get("job_public_id")
-            app["company_name"] = job.get("company_name")
-    
-    return {"pending_count": len(applications), "applications": applications}
-
 
 
 @applications_router.get("/applications/{app_id}", response_model=ApplicationResponse)
@@ -657,16 +622,8 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
         except Exception as _e:
             logger.debug(f"[applications] LTR auto-log skipped: {_e}")
 
-        # Phase 55.7 — auto-draft a bill on `hired` / `joined`. Best-effort;
-        # never blocks the stage change. Idempotent via line_items.application_id.
-        if new_stage in ("hired", "joined"):
-            try:
-                from services.bill_auto_draft import maybe_auto_draft_bill
-                merged_app = {**application, **update_dict, "id": app_id}
-                await maybe_auto_draft_bill(app_id, merged_app, current_user)
-            except Exception as _e:
-                # Never break stage transitions because of billing side-effects.
-                logger.warning("[applications] auto-draft bill failed for %s: %s", app_id, _e)
+        # Bills are raised only from the Joining List (step 7 of the flow) —
+        # no invoice is auto-drafted on a stage move.
 
         # Fix 5.1 (spec 2026-09-08) — a job whose headcount is fully hired
         # should disappear from the active/open job view. When a candidate
@@ -746,100 +703,6 @@ async def update_application(app_id: str, update_data: ApplicationUpdate, curren
     _bust_pipeline_cache()
 
     return ApplicationResponse(**updated_application)
-
-
-@applications_router.post("/applications/{app_id}/employer-approval")
-async def employer_approve_candidate(
-    app_id: str,
-    req: CandidateApprovalRequest,
-    current_user: dict = Depends(require_role(["admin", "employer"]))
-):
-    """
-    Employer approves or rejects a candidate shortlisted by a recruiter.
-    
-    Flow: Recruiter Shortlists → Employer Approves/Rejects → Moves Forward
-    - approve: stage moves from 'shortlisted' to 'employer_approved'
-    - reject: stage moves to 'employer_rejected'
-    """
-    application = await db.applications.find_one({"id": app_id}, {"_id": 0})
-    if not application:
-        raise HTTPException(status_code=404, detail="Application not found")
-    
-    current_stage = application.get("stage", "applied")
-    if current_stage != "shortlisted":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Can only approve/reject candidates at 'shortlisted' stage. Current stage: {current_stage}"
-        )
-    
-    if req.action not in ("approve", "reject"):
-        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    new_stage = "employer_approved" if req.action == "approve" else "employer_rejected"
-    
-    update_fields = {
-        "stage": new_stage,
-        "employer_approval": req.action + "d",  # "approved" or "rejected"
-        "employer_approval_by": current_user["id"],
-        "employer_approval_by_name": current_user["name"],
-        "employer_approval_at": now,
-        "employer_approval_reason": req.reason,
-        "updated_at": now,
-    }
-    
-    await db.applications.update_one({"id": app_id}, {"$set": update_fields})
-    
-    # Log pipeline event
-    from services.pipeline_events import log_pipeline_event
-    await log_pipeline_event(
-        candidate_id=application.get("candidate_id", ""),
-        mandate_id=application.get("job_id", ""),
-        application_id=app_id,
-        previous_stage=current_stage,
-        new_stage=new_stage,
-        source="employer_approval",
-        user_id=current_user.get("id", ""),
-        user_name=current_user.get("name", ""),
-    )
-    
-    # Sync to tracker
-    from services.tracker_sync import sync_pipeline_to_tracker
-    await sync_pipeline_to_tracker(
-        application_id=app_id,
-        new_stage=new_stage,
-        user_id=current_user.get("id", ""),
-        user_name=current_user.get("name", ""),
-    )
-    
-    # Update governance history
-    if application.get("candidate_id"):
-        outcome = "employer_rejected" if req.action == "reject" else None
-        await update_application_in_history(
-            application["candidate_id"], app_id, new_stage, outcome
-        )
-    
-    logger.info(f"Employer {current_user['name']} {req.action}d candidate in application {app_id}")
-    
-    # Log activity
-    action_type = ACTION_APPROVAL if req.action == "approve" else ACTION_REJECTED
-    await log_activity(
-        candidate_id=application.get("candidate_id", ""), action=action_type,
-        description=f"Employer {req.action}d candidate for {application.get('job_title', 'a job')}",
-        performed_by=current_user.get("id"), performed_by_name=current_user.get("name"),
-        performed_by_role=current_user.get("role"),
-        candidate_name=application.get("candidate_name"),
-        details={"action": req.action, "reason": req.reason, "application_id": app_id},
-    )
-
-    updated = await db.applications.find_one({"id": app_id}, {"_id": 0})
-    return {
-        "success": True,
-        "message": f"Candidate {req.action}d successfully",
-        "application": {k: v for k, v in updated.items() if k != "_id"},
-    }
-
-
 
 
 @applications_router.delete("/applications/{app_id}")
@@ -2150,10 +2013,8 @@ async def link_candidate_to_job(
         {"_id": 0}
     )
     if existing:
-        # Upgrade the existing row so it becomes visible in the pipeline.
-        # The pipeline_display_filter() hides rows with source=extension_capture;
-        # the user explicitly clicked "Add as Applicant", so this candidate is
-        # no longer a silent auto-capture — mark it as a manual link.
+        # Already linked (e.g. captured by the extension against this mandate).
+        # Mark it as a manual link and leave the stage where it is.
         now_ts = datetime.now(timezone.utc).isoformat()
         upgrade = {
             "source": "candidate_bank",

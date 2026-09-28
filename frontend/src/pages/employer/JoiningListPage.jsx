@@ -13,6 +13,7 @@ import {
 import { Loader2, RefreshCw, Receipt, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { joiningsAPI, targetsAPI } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { StatusChip, inr, compactINR, downloadCSV } from '../../components/revenue/RevenueTables';
 import { ResolveRowDialog } from '../../components/revenue/ResolveRowDialog';
 
@@ -38,6 +39,8 @@ function StatBox({ label, value, hint, testId }) {
 }
 
 export default function JoiningListPage() {
+  const { user } = useAuth();
+  const readOnly = user?.role === 'recruiter';
   const [data, setData] = useState(null);
   const [targets, setTargets] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +53,7 @@ export default function JoiningListPage() {
   const [saving, setSaving] = useState({});
   const [invoiceFor, setInvoiceFor] = useState(null);
   const [updateRow, setUpdateRow] = useState(null);
-  const [invoiceForm, setInvoiceForm] = useState({ joined_ctc: '', commercial_rate_pct: '', designation: '' });
+  const [invoiceForm, setInvoiceForm] = useState({ joined_ctc: '', billing_amount: '', designation: '' });
   const [raising, setRaising] = useState(false);
 
   useEffect(() => {
@@ -69,7 +72,7 @@ export default function JoiningListPage() {
           ...(q ? { q } : {}),
           limit: 1000,
         }),
-        targetsAPI.teamSummary().catch(() => ({ data: null })),
+        readOnly ? Promise.resolve({ data: null }) : targetsAPI.teamSummary().catch(() => ({ data: null })),
       ]);
       setData(j.data);
       setTargets(t.data);
@@ -78,7 +81,7 @@ export default function JoiningListPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, status, source, q]);
+  }, [filters, status, source, q, readOnly]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -89,8 +92,10 @@ export default function JoiningListPage() {
       await joiningsAPI.update(row.application_id, {
         joined_ctc: d.joined_ctc !== undefined && d.joined_ctc !== '' ? Number(d.joined_ctc) : undefined,
         revenue: d.revenue !== undefined && d.revenue !== '' ? Number(d.revenue) : undefined,
+        join_date: d.join_date || undefined,
       });
       toast.success('Saved');
+      setDraft((prev) => { const n = { ...prev }; delete n[row.key]; return n; });
       await load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Could not save');
@@ -99,26 +104,13 @@ export default function JoiningListPage() {
     }
   };
 
-  const openInvoice = (row) => {
-    setInvoiceFor(row);
-    setInvoiceForm({
-      joined_ctc: row.joined_ctc || '',
-      commercial_rate_pct: row.commercial_rate_pct || '',
-      designation: row.position || '',
-    });
-  };
-
-  const submitInvoice = async () => {
-    if (!invoiceForm.joined_ctc || !invoiceForm.commercial_rate_pct) {
-      toast.error('Enter both the joining CTC and the commercial rate');
-      return;
-    }
+  const raise = async (row, ctc, amount, designation) => {
     setRaising(true);
     try {
-      const { data: res } = await joiningsAPI.raiseInvoice(invoiceFor.application_id, {
-        joined_ctc: Number(invoiceForm.joined_ctc),
-        commercial_rate_pct: Number(invoiceForm.commercial_rate_pct),
-        designation: invoiceForm.designation || undefined,
+      const { data: res } = await joiningsAPI.raiseInvoice(row.application_id, {
+        joined_ctc: Number(ctc),
+        billing_amount: Number(amount),
+        designation: designation || row.position || undefined,
       });
       toast.success(`Invoice ${res.bill_number} sent to Accounts`);
       setInvoiceFor(null);
@@ -128,6 +120,32 @@ export default function JoiningListPage() {
     } finally {
       setRaising(false);
     }
+  };
+
+  // Step 7 — if both figures are already on the row, the invoice goes straight
+  // to Accounts; only a missing figure opens the box.
+  const startInvoice = (row) => {
+    const d = draft[row.key] || {};
+    const ctc = d.joined_ctc ?? row.joined_ctc;
+    const amount = d.revenue ?? row.revenue;
+    if (Number(ctc) > 0 && Number(amount) > 0) {
+      raise(row, ctc, amount, row.position);
+      return;
+    }
+    setInvoiceFor(row);
+    setInvoiceForm({
+      joined_ctc: ctc || '',
+      billing_amount: amount || '',
+      designation: row.position || '',
+    });
+  };
+
+  const submitInvoice = () => {
+    if (!Number(invoiceForm.joined_ctc) || !Number(invoiceForm.billing_amount)) {
+      toast.error('Enter both the joining CTC and the billing amount');
+      return;
+    }
+    raise(invoiceFor, invoiceForm.joined_ctc, invoiceForm.billing_amount, invoiceForm.designation);
   };
 
   const rows = data?.items || [];
@@ -151,9 +169,9 @@ export default function JoiningListPage() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Joining List</h1>
           <p className="text-sm text-slate-500 max-w-3xl">
-            Every joining for your team — from the branch revenue tracker and from the pipeline, merged.
-            Pipeline rows can be filled in (joining CTC + revenue) and invoiced; tracker rows carry the
-            billing and payment status already recorded.
+            {readOnly
+              ? 'Every candidate of yours who has joined the client.'
+              : 'Every joining for your team. Fill in the joining CTC and the billing amount, then raise the invoice — it lands in Accounts’ Bills & Invoices tab.'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -166,6 +184,47 @@ export default function JoiningListPage() {
         </div>
       </div>
 
+      {readOnly ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">My joinings ({data?.count ?? 0})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
+            ) : rows.length === 0 ? (
+              <p className="py-10 text-center text-sm text-slate-500" data-testid="joinings-empty">
+                No joinings yet.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-sm" data-testid="joinings-table">
+                  <thead className="bg-slate-50">
+                    <tr className="text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="text-left px-3 py-2">DOJ</th>
+                      <th className="text-left px-3 py-2">Candidate</th>
+                      <th className="text-left px-3 py-2">Client</th>
+                      <th className="text-left px-3 py-2">Client Position</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50/70"
+                          data-testid={`joining-row-${row.key}`}>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.join_date || '—'}</td>
+                        <td className="px-3 py-2 font-medium text-slate-900">{row.candidate_name || '—'}</td>
+                        <td className="px-3 py-2">{row.client_name || '—'}</td>
+                        <td className="px-3 py-2">{row.position || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+      <>
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <StatBox testId="stat-joinings" label="Joinings" value={data?.count ?? 0}
                  hint={`${sources.both ?? 0} in both · ${sources.tracker_only ?? 0} tracker · ${sources.pipeline_only ?? 0} pipeline`} />
@@ -264,7 +323,14 @@ export default function JoiningListPage() {
                     return (
                       <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50/70"
                           data-testid={`joining-row-${row.key}`}>
-                        <td className="px-3 py-2 whitespace-nowrap">{row.join_date || '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {row.editable ? (
+                            <Input className="h-8 w-36" type="date"
+                                   value={d.join_date ?? (row.join_date || '')}
+                                   onChange={(e) => setDraft({ ...draft, [row.key]: { ...d, join_date: e.target.value } })}
+                                   data-testid={`joining-doj-${row.key}`} />
+                          ) : (row.join_date || '—')}
+                        </td>
                         <td className="px-3 py-2 font-medium text-slate-900">{row.candidate_name || '—'}</td>
                         <td className="px-3 py-2 text-slate-500">{row.recruiter_name || '—'}</td>
                         <td className="px-3 py-2">{row.client_name || '—'}</td>
@@ -303,7 +369,7 @@ export default function JoiningListPage() {
                                 {saving[row.key] ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
                               </Button>
                               <Button size="sm" className="h-8 bg-[#7CB342] hover:bg-[#6aa037]"
-                                      disabled={!!row.bill_number} onClick={() => openInvoice(row)}
+                                      disabled={!!row.bill_number || raising} onClick={() => startInvoice(row)}
                                       data-testid={`joining-raise-invoice-${row.key}`}>
                                 <Receipt className="w-3 h-3 mr-1" /> Raise Invoice
                               </Button>
@@ -340,6 +406,8 @@ export default function JoiningListPage() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       <ResolveRowDialog row={updateRow} onClose={() => setUpdateRow(null)} onSaved={load} />
 
@@ -350,10 +418,8 @@ export default function JoiningListPage() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-xs text-slate-500">
-              {invoiceFor?.client_name} · joined {invoiceFor?.join_date}. Both figures are entered manually.
-              The invoice line amount <span className="font-medium">replaces</span> the revenue booked for{' '}
-              {invoiceFor?.recruiter_name || 'the recruiter'}
-              {invoiceFor?.revenue ? ` (currently ${inr(invoiceFor.revenue)})` : ''}.
+              {invoiceFor?.client_name} · joined {invoiceFor?.join_date}. The joining CTC or the
+              billing amount is missing — fill them in and the invoice goes to Accounts.
             </p>
             <div>
               <Label className="text-xs text-slate-500 mb-1 block">Designation on invoice</Label>
@@ -363,24 +429,22 @@ export default function JoiningListPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs text-slate-500 mb-1 block">Annual CTC (₹)</Label>
+                <Label className="text-xs text-slate-500 mb-1 block">Joining CTC (₹)</Label>
                 <Input type="number" value={invoiceForm.joined_ctc}
                        onChange={(e) => setInvoiceForm({ ...invoiceForm, joined_ctc: e.target.value })}
                        data-testid="invoice-ctc" />
               </div>
               <div>
-                <Label className="text-xs text-slate-500 mb-1 block">Commercial rate (%)</Label>
-                <Input type="number" step="0.01" value={invoiceForm.commercial_rate_pct}
-                       onChange={(e) => setInvoiceForm({ ...invoiceForm, commercial_rate_pct: e.target.value })}
-                       data-testid="invoice-rate" />
+                <Label className="text-xs text-slate-500 mb-1 block">Billing amount (₹)</Label>
+                <Input type="number" value={invoiceForm.billing_amount}
+                       onChange={(e) => setInvoiceForm({ ...invoiceForm, billing_amount: e.target.value })}
+                       data-testid="invoice-amount" />
               </div>
             </div>
-            {invoiceForm.joined_ctc && invoiceForm.commercial_rate_pct && (
+            {Number(invoiceForm.billing_amount) > 0 && (
               <p className="text-sm text-slate-700" data-testid="invoice-preview-amount">
                 Invoice amount:&nbsp;
-                <span className="font-semibold">
-                  {inr(Number(invoiceForm.joined_ctc) * Number(invoiceForm.commercial_rate_pct) / 100)}
-                </span>
+                <span className="font-semibold">{inr(Number(invoiceForm.billing_amount))}</span>
                 <span className="text-slate-400"> (before GST)</span>
               </p>
             )}

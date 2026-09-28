@@ -120,6 +120,13 @@ async def create_notification_event(
     return event_id
 
 
+EMAIL_CATEGORY_BY_EVENT = {
+    "attendance_reminder": "attendance_reminder",
+    "attendance_absent": "attendance_status",
+    "attendance_late": "attendance_status",
+}
+
+
 async def process_email_delivery(event_id: str):
     """Process pending email delivery for a notification event."""
     event = await db.notification_events.find_one({"id": event_id}, {"_id": 0})
@@ -138,13 +145,14 @@ async def process_email_delivery(event_id: str):
 
     try:
         result = await send_email(
+            category=EMAIL_CATEGORY_BY_EVENT.get(event.get("event_type"), "other"),
             recipient_email=event["recipient_email"],
             subject=event["title"],
             html_content=event["message"],
         )
 
         status = "delivered" if result.get("status") == "sent" else "failed"
-        if result.get("status") == "skipped":
+        if result.get("status") in ("skipped", "blocked"):
             status = "skipped"
 
         await db.notification_delivery_logs.update_one(
@@ -261,6 +269,31 @@ def _reminder_email_html(user_name: str, date_str: str) -> str:
       </div>
     </div>
     """
+
+
+async def notify_attendance_status(user: dict, event_type: str, title: str, body: str) -> None:
+    """Absent / late notification — in-app + one mail (allowed Resend flow)."""
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;">
+        <h2 style="color:#b91c1c;margin:0 0 8px;">{title}</h2>
+        <p style="color:#374151;margin:0 0 12px;">Hi <strong>{user.get('name') or user.get('email')}</strong>,</p>
+        <p style="color:#6b7280;margin:0 0 16px;">{body}</p>
+        <p style="color:#9ca3af;font-size:12px;margin:0;">— VHC Talent OS · Attendance System</p>
+      </div>
+    </div>
+    """
+    if not user.get("email"):
+        return
+    event_id = await create_notification_event(
+        event_type=event_type,
+        recipient_id=user.get("id", ""),
+        recipient_email=user["email"],
+        title=title,
+        message=html,
+        channels=["in_app", "email"],
+    )
+    await process_email_delivery(event_id)
 
 
 async def run_attendance_reminders():
@@ -418,6 +451,13 @@ async def run_auto_absent_marking():
                     "updated_at": now_iso,
                 }
                 await db.attendance_records.insert_one(record)
+                await notify_attendance_status(
+                    user=user,
+                    event_type="attendance_absent",
+                    title="Marked Absent",
+                    body=(f"You have been marked <strong>absent</strong> for {today} — no check-in "
+                          "and no approved leave was found."),
+                )
                 marked += 1
             else:
                 skipped += 1

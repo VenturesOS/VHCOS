@@ -93,6 +93,7 @@ async def worklist(
             "date": p.get("join_date") or "",
             "amount": float(p.get("revenue") or 0),
             "application_id": p["application_id"],
+            "joined_ctc": float(p.get("joined_ctc") or 0),
             "bill_id": "",
             "can_record_invoice": False,
             "can_mark_received": False,

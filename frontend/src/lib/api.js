@@ -187,8 +187,6 @@ export const applicationAPI = {
   addNote: (id, content) => api.post(`/applications/${id}/notes`, { content }),
   downloadResume: (id) => `${API_BASE}/applications/${id}/resume`,
   delete: (id) => api.delete(`/applications/${id}`),
-  employerApproval: (id, data) => api.post(`/applications/${id}/employer-approval`, data),
-  getPendingApproval: (params) => api.get('/applications/pending-approval', { params }),
 };
 
 // Candidate APIs

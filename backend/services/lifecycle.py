@@ -319,7 +319,6 @@ async def run_deferred_init(app):
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from scripts.badge_threshold_autolabeler import main as _autolabel_main
-        from services.weekly_digest import send_weekly_digest
 
         async def _run_autolabeler():
             try:
@@ -327,56 +326,41 @@ async def run_deferred_init(app):
             except Exception as e:
                 logging.warning(f"[AutoLabeler] daily run failed: {e}")
 
-        async def _run_weekly_digest():
-            try:
-                res = await send_weekly_digest(dry_run=False)
-                logging.warning(f"[WeeklyDigest] sent={res.get('sent')} failed={res.get('failed')} rows={res.get('rows')}")
-            except Exception as e:
-                logging.warning(f"[WeeklyDigest] failed: {e}")
-
         autolabel_sched = AsyncIOScheduler()
         # 03:45 UTC = 09:15 IST — daily badge audit auto-labeler
         autolabel_sched.add_job(_run_autolabeler, 'cron', hour=3, minute=45, id='badge_autolabeler_daily')
-        # 11:30 UTC Friday = 17:00 IST Friday — weekly recruiter digest
-        autolabel_sched.add_job(_run_weekly_digest, 'cron', day_of_week='fri', hour=11, minute=30, id='weekly_recruiter_digest')
         autolabel_sched.start()
         app.state.autolabel_scheduler = autolabel_sched
         logging.warning("[AutoLabeler] Daily run scheduled (03:45 UTC / 09:15 IST).")
-        logging.warning("[WeeklyDigest] Friday 11:30 UTC / 17:00 IST scheduled.")
     except Exception as e:
         logging.warning(f"[AutoLabeler] Failed to start: {e}")
 
-    # --- Recruiter performance reports (Daily + Weekly Excel to team leaders) ---
+    # --- Payment-due reminders (Accounts + Admin + the team's Employer) ---
+    # One of the three mail flows the Resend quota is reserved for.
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from services.reports_service import generate_and_send_daily_reports, generate_and_send_weekly_reports
-        from services.team_digest_service import run_daily_digest
-        from config import db as _db
+        from services.payment_due_reminders import run_payment_due_reminders
 
-        async def _run_daily():
-            await generate_and_send_daily_reports(_db)
+        async def _run_payment_due():
+            try:
+                res = await run_payment_due_reminders()
+                logging.warning(f"[PaymentDue] rows={res.get('rows')} sent={len(res.get('sent') or [])}")
+            except Exception as e:
+                logging.warning(f"[PaymentDue] failed: {e}")
 
-        async def _run_weekly():
-            await generate_and_send_weekly_reports(_db)
-
-        async def _run_team_digest():
-            await run_daily_digest(_db)
-
-        reports_scheduler = AsyncIOScheduler()
-        # Team digest at 18:29 IST = 12:59 UTC — 1 min before email reports
-        reports_scheduler.add_job(_run_team_digest, 'cron', hour=12, minute=59, id='daily_team_digest')
-        # 18:30 IST = 13:00 UTC (APScheduler default timezone is UTC)
-        reports_scheduler.add_job(_run_daily, 'cron', hour=13, minute=0, id='daily_recruiter_report')
-        # 09:00 IST Monday = 03:30 UTC Monday
-        reports_scheduler.add_job(_run_weekly, 'cron', day_of_week='mon', hour=3, minute=30, id='weekly_recruiter_report')
-        reports_scheduler.start()
-        app.state.reports_scheduler = reports_scheduler
-        # Use WARNING level so it surfaces in gunicorn logs alongside other schedulers
-        logging.warning("[ReportsScheduler] Team digest (18:29 IST) + Daily (18:30 IST) + Weekly (Mon 09:00 IST) jobs started")
-        for j in reports_scheduler.get_jobs():
-            logging.warning(f"[ReportsScheduler] Job: {j.id} | next_run={j.next_run_time}")
+        payments_sched = AsyncIOScheduler()
+        # Monday 04:30 UTC = 10:00 IST
+        payments_sched.add_job(_run_payment_due, 'cron', day_of_week='mon', hour=4, minute=30,
+                               id='payment_due_reminder')
+        payments_sched.start()
+        app.state.payments_scheduler = payments_sched
+        logging.warning("[PaymentDue] Monday 10:00 IST reminder scheduled.")
     except Exception as e:
-        logging.warning(f"[ReportsScheduler] Failed to start: {e}")
+        logging.warning(f"[PaymentDue] Failed to start: {e}")
+
+    # --- Recruiter performance reports: retired (Sep 2026).
+    # Daily/weekly Excel mails and the team digest were duplicate mail traffic;
+    # the Resend quota is now reserved for attendance + payment-due mails.
 
     # --- Batch API enrichment scheduler (DISABLED — using spaCy + Haiku instead) ---
     # To re-enable: uncomment the block below

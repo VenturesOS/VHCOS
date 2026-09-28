@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminAPI, applicationAPI, revenueAPI } from '../../lib/api';
+import { adminAPI, applicationAPI } from '../../lib/api';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatSalaryINR } from '../../lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -7,11 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
-import { DeleteDialog, OfferDialog, HiredDialog, JoinDialog } from '../../components/admin/pipeline/PipelineDialogs';
+import { DeleteDialog } from '../../components/admin/pipeline/PipelineDialogs';
 import { 
   LayoutGrid, Users, CheckCircle, Clock, Award, UserCheck, 
   XCircle, Pause, Filter, Building2, Send,
-  Briefcase, FileText, Trash2, AlertCircle, IndianRupee, Lock, ArrowRight,
+  Briefcase, FileText, Trash2, AlertCircle, Lock,
   CalendarClock
 } from 'lucide-react';
 
@@ -165,103 +165,16 @@ export default function AdminPipelinePage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [applicationToDelete, setApplicationToDelete] = useState(null);
 
-  // Revenue stage dialogs
-  const [showOfferDialog, setShowOfferDialog] = useState(false);
-  const [showHiredDialog, setShowHiredDialog] = useState(false);
-  const [showJoinDialog, setShowJoinDialog] = useState(false);
-  const [selectedApp, setSelectedApp] = useState(null);
-  const [offerForm, setOfferForm] = useState({ offered_ctc: '', offer_date: '' });
-  const [hiredForm, setHiredForm] = useState({ date_of_joining: '' });
-  const [joinForm, setJoinForm] = useState({ join_date: '', joined_ctc: '' });
-  const [stageLoading, setStageLoading] = useState(false);
-
-  const openOfferDialog = (app) => {
-    setSelectedApp(app);
-    setOfferForm({ offered_ctc: app.offered_ctc || app.expected_salary || '', offer_date: new Date().toISOString().split('T')[0] });
-    setShowOfferDialog(true);
-  };
-
-  const openHiredDialog = (app) => {
-    setSelectedApp(app);
-    setHiredForm({ date_of_joining: app.join_date || '' });
-    setShowHiredDialog(true);
-  };
-
-  const openJoinDialog = (app) => {
-    setSelectedApp(app);
-    setJoinForm({
-      join_date: app.join_date || new Date().toISOString().split('T')[0],
-      joined_ctc: app.joined_ctc || '',
-    });
-    setShowJoinDialog(true);
-  };
-
-  const handleProcessOffer = async () => {
-    if (!offerForm.offered_ctc || parseFloat(offerForm.offered_ctc) <= 0) return toast.error('Offered CTC is required');
-    if (!offerForm.offer_date) return toast.error('Offer date is required');
-    setStageLoading(true);
+  // Stage movement is unconditional — a move is a move, no CTC or revenue
+  // is asked for on the board (user spec, Sep 2026). Money is entered once,
+  // on the Joining List.
+  const moveStage = async (app, stageId, label) => {
     try {
-      const res = await revenueAPI.offered(selectedApp.id, {
-        offered_ctc: parseFloat(offerForm.offered_ctc),
-        offer_date: offerForm.offer_date,
-      });
-      const d = res.data;
-      let msg = `Offered: Revenue ₹${Math.round(d.revenue_amount).toLocaleString('en-IN')}`;
-      if (d.slab_shift) msg += ' (slab changed!)';
-      toast.success(msg);
-      setShowOfferDialog(false);
+      await applicationAPI.update(app.id, { stage: stageId });
+      toast.success(`Moved to ${label}`);
       loadPipeline();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to process offer');
-    } finally {
-      setStageLoading(false);
-    }
-  };
-
-  const handleProcessHired = async () => {
-    if (!hiredForm.date_of_joining) return toast.error('Date of Joining (DOJ) is required');
-    setStageLoading(true);
-    try {
-      await revenueAPI.hired(selectedApp.id, { date_of_joining: hiredForm.date_of_joining });
-      toast.success('Hired: Offer accepted, DOJ set');
-      setShowHiredDialog(false);
-      loadPipeline();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to process hired stage');
-    } finally {
-      setStageLoading(false);
-    }
-  };
-
-  const handleProcessJoin = async () => {
-    if (!joinForm.join_date) return toast.error('Join date is required');
-    setStageLoading(true);
-    try {
-      const res = await revenueAPI.joined(selectedApp.id, { join_date: joinForm.join_date });
-      // fix.docx (2026-09-15): capture the actual joined CTC (may differ
-      // from offered) so the Blog Engine "Joinings" list can render it.
-      const jc = parseFloat(joinForm.joined_ctc);
-      if (!Number.isNaN(jc) && jc > 0) {
-        try {
-          await fetch(`${process.env.REACT_APP_BACKEND_URL || ''}/api/blog/joinings/${selectedApp.id}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('vhc_token') || ''}`,
-            },
-            body: JSON.stringify({ joined_ctc: jc }),
-          });
-        } catch {
-          // Non-blocking — the join itself succeeded, the CTC edit can be redone from the Blog Engine tab.
-        }
-      }
-      toast.success(`Joined: Revenue ₹${Math.round(res.data.final_revenue).toLocaleString('en-IN')} locked`);
-      setShowJoinDialog(false);
-      loadPipeline();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to process join');
-    } finally {
-      setStageLoading(false);
+      toast.error(e.response?.data?.detail || 'Failed to update');
     }
   };
 
@@ -572,76 +485,14 @@ export default function AdminPipelinePage() {
                             <FileText className="w-3 h-3 text-green-500" title="Has Resume" />
                           )}
                         </div>
-                        {/* Revenue actions */}
-                        {stage.id === 'interview' && (
-                          <Button
-                            size="sm" variant="outline"
-                            className="w-full mt-2 h-7 text-xs text-green-700 border-green-200 hover:bg-green-50"
-                            onClick={() => openOfferDialog(app)}
-                            data-testid={`offer-btn-${app.id}`}
-                          >
-                            <ArrowRight className="w-3 h-3 mr-1" /> Move to Offered
-                          </Button>
-                        )}
-                        {stage.id === 'offered' && (
-                          <div className="mt-2 space-y-1">
-                            {app.offered_ctc && (
-                              <div className="flex items-center gap-1 text-xs text-teal-700 bg-teal-50 rounded px-2 py-1">
-                                <IndianRupee className="w-3 h-3" />
-                                <span>CTC: {(app.offered_ctc / 100000).toFixed(1)}L</span>
-                                {app.forecast_revenue && <span className="ml-auto font-medium">Rev: ₹{Math.round(app.forecast_revenue).toLocaleString('en-IN')}</span>}
-                              </div>
-                            )}
-                            <Button
-                              size="sm" variant="outline"
-                              className="w-full h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                              onClick={() => openHiredDialog(app)}
-                              data-testid={`hired-btn-${app.id}`}
-                            >
-                              <UserCheck className="w-3 h-3 mr-1" /> Move to Hired
-                            </Button>
-                          </div>
-                        )}
-                        {stage.id === 'hired' && (
-                          <div className="mt-2 space-y-1">
-                            {app.offered_ctc && (
-                              <div className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1">
-                                <IndianRupee className="w-3 h-3" />
-                                <span>CTC: {(app.offered_ctc / 100000).toFixed(1)}L</span>
-                                {app.join_date && <span className="ml-auto">DOJ: {new Date(app.join_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>}
-                              </div>
-                            )}
-                            <Button
-                              size="sm" variant="outline"
-                              className="w-full h-7 text-xs text-teal-700 border-teal-200 hover:bg-teal-50"
-                              onClick={() => openJoinDialog(app)}
-                              data-testid={`join-btn-${app.id}`}
-                            >
-                              <Lock className="w-3 h-3 mr-1" /> Move to Joined
-                            </Button>
-                          </div>
-                        )}
-                        {stage.id === 'joined' && app.offered_ctc && (
-                          <div className="mt-2 flex items-center gap-1 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
-                            <Lock className="w-3 h-3" />
-                            <span>CTC: {(app.offered_ctc / 100000).toFixed(1)}L</span>
-                            <span className="ml-auto font-medium">Locked</span>
-                          </div>
-                        )}
-                        {/* Quick-move chips (simple stages only; Offered/Hired/Joined need revenue dialogs) */}
+                        {/* Quick-move chips — every stage, no conditions */}
                         <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-1">
                           {STAGES
-                            .filter((s) => s.id !== stage.id && !['offered','hired','joined'].includes(s.id))
+                            .filter((s) => s.id !== stage.id)
                             .map((s) => (
                               <button
                                 key={s.id}
-                                onClick={async () => {
-                                  try {
-                                    await applicationAPI.update(app.id, { stage: s.id });
-                                    toast.success(`Moved to ${s.label}`);
-                                    loadPipeline();
-                                  } catch (e) { toast.error('Failed to update'); }
-                                }}
+                                onClick={() => moveStage(app, s.id, s.label)}
                                 className="px-1.5 py-0.5 text-[10px] rounded border border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300 transition-colors"
                                 data-testid={`admin-quick-move-${app.id}-${s.id}`}
                                 title={`Move to ${s.label}`}
@@ -703,9 +554,6 @@ export default function AdminPipelinePage() {
       </Card>
 
       <DeleteDialog open={showDeleteDialog} onClose={setShowDeleteDialog} app={applicationToDelete} onConfirm={handleDeleteApplication} />
-      <OfferDialog open={showOfferDialog} onClose={setShowOfferDialog} app={selectedApp} form={offerForm} setForm={setOfferForm} onConfirm={handleProcessOffer} loading={stageLoading} />
-      <HiredDialog open={showHiredDialog} onClose={setShowHiredDialog} app={selectedApp} form={hiredForm} setForm={setHiredForm} onConfirm={handleProcessHired} loading={stageLoading} />
-      <JoinDialog open={showJoinDialog} onClose={setShowJoinDialog} app={selectedApp} form={joinForm} setForm={setJoinForm} onConfirm={handleProcessJoin} loading={stageLoading} />
     </div>
   );
 }

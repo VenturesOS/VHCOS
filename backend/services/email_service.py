@@ -19,12 +19,26 @@ if RESEND_API_KEY and RESEND_API_KEY != 're_placeholder_key':
     resend.api_key = RESEND_API_KEY
 
 
+# The Resend quota is reserved for these three transactional flows only
+# (user decision, Sep 2026). `password_reset` stays on because account
+# recovery would be impossible otherwise. Everything else — digests,
+# weekly reports, blog mails, job-match alerts — is dropped before it
+# reaches Resend.
+ALLOWED_EMAIL_CATEGORIES = {
+    "attendance_reminder",   # daily check-in reminder
+    "attendance_status",     # marked absent / marked late
+    "payment_due",           # payment pending reminder to accounts/admin/employer
+    "password_reset",
+}
+
+
 async def send_email(
     recipient_email: str,
     subject: str,
     html_content: str,
     text_content: Optional[str] = None,
     attachments: Optional[List[Dict]] = None,
+    category: str = "other",
 ) -> Dict:
     """
     Send email asynchronously using Resend API.
@@ -32,7 +46,17 @@ async def send_email(
 
     attachments: list of dicts with keys 'filename' (str) and 'content' (bytes).
                  Content will be base64-encoded before sending to Resend.
+    category:    must be in ALLOWED_EMAIL_CATEGORIES or the mail is dropped.
     """
+    if category not in ALLOWED_EMAIL_CATEGORIES:
+        logger.info(f"[EMAIL] Dropped (category={category}) to {recipient_email}: {subject}")
+        return {
+            "status": "blocked",
+            "message": f"Email category '{category}' is not enabled",
+            "recipient": recipient_email,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
     if not RESEND_API_KEY or RESEND_API_KEY == 're_placeholder_key':
         logger.warning(f"[EMAIL] Resend API key not configured. Would send to: {recipient_email}")
         return {
@@ -95,7 +119,8 @@ async def send_batch_emails(emails: List[Dict]) -> List[Dict]:
             recipient_email=email["recipient_email"],
             subject=email["subject"],
             html_content=email["html_content"],
-            text_content=email.get("text_content")
+            text_content=email.get("text_content"),
+            category=email.get("category", "other"),
         )
         for email in emails
     ]

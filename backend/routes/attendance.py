@@ -362,6 +362,21 @@ async def check_in(req: CheckInRequest, request: Request, user=Depends(require_r
         await db.attendance_records.insert_one(record)
 
     record.pop("_id", None)
+
+    if record["is_late"]:
+        try:
+            from services.attendance_cron_service import notify_attendance_status
+            await notify_attendance_status(
+                user=user,
+                event_type="attendance_late",
+                title="Marked Late",
+                body=(f"Your check-in for {today} was recorded at {now_time} — "
+                      f"{late_minutes} minute(s) after the "
+                      f"{settings.get('work_start_time', '09:00')} start time."),
+            )
+        except Exception as e:
+            logger.warning(f"[Attendance] late notification failed: {e}")
+
     return record
 
 

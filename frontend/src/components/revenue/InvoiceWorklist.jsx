@@ -14,7 +14,7 @@ import {
 } from '../ui/dialog';
 import { Loader2, Download, RotateCcw, Receipt, IndianRupee } from 'lucide-react';
 import { toast } from 'sonner';
-import api, { billsAPI } from '../../lib/api';
+import api, { billsAPI, joiningsAPI } from '../../lib/api';
 import { inr, compactINR, downloadCSV, DataTable } from './RevenueTables';
 import { Checkbox } from '../ui/checkbox';
 import { ConsolidatedInvoiceDialog } from './ConsolidatedInvoiceDialog';
@@ -46,6 +46,9 @@ export function InvoiceWorklist() {
   const [saving, setSaving] = useState(false);
   const [picked, setPicked] = useState({});        // key -> row, for one-invoice-many-candidates
   const [billing, setBilling] = useState(null);
+  const [raiseRow, setRaiseRow] = useState(null);
+  const [raiseForm, setRaiseForm] = useState({ joined_ctc: '', billing_amount: '', designation: '' });
+  const [raising, setRaising] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setQ(search), 350);
@@ -101,6 +104,37 @@ export function InvoiceWorklist() {
       toast.error(e?.response?.data?.detail || e.message || 'Could not save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openRaise = (row) => {
+    setRaiseForm({
+      joined_ctc: row.joined_ctc || '',
+      billing_amount: row.amount || '',
+      designation: row.designation || '',
+    });
+    setRaiseRow(row);
+  };
+
+  const submitRaise = async () => {
+    if (!Number(raiseForm.joined_ctc) || !Number(raiseForm.billing_amount)) {
+      toast.error('Enter both the joining CTC and the billing amount');
+      return;
+    }
+    setRaising(true);
+    try {
+      const { data: res } = await joiningsAPI.raiseInvoice(raiseRow.application_id, {
+        joined_ctc: Number(raiseForm.joined_ctc),
+        billing_amount: Number(raiseForm.billing_amount),
+        designation: raiseForm.designation || undefined,
+      });
+      toast.success(`Invoice ${res.bill_number} created`);
+      setRaiseRow(null);
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Could not raise the invoice');
+    } finally {
+      setRaising(false);
     }
   };
 
@@ -174,8 +208,9 @@ export function InvoiceWorklist() {
       render: (r) => (
         <div className="flex justify-end gap-2 whitespace-nowrap">
           {r.can_raise_invoice && (
-            <Button size="sm" variant="outline" className="h-8" asChild data-testid={`wl-raise-${r.key}`}>
-              <a href="/admin/analytics#joinings">Raise invoice</a>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => openRaise(r)}
+                    data-testid={`wl-raise-${r.key}`}>
+              <Receipt className="w-3 h-3 mr-1" /> Raise invoice
             </Button>
           )}
           {r.can_record_invoice && r.state === 'to_raise' && (
@@ -278,6 +313,47 @@ export function InvoiceWorklist() {
 
       <ConsolidatedInvoiceDialog rows={billing} onClose={() => setBilling(null)}
                                  onDone={() => { setPicked({}); load(); }} />
+
+      <Dialog open={!!raiseRow} onOpenChange={(o) => !o && setRaiseRow(null)}>
+        <DialogContent data-testid="wl-raise-dialog">
+          <DialogHeader>
+            <DialogTitle>Raise invoice — {raiseRow?.candidate_name}</DialogTitle>
+            <DialogDescription className="text-xs">
+              {raiseRow?.client_name || 'client not recorded'} · joined {raiseRow?.date || '—'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-slate-500 mb-1 block">Designation on invoice</Label>
+              <Input value={raiseForm.designation}
+                     onChange={(e) => setRaiseForm({ ...raiseForm, designation: e.target.value })}
+                     data-testid="wl-raise-designation" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-slate-500 mb-1 block">Joining CTC (₹)</Label>
+                <Input type="number" value={raiseForm.joined_ctc}
+                       onChange={(e) => setRaiseForm({ ...raiseForm, joined_ctc: e.target.value })}
+                       data-testid="wl-raise-ctc" />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-500 mb-1 block">Billing amount (₹)</Label>
+                <Input type="number" value={raiseForm.billing_amount}
+                       onChange={(e) => setRaiseForm({ ...raiseForm, billing_amount: e.target.value })}
+                       data-testid="wl-raise-amount" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRaiseRow(null)}>Cancel</Button>
+            <Button onClick={submitRaise} disabled={raising} className="bg-[#7CB342] hover:bg-[#6aa037]"
+                    data-testid="wl-raise-submit">
+              {raising ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Receipt className="w-4 h-4 mr-1" />}
+              Create invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!acting} onOpenChange={(o) => !o && setActing(null)}>
         <DialogContent data-testid="wl-dialog">

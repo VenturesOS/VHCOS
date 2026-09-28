@@ -22,21 +22,32 @@ joinings_router = APIRouter(prefix="/api/joinings", tags=["Joinings"])
 logger = logging.getLogger(__name__)
 
 
+MONEY_ROLES = ("admin", "accounts", "employer")
+# Columns a recruiter is allowed to see on their own joinings — no rupee values.
+RECRUITER_FIELDS = ("key", "join_date", "candidate_name", "client_name", "position")
+
+
 async def _scope(user: dict) -> tuple:
     """(recruiter_ids, team_ids) the caller may see. (None, None) = everything.
 
-    Admin and Accounts see every number; an account manager sees only the
-    teams they run; recruiters never see rupee values at all.
+    Admin and Accounts see everything; an employer sees the teams they run;
+    a recruiter sees only their own joinings (and no rupee values).
     """
     role = user.get("role")
     if role in ("admin", "accounts"):
         return None, None
+    if role == "recruiter":
+        return [user["id"]], None
     if role != "employer":
-        # Recruiters (team leads included) only ever see percentages, so the
-        # rupee-level joining list stays with Admin/Accounts/Employer logins.
-        raise HTTPException(status_code=403, detail="The Joining List is available to Admin, Accounts and Employer logins.")
+        raise HTTPException(status_code=403, detail="The Joining List is not available for this login.")
     teams = await ts.teams_for_employer(db, user["id"])
     return list({uid for t in teams for uid in ts.team_member_ids(t)}), [t["id"] for t in teams]
+
+
+def _require_money_role(user: dict) -> None:
+    if user.get("role") not in MONEY_ROLES:
+        raise HTTPException(status_code=403,
+                            detail="Only Admin, Accounts and the team's Employer can edit a joining.")
 
 
 async def _team_of(recruiter_id: str) -> dict:
@@ -99,21 +110,42 @@ async def list_joinings(
             raise HTTPException(status_code=403, detail="That recruiter is not in your team.")
         recruiter_ids = [employee_id]
         team_ids = None
-    return await unified_joinings(
+    result = await unified_joinings(
         db,
         date_from=date_from, date_to=date_to, company_id=company_id,
         position_q=position_q, location_q=location_q, payment_status=payment_status,
         source=source, q=q, recruiter_ids=recruiter_ids, team_ids=team_ids, limit=limit,
     )
+    if user.get("role") == "recruiter":
+        # A recruiter sees that their candidate joined — DOJ, name, client,
+        # position — and nothing about the money.
+        return {
+            "items": [{k: r.get(k) for k in RECRUITER_FIELDS} for r in result["items"]],
+            "count": result["count"],
+            "truncated": result["truncated"],
+            "restricted": True,
+        }
+    return result
+
+
+@joinings_router.post("/payment-reminders/run")
+async def run_payment_reminders(dry_run: bool = True, user: dict = Depends(get_current_user)):
+    """Fire the payment-due reminder now (step 10). Admin/Accounts only."""
+    if user.get("role") not in ("admin", "accounts"):
+        raise HTTPException(status_code=403, detail="Admin or Accounts only.")
+    from services.payment_due_reminders import run_payment_due_reminders
+    return await run_payment_due_reminders(dry_run=dry_run)
 
 
 class JoiningUpdate(BaseModel):
     joined_ctc: Optional[float] = None
     revenue: Optional[float] = None
     commercial_rate_pct: Optional[float] = None
+    join_date: Optional[str] = None
 
 
 async def _load_scoped_application(application_id: str, user: dict) -> dict:
+    _require_money_role(user)
     app = await db.applications.find_one({"id": application_id}, {"_id": 0})
     if not app:
         raise HTTPException(status_code=404, detail="Joining not found")
@@ -156,13 +188,22 @@ async def _block_if_in_tracker(app: dict) -> None:
 
 @joinings_router.patch("/{application_id}")
 async def update_joining(application_id: str, payload: JoiningUpdate, user: dict = Depends(get_current_user)):
-    """Fill the blanks: joining CTC and the revenue generated. The revenue
-    row carries recruiter + join date so target rollups stay cheap."""
+    """Fill the blanks: joining CTC, the billing amount, and the DOJ. The
+    revenue row carries recruiter + join date so target rollups stay cheap."""
     app = await _load_scoped_application(application_id, user)
     if payload.revenue is not None or payload.commercial_rate_pct is not None:
         await _block_if_in_tracker(app)
     now = datetime.now(timezone.utc).isoformat()
     join_date = await _freeze_join_date(app)
+
+    if payload.join_date:
+        join_date = payload.join_date[:10]
+        await db.applications.update_one(
+            {"id": application_id},
+            {"$set": {"join_date": join_date, "updated_at": now}},
+        )
+        await db.revenue.update_one({"application_id": application_id},
+                                    {"$set": {"join_date": join_date}})
 
     if payload.joined_ctc is not None:
         await db.applications.update_one(
@@ -190,8 +231,9 @@ async def update_joining(application_id: str, payload: JoiningUpdate, user: dict
 
 
 class RaiseInvoiceRequest(BaseModel):
+    """Step 7: joining CTC + billing amount are the only two figures needed."""
     joined_ctc: float
-    commercial_rate_pct: float
+    billing_amount: float
     sender_variant: Optional[str] = None
     designation: Optional[str] = None
     notes: Optional[str] = None
@@ -257,23 +299,28 @@ async def book_joining_revenue(app: dict, bill: dict, line_amount: float, rate: 
 
 @joinings_router.post("/{application_id}/raise-invoice")
 async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user: dict = Depends(get_current_user)):
-    """Create a pre-filled DRAFT bill for Accounts/Admin from a joining.
+    """Create a pre-filled DRAFT bill for Accounts from a joining (step 7).
 
-    CTC and commercial rate are entered by the team leader (user choice
-    2026-09-17) — nothing is guessed. The resulting line amount is booked
-    as that recruiter's revenue for the year.
+    The billing amount typed on the Joining List is the invoice line amount
+    and the revenue booked against that recruiter for the year.
     """
     app, job, join_date = await load_joining_for_invoice(application_id, user)
 
     from routes.bills import build_draft_bill
     from models.bill import BillCreate, BillLineItem
 
+    ctc = float(payload.joined_ctc)
+    amount = float(payload.billing_amount)
+    rate = round(amount / ctc * 100, 2) if ctc else 0.0
+
     line = BillLineItem(
         candidate_name=app.get("candidate_name") or "",
         designation=payload.designation or app.get("job_title") or job.get("title") or "",
         joining_date=join_date,
-        annual_ctc=float(payload.joined_ctc),
-        commercial_rate_pct=float(payload.commercial_rate_pct),
+        annual_ctc=ctc,
+        commercial_rate_pct=rate,
+        line_amount=amount,
+        application_id=application_id,
     )
     bill = await build_draft_bill(
         BillCreate(
@@ -288,8 +335,7 @@ async def raise_invoice(application_id: str, payload: RaiseInvoiceRequest, user:
     bill.pop("_id", None)
 
     line_amount = float(bill["line_items"][0]["line_amount"])
-    await book_joining_revenue(app, bill, line_amount, float(payload.commercial_rate_pct),
-                               float(payload.joined_ctc), join_date, user)
+    await book_joining_revenue(app, bill, line_amount, rate, ctc, join_date, user)
     return {
         "message": "Invoice draft created",
         "bill_id": bill["id"],
