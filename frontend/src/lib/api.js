@@ -217,13 +217,18 @@ export const cvUploadAPI = {
    * Parse a CV and poll until the background task completes.
    * Returns the completed task result or throws on failure.
    */
-  parseAndPoll: async (file, { onProgress, pollInterval = 3000, maxAttempts = 90 } = {}) => {
+  parseAndPoll: async (file, { onProgress, maxWaitMs = 180000 } = {}) => {
     const res = await cvUploadAPI.parse(file);
     const taskId = res.data.task_id;
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise(r => setTimeout(r, pollInterval));
+    const deadline = Date.now() + maxWaitMs;
+    let attempt = 0;
+    // A CV parse lands in ~15s. Poll fast at first so the result appears the
+    // moment it is ready, then ease off instead of waiting a flat 3s a time.
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, attempt < 12 ? 800 : 2500));
+      attempt += 1;
       const status = await cvUploadAPI.getParseStatus(taskId);
-      onProgress?.(status.data);
+      onProgress?.({ ...status.data, attempt });
       if (status.data.status === 'completed') return status.data.result;
       if (status.data.status === 'failed') throw new Error(status.data.error || 'Parsing failed');
     }

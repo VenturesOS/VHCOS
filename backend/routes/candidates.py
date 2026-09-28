@@ -318,7 +318,7 @@ async def batch_save_candidates(
     Uses the same non-destructive merge logic as single CV upload.
     """
     from config import db
-    from routes.extension import normalize_phone, build_team_visibility
+    from services.extension_service import normalize_phone, build_team_visibility
     from routes.cv_upload import _build_cv_document, _merge_cv_into_existing
 
     candidates = data.get("candidates", [])

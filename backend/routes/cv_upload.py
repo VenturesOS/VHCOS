@@ -228,6 +228,7 @@ Resume text:
             system_prompt="You are a precise resume parser. Extract structured candidate data from resumes. Return only valid JSON.",
             user_prompt=prompt,
             temperature=0.1,
+            max_tokens=4000,
             json_mode=True,
         )
         if not ai_result or not ai_result.get("content"):
@@ -382,7 +383,7 @@ async def save_cv_profile(
 
 def _build_cv_document(profile, data, current_user, candidate_id, now):
     """Build a fresh candidate document from a parsed CV (used for new candidates)."""
-    from routes.extension import normalize_phone
+    from services.extension_service import normalize_phone
     import asyncio
 
     name = profile["name"].strip()
@@ -498,7 +499,7 @@ def _merge_cv_into_existing(existing: dict, cv_doc: dict, profile: dict) -> dict
       3. Contact fields: if the CV brings a *different* phone/email, it becomes
          the alternate; the original stays primary.
     """
-    from routes.extension import normalize_phone
+    from services.extension_service import normalize_phone
     update: dict = {}
 
     # ── 1. PROTECTED scalar fields: keep existing if populated ──

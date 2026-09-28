@@ -249,3 +249,22 @@ the regex backfill instead of a billed Anthropic call.
 so the third link in the chain is dead upstream. Super 120B and Ultra 550B both pass live checks
 (a real capture extracted cleanly on Super), so capture is unaffected — but the chain is effectively
 two providers deep until that model id is swapped.
+
+### Manual CV upload fixed + made faster (2026-09-28)
+**Root cause of "Internal server error" on Save to Candidate Bank**: `routes/cv_upload.py` and
+`routes/candidates.py` imported `normalize_phone` (and `build_team_visibility`) from
+`routes.extension`, but the identity-resolution port moved those helpers to
+`services.extension_service` — so every save raised
+`ImportError: cannot import name 'normalize_phone' from 'routes.extension'` after the parse had
+already succeeded. Imports repointed at `services.extension_service` (3 call sites).
+
+**Speed**: the review screen used to appear in ~20s. Two changes took it to ~10s:
+- `cvUploadAPI.parseAndPoll` waited a flat 3s before *and* between every status poll. It now polls
+  at 800 ms for the first 12 tries, then 2.5s, with a 3-minute wall-clock deadline.
+- The CV parse prompt ran with the chain default `max_tokens=16000`; capped at 4000, which cut the
+  LLM leg from 14.7s to 7.0s.
+- The parsing screen now shows a live "Reading the CV… · Ns" counter instead of a bare spinner.
+
+Verified in the browser end to end: mandate → Add Candidate → Upload a CV instead → parse (10.3s) →
+Save to Candidate Bank → "Candidate profile created" + "Added to mandate", zero 4xx/5xx. Test
+candidate and application removed afterwards.

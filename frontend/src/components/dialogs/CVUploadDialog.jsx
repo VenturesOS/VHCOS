@@ -18,6 +18,7 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved, mandate }) 
   const [filename, setFilename] = useState('');
   const [jobs, setJobs] = useState([]);
   const [selectedMandateId, setSelectedMandateId] = useState(mandate?.id || '');
+  const [elapsed, setElapsed] = useState(0);
 
   const reset = useCallback(() => {
     setStep('upload');
@@ -64,7 +65,9 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved, mandate }) 
   const handleParse = async () => {
     if (!file) return;
     setParsing(true);
+    setElapsed(0);
     setStep('parsing');
+    const ticker = setInterval(() => setElapsed((e) => e + 1), 1000);
     try {
       const result = await cvUploadAPI.parseAndPoll(file);
       if (result.success && result.profile_data) {
@@ -79,6 +82,7 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved, mandate }) 
       toast.error(err.message || 'Failed to parse CV');
       setStep('upload');
     } finally {
+      clearInterval(ticker);
       setParsing(false);
     }
   };
@@ -194,10 +198,13 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved, mandate }) 
 
         {/* Step 2: Parsing */}
         {step === 'parsing' && (
-          <div className="flex flex-col items-center justify-center py-12">
+          <div className="flex flex-col items-center justify-center py-12" data-testid="cv-parsing-state">
             <Loader2 className="w-10 h-10 text-[#7CB342] animate-spin mb-4" />
-            <p className="text-slate-600 font-medium">AI is parsing the CV...</p>
-            <p className="text-sm text-slate-400 mt-1">This may take a few seconds</p>
+            <p className="text-slate-600 font-medium">Reading the CV…</p>
+            <p className="text-sm text-slate-400 mt-1">
+              {elapsed < 3 ? 'Extracting the text' : elapsed < 10 ? 'Pulling out skills and work history' : 'Almost there'}
+              {' · '}{elapsed}s
+            </p>
           </div>
         )}
 
