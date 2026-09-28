@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Upload, FileText, Loader2, User, Mail, Phone, Briefcase, MapPin, X, Check, Pencil, Link2 } from 'lucide-react';
 
-export function CVUploadDialog({ open, onOpenChange, onProfileSaved }) {
+export function CVUploadDialog({ open, onOpenChange, onProfileSaved, mandate }) {
   const [step, setStep] = useState('upload'); // upload | parsing | review
   const [file, setFile] = useState(null);
   const [parsing, setParsing] = useState(false);
@@ -17,7 +17,7 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved }) {
   const [profile, setProfile] = useState(null);
   const [filename, setFilename] = useState('');
   const [jobs, setJobs] = useState([]);
-  const [selectedMandateId, setSelectedMandateId] = useState('');
+  const [selectedMandateId, setSelectedMandateId] = useState(mandate?.id || '');
 
   const reset = useCallback(() => {
     setStep('upload');
@@ -26,17 +26,18 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved }) {
     setSaving(false);
     setProfile(null);
     setFilename('');
-    setSelectedMandateId('');
-  }, []);
+    setSelectedMandateId(mandate?.id || '');
+  }, [mandate?.id]);
 
-  // Load active jobs for mandate linking
+  // Load active jobs for mandate linking (skipped when the mandate is fixed)
   useEffect(() => {
-    if (open) {
+    if (open && !mandate?.id) {
       jobAPI.getAll().then(res => {
         setJobs((res.data || []).filter(j => j.status === 'active'));
       }).catch(() => {});
     }
-  }, [open]);
+    if (open && mandate?.id) setSelectedMandateId(mandate.id);
+  }, [open, mandate?.id]);
 
   const handleClose = () => {
     reset();
@@ -109,8 +110,8 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved }) {
         if (selectedMandateId && selectedMandateId !== 'none' && candidateId) {
           try {
             await candidateBankAPI.linkToJob(candidateId, selectedMandateId);
-            const linkedJob = jobs.find(j => j.id === selectedMandateId);
-            toast.success(`Linked to mandate: ${linkedJob?.title || 'Selected job'}`);
+            const linkedJob = mandate?.id === selectedMandateId ? mandate : jobs.find(j => j.id === selectedMandateId);
+            toast.success(`Added to mandate: ${linkedJob?.title || 'Selected job'}`);
           } catch (linkErr) {
             const detail = linkErr.response?.data?.detail;
             if (typeof detail === 'string' && detail.includes('already linked')) {
@@ -339,7 +340,20 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved }) {
               </div>
             )}
 
-            {/* Link to Mandate (Optional) */}
+        {/* Link to Mandate */}
+        {mandate?.id ? (
+              <div className="bg-[#DCFCE7] border border-[#7CB342]/40 rounded-lg p-3" data-testid="cv-locked-mandate">
+                <Label className="text-xs text-[#3f6d1b] flex items-center gap-1 font-medium">
+                  <Link2 className="w-3 h-3" /> Adding to mandate
+                </Label>
+                <p className="text-sm font-medium text-slate-800 mt-1">
+                  {mandate.title}{mandate.company_name ? ` — ${mandate.company_name}` : ''}
+                </p>
+                <p className="text-xs text-[#3f6d1b] mt-1">
+                  Saved to the Candidate Bank and dropped into this mandate's Sourced column.
+                </p>
+              </div>
+            ) : (
             <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
               <Label className="text-xs text-purple-700 flex items-center gap-1 font-medium">
                 <Link2 className="w-3 h-3" /> Link to Mandate (Optional)
@@ -361,6 +375,7 @@ export function CVUploadDialog({ open, onOpenChange, onProfileSaved }) {
                 Candidate will be saved to Candidate Bank and also added as an applicant to the selected mandate.
               </p>
             </div>
+            )}
 
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => { setStep('upload'); setProfile(null); }}>

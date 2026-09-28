@@ -13,8 +13,9 @@ import { toast } from 'sonner';
 import { 
   Users, CheckCircle, Clock, Award, UserCheck, XCircle, Pause, Send,
   Filter, Briefcase, FileText, Mail, Phone, Calendar, Download,
-  ChevronRight, MessageSquare, Star, Building2, Lock
+  ChevronRight, MessageSquare, Star, Building2, Lock, UserPlus
 } from 'lucide-react';
+import { AddCandidateToMandateDialog } from '../../components/dialogs/AddCandidateToMandateDialog';
 
 // Stage configuration — simplified pipeline (no approval barricade)
 // Sourced → Submitted → Shortlisted → Interviewed → Offered → Hired → Joined
@@ -70,6 +71,8 @@ export default function EmployerPipelinePage() {
   const [showDetail, setShowDetail] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+
+  const [showAddCandidate, setShowAddCandidate] = useState(false);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
@@ -174,6 +177,17 @@ export default function EmployerPipelinePage() {
           <p className="text-slate-500 mt-1">
             Drag candidates across stages • {totalApplications} total applications
           </p>
+          <Button
+            size="sm"
+            className="mt-3 bg-[#7CB342] hover:bg-[#689F38] text-white"
+            disabled={selectedJob === 'all'}
+            title={selectedJob === 'all' ? 'Pick a mandate first' : 'Add a candidate to this mandate'}
+            onClick={() => setShowAddCandidate(true)}
+            data-testid="pipeline-add-candidate-btn"
+          >
+            <UserPlus className="w-4 h-4 mr-1.5" />
+            {selectedJob === 'all' ? 'Add Candidate (pick a mandate)' : 'Add Candidate'}
+          </Button>
         </div>
         
         {/* Filters */}
@@ -650,6 +664,13 @@ export default function EmployerPipelinePage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AddCandidateToMandateDialog
+        open={showAddCandidate}
+        onOpenChange={setShowAddCandidate}
+        job={filters.jobs.find((j) => j.id === selectedJob) || null}
+        onCandidateLinked={loadPipeline}
+      />
     </div>
   );
 }

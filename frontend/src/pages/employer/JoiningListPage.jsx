@@ -205,18 +205,37 @@ export default function JoiningListPage() {
                       <th className="text-left px-3 py-2">Candidate</th>
                       <th className="text-left px-3 py-2">Client</th>
                       <th className="text-left px-3 py-2">Client Position</th>
+                      <th className="text-right px-3 py-2"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
+                    {rows.map((row) => {
+                      const d = draft[row.key] || {};
+                      return (
                       <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50/70"
                           data-testid={`joining-row-${row.key}`}>
-                        <td className="px-3 py-2 whitespace-nowrap">{row.join_date || '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {row.editable ? (
+                            <Input className="h-8 w-36" type="date"
+                                   value={d.join_date ?? (row.join_date || '')}
+                                   onChange={(e) => setDraft({ ...draft, [row.key]: { ...d, join_date: e.target.value } })}
+                                   data-testid={`joining-doj-${row.key}`} />
+                          ) : (row.join_date || '—')}
+                        </td>
                         <td className="px-3 py-2 font-medium text-slate-900">{row.candidate_name || '—'}</td>
                         <td className="px-3 py-2">{row.client_name || '—'}</td>
                         <td className="px-3 py-2">{row.position || '—'}</td>
+                        <td className="px-3 py-2 text-right">
+                          {row.editable && d.join_date && d.join_date !== row.join_date && (
+                            <Button size="sm" variant="outline" className="h-8" disabled={saving[row.key]}
+                                    onClick={() => saveRow(row)} data-testid={`joining-save-${row.key}`}>
+                              {saving[row.key] ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save DOJ'}
+                            </Button>
+                          )}
+                        </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -194,3 +194,16 @@ all candidates to Admin + Accounts, team-only to each Employer. Dry run:
 
 `frontend/yarn.lock` is back in sync with `package.json` (`yarn install --frozen-lockfile` passes),
 so the AWS frontend build is unblocked.
+
+### Follow-ups (2026-09-28, same day)
+- **DOJ edit for everyone on the joining**: Accounts, the team's Employer and now the **Recruiter**
+  can correct the date of joining from their own Joining List tab. A recruiter may send only
+  `join_date` (a rupee field returns 403 "Only Admin, Accounts and the team's Employer can edit a
+  joining") and only on their own joining (another recruiter's row returns 403). Tracker-sourced
+  rows stay read-only — those are fixed through Performance Records → Review.
+- **Add a candidate to a mandate by hand**: every pipeline page (Admin / Employer / Recruiter) has an
+  **Add Candidate** button (`pipeline-add-candidate-btn`) that opens the Add-Candidate-to-Mandate
+  dialog for the selected mandate — Sourced captures, system suggestions, or a Candidate Bank search.
+  Inside it, **"Upload a CV instead"** (`open-cv-upload-btn`) parses a PDF/DOCX, saves the profile to
+  the Candidate Bank and drops the candidate into that same mandate's Sourced column; the mandate is
+  shown fixed instead of a dropdown when it is already known.

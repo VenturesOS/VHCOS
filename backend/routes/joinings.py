@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 MONEY_ROLES = ("admin", "accounts", "employer")
 # Columns a recruiter is allowed to see on their own joinings — no rupee values.
-RECRUITER_FIELDS = ("key", "join_date", "candidate_name", "client_name", "position")
+RECRUITER_FIELDS = ("key", "join_date", "candidate_name", "client_name", "position",
+                    "application_id", "editable")
 
 
 async def _scope(user: dict) -> tuple:
@@ -144,8 +145,9 @@ class JoiningUpdate(BaseModel):
     join_date: Optional[str] = None
 
 
-async def _load_scoped_application(application_id: str, user: dict) -> dict:
-    _require_money_role(user)
+async def _load_scoped_application(application_id: str, user: dict, money: bool = True) -> dict:
+    if money:
+        _require_money_role(user)
     app = await db.applications.find_one({"id": application_id}, {"_id": 0})
     if not app:
         raise HTTPException(status_code=404, detail="Joining not found")
@@ -189,8 +191,14 @@ async def _block_if_in_tracker(app: dict) -> None:
 @joinings_router.patch("/{application_id}")
 async def update_joining(application_id: str, payload: JoiningUpdate, user: dict = Depends(get_current_user)):
     """Fill the blanks: joining CTC, the billing amount, and the DOJ. The
-    revenue row carries recruiter + join date so target rollups stay cheap."""
-    app = await _load_scoped_application(application_id, user)
+    revenue row carries recruiter + join date so target rollups stay cheap.
+
+    A recruiter can correct the DOJ of their own joining — that is all; the
+    rupee fields stay with Admin / Accounts / the team's Employer.
+    """
+    touches_money = (payload.joined_ctc is not None or payload.revenue is not None
+                     or payload.commercial_rate_pct is not None)
+    app = await _load_scoped_application(application_id, user, money=touches_money)
     if payload.revenue is not None or payload.commercial_rate_pct is not None:
         await _block_if_in_tracker(app)
     now = datetime.now(timezone.utc).isoformat()

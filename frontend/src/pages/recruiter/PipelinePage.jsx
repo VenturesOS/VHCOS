@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Textarea } from '../../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { ClipboardList, User, Mail, FileText, Plus, MessageSquare } from 'lucide-react';
+import { ClipboardList, User, Mail, FileText, Plus, MessageSquare, UserPlus } from 'lucide-react';
+import { AddCandidateToMandateDialog } from '../../components/dialogs/AddCandidateToMandateDialog';
 
 const STAGES = [
   { id: 'sourced', label: 'Sourced', color: 'border-slate-400 bg-slate-50', desc: 'Added as applicant' },
@@ -41,6 +42,7 @@ export default function PipelinePage() {
   const [draftTo, setDraftTo] = useState(windowTo);
   const [loading, setLoading] = useState(true);
   const [selectedApp, setSelectedApp] = useState(null);
+  const [showAddCandidate, setShowAddCandidate] = useState(false);
   const [noteText, setNoteText] = useState('');
 
   // Keep URL ↔ state in sync so the filter survives refreshes and can be
@@ -164,6 +166,8 @@ export default function PipelinePage() {
     }
   };
 
+  const activeMandate = jobs.find((j) => j.id === selectedJob) || null;
+
   const getApplicationsByStage = (stageId) =>
     applications.filter((app) => app.stage === stageId);
 
@@ -181,6 +185,17 @@ export default function PipelinePage() {
         <div>
           <h1 className="font-heading text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Candidate Pipeline</h1>
           <p className="text-slate-500 mt-1">Drag candidates between stages to update status</p>
+          <Button
+            size="sm"
+            className="mt-3 bg-[#7CB342] hover:bg-[#689F38] text-white"
+            disabled={selectedJob === 'all'}
+            title={selectedJob === 'all' ? 'Pick a mandate first' : 'Add a candidate to this mandate'}
+            onClick={() => setShowAddCandidate(true)}
+            data-testid="pipeline-add-candidate-btn"
+          >
+            <UserPlus className="w-4 h-4 mr-1.5" />
+            {selectedJob === 'all' ? 'Add Candidate (pick a mandate)' : 'Add Candidate'}
+          </Button>
         </div>
         <div className="flex flex-col gap-2 w-full sm:w-auto">
           {/* Date window with Apply button — replaces the old "Activity window"
@@ -580,6 +595,13 @@ export default function PipelinePage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AddCandidateToMandateDialog
+        open={showAddCandidate}
+        onOpenChange={setShowAddCandidate}
+        job={activeMandate}
+        onCandidateLinked={loadApplications}
+      />
     </div>
   );
 }

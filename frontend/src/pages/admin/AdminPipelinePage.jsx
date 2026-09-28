@@ -8,10 +8,11 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
 import { DeleteDialog } from '../../components/admin/pipeline/PipelineDialogs';
+import { AddCandidateToMandateDialog } from '../../components/dialogs/AddCandidateToMandateDialog';
 import { 
   LayoutGrid, Users, CheckCircle, Clock, Award, UserCheck, 
   XCircle, Pause, Filter, Building2, Send,
-  Briefcase, FileText, Trash2, AlertCircle, Lock,
+  Briefcase, FileText, Trash2, AlertCircle, Lock, UserPlus,
   CalendarClock
 } from 'lucide-react';
 
@@ -161,6 +162,8 @@ export default function AdminPipelinePage() {
     if (selectedJob !== 'all') updateSelectedJob('all');
   };
 
+  const [showAddCandidate, setShowAddCandidate] = useState(false);
+
   // Delete application state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [applicationToDelete, setApplicationToDelete] = useState(null);
@@ -252,15 +255,25 @@ export default function AdminPipelinePage() {
               </strong>
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-[#3f6d1b] hover:bg-[#7CB342]/10 h-7"
-            onClick={() => updateSelectedJob('all')}
-            data-testid="pipeline-clear-job-filter-btn"
-          >
-            Show all jobs
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-7 bg-[#7CB342] hover:bg-[#689F38] text-white"
+              onClick={() => setShowAddCandidate(true)}
+              data-testid="pipeline-add-candidate-btn"
+            >
+              <UserPlus className="w-3.5 h-3.5 mr-1" /> Add Candidate
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-[#3f6d1b] hover:bg-[#7CB342]/10 h-7"
+              onClick={() => updateSelectedJob('all')}
+              data-testid="pipeline-clear-job-filter-btn"
+            >
+              Show all jobs
+            </Button>
+          </div>
         </div>
       )}
 
@@ -554,6 +567,13 @@ export default function AdminPipelinePage() {
       </Card>
 
       <DeleteDialog open={showDeleteDialog} onClose={setShowDeleteDialog} app={applicationToDelete} onConfirm={handleDeleteApplication} />
+
+      <AddCandidateToMandateDialog
+        open={showAddCandidate}
+        onOpenChange={setShowAddCandidate}
+        job={filters.jobs.find((j) => j.id === selectedJob) || null}
+        onCandidateLinked={loadPipeline}
+      />
     </div>
   );
 }

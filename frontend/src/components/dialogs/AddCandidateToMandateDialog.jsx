@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { candidateBankAPI, jobAPI } from '../../lib/api';
 import api from '../../lib/api';
 import CandidateProfileDialog from '../shared/CandidateProfileDialog';
+import { CVUploadDialog } from './CVUploadDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,7 +11,7 @@ import { toast } from 'sonner';
 import {
   Search, User, Mail, MapPin, Briefcase, Loader2, Check, UserPlus,
   Target, Sparkles, BookOpen, Phone, Eye,
-  DollarSign, Clock, RefreshCw, Zap, AlertTriangle
+  DollarSign, Clock, RefreshCw, Zap, AlertTriangle, Upload
 } from 'lucide-react';
 
 function scoreColor(s) {
@@ -180,6 +181,7 @@ export function AddCandidateToMandateDialog({ open, onOpenChange, job, onCandida
   const [linking, setLinking] = useState(null);
   const [activeTab, setActiveTab] = useState('sourced');
   const [profileCandidate, setProfileCandidate] = useState(null);
+  const [showUpload, setShowUpload] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
 
   const handleViewProfile = async (candidateId) => {
@@ -454,11 +456,24 @@ export function AddCandidateToMandateDialog({ open, onOpenChange, job, onCandida
             </>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="sm:justify-between">
+            <Button variant="outline" onClick={() => setShowUpload(true)}
+                    data-testid="open-cv-upload-btn">
+              <Upload className="w-4 h-4 mr-2" /> Upload a CV instead
+            </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Manual upload — parses the CV, saves it to the bank and drops the
+          candidate straight into this mandate's Sourced column. */}
+      <CVUploadDialog
+        open={showUpload}
+        onOpenChange={setShowUpload}
+        mandate={job}
+        onProfileSaved={() => { onCandidateLinked?.(); loadSourcedCandidates(); }}
+      />
 
       {/* Full Profile Dialog — opens over the Add Candidate dialog */}
       <CandidateProfileDialog
