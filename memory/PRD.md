@@ -144,3 +144,53 @@ the spec), and unifying Daily Digest points (tracker_events) with the analytics 
 - [Historical archive](CHANGELOG_ARCHIVE_PRE_2026_09_08.md): exact prior 2,053-line PRD retained for older requirements and implementation history. Its RunPod/GPT routing instructions are obsolete.
 - `ATLAS_FLEX_MIGRATION_RUNBOOK.md`: retained, migration paused.
 - `PLATFORM_AUDIT_2026_08.md`, `badge_traceback_diagnostics.md`: earlier audit references.
+## One flow, end to end (2026-09-28) — user-dictated rewrite
+The sourcing → joining → invoice → payment → revenue process is now a single chain. Everything
+that contradicted it was deleted.
+
+1. Mandate is created by Recruiter / Employer / Admin.
+2. The mandate is selected in the Chrome extension.
+3. A captured profile lands in the **Sourced** column of that mandate's pipeline
+   (`pipeline_display_filter()` no longer hides `source=extension_capture`; only a rejection
+   older than 7 days leaves the board).
+4. Stage movement is **unconditional**: Sourced → Submitted → Shortlisted → Interviewed →
+   Offered → Hired → Joined, plus Rejected / On Hold. No CTC, offer amount or revenue is asked
+   for on the board — the Offer/Hired/Join revenue dialogs are gone from the admin pipeline and
+   every stage chip is available on every card.
+5. Moving to **Joined** puts the candidate on the Joining List of the recruiter, the employer of
+   their team, Admin and Accounts. Recruiters have their own list at `/recruiter/joinings`
+   showing DOJ, candidate, client and client position only (`restricted: true`, no rupee values).
+6. Admin / Accounts / the team's Employer fill in Joining CTC + Billing amount and can edit the
+   DOJ (`PATCH /api/joinings/{id}` accepts `joined_ctc`, `revenue`, `join_date`).
+7. **Raise Invoice** on the Joining List: both figures present → the draft goes straight to
+   Accounts; a figure missing → one box asks for CTC + billing amount.
+   `POST /api/joinings/{id}/raise-invoice` now takes `{joined_ctc, billing_amount}` (the
+   commercial-rate input is gone; the rate is derived for the PDF) and stamps `application_id`
+   on the line item so mark-paid clears the revenue row.
+8-13. Accounts sees the draft in Bills & Invoices, sends it, marks payment received, and the
+   amount rolls into company / team / recruiter revenue and targets.
+
+Removed as contradicting process: auto-drafted bills on hired/joined, the employer
+approve/reject gate (`/applications/pending-approval`, `/applications/{id}/employer-approval`
+and their shortlist notification), and the legacy stages — 305 `applied` rows became `sourced`
+and 36 `employer_approved` became `shortlisted` (original value kept in `legacy_stage`).
+
+**Duplicate joinings fixed**: one row per candidate name; the most complete row wins (live client
+first, then money already recorded, then the most recent DOJ). Caused by a candidate left behind
+on a mandate that was later deleted, which showed as a second row with no client or position.
+
+**Recruiter pipeline scope**: a recruiter now sees only their own sourced candidates plus the
+mandates they own/are assigned to, sorted by most recent activity.
+
+**Resend quota is reserved for three flows** (`ALLOWED_EMAIL_CATEGORIES` in
+`services/email_service.py`): attendance reminder, marked absent/late notification, and the
+payment-due reminder. `password_reset` stays on because account recovery needs it, and the
+invoice-to-client mail keeps sending through `services/bill_mailer.py` (step 9 needs it).
+Everything else — weekly recruiter digest, daily/weekly Excel reports, team digest, blog and
+job-match mails — is dropped before it reaches Resend, and those cron jobs were removed.
+New: `services/payment_due_reminders.py` mails the pending-payment list every Monday 10:00 IST —
+all candidates to Admin + Accounts, team-only to each Employer. Dry run:
+`POST /api/joinings/payment-reminders/run?dry_run=true`.
+
+`frontend/yarn.lock` is back in sync with `package.json` (`yarn install --frozen-lockfile` passes),
+so the AWS frontend build is unblocked.
