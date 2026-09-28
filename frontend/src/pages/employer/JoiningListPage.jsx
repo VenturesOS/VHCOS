@@ -85,7 +85,7 @@ export default function JoiningListPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const saveRow = async (row) => {
+  const saveRow = async (row, { silent = false, skipReload = false } = {}) => {
     const d = draft[row.key] || {};
     setSaving((s) => ({ ...s, [row.key]: true }));
     try {
@@ -94,11 +94,11 @@ export default function JoiningListPage() {
         revenue: d.revenue !== undefined && d.revenue !== '' ? Number(d.revenue) : undefined,
         join_date: d.join_date || undefined,
       });
-      toast.success('Saved');
+      if (!silent) toast.success('Saved');
       setDraft((prev) => { const n = { ...prev }; delete n[row.key]; return n; });
-      await load();
+      if (!skipReload) await load();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Could not save');
+      toast.error(`${row.candidate_name || 'Row'}: ${e?.response?.data?.detail || 'could not save'}`);
     } finally {
       setSaving((s) => ({ ...s, [row.key]: false }));
     }
@@ -151,6 +151,25 @@ export default function JoiningListPage() {
   const rows = data?.items || [];
   const totals = data?.totals || {};
   const sources = data?.sources || {};
+
+  // Any row the user has actually changed — drives the sticky save bar.
+  const dirtyRows = rows.filter((r) => {
+    const d = draft[r.key];
+    if (!d) return false;
+    return ['join_date', 'joined_ctc', 'revenue'].some(
+      (f) => d[f] !== undefined && String(d[f]) !== String(r[f] ?? ''),
+    );
+  });
+  const savingAny = Object.values(saving).some(Boolean);
+
+  const saveAll = async () => {
+    for (const row of dirtyRows) {
+      // eslint-disable-next-line no-await-in-loop
+      await saveRow(row, { silent: true, skipReload: true });
+    }
+    toast.success(`Saved ${dirtyRows.length} joining${dirtyRows.length > 1 ? 's' : ''}`);
+    await load();
+  };
 
   const exportCSV = () => downloadCSV(
     `joinings-${filters.date_from}-to-${filters.date_to}.csv`,
@@ -226,8 +245,9 @@ export default function JoiningListPage() {
                         <td className="px-3 py-2">{row.client_name || '—'}</td>
                         <td className="px-3 py-2">{row.position || '—'}</td>
                         <td className="px-3 py-2 text-right">
-                          {row.editable && d.join_date && d.join_date !== row.join_date && (
-                            <Button size="sm" variant="outline" className="h-8" disabled={saving[row.key]}
+                          {row.editable && (
+                            <Button size="sm" variant="outline" className="h-8"
+                                    disabled={saving[row.key] || !d.join_date || d.join_date === row.join_date}
                                     onClick={() => saveRow(row)} data-testid={`joining-save-${row.key}`}>
                               {saving[row.key] ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save DOJ'}
                             </Button>
@@ -426,6 +446,25 @@ export default function JoiningListPage() {
         </CardContent>
       </Card>
       </>
+      )}
+
+      {dirtyRows.length > 0 && (
+        <div className="sticky bottom-4 z-30 flex justify-center" data-testid="joinings-save-bar">
+          <div className="flex items-center gap-4 rounded-full border border-amber-300 bg-amber-50 px-5 py-2.5 shadow-lg">
+            <span className="text-sm text-amber-900">
+              {dirtyRows.length} unsaved change{dirtyRows.length > 1 ? 's' : ''}
+            </span>
+            <Button size="sm" variant="ghost" className="h-8 text-amber-900 hover:bg-amber-100"
+                    onClick={() => setDraft({})} data-testid="joinings-discard-all">
+              Discard
+            </Button>
+            <Button size="sm" className="h-8 bg-[#7CB342] hover:bg-[#6aa037]"
+                    disabled={savingAny} onClick={saveAll} data-testid="joinings-save-all">
+              {savingAny ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Save changes
+            </Button>
+          </div>
+        </div>
       )}
 
       <ResolveRowDialog row={updateRow} onClose={() => setUpdateRow(null)} onSaved={load} />

@@ -841,6 +841,7 @@ async def get_admin_pipeline(
     recruiter_id: Optional[str] = None,
     team_id: Optional[str] = None,
     job_id: Optional[str] = None,
+    q: Optional[str] = None,        # candidate name / email / phone search
     include_filters: bool = True,   # Phase 54.12 — skip if frontend already has them
     per_stage_limit: int = 100,     # Phase 54.16 — cap per-stage rows (kanban perf)
     window: Optional[str] = None,       # v5.5.10 — week/month/quarter/year/all/custom
@@ -882,6 +883,7 @@ async def get_admin_pipeline(
         f"rec={recruiter_id or 'all'}|"
         f"team={team_id or 'all'}|"
         f"job={job_id or 'all'}|"
+        f"q={(q or '').strip().lower()}|"
         f"psl={per_stage_limit}|"
         f"win={window or 'all'}|{window_from or ''}|{window_to or ''}|"
         f"filters={'1' if include_filters else '0'}"
@@ -959,10 +961,12 @@ async def get_admin_pipeline(
     #       on busy organizations while keeping the badge counts correct.
     # Applies pipeline_display_filter() to hide extension-capture clutter and
     # stale rejections (>7 days) per product spec.
-    from services.pipeline_events import pipeline_display_filter
+    from services.pipeline_events import (
+        candidate_search_filter, stage_display_clause, rejected_cutoff,
+    )
 
     psl = max(10, min(per_stage_limit, 500))  # clamp to sensible range
-    pipeline_display = pipeline_display_filter()
+    search_clause = candidate_search_filter(q)
 
     # v5.5.10 — pipeline timeline window. Reuses the same helper as the
     # recruiter pipeline so admin counts tie with what recruiters see.
@@ -980,9 +984,13 @@ async def get_admin_pipeline(
     applications: list = []
     if job_ids:
         # (1) Accurate stage counts across ALL apps (no per-stage cap)
-        base_match: list = [{"job_id": {"$in": job_ids}}, pipeline_display]
+        # No display filter in the match — only rejections age out, and a
+        # `$nor` clause here dropped the index (7s vs 0.4s on a big team).
+        base_match: list = [{"job_id": {"$in": job_ids}}]
         if win_filter:
             base_match.append(win_filter)
+        if search_clause:
+            base_match.append(search_clause)
         async for row in db.applications.aggregate([
             {"$match": {"$and": base_match}},
             {"$group": {"_id": "$stage", "count": {"$sum": 1}}},
@@ -990,7 +998,13 @@ async def get_admin_pipeline(
             raw = row["_id"] or "sourced"
             canon = LEGACY_STAGE_MAP.get(raw, raw)
             stage_counts_raw[canon] = stage_counts_raw.get(canon, 0) + row["count"]
-            total_applications += row["count"]
+        if stage_counts_raw.get("rejected"):
+            stale = await db.applications.count_documents(
+                {"$and": base_match + [{"stage": "rejected"},
+                                        {"updated_at": {"$lt": rejected_cutoff()}}]}
+            )
+            stage_counts_raw["rejected"] = max(0, stage_counts_raw["rejected"] - stale)
+        total_applications = sum(stage_counts_raw.values())
 
         # (2) Per-stage limit: union of `psl` most-recent docs per stage.
         # Issued in parallel via asyncio.gather so wall-clock stays low.
@@ -1000,17 +1014,21 @@ async def get_admin_pipeline(
             stage_match: list = [
                 {"job_id": {"$in": job_ids}},
                 {"stage": stage_name},
-                pipeline_display,
             ]
+            extra = stage_display_clause(stage_name)
+            if extra:
+                stage_match.append(extra)
             if win_filter:
                 stage_match.append(win_filter)
+            if search_clause:
+                stage_match.append(search_clause)
             cursor = db.applications.find(
                 {"$and": stage_match},
                 {"_id": 0},
-            ).sort("created_at", -1).limit(psl)
+            ).sort("updated_at", -1).limit(psl)
             return await cursor.to_list(psl)
 
-        active_stages = list(stage_counts_raw.keys())
+        active_stages = [s for s, n in stage_counts_raw.items() if n]
         fetched = await _aio.gather(*[_fetch_stage(s) for s in active_stages])
         applications = [doc for sub in fetched for doc in sub]
     

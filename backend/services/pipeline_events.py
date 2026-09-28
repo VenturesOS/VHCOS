@@ -4,7 +4,9 @@ Logs all stage transitions for audit, analytics, and tracker sync.
 Every pipeline/tracker action generates an event for the tracker_events collection.
 """
 import uuid
+import re
 import logging
+from typing import Optional
 from datetime import datetime, timezone
 from config import db
 
@@ -47,6 +49,45 @@ def get_stage_index(stage: str) -> int:
         return PIPELINE_STAGES.index(stage)
     except ValueError:
         return -1
+
+
+REJECTED_VISIBLE_DAYS = 7
+
+
+def rejected_cutoff() -> str:
+    """Rejections drop off the board after 7 days (data is kept)."""
+    from datetime import timedelta
+    return (datetime.now(timezone.utc) - timedelta(days=REJECTED_VISIBLE_DAYS)).isoformat()
+
+
+def stage_display_clause(stage: str) -> Optional[dict]:
+    """Extra match clause for a single-stage board query.
+
+    Only rejections age out, so every other stage needs no clause at all —
+    which keeps the query on the `job_id + stage + updated_at` index instead
+    of falling back to a collection scan (a `$nor` filter cost 7s on the
+    employer board; this costs 0.4s).
+    """
+    if stage != "rejected":
+        return None
+    return {"updated_at": {"$gte": rejected_cutoff()}}
+
+
+def candidate_search_filter(q: Optional[str]) -> Optional[dict]:
+    """Name / email / phone match for the pipeline search box.
+
+    Returns None when there is nothing to search, so callers can drop the
+    clause entirely instead of matching everything.
+    """
+    term = (q or "").strip()
+    if len(term) < 2:
+        return None
+    rx = re.escape(term)
+    return {"$or": [
+        {"candidate_name": {"$regex": rx, "$options": "i"}},
+        {"candidate_email": {"$regex": rx, "$options": "i"}},
+        {"candidate_phone": {"$regex": rx, "$options": "i"}},
+    ]}
 
 
 def pipeline_display_filter() -> dict:

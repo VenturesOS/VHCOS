@@ -340,6 +340,8 @@ async def get_employer_companies_with_details(current_user: dict = Depends(requi
 async def get_employer_pipeline(
     recruiter_id: Optional[str] = None,
     job_id: Optional[str] = None,
+    q: Optional[str] = None,
+    per_stage_limit: int = 100,
     current_user: dict = Depends(require_role(["employer", "recruiter"]))
 ):
     """
@@ -375,7 +377,11 @@ async def get_employer_pipeline(
     if job_id:
         job_filter = {"id": job_id, **job_filter}
 
-    jobs = await db.jobs.find(job_filter, {"_id": 0}).to_list(1000)
+    jobs = await db.jobs.find(
+        job_filter,
+        {"_id": 0, "id": 1, "title": 1, "company_name": 1, "posted_by": 1,
+         "assigned_recruiters": 1, "team_id": 1, "company_id": 1},
+    ).to_list(1000)
     job_ids_list = [j["id"] for j in jobs]
     jobs_map = {j["id"]: j for j in jobs}
 
@@ -386,17 +392,50 @@ async def get_employer_pipeline(
         ]
         job_ids_list = [jid for jid in job_ids_list if jid in recruiter_job_ids]
 
-    from services.pipeline_events import pipeline_display_filter
+    from services.pipeline_events import (
+        candidate_search_filter, stage_display_clause, rejected_cutoff,
+    )
+
+    # Counts come from one index-backed aggregation over every application;
+    # only the most recent `per_stage_limit` rows per stage are shipped to the
+    # board. Without this the team's Sourced column (extension captures
+    # included) would be tens of thousands of rows on a single response.
+    psl = max(10, min(per_stage_limit, 500))
+    stage_counts: dict = {}
+    total_applications = 0
+    applications: list = []
     if job_ids_list:
-        applications = await db.applications.find(
-            {"$and": [
-                {"job_id": {"$in": job_ids_list}},
-                pipeline_display_filter(),
-            ]},
-            {"_id": 0}
-        ).to_list(10000)
-    else:
-        applications = []
+        base_match = [{"job_id": {"$in": job_ids_list}}]
+        search_clause = candidate_search_filter(q)
+        if search_clause:
+            base_match.append(search_clause)
+        async for row in db.applications.aggregate([
+            {"$match": {"$and": base_match}},
+            {"$group": {"_id": "$stage", "count": {"$sum": 1}}},
+        ]):
+            stage_counts[row["_id"] or "sourced"] = row["count"]
+        if stage_counts.get("rejected"):
+            stale = await db.applications.count_documents(
+                {"$and": base_match + [{"stage": "rejected"},
+                                        {"updated_at": {"$lt": rejected_cutoff()}}]}
+            )
+            stage_counts["rejected"] = max(0, stage_counts["rejected"] - stale)
+        total_applications = sum(stage_counts.values())
+
+        import asyncio as _aio
+
+        async def _fetch_stage(stage_name: str):
+            match = base_match + [{"stage": stage_name}]
+            extra = stage_display_clause(stage_name)
+            if extra:
+                match.append(extra)
+            return await db.applications.find(
+                {"$and": match}, {"_id": 0}
+            ).sort("updated_at", -1).limit(psl).to_list(psl)
+
+        wanted = [s for s, n in stage_counts.items() if n]
+        fetched = await _aio.gather(*[_fetch_stage(s) for s in wanted])
+        applications = [doc for sub in fetched for doc in sub]
 
     all_stages = ["sourced", "submitted_to_client", "shortlisted", "interview", "offered", "hired", "joined", "rejected", "on_hold"]
 
@@ -461,7 +500,7 @@ async def get_employer_pipeline(
             "headline": app.get("headline") or cb.get("headline"),
         })
 
-    stage_counts = {stage: len(apps) for stage, apps in pipeline_data.items()}
+    stage_counts = {stage: stage_counts.get(stage, 0) for stage in all_stages}
 
     recruiters = []
     if recruiter_ids:
@@ -474,7 +513,7 @@ async def get_employer_pipeline(
     result = {
         "pipeline": pipeline_data,
         "stage_counts": stage_counts,
-        "total_applications": len(applications),
+        "total_applications": total_applications,
         "filters": {
             "recruiters": recruiters,
             "jobs": [{"id": j["id"], "title": j.get("title", "Untitled"), "company_name": j.get("company_name")} for j in jobs]

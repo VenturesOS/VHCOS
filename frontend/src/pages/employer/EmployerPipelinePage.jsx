@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { 
   Users, CheckCircle, Clock, Award, UserCheck, XCircle, Pause, Send,
   Filter, Briefcase, FileText, Mail, Phone, Calendar, Download,
-  ChevronRight, MessageSquare, Star, Building2, Lock, UserPlus
+  ChevronRight, MessageSquare, Star, Building2, Lock, UserPlus, Search, X
 } from 'lucide-react';
 import { AddCandidateToMandateDialog } from '../../components/dialogs/AddCandidateToMandateDialog';
 
@@ -73,11 +73,19 @@ export default function EmployerPipelinePage() {
   const [addingNote, setAddingNote] = useState(false);
 
   const [showAddCandidate, setShowAddCandidate] = useState(false);
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
+      if (q.length >= 2) params.q = q;
       if (selectedRecruiter !== 'all') params.recruiter_id = selectedRecruiter;
       if (selectedJob !== 'all') params.job_id = selectedJob;
       
@@ -91,7 +99,7 @@ export default function EmployerPipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedRecruiter, selectedJob]);
+  }, [selectedRecruiter, selectedJob, q]);
 
   useEffect(() => {
     loadPipeline();
@@ -195,6 +203,23 @@ export default function EmployerPipelinePage() {
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <Filter className="w-4 h-4" />
             <span>Filter:</span>
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search a candidate by name, email or phone"
+              className="w-full rounded border border-slate-200 text-sm pl-8 pr-8 py-2"
+              data-testid="pipeline-search-input"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} data-testid="pipeline-search-clear"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
           
           <Select value={selectedRecruiter} onValueChange={setSelectedRecruiter}>

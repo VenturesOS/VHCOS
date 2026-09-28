@@ -12,7 +12,7 @@ import { AddCandidateToMandateDialog } from '../../components/dialogs/AddCandida
 import { 
   LayoutGrid, Users, CheckCircle, Clock, Award, UserCheck, 
   XCircle, Pause, Filter, Building2, Send,
-  Briefcase, FileText, Trash2, AlertCircle, Lock, UserPlus,
+  Briefcase, FileText, Trash2, AlertCircle, Lock, UserPlus, Search, X,
   CalendarClock
 } from 'lucide-react';
 
@@ -104,6 +104,7 @@ export default function AdminPipelinePage() {
     setLoading(true);
     try {
       const params = { include_filters: false };  // Phase 54.12
+      if (q.length >= 2) params.q = q;
       if (selectedEmployer !== 'all') params.employer_id = selectedEmployer;
       if (selectedRecruiter !== 'all') params.recruiter_id = selectedRecruiter;
       if (selectedJob !== 'all') params.job_id = selectedJob;
@@ -119,7 +120,12 @@ export default function AdminPipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedEmployer, selectedRecruiter, selectedJob, windowFrom, windowTo]);
+  }, [selectedEmployer, selectedRecruiter, selectedJob, windowFrom, windowTo, q]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // Load filters once on mount + whenever employer cascade changes
   useEffect(() => {
@@ -131,6 +137,7 @@ export default function AdminPipelinePage() {
   }, [loadPipeline]);
 
   const clearFilters = () => {
+    setSearch('');
     setSelectedEmployer('all');
     setSelectedRecruiter('all');
     updateSelectedJob('all');
@@ -163,6 +170,8 @@ export default function AdminPipelinePage() {
   };
 
   const [showAddCandidate, setShowAddCandidate] = useState(false);
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
 
   // Delete application state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -283,7 +292,7 @@ export default function AdminPipelinePage() {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-500" />
             <span className="font-medium text-slate-700">Filters</span>
-            {(selectedEmployer !== 'all' || selectedRecruiter !== 'all' || selectedJob !== 'all' || windowFrom || windowTo) && (
+            {(selectedEmployer !== 'all' || selectedRecruiter !== 'all' || selectedJob !== 'all' || windowFrom || windowTo || search) && (
               <button
                 onClick={clearFilters}
                 className="ml-auto text-sm text-[#7CB342] hover:underline"
@@ -295,6 +304,30 @@ export default function AdminPipelinePage() {
           </div>
         </CardHeader>
         <CardContent className="p-4 space-y-4">
+          {/* Candidate search — finds one person anywhere in the pipeline and
+              shows the stage they are sitting in, so they can be moved. */}
+          <div className="space-y-2">
+            <label className="text-sm text-slate-500 flex items-center gap-1">
+              <Search className="w-3 h-3" /> Find a candidate
+            </label>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Name, email or phone"
+                className="w-full rounded border border-slate-200 text-sm pl-8 pr-8 py-2"
+                data-testid="pipeline-search-input"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} data-testid="pipeline-search-clear"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Date window — TOP of the filter panel (fix.docx 2026-09-15).
               User buffers From/To in the two pickers; the fetch only fires
               when they hit Apply, so mistyping a year no longer stalls the

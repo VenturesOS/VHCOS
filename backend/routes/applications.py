@@ -415,6 +415,7 @@ async def get_pipeline_stage_stats(
 async def get_applications(
     job_id: Optional[str] = None,
     stage: Optional[str] = None,
+    q: Optional[str] = Query(None, description="Search candidate name / email / phone"),
     page: int = 1,
     limit: int = 200,
     window: Optional[str] = Query(
@@ -451,6 +452,11 @@ async def get_applications(
             query["job_id"] = job_id
         if stage:
             query["stage"] = stage
+
+        from services.pipeline_events import candidate_search_filter
+        _search = candidate_search_filter(q)
+        if _search:
+            query = {"$and": [query, _search]} if query else _search
 
         # ── Pipeline timeline window: filter to applications that MOVED in the window ──
         win_filter = _build_pipeline_window_filter(window, window_from, window_to)

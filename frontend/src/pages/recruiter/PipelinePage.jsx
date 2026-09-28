@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Textarea } from '../../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { ClipboardList, User, Mail, FileText, Plus, MessageSquare, UserPlus } from 'lucide-react';
+import { ClipboardList, User, Mail, FileText, Plus, MessageSquare, UserPlus, Search, X } from 'lucide-react';
 import { AddCandidateToMandateDialog } from '../../components/dialogs/AddCandidateToMandateDialog';
 
 const STAGES = [
@@ -43,6 +43,8 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true);
   const [selectedApp, setSelectedApp] = useState(null);
   const [showAddCandidate, setShowAddCandidate] = useState(false);
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
   const [noteText, setNoteText] = useState('');
 
   // Keep URL ↔ state in sync so the filter survives refreshes and can be
@@ -72,10 +74,17 @@ export default function PipelinePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debounce the search box so every keystroke doesn't hit the server.
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const loadApplications = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
+      if (q.length >= 2) params.q = q;
       if (selectedJob !== 'all') params.job_id = selectedJob;
       if (windowFrom) params.window_from = windowFrom;
       if (windowTo)   params.window_to   = windowTo;
@@ -86,7 +95,7 @@ export default function PipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedJob, windowFrom, windowTo]);
+  }, [selectedJob, windowFrom, windowTo, q]);
 
   // Push buffered date-picker values into the applied set + URL. Fetch
   // fires via the `loadApplications` dep.
@@ -229,6 +238,22 @@ export default function PipelinePage() {
             >
               Apply
             </Button>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search a candidate by name, email or phone"
+              className="w-full rounded border border-slate-200 text-sm pl-8 pr-8 py-2"
+              data-testid="pipeline-search-input"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} data-testid="pipeline-search-clear"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <Select value={selectedJob} onValueChange={updateSelectedJob}>
             <SelectTrigger className="w-full sm:w-64" data-testid="job-filter-select">
