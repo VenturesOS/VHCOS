@@ -120,11 +120,11 @@ def queue_for_batch(candidate_id: str, candidate_name: str,
 
 def submit_batch():
     """
-    Process all queued candidates using Groq with Emergent LLM fallback.
+    Process all queued candidates through the approved NVIDIA provider chain.
     Processes candidates synchronously (Groq is fast enough).
     """
-    if not GROQ_API_KEY and not EMERGENT_LLM_KEY:
-        logger.warning("[BatchAPI] Neither GROQ_API_KEY nor EMERGENT_LLM_KEY set — skipping batch")
+    if not os.environ.get("NEMOTRON_API_KEY"):
+        logger.warning("[BatchAPI] NEMOTRON_API_KEY not set — skipping batch")
         return None
 
     try:

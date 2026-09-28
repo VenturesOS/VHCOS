@@ -1255,11 +1255,11 @@ async def bulk_re_enrich(
             "candidates_to_process": min(total_matched, limit),
             "total_matched": total_matched,
             "source_breakdown": breakdown,
-            "provider_chain": ["nvidia_nemotron_super_120b", "nvidia_nemotron_550b", "nvidia_mistral_nemotron", "emergent_haiku_4_5"],
+            "provider_chain": ["nvidia_nemotron_super_120b", "nvidia_nemotron_550b", "nvidia_mistral_nemotron"],
             "dry_run": True,
         }
 
-    if not (os.environ.get("NEMOTRON_API_KEY") or os.environ.get("EMERGENT_LLM_KEY")):
+    if not os.environ.get("NEMOTRON_API_KEY"):
         raise HTTPException(503, "No approved LLM provider is configured")
 
     # Fetch candidate list

@@ -83,6 +83,7 @@ async def llm_failure_stats(
     nvidia_ok = sum(r["count"] for r in by_source if r.get("_id") == "nvidia_nemotron_550b")
     gpt_ok = sum(r["count"] for r in by_source if r.get("_id") == "nvidia_nemotron_super_120b")
     mistral_ok = sum(r["count"] for r in by_source if r.get("_id") == "nvidia_mistral_nemotron")
+    # Retired 2026-09-28 — kept only so historical rows still report correctly.
     anthropic_fallback = sum(r["count"] for r in by_source if r.get("_id") in ("emergent_haiku_4_5", "claude_haiku_4_5_emergent"))
     regex_only = sum(r["count"] for r in by_source if r.get("_id") == "regex_only")
 
@@ -125,7 +126,6 @@ async def llm_provider_status(current_user=Depends(get_current_user)):
         {"id": "nemotron_super", "name": "Nemotron Super 120B (primary)", "configured": nvidia and bool(os.environ.get("NVIDIA_FALLBACK_MODEL"))},
         {"id": "nemotron", "name": "NVIDIA Nemotron Ultra 550B", "configured": nvidia and bool(os.environ.get("NEMOTRON_MODEL"))},
         {"id": "mistral_nemotron", "name": "Mistral Nemotron", "configured": nvidia and bool(os.environ.get("NVIDIA_MISTRAL_MODEL"))},
-        {"id": "emergent", "name": "Emergent Claude Haiku 4.5", "configured": bool(os.environ.get("EMERGENT_LLM_KEY"))},
     ]}
 
 

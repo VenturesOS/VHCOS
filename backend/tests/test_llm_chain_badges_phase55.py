@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import pytest
 
 from services.llm_fallback_service import APPROVED_SOURCES, call_llm_chain
-from services.llm_providers import call_nvidia_fallback, call_nvidia_mistral, call_haiku, call_nemotron, ProviderError
+from services.llm_providers import call_nvidia_fallback, call_nvidia_mistral, call_nemotron, ProviderError
 from services.profile_extraction_helpers import _extract_json_from_response
 
 
@@ -56,14 +56,6 @@ def test_live_nemotron_super_adapter_synthetic_json():
     _assert_profile_shape(obj)
 
 
-def test_live_haiku_adapter_synthetic_json():
-    response = asyncio.run(call_haiku(
-        "You are a strict JSON generator.", SYNTHETIC_PROMPT, temperature=0, text_mode=False, max_tokens=250
-    ))
-    obj = _extract_obj(response["content"])
-    _assert_profile_shape(obj)
-
-
 # ── Fallback traversal / quality gates ───────────────────────────────────────
 
 
@@ -89,15 +81,18 @@ def test_fallback_forced_to_ultra_when_super_fails(monkeypatch):
     assert out.get("_fallback_errors") and out["_fallback_errors"][0]["source"] == "nvidia_nemotron_super_120b"
 
 
-def test_fallback_forced_to_haiku_when_nemo_and_fallback_fail(monkeypatch):
+def test_fallback_forced_to_mistral_when_super_and_ultra_fail(monkeypatch):
     from services import llm_fallback_service as lfs
 
     async def _fail(*_, **__):
         raise ProviderError("mock_upstream_failure")
 
+    async def _good_mistral(*_, **__):
+        return {"content": '{"name":"Synthetic Candidate","key_skills":["python","fastapi","mongodb"]}'}
+
     monkeypatch.setattr(lfs, "_call_nemotron", _fail)
     monkeypatch.setattr(lfs, "_call_nvidia_fallback", _fail)
-    monkeypatch.setattr(lfs, "_call_nvidia_mistral", _fail)
+    monkeypatch.setattr(lfs, "_call_nvidia_mistral", _good_mistral)
 
     out = asyncio.run(call_llm_chain(
         "You are a strict JSON generator.",
@@ -108,13 +103,19 @@ def test_fallback_forced_to_haiku_when_nemo_and_fallback_fail(monkeypatch):
         validator=lambda d: bool(d.get("name") and d.get("key_skills")),
     ))
 
-    assert out.get("source") == "emergent_haiku_4_5", out
+    assert out.get("source") == "nvidia_mistral_nemotron", out
     assert out.get("_fallback_chain") == list(APPROVED_SOURCES), out.get("_fallback_chain")
     assert [e["source"] for e in out.get("_fallback_errors", [])] == [
         "nvidia_nemotron_super_120b",
         "nvidia_nemotron_550b",
-        "nvidia_mistral_nemotron",
     ]
+
+
+def test_haiku_backstop_is_gone():
+    """The paid Emergent Haiku fallback was removed on 2026-09-28."""
+    import services.llm_providers as providers
+    assert "emergent_haiku_4_5" not in APPROVED_SOURCES
+    assert not hasattr(providers, "call_haiku")
 
 
 @pytest.mark.parametrize("bad_payload", [None, "", "[]", "123", "{}", '{"x":1}'])
@@ -149,14 +150,13 @@ def test_all_failed_contains_only_approved_chain_and_sanitized_reasons(monkeypat
     monkeypatch.setattr(lfs, "_call_nemotron", _fail_500)
     monkeypatch.setattr(lfs, "_call_nvidia_fallback", _fail_500)
     monkeypatch.setattr(lfs, "_call_nvidia_mistral", _fail_500)
-    monkeypatch.setattr(lfs, "_call_emergent_llm_haiku", _fail_500)
 
     out = asyncio.run(call_llm_chain("sys", "user", json_mode=True))
     assert out["error"] == "All LLM providers failed"
     assert out["source"] == "all_failed"
     assert out["_fallback_chain"] == list(APPROVED_SOURCES)
     reasons = [e["reason"] for e in out["_fallback_errors"]]
-    assert reasons == ["http_500", "http_500", "http_500", "http_500"]
+    assert reasons == ["http_500", "http_500", "http_500"]
     # No retired provider id/reason should appear
     assert all("qwen" not in (r or "").lower() for r in reasons)
 

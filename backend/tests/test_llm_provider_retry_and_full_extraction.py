@@ -185,7 +185,7 @@ def test_extract_full_profile_all_failed_shape_and_event_logged(monkeypatch):
         return {
             "error": "All LLM providers failed",
             "source": "all_failed",
-            "_fallback_chain": ["nvidia_nemotron_super_120b", "nvidia_nemotron_550b", "nvidia_mistral_nemotron", "emergent_haiku_4_5"],
+            "_fallback_chain": ["nvidia_nemotron_super_120b", "nvidia_nemotron_550b", "nvidia_mistral_nemotron"],
             "_fallback_errors": [{"source": "nvidia_nemotron_super_120b", "reason": "http_503"}],
         }
 

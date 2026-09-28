@@ -228,3 +228,24 @@ so the AWS frontend build is unblocked.
   was replaced by `stage_display_clause()` (only rejections age out, so the query keeps the
   `job_id + stage + updated_at` index). 60s timeout → ~4s. The same fix was applied to
   `/admin/pipeline` (count aggregation 7s → 0.4s).
+
+### Emergent Claude Haiku backstop removed (2026-09-28)
+Capture is stable on the NVIDIA chain, so the paid fallback is gone. The extraction chain is now
+**Nemotron Super 120B → Nemotron Ultra 550B → Mistral Nemotron**; a total failure falls through to
+the regex backfill instead of a billed Anthropic call.
+- `services/llm_providers.py` — `call_haiku()` and `HAIKU_MODEL` deleted.
+- `services/llm_fallback_service.py` — `emergent_haiku_4_5` dropped from `APPROVED_SOURCES`.
+- `routes/candidates.py` — advertised `provider_chain` trimmed; the bulk-enrich guard now requires
+  `NEMOTRON_API_KEY` only (it used to accept `EMERGENT_LLM_KEY`).
+- `services/batch_enrichment.py` — batch gate moved from `GROQ_API_KEY`/`EMERGENT_LLM_KEY` to
+  `NEMOTRON_API_KEY`.
+- `routes/admin_monitoring.py` — Emergent removed from `/api/admin/llm/provider-status`; the
+  historical `anthropic_fallback` counter stays so old rows still report.
+- `AIMonitoringPage.jsx` — the Haiku row now reads "retired · N historical".
+- Tests updated; `test_haiku_backstop_is_gone` locks it in.
+`EMERGENT_LLM_KEY` itself is still in use by the matching engine (OpenAI), so the key stays in `.env`.
+
+**Heads-up found while testing**: NVIDIA's `mistral_nemotron` endpoint now answers **HTTP 410 Gone**,
+so the third link in the chain is dead upstream. Super 120B and Ultra 550B both pass live checks
+(a real capture extracted cleanly on Super), so capture is unaffected — but the chain is effectively
+two providers deep until that model id is swapped.

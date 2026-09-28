@@ -166,9 +166,9 @@ export default function AIMonitoringPage() {
               <span className="font-semibold text-slate-700">{stats?.summary?.regex_only_pct || 0}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Emergent Haiku (fallback)</span>
-              <span className={`font-semibold ${stats?.summary?.anthropic_fallback_pct > 10 ? 'text-red-600' : 'text-slate-700'}`}>
-                {stats?.summary?.anthropic_fallback_pct || 0}% ({stats?.summary?.anthropic_fallback_count || 0})
+              <span className="text-slate-600">Emergent Haiku (retired)</span>
+              <span className="font-semibold text-slate-400">
+                {stats?.summary?.anthropic_fallback_count || 0} historical
               </span>
             </div>
             <div className="flex items-center justify-between">
