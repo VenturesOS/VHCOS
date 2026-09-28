@@ -43,6 +43,8 @@ export default function AdminPipelinePage() {
   // Filter state
   const [selectedEmployer, setSelectedEmployer] = useState('all');
   const [selectedRecruiter, setSelectedRecruiter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
   const [selectedJob, setSelectedJob] = useState(searchParams.get('job_id') || 'all');
   // Spec fix.docx (2026-09-15): the legacy "Activity window" preset dropdown
   // (All Time / This Week / …) has been removed. The two date pickers below
@@ -170,8 +172,6 @@ export default function AdminPipelinePage() {
   };
 
   const [showAddCandidate, setShowAddCandidate] = useState(false);
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
 
   // Delete application state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);

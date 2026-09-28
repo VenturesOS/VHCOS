@@ -207,3 +207,24 @@ so the AWS frontend build is unblocked.
   Inside it, **"Upload a CV instead"** (`open-cv-upload-btn`) parses a PDF/DOCX, saves the profile to
   the Candidate Bank and drops the candidate into that same mandate's Sourced column; the mandate is
   shown fixed instead of a dropdown when it is already known.
+
+### Follow-ups (2026-09-28, evening)
+- **Sticky save bar on the Joining List**: with 11 columns the per-row Save sat off-screen to the
+  right, so DOJ/CTC/billing edits looked like they never saved. Editing any cell now raises a
+  sticky bar — "N unsaved changes · Discard · Save changes" (`joinings-save-bar`,
+  `joinings-save-all`, `joinings-discard-all`) — which PATCHes every edited row and reloads once.
+  The per-row Save button stays. Verified: 2 rows edited → 2 PATCHes 200 → bar clears → KPI tiles
+  move (49 awaiting revenue, pending ₹1.92 Cr).
+- **Candidate search in the pipeline** for every role, scoped the same way the board is:
+  Admin searches all, Employer searches their team, Recruiter searches their own. Matches name,
+  email or phone (min 2 chars, 400 ms debounce) and the hits render **in the stage column they are
+  sitting in**, so the card can be moved straight away. New `q` param on
+  `GET /api/admin/pipeline`, `GET /api/employer/pipeline` and `GET /api/applications`
+  (`candidate_search_filter()` in `services/pipeline_events.py`); `pipeline-search-input` /
+  `pipeline-search-clear` test ids.
+- **Employer pipeline performance fix**: with extension captures now on the board, `/employer/pipeline`
+  loaded every application for the team (11.7k rows) and timed out at 60s. It now uses one
+  index-backed count aggregation + the 100 most recent rows per stage, and the `$nor` display filter
+  was replaced by `stage_display_clause()` (only rejections age out, so the query keeps the
+  `job_id + stage + updated_at` index). 60s timeout → ~4s. The same fix was applied to
+  `/admin/pipeline` (count aggregation 7s → 0.4s).
