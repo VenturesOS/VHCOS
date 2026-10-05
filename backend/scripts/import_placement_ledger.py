@@ -9,7 +9,8 @@ Mapping rules confirmed by the client (2026-09-20):
   • Spelling variants are one person (Karambir=Karamvir, Abhey=Abhay, ...).
   • Priyanka (hr64) and Priyanka yadav (hr9) are two different people.
   • People who left keep their revenue inside the team they worked for.
-  • "Ajit / Avinash" is shared credit — split 50-50.
+  • A shared row ("Ajit / Avinash") credits the main recruiter 75% and the
+    support recruiter 25% (client decision, 2026-09-30).
   • Blank recruiter / stray rows sit in the branch total as Unassigned.
 
 Run:  python3 -m scripts.import_placement_ledger /path/to/file.xlsx
@@ -120,6 +121,12 @@ RECRUITER_EMAIL = {
     "krishna": "krishna@vhc.in",
     "madhavi": "hr81@vhc.in",
     "madhavimancharia": "hr81@vhc.in",
+    # Added 2026-09-30 from the final reworked sheet
+    "manorma": "manorma@vhc.in",
+    "abhayyadav": "hr7@vhc.in",
+    "sachinyadav": "hr12@vhc.in",
+    "swastik": None,
+    "nidhi": None,
 }
 
 # Same first name, different person depending on the branch.
@@ -128,8 +135,13 @@ BRANCH_OVERRIDE = {
     ("Bangalore", "navya"): "hr35@vhc.in",   # Navya CN
 }
 
-# Shared credit — revenue and the placement count are split evenly.
-SPLIT = {"ajitavinash": ["ajit@vhc.in", "avinash@vhc.in"]}
+# Shared credit — the recruiter named first owns the placement (75%), the one
+# named second supported it (25%). Revenue and the placement count both split.
+MAIN_SHARE, SUPPORT_SHARE = 0.75, 0.25
+SPLIT = {
+    "ajitavinash": [("ajit@vhc.in", MAIN_SHARE), ("avinash@vhc.in", SUPPORT_SHARE)],
+    "madhurinavya": [("hr58@vhc.in", MAIN_SHARE), ("hr35@vhc.in", SUPPORT_SHARE)],
+}
 
 UNASSIGNED = {"unassignedblankrecruiter", "areasalesmanager"}
 
@@ -200,6 +212,15 @@ async def main(path: str):
     client = AsyncIOMotorClient(os.environ["MONGO_URL"])
     db = client[os.environ["DB_NAME"]]
 
+    # A candidate who already sits in the pipeline as `joined` AND has no
+    # invoice number yet stays platform-owned: Accounts raises that invoice
+    # in-app (user decision, 2026-09-30). Importing them here would make the
+    # row read-only. Anything already invoiced belongs in the ledger.
+    platform_owned = {}
+    async for a in db.applications.find({"stage": "joined"},
+                                        {"_id": 0, "id": 1, "candidate_name": 1}):
+        platform_owned.setdefault(norm(a.get("candidate_name")), a["id"])
+
     users = {}
     async for u in db.users.find({}, {"_id": 0, "id": 1, "name": 1, "email": 1, "is_active": 1}):
         users[str(u.get("email") or "").lower()] = u
@@ -208,6 +229,7 @@ async def main(path: str):
         teams[t["name"]] = t
 
     docs, unknown, years = [], Counter(), Counter()
+    skipped = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         if row[col["S.No"]] is None:
             continue
@@ -219,6 +241,19 @@ async def main(path: str):
         years[doj[:4] or "?"] += 1
         status_raw = str(row[col["Payment Status (Standard)"]] or "").strip()
         status = STATUSES.get(status_raw.lower(), "Other / Review")
+
+        cand = row[col["Candidate Name"]] or ""
+        invoice_no = str(row[col["Invoice No."]] or "").strip()
+        if norm(cand) in platform_owned and not invoice_no and status in ("IP", "PP"):
+            skipped.append({
+                "application_id": platform_owned[norm(cand)],
+                "candidate_name": cand,
+                "branch": branch,
+                "offered_ctc": money(row[col["Offered CTC"]]),
+                "revenue": money(row[col["Revenue (Numeric)"]]),
+                "doj": doj,
+            })
+            continue
 
         base = {
             "s_no": row[col["S.No"]],
@@ -244,8 +279,7 @@ async def main(path: str):
         if key in UNASSIGNED:
             targets = [(None, "Ex-employee / Unassigned", 1.0)]
         elif key in SPLIT:
-            share = 1.0 / len(SPLIT[key])
-            targets = [(e, None, share) for e in SPLIT[key]]
+            targets = [(e, None, share) for e, share in SPLIT[key]]
         else:
             email = BRANCH_OVERRIDE.get((branch, key), RECRUITER_EMAIL.get(key, "__missing__"))
             if email == "__missing__":
@@ -277,6 +311,15 @@ async def main(path: str):
     await db[COLL].create_index([("team_id", 1), ("doj", 1)])
 
     print(f"removed={removed} inserted={len(docs)} placements={sum(d['placement_credit'] for d in docs)}")
+    print(f"left platform-owned (already a joined application): {len(skipped)} rows "
+          f"₹{round(sum(s['revenue'] for s in skipped), 2):,} — "
+          f"their CTC and billing amount are pre-filled on the Joining List instead")
+    for s_row in skipped:
+        await db.applications.update_one(
+            {"id": s_row["application_id"]},
+            {"$set": {"joined_ctc": s_row["offered_ctc"],
+                      "master_sheet_billing": s_row["revenue"]}},
+        )
     print("DOJ years:", dict(years))
     print("gross:", round(sum(d["revenue"] for d in docs), 2))
     if unknown:

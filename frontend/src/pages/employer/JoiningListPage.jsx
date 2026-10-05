@@ -135,7 +135,7 @@ export default function JoiningListPage() {
     setInvoiceFor(row);
     setInvoiceForm({
       joined_ctc: ctc || '',
-      billing_amount: amount || '',
+      billing_amount: amount || row.suggested_billing || '',
       designation: row.position || '',
     });
   };

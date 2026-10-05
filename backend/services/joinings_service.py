@@ -123,6 +123,7 @@ async def unified_joinings(
             "team_id": "",
             "joined_ctc": p.get("joined_ctc") or 0,
             "revenue": p.get("revenue") or 0,
+            "suggested_billing": p.get("suggested_billing") or 0,
             # Platform rows carry their own state: nothing filled in yet →
             # revenue pending; filled but no invoice → IP; invoiced → PP.
             "payment_status": (
@@ -257,6 +258,9 @@ async def fetch_joinings(
             "position": a.get("job_title") or job.get("title") or "",
             "location": cand.get("location") or cand.get("current_location") or job.get("location") or "",
             "joined_ctc": a.get("joined_ctc") or a.get("offered_ctc") or 0,
+            # Carried over from the branch master sheet so Accounts does not
+            # have to retype the billing amount when raising the invoice.
+            "suggested_billing": a.get("master_sheet_billing") or 0,
             "revenue": rev.get("final_revenue"),
             "revenue_status": rev.get("revenue_status") or "",
             "commercial_rate_pct": rev.get("commercial_rate_pct"),

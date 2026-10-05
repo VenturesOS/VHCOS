@@ -268,3 +268,39 @@ already succeeded. Imports repointed at `services.extension_service` (3 call sit
 Verified in the browser end to end: mandate → Add Candidate → Upload a CV instead → parse (10.3s) →
 Save to Candidate Bank → "Candidate profile created" + "Added to mandate", zero 4xx/5xx. Test
 candidate and application removed afterwards.
+
+### Master-sheet reconciliation + 75/25 shared credit (2026-09-30 → 2026-10-05)
+The client sent the reworked tracker in the system format
+(`Reworked_Branch_Recruiter_Revenue_FINAL_SYSTEM_FORMAT.xlsx`, `Sorted Data`, 594 placements,
+gross ₹6.06 Cr, received ₹4.18 Cr). `scripts/import_placement_ledger.py` re-imported it
+(idempotent on `source=excel_tracker_2026_09`).
+
+Result in `placement_ledger`: **587 rows / 584 placement credits / gross ₹5.9654 Cr**. The gap to
+the sheet is exactly the ₹9,81,280 of rows kept platform-owned (below). Branch totals tie out:
+Delhi ₹2.04 Cr, Gurgaon ₹1.87 Cr, Faridabad ₹1.07 Cr, Bangalore ₹88.2 L, Hyderabad ₹10.1 L.
+
+- **Shared credit is now 75 / 25** (`MAIN_SHARE`, `SUPPORT_SHARE`): the recruiter named first on a
+  shared row owns the placement, the second supported it. Applies to revenue *and* the placement
+  count — `Ajit / Avinash` (2 rows) and the new `Madhuri /Navya` (1 row).
+- **New recruiter mappings** from the final sheet: `manorma → manorma@vhc.in`,
+  `abhayyadav → hr7`, `sachinyadav → hr12`; `swastik` and Faridabad `nidhi` have no login so their
+  rows sit in the branch as Unassigned (49 unassigned rows, ₹33.7 L, unchanged policy).
+- **10 rows stay platform-owned** (₹9,81,280): a candidate who is already a `joined` application
+  *and* has no invoice number in the sheet is not imported — a tracker row is read-only and would
+  kill "Raise Invoice". Their Offered CTC is written to the application and the billing amount is
+  carried as `master_sheet_billing`, surfaced on the Joining List as `suggested_billing` and
+  pre-filled into the Raise Invoice box, so Accounts raises those invoices in-app.
+  (Darshan Gondalia, ANAND S, Vinit Shah, Sumitha N, Srinivas P, Shubham Suresh Sorte,
+  Ravindra Navik, Rahul Singh Ruhela, Manish Bhoi + 1.)
+- Backup of the pre-import ledger: `/app/memory/placement_ledger_backup_20260930.json` (528 rows).
+- The earlier interim reconciliation (`scripts/reconcile_master_sheet.py`, source
+  `master_sheet_2026_09_30`) was rolled back — its 35 rows were deleted before this import, and the
+  two renamed duplicates it voided (Saransh, Rahul) are absent from the final sheet anyway. The
+  script is kept for future sheet-vs-ledger diffs (read-only by default).
+
+Live after the import: Joining List 614 joinings (110 in both · 456 tracker · 48 pipeline),
+gross ₹5.90 Cr, received ₹4.08 Cr, pending ₹1.80 Cr, backout/CN ₹2.34 L; bills worklist
+to-raise 90 / pending 99 / received 272; targets and team rollups recomputed off the new ledger.
+
+**Open item**: FY26-27 team targets are still near zero, so the Joining List shows
+"Team achievement 4015.4% (₹5.92 Cr of ₹14.75 L)". The targets need to be set for the year.
