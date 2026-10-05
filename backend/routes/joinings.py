@@ -173,7 +173,7 @@ async def _freeze_join_date(app: dict) -> str:
 async def _block_if_in_tracker(app: dict) -> None:
     """Refuse to book money on a hire the branch tracker already bills."""
     from services import branch_revenue as br
-    row = await br.tracker_row_for_candidate(db, app.get("candidate_name") or "")
+    row = await br.tracker_row_for_candidate(db, app.get("candidate_name") or "", app.get("id"))
     if row:
         looks_like = "" if row.get("match") == "exact" else " (spelled slightly differently)"
         raise HTTPException(

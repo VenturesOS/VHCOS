@@ -168,11 +168,16 @@ def data_quality(rows: List[dict], include_resolved: bool = False) -> List[dict]
     return out
 
 
-async def tracker_row_for_candidate(db, candidate_name: str) -> Optional[dict]:
+async def tracker_row_for_candidate(db, candidate_name: str,
+                                    application_id: Optional[str] = None) -> Optional[dict]:
     """The tracker row for this hire, if the branch sheet already bills them.
 
     Guards the money: a hire that exists in both places must never have
     revenue booked twice (once from the tracker, once from the pipeline).
+
+    A pair already settled as "different people" in Performance Records →
+    Review is skipped — two people can share a name ("Sumitha" and
+    "Sumitha N" are not the same hire).
     """
     from difflib import SequenceMatcher
 
@@ -183,7 +188,10 @@ async def tracker_row_for_candidate(db, candidate_name: str) -> Optional[dict]:
     async for row in db[COLL].find({"void": {"$ne": True}},
                                    {"_id": 0, "id": 1, "candidate_name": 1, "revenue": 1,
                                     "payment_status": 1, "invoice_no": 1, "branch": 1,
-                                    "recruiter_name": 1, "name_aliases": 1}):
+                                    "recruiter_name": 1, "name_aliases": 1,
+                                    "not_duplicate_of": 1}):
+        if application_id and application_id in (row.get("not_duplicate_of") or []):
+            continue
         names = [row.get("candidate_name"), *(row.get("name_aliases") or [])]
         if any(norm_name(n) == needle for n in names):
             return {**row, "match": "exact"}

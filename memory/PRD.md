@@ -304,3 +304,41 @@ to-raise 90 / pending 99 / received 272; targets and team rollups recomputed off
 
 **Open item**: FY26-27 team targets are still near zero, so the Joining List shows
 "Team achievement 4015.4% (₹5.92 Cr of ₹14.75 L)". The targets need to be set for the year.
+
+### Name-ambiguity audit + duplicate-guard fix (2026-10-05)
+Audited all 587 ledger rows for name confusion:
+- **17 names appear more than once**: 3 are 75/25 shared rows (Priyadarshan, Sumitha, Ashish Kumar),
+  3 are the RPO monthly billing names (rohit-rpo, Lokesh Tiwari Rpo, Aniket-rpo — 4 rows each, one
+  per month), and 11 are genuinely different people in different branches/clients (Ankit Kumar,
+  Manish Kumar, Rahul Kumar, Sandeep Kumar, Ayush Sharma, Abhay Yadav, Shubham Gupta,
+  Saurabh Sharma ×3, Puneet Kumar, Vishal). No row is double-counted.
+- **5 near-spelling pairs** the money guard would treat as one person even though they are not:
+  Shubham/Shubam Gupta · Manish/Anish Kumar · Abhishek Rathor/Rathod · Praveen Kumar G/B ·
+  Vishal/Vishva Sharma.
+- **57 rows carry a first name only**; 8 share that first name with a full-name row (Sachin,
+  Gaurav, Ravi ×3 each, Navdeep, Hemant, Ankush). A bare first name cannot be matched to a
+  pipeline candidate at all, so a future in-app invoice for the same person would not be caught.
+- **125 pipeline joinings are matched to a tracker row** (119 exact, 6 fuzzy). Five fuzzy ones are
+  genuine typos of the same hire; **"Sumitha N" (Gurgaon, ₹91,000) vs "Sumitha" (Bangalore,
+  ₹28,875) are two different people** and the guard was blocking her invoice.
+
+**Fix**: `tracker_row_for_candidate()` now takes the application id and skips any ledger row whose
+`not_duplicate_of` already lists it, so Performance Records → Review → *different people* finally
+unblocks invoicing — until now that action only stopped the flagging. Verified on Sumitha N
+(blocked → marked → clear → reverted, so the call stays with the user).
+
+### How a placement's revenue is credited (reference)
+Tracker rows (`scripts/import_placement_ledger.py`):
+1. One sheet row = one placement; `Revenue (Numeric)` is the money.
+2. `Recruiter (Standard)` → a login via `RECRUITER_EMAIL` (+ `BRANCH_OVERRIDE` where a first name
+   means different people in different branches). One name → **100%**.
+3. `A / B` → **main 75% / support 25%** (`MAIN_SHARE`/`SUPPORT_SHARE`), applied to the money *and*
+   the placement count (0.75/0.25), so a shared hire still counts once company-wide.
+4. Blank recruiter or no login → the row stays in the branch total as *Ex-employee / Unassigned*
+   and credits no individual.
+5. Branch → team via `BRANCH_TEAM_NAME`; buckets Payment Received / PP / IP / Backout /
+   Credit Note / Other-Review. Active Revenue = Gross − Backout − Credit Note − Other.
+   Target achievement uses Active Revenue; Realization % = Received / Gross.
+In-app joinings (`book_joining_revenue`): the billing amount typed on the Joining List is booked
+**100% to the recruiter who created the application** (`created_by`). There is no support-recruiter
+field in-app yet — a shared in-app placement has to be split on the tracker side.
