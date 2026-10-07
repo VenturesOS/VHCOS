@@ -9,7 +9,7 @@ Who sees what (user choice 2026-02, tightened):
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from config import db
@@ -103,7 +103,7 @@ async def team_summary(
         "total_target": total_target,
         "total_achieved": total_achieved,
         "achievement_pct": ts.pct(total_achieved, total_target),
-        "total_joinings": sum(r["joinings"] for r in rows),
+        "total_joinings": ts.whole(sum(r["joinings"] for r in rows)),
     }
 
 

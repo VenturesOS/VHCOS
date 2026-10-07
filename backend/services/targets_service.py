@@ -232,8 +232,15 @@ def whole(n: float) -> float:
 async def roster_ids(db) -> set:
     """Every recruiter attributed to a team, across all teams. Used so a
     person counted on their own team is never also counted as
-    'unattributed' on another team's ledger rows."""
-    return {uid for ids in canonical_team_members(await live_teams(db)).values() for uid in ids}
+    'unattributed' on another team's ledger rows.
+
+    Deactivated accounts are dropped: `member_rows` already excludes them,
+    so leaving them in would make their revenue vanish from both the member
+    rows and the ex-member bucket — the employer view read ₹12.05 L short of
+    the admin view until this matched `company_summary`.
+    """
+    ids = {uid for ids in canonical_team_members(await live_teams(db)).values() for uid in ids}
+    return set(await active_users(db, sorted(ids)))
 
 
 async def ex_member_revenue(db, team_id: str, year: int, member_ids: List[str],
