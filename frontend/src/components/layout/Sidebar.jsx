@@ -184,9 +184,9 @@ export const Sidebar = () => {
       {/* Logo */}
       <div className="p-4 lg:p-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <img src={LOGO_URL} alt="Ventures HRD" className="h-10 lg:h-14 w-auto" />
+          <img src={LOGO_URL} alt="Ventures HRD Centre" className="h-10 lg:h-14 w-auto" />
           <div className="flex-1">
-            <h1 className="font-heading font-bold text-base lg:text-lg text-slate-900 dark:text-slate-100">Ventures HRD</h1>
+            <h1 className="font-heading font-bold text-base lg:text-lg text-slate-900 dark:text-slate-100">Ventures HRD Centre</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{user?.role} Portal</p>
           </div>
           <NotificationBell />
