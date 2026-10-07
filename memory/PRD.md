@@ -374,3 +374,38 @@ List and the revenue dashboard; company achieved ₹5,87,29,464 = tracker active
 platform ₹4,84,001; 562 placements; team achievement 74.2% of ₹7.75 Cr.
 **Any apparent mismatch between pages is the date window**: targets/analytics use calendar
 Jan–Dec, the Joining List filter defaults to the same, but an Apr–Mar view will read lower.
+
+### Cross-page number sync, round 2 (2026-10-07)
+Three separate causes were making the same figure read differently page to page.
+
+**1. Employer vs admin company total (74.2% vs 75.8%).** `/api/targets/team-summary`
+(Joining List card, employer My Team) and `/api/targets/company-summary` (admin Teams page)
+bucketed ex-employees differently: `roster_ids()` kept deactivated accounts, so revenue earned by
+someone who has since left was excluded from the member rows *and* from the "people who left /
+unassigned" bucket — ₹12,05,554 vanished from the employer-facing total. `roster_ids()` now filters
+through `active_users`, matching `company_summary`. Both read ₹5,87,29,464 / 75.8% / 569.
+
+**2. Employer "My Analytics" showed ₹0 everywhere.** `/api/analytics/employer` read only
+`db.revenue`, which holds ₹4.84 L — the tracker holds the rest. It now reads the joining list
+(`unified_joinings`) scoped exactly the way the Joining List scopes it per role: one call, grouped
+in Python by team / client / recruiter, so the three tables always add up to the KPI strip.
+A tracker row is attributed to its own team, a platform joining through its recruiter's canonical
+team. Also: an employer with no assigned companies used to short-circuit the whole page to zero —
+only the mandate counters depend on the company list now. KPI cards relabelled to
+**Pending Payment** / **Payment Received** (the Joining List's words) with gross as a sub-line.
+
+**3. Three tracker rows sat on the wrong team.** Madhuri Singh's ₹74,970 and two of Ajit Yadav's
+rows (₹39,149.25) were imported under Bengaluru after the recruiters had moved. Targets attribute
+by recruiter, the Joining List by the row's `team_id`, so the two disagreed by exactly those
+amounts. `scripts/fix_ledger_team_attribution.py` moves a row's `team_id` **and** `branch` to the
+recruiter's canonical team — run it after any team reshuffle; it is idempotent and prints a dry run
+without `--apply`.
+
+**Where the remaining differences are legitimate** (all verified, reconcile still 9/9):
+- Branch revenue dashboard = **tracker only**, ₹5,84,79,113. Platform-booked joinings (₹4,84,001)
+  are not in the sheet.
+- Joining List / My Analytics = **tracker + platform gross**, ₹5,89,63,114, 607 rows.
+- Targets / achievement % = **active revenue** — gross less backout and credit notes
+  (₹2,33,650 this year, all Delhi) = ₹5,87,29,464. A footnote on My Analytics now says so.
+- Targets count placements as **credit** (a 75/25 split counts 0.75 + 0.25), so a team can read
+  145.8 placements against 159 joining rows.

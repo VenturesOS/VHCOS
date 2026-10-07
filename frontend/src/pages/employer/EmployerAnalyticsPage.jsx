@@ -100,9 +100,10 @@ export default function EmployerAnalyticsPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-4 h-4 text-amber-600" />
-              <span className="text-xs text-amber-700">Pipeline Revenue</span>
+              <span className="text-xs text-amber-700">Pending Payment</span>
             </div>
-            <p className="text-2xl font-bold text-amber-700">{formatCurrency(kpis.pipeline_revenue)}</p>
+            <p className="text-2xl font-bold text-amber-700" data-testid="kpi-pending-revenue">{formatCurrency(kpis.pipeline_revenue)}</p>
+            <p className="text-xs text-amber-600/70 mt-1">of {formatCurrency(kpis.gross_revenue)} billed</p>
           </CardContent>
         </Card>
         
@@ -110,9 +111,10 @@ export default function EmployerAnalyticsPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="w-4 h-4 text-green-600" />
-              <span className="text-xs text-green-700">Closed Revenue</span>
+              <span className="text-xs text-green-700">Payment Received</span>
             </div>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(kpis.closed_revenue)}</p>
+            <p className="text-2xl font-bold text-green-700" data-testid="kpi-received-revenue">{formatCurrency(kpis.closed_revenue)}</p>
+            <p className="text-xs text-green-600/70 mt-1">{kpis.joinings || 0} joinings this year</p>
           </CardContent>
         </Card>
         
@@ -154,7 +156,7 @@ export default function EmployerAnalyticsPage() {
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <th className="text-left py-3 px-4 font-medium text-slate-600">Team</th>
                     <th className="text-right py-3 px-4 font-medium text-slate-600">Mandates</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600">Hired</th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-600">Joined</th>
                     <th className="text-right py-3 px-4 font-medium text-slate-600">Revenue</th>
                   </tr>
                 </thead>
@@ -165,17 +167,23 @@ export default function EmployerAnalyticsPage() {
                     </tr>
                   ) : (
                     teamPerformance.map((team, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50"
+                          data-testid={`team-perf-row-${team.team_id}`}>
                         <td className="py-3 px-4 font-medium text-slate-900">{team.team_name}</td>
                         <td className="py-3 px-4 text-right text-slate-600">{team.mandates}</td>
-                        <td className="py-3 px-4 text-right text-green-600">{team.hired}</td>
-                        <td className="py-3 px-4 text-right text-[#7CB342]">{formatCurrency(team.pipeline_revenue + team.closed_revenue)}</td>
+                        <td className="py-3 px-4 text-right text-green-600">{team.joinings}</td>
+                        <td className="py-3 px-4 text-right text-[#7CB342]">{formatCurrency(team.revenue)}</td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
             </div>
+            <p className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100">
+              Revenue is gross billing, the same figure as the Joining List. Targets measure
+              active revenue — gross less backout and credit notes
+              {kpis.revenue_lost ? ` (${formatCurrency(kpis.revenue_lost)} this year)` : ''}.
+            </p>
           </CardContent>
         </Card>
 
@@ -236,7 +244,7 @@ export default function EmployerAnalyticsPage() {
                   <th className="text-left py-3 px-4 font-medium text-slate-600">Recruiter</th>
                   <th className="text-right py-3 px-4 font-medium text-slate-600">Mandates</th>
                   <th className="text-right py-3 px-4 font-medium text-slate-600">Applications</th>
-                  <th className="text-right py-3 px-4 font-medium text-slate-600">Hired</th>
+                  <th className="text-right py-3 px-4 font-medium text-slate-600">Joined</th>
                   <th className="text-right py-3 px-4 font-medium text-slate-600">Revenue</th>
                 </tr>
               </thead>
@@ -247,11 +255,12 @@ export default function EmployerAnalyticsPage() {
                   </tr>
                 ) : (
                   recruiterContribution.map((rec, idx) => (
-                    <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                    <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50"
+                        data-testid={`recruiter-contrib-row-${rec.recruiter_id}`}>
                       <td className="py-3 px-4 font-medium text-slate-900">{rec.recruiter_name}</td>
                       <td className="py-3 px-4 text-right text-slate-600">{rec.mandates}</td>
                       <td className="py-3 px-4 text-right text-slate-600">{rec.applications}</td>
-                      <td className="py-3 px-4 text-right text-green-600">{rec.hired}</td>
+                      <td className="py-3 px-4 text-right text-green-600">{rec.joinings}</td>
                       <td className="py-3 px-4 text-right text-[#7CB342]">{formatCurrency(rec.revenue)}</td>
                     </tr>
                   ))

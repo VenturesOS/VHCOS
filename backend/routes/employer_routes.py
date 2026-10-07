@@ -4,6 +4,7 @@ Employer portal endpoints: My Team, Companies, Pipeline, Analytics, Company Pipe
 Also includes admin-facing employer management: hierarchy, assign-employer, company update.
 """
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -11,9 +12,11 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 
 from config import db
-from models import CompanyResponse, CompanyUpdate
+from models import CompanyResponse
 from models.company import CompanyCreate, CommercialModel
-from utils import get_current_user, require_role
+from services import targets_service as ts
+from services.joinings_service import unified_joinings
+from utils import require_role
 from utils.team_lead import get_effective_employer_id, mask_confidential, is_team_lead
 
 employer_router = APIRouter(prefix="/api", tags=["Employer"])
@@ -525,6 +528,12 @@ async def get_employer_pipeline(
 
 # ============== EMPLOYER ANALYTICS ==============
 
+def _norm(s: str) -> str:
+    """Client names are typed by hand in the tracker and on the company
+    master — match them the same way the revenue reconcile does."""
+    return re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+
+
 @employer_router.get("/analytics/employer")
 async def get_employer_analytics(
     date_from: Optional[str] = None,
@@ -538,24 +547,13 @@ async def get_employer_analytics(
     assigned_companies = await db.companies.find(company_query, {"_id": 0, "id": 1, "name": 1, "commercial": 1}).to_list(1000)
     company_ids = [c["id"] for c in assigned_companies]
 
-    if not company_ids:
-        return {
-            "kpis": {
-                "active_mandates": 0,
-                "pipeline_revenue": 0,
-                "closed_revenue": 0,
-                "offers_pending": 0,
-                "avg_fee_percentage": 0,
-            },
-            "team_performance": [],
-            "company_revenue": [],
-            "recruiter_contribution": [],
-        }
-
+    # No assigned companies used to short-circuit to all-zero. The employer's
+    # teams still carry joinings and revenue, so only the mandate half of the
+    # page depends on the company list.
     jobs = await db.jobs.find(
         {"company_id": {"$in": company_ids}},
         {"_id": 0, "id": 1, "status": 1, "company_id": 1, "team_id": 1, "assigned_recruiter_ids": 1}
-    ).to_list(10000)
+    ).to_list(10000) if company_ids else []
 
     active_jobs_count = sum(1 for j in jobs if j.get("status") == "active")
     job_ids = [j["id"] for j in jobs]
@@ -574,38 +572,77 @@ async def get_employer_analytics(
 
     offers_pending = sum(s.get("offered", 0) for s in app_stats)
 
-    revenue_pipeline = [
-        {"$match": {"company_id": {"$in": company_ids}}},
-        {"$group": {
-            "_id": None,
-            "pipeline_revenue": {"$sum": {"$cond": [{"$eq": ["$is_closed", False]}, "$final_revenue", 0]}},
-            "closed_revenue": {"$sum": {"$cond": [{"$eq": ["$is_closed", True]}, "$final_revenue", 0]}}
-        }}
-    ]
-    revenue_kpis = await db.revenue.aggregate(revenue_pipeline).to_list(1)
-    pipeline_revenue = revenue_kpis[0]["pipeline_revenue"] if revenue_kpis else 0
-    closed_revenue = revenue_kpis[0]["closed_revenue"] if revenue_kpis else 0
+    # Revenue is read from the joining list — the branch tracker plus
+    # platform-booked joinings — so this page, the Joining List and the
+    # targets page always quote the same number. Reading `db.revenue` alone
+    # showed ₹0 here, because the tracker holds nearly all of the money.
+    year = ts.current_year()
+    win_from, win_to = ts.year_bounds(year)
+    win_from, win_to = date_from or win_from, date_to or win_to
 
-    company_revenue_pipeline = [
-        {"$match": {"company_id": {"$in": company_ids}}},
-        {"$group": {
-            "_id": "$company_id",
-            "pipeline": {"$sum": {"$cond": [{"$eq": ["$is_closed", False]}, "$final_revenue", 0]}},
-            "closed": {"$sum": {"$cond": [{"$eq": ["$is_closed", True]}, "$final_revenue", 0]}}
-        }}
-    ]
-    revenue_by_company = await db.revenue.aggregate(company_revenue_pipeline).to_list(100)
-    revenue_map = {r["_id"]: r for r in revenue_by_company}
+    all_teams = await ts.live_teams(db)
+    if current_user["role"] == "employer":
+        teams = await ts.teams_for_employer(db, current_user["id"])
+        scope_teams = [t["id"] for t in teams]
+        scope_recruiters = list({uid for t in teams for uid in ts.team_member_ids(t)})
+    else:
+        teams, scope_teams, scope_recruiters = all_teams, None, None
 
-    revenue_by_job_pipeline = [
-        {"$match": {"job_id": {"$in": job_ids}}},
-        {"$group": {
-            "_id": "$job_id",
-            "total_revenue": {"$sum": "$final_revenue"}
-        }}
-    ]
-    revenue_by_job = await db.revenue.aggregate(revenue_by_job_pipeline).to_list(10000)
-    job_revenue_map = {r["_id"]: r["total_revenue"] for r in revenue_by_job}
+    # ONE scoped read, grouped in Python — the same rows the Joining List
+    # shows this login, so the tables below always add up to the KPI.
+    jl = await unified_joinings(
+        db, date_from=win_from, date_to=win_to,
+        team_ids=scope_teams, recruiter_ids=scope_recruiters, limit=10000,
+    )
+    rows = jl["items"]
+    owner_of = {uid: tid for tid, ids in ts.canonical_team_members(teams).items() for uid in ids}
+    team_names = {t["id"]: t.get("name") or "" for t in teams}
+
+    def bucket() -> dict:
+        return {"joinings": 0, "revenue": 0.0, "pipeline": 0.0, "closed": 0.0}
+
+    def add(acc: dict, row: dict) -> None:
+        rev = float(row["revenue"] or 0)
+        acc["joinings"] += 1
+        acc["revenue"] += rev
+        if row["payment_status"] in ("PP", "IP"):
+            acc["pipeline"] += rev
+        elif row["payment_status"] == "Payment Received":
+            acc["closed"] += rev
+
+    by_team: dict = {}
+    by_client: dict = {}
+    by_recruiter: dict = {}
+    for r in rows:
+        # A tracker row carries its own team; a platform joining is
+        # attributed through the recruiter who owns it.
+        tid = r.get("team_id") or owner_of.get(r.get("recruiter_id") or "") or ""
+        add(by_team.setdefault(tid, bucket()), r)
+        add(by_client.setdefault(_norm(r.get("client_name")), bucket()), r)
+        by_client[_norm(r.get("client_name"))].setdefault("label", r.get("client_name") or "—")
+        add(by_recruiter.setdefault(r.get("recruiter_id") or "", bucket()), r)
+        by_recruiter[r.get("recruiter_id") or ""].setdefault("label", r.get("recruiter_name") or "—")
+
+    totals = jl["totals"]
+    pipeline_revenue, closed_revenue, gross_revenue = (
+        totals["pending"], totals["received"], totals["gross"])
+    team_performance = []
+    for tid in list(team_names) + [t for t in by_team if t not in team_names]:
+        acc = by_team.get(tid) or bucket()
+        team_jobs = [j for j in jobs if j.get("team_id") == tid]
+        if not acc["joinings"] and not team_jobs:
+            continue
+        team_performance.append({
+            "team_id": tid,
+            "team_name": team_names.get(tid) or "Unassigned / left",
+            "mandates": len(team_jobs),
+            "applications": sum(app_stats_map.get(j["id"], {}).get("total", 0) for j in team_jobs),
+            "joinings": acc["joinings"],
+            "revenue": round(acc["revenue"], 2),
+            "pipeline_revenue": round(acc["pipeline"], 2),
+            "closed_revenue": round(acc["closed"], 2),
+        })
+    team_performance.sort(key=lambda t: -t["revenue"])
 
     pct_fees = []
     for co in assigned_companies:
@@ -621,51 +658,35 @@ async def get_employer_analytics(
 
     company_revenue = []
     for company in assigned_companies:
-        cid = company["id"]
-        rev_data = revenue_map.get(cid, {"pipeline": 0, "closed": 0})
+        acc = by_client.pop(_norm(company.get("name")), None) or {}
         company_revenue.append({
-            "company_id": cid,
+            "company_id": company["id"],
             "company_name": company.get("name"),
-            "pipeline": rev_data.get("pipeline", 0),
-            "closed": rev_data.get("closed", 0),
-            "mandates": jobs_by_company.get(cid, 0),
+            "pipeline": round(acc.get("pipeline", 0.0), 2),
+            "closed": round(acc.get("closed", 0.0), 2),
+            "revenue": round(acc.get("revenue", 0.0), 2),
+            "joinings": acc.get("joinings", 0),
+            "mandates": jobs_by_company.get(company["id"], 0),
         })
-
-    team_query = {"employer_id": current_user["id"]} if current_user["role"] == "employer" else {}
-    teams = await db.teams.find(team_query, {"_id": 0, "id": 1, "name": 1}).to_list(100)
-
-    team_performance = []
-    for team in teams:
-        team_jobs = [j for j in jobs if j.get("team_id") == team["id"]]
-        team_job_ids = {j["id"] for j in team_jobs}
-
-        team_apps = sum(app_stats_map.get(jid, {}).get("total", 0) for jid in team_job_ids)
-        team_hired = sum(app_stats_map.get(jid, {}).get("hired", 0) for jid in team_job_ids)
-
-        team_rev_pipeline = [
-            {"$match": {"job_id": {"$in": list(team_job_ids)}}},
-            {"$group": {
-                "_id": None,
-                "pipeline": {"$sum": {"$cond": [{"$eq": ["$is_closed", False]}, "$final_revenue", 0]}},
-                "closed": {"$sum": {"$cond": [{"$eq": ["$is_closed", True]}, "$final_revenue", 0]}}
-            }}
-        ]
-        team_rev_result = await db.revenue.aggregate(team_rev_pipeline).to_list(1) if team_job_ids else []
-
-        team_performance.append({
-            "team_id": team["id"],
-            "team_name": team.get("name"),
-            "mandates": len(team_jobs),
-            "applications": team_apps,
-            "hired": team_hired,
-            "pipeline_revenue": team_rev_result[0]["pipeline"] if team_rev_result else 0,
-            "closed_revenue": team_rev_result[0]["closed"] if team_rev_result else 0,
+    # Clients that carry revenue but aren't on the company master — listed so
+    # the rows still add up to the KPI above.
+    for acc in by_client.values():
+        if not acc["revenue"] and not acc["joinings"]:
+            continue
+        company_revenue.append({
+            "company_id": "", "company_name": acc.get("label") or "—",
+            "pipeline": round(acc["pipeline"], 2), "closed": round(acc["closed"], 2),
+            "revenue": round(acc["revenue"], 2), "joinings": acc["joinings"], "mandates": 0,
         })
+    company_revenue.sort(key=lambda c: (-c["revenue"], -c["mandates"]))
 
     recruiter_ids = set()
     for job in jobs:
         for rec_id in job.get("assigned_recruiter_ids", []):
             recruiter_ids.add(rec_id)
+    # Everyone who carries a joining in the window, even if no live mandate
+    # is assigned to them right now.
+    recruiter_ids |= {rid for rid in by_recruiter if rid}
 
     recruiter_names = {}
     if recruiter_ids:
@@ -679,19 +700,27 @@ async def get_employer_analytics(
     for rec_id in recruiter_ids:
         rec_jobs = [j for j in jobs if rec_id in j.get("assigned_recruiter_ids", [])]
         rec_job_ids = {j["id"] for j in rec_jobs}
-
-        rec_apps = sum(app_stats_map.get(jid, {}).get("total", 0) for jid in rec_job_ids)
-        rec_hired = sum(app_stats_map.get(jid, {}).get("hired", 0) for jid in rec_job_ids)
-        rec_revenue = sum(job_revenue_map.get(jid, 0) for jid in rec_job_ids)
+        acc = by_recruiter.get(rec_id) or {}
 
         recruiter_contribution.append({
             "recruiter_id": rec_id,
-            "recruiter_name": recruiter_names.get(rec_id, "Unknown"),
+            "recruiter_name": recruiter_names.get(rec_id) or acc.get("label") or "Unknown",
             "mandates": len(rec_jobs),
-            "applications": rec_apps,
-            "hired": rec_hired,
-            "revenue": rec_revenue,
+            "applications": sum(app_stats_map.get(jid, {}).get("total", 0) for jid in rec_job_ids),
+            "joinings": acc.get("joinings", 0),
+            "revenue": round(acc.get("revenue", 0.0), 2),
         })
+    # Tracker rows whose recruiter never had a login (ex-employees, blank
+    # names) still carry money — keep them visible instead of silently
+    # dropping the difference.
+    unlinked = by_recruiter.get("")
+    if unlinked and unlinked["revenue"]:
+        recruiter_contribution.append({
+            "recruiter_id": "", "recruiter_name": unlinked.get("label") or "Unassigned / left",
+            "mandates": 0, "applications": 0,
+            "joinings": unlinked["joinings"], "revenue": round(unlinked["revenue"], 2),
+        })
+    recruiter_contribution.sort(key=lambda r: (-r["revenue"], -r["mandates"]))
 
     elapsed = time.time() - start_time
     logger.info(f"[EMPLOYER ANALYTICS] Completed in {elapsed:.2f}s")
@@ -699,6 +728,10 @@ async def get_employer_analytics(
     return {
         "kpis": {
             "active_mandates": active_jobs_count,
+            "joinings": len(rows),
+            "gross_revenue": gross_revenue,
+            "revenue_lost": totals["lost"],
+            "active_revenue": round(gross_revenue - totals["lost"], 2),
             "pipeline_revenue": round(pipeline_revenue, 2),
             "closed_revenue": round(closed_revenue, 2),
             "offers_pending": offers_pending,
