@@ -86,6 +86,13 @@ async def unified_joinings(
             "payment_status": r.get("payment_status") or "",
             "bill_number": r.get("invoice_no") or "",
             "editable": False,
+            "payment_date": r.get("payment_date") or "",
+            "invoice_no": r.get("invoice_no") or "",
+            "s_no": r.get("s_no"),
+            "organization": r.get("organization") or "",
+            "designation": r.get("designation") or "",
+            "doj": r.get("doj") or "",
+            "offered_ctc": r.get("offered_ctc") or 0,
         }
         rows.append(row)
         # Aliases hold spellings an admin has confirmed are the same person

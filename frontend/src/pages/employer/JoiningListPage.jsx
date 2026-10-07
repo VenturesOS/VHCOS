@@ -10,7 +10,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../../components/ui/dialog';
-import { Loader2, RefreshCw, Receipt, Download } from 'lucide-react';
+import { Loader2, RefreshCw, Receipt, Download, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { joiningsAPI, targetsAPI } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -55,6 +55,8 @@ export default function JoiningListPage() {
   const [updateRow, setUpdateRow] = useState(null);
   const [invoiceForm, setInvoiceForm] = useState({ joined_ctc: '', billing_amount: '', designation: '' });
   const [raising, setRaising] = useState(false);
+  const [removing, setRemoving] = useState(null);
+  const canRemove = ['admin', 'accounts', 'employer'].includes(user?.role);
 
   useEffect(() => {
     const t = setTimeout(() => setQ(search), 350);
@@ -169,6 +171,21 @@ export default function JoiningListPage() {
     }
     toast.success(`Saved ${dirtyRows.length} joining${dirtyRows.length > 1 ? 's' : ''}`);
     await load();
+  };
+
+  const removeDuplicate = async () => {
+    const row = removing;
+    try {
+      const { data } = await joiningsAPI.removeDuplicate({
+        ...(row.placement_id ? { placement_id: row.placement_id } : { application_id: row.application_id }),
+        reason: 'Duplicate entry removed from the Joining List',
+      });
+      toast.success(data.message);
+      setRemoving(null);
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Could not remove that row');
+    }
   };
 
   const exportCSV = () => downloadCSV(
@@ -424,13 +441,24 @@ export default function JoiningListPage() {
                                       payment_status: row.payment_status,
                                       invoice_no: row.bill_number,
                                       recruiter_id: row.recruiter_id,
-                                      reasons: ['Recorded in the branch tracker — update the payment as it moves'],
+                                      designation: row.position,
+                                      location: row.location,
+                                      doj: row.join_date,
+                                      offered_ctc: row.joined_ctc,
+                                      payment_date: row.payment_date,
+                                      reasons: ['Recorded in the branch tracker — correct anything here and every total re-flows'],
                                     })}
                                     data-testid={`joining-update-${row.key}`}>
-                              Update
+                              Edit
                             </Button>
-                          ) : (
-                            <span className="text-xs text-slate-400">from tracker</span>
+                          ) : null}
+                          {canRemove && (row.placement_id || row.application_id) && (
+                            <Button size="sm" variant="ghost" title="Remove as a duplicate"
+                                    className="h-8 ml-1 text-red-600 hover:bg-red-50"
+                                    onClick={() => setRemoving(row)}
+                                    data-testid={`joining-remove-${row.key}`}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           )}
                         </td>
                       </tr>
@@ -467,7 +495,31 @@ export default function JoiningListPage() {
         </div>
       )}
 
-      <ResolveRowDialog row={updateRow} onClose={() => setUpdateRow(null)} onSaved={load} />
+      <Dialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
+        <DialogContent data-testid="remove-duplicate-dialog">
+          <DialogHeader>
+            <DialogTitle>Remove {removing?.candidate_name} as a duplicate?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            {removing?.client_name || 'Client not recorded'} · joined {removing?.join_date || '—'} ·{' '}
+            {removing?.revenue ? inr(removing.revenue) : 'no amount booked'}.
+          </p>
+          <p className="text-xs text-slate-500">
+            Nothing is erased — the row is marked void, stays in the audit trail with your name on it,
+            and drops out of the joining list, revenue, targets and bills straight away.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoving(null)}>Keep it</Button>
+            <Button className="bg-red-600 hover:bg-red-700" onClick={removeDuplicate}
+                    data-testid="remove-duplicate-confirm">
+              <Trash2 className="w-4 h-4 mr-1" /> Remove duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ResolveRowDialog row={updateRow} onClose={() => setUpdateRow(null)} onSaved={load}
+                        canEditAll={['admin', 'accounts'].includes(user?.role)} />
 
       <Dialog open={!!invoiceFor} onOpenChange={(o) => !o && setInvoiceFor(null)}>
         <DialogContent data-testid="raise-invoice-dialog">

@@ -611,6 +611,7 @@ export const targetsAPI = {
 
 export const joiningsAPI = {
   list: (params = {}) => api.get('/joinings', { params }),
+  removeDuplicate: (body) => api.post('/joinings/remove-duplicate', body),
   update: (applicationId, data) => api.patch(`/joinings/${applicationId}`, data),
   raiseInvoice: (applicationId, data) => api.post(`/joinings/${applicationId}/raise-invoice`, data),
 };

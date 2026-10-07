@@ -138,6 +138,64 @@ async def run_payment_reminders(dry_run: bool = True, user: dict = Depends(get_c
     return await run_payment_due_reminders(dry_run=dry_run)
 
 
+class RemoveDuplicate(BaseModel):
+    """Drop a duplicate joining so the totals stop counting it twice."""
+    placement_id: Optional[str] = None     # branch tracker row
+    application_id: Optional[str] = None   # platform joining
+    reason: Optional[str] = None
+
+
+@joinings_router.post("/remove-duplicate")
+async def remove_duplicate(payload: RemoveDuplicate, user: dict = Depends(get_current_user)):
+    """Soft-delete a duplicate row. Nothing is erased — the row is marked void
+    (tracker) or removed (pipeline), stays in the audit trail, and drops out of
+    every total. Admin and Accounts can remove any row; an Employer only their
+    own team's.
+    """
+    if user.get("role") not in ("admin", "accounts", "employer"):
+        raise HTTPException(status_code=403, detail="Only Admin, Accounts and the team's Employer can remove a joining.")
+    recruiter_ids, team_ids = await _scope(user)
+    now = datetime.now(timezone.utc).isoformat()
+    stamp = {"at": now, "by": user.get("email") or user.get("id"), "role": user.get("role"),
+             "changes": {"removed": "duplicate"}, "note": payload.reason or ""}
+
+    if payload.placement_id:
+        row = await db.placement_ledger.find_one({"id": payload.placement_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="That tracker row no longer exists.")
+        if team_ids is not None and row.get("team_id") not in team_ids:
+            raise HTTPException(status_code=403, detail="That joining belongs to another team.")
+        await db.placement_ledger.update_one({"id": payload.placement_id}, {
+            "$set": {"void": True, "void_reason": payload.reason or "Duplicate entry",
+                     "voided_by": user.get("email") or user.get("id"), "voided_at": now,
+                     "review_resolved": True},
+            "$push": {"edits": stamp},
+        })
+        return {"message": f"Removed — {row.get('candidate_name')} no longer counts in any total",
+                "removed": "tracker_row", "id": payload.placement_id,
+                "amount": float(row.get("revenue") or 0)}
+
+    if payload.application_id:
+        app = await db.applications.find_one({"id": payload.application_id}, {"_id": 0})
+        if not app:
+            raise HTTPException(status_code=404, detail="That joining no longer exists.")
+        if recruiter_ids is not None and app.get("created_by") not in recruiter_ids:
+            raise HTTPException(status_code=403, detail="That joining belongs to another team.")
+        await db.applications.update_one({"id": payload.application_id}, {"$set": {
+            "stage": "removed", "status": "removed", "removed_at": now,
+            "removed_by": user.get("id"), "removed_by_name": user.get("name"),
+            "removed_reason": payload.reason or "Duplicate joining", "updated_at": now,
+        }})
+        # The booked revenue goes with it, otherwise targets keep the money.
+        rev = await db.revenue.find_one({"application_id": payload.application_id}, {"_id": 0})
+        await db.revenue.delete_many({"application_id": payload.application_id})
+        return {"message": f"Removed — {app.get('candidate_name')} is out of the joining list",
+                "removed": "pipeline_joining", "id": payload.application_id,
+                "amount": float((rev or {}).get("final_revenue") or 0)}
+
+    raise HTTPException(status_code=400, detail="Send either placement_id or application_id.")
+
+
 class JoiningUpdate(BaseModel):
     joined_ctc: Optional[float] = None
     revenue: Optional[float] = None

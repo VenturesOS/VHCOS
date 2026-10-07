@@ -23,10 +23,11 @@ const STATUSES = ['Payment Received', 'PP', 'IP', 'Backout', 'Credit Note', 'Oth
 const UNASSIGNED = '__unassigned__';
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function ResolveRowDialog({ row, onClose, onSaved }) {
+export function ResolveRowDialog({ row, onClose, onSaved, canEditAll = false }) {
   const [people, setPeople] = useState([]);
   const [form, setForm] = useState({
     recruiter_id: '', revenue: '', payment_status: '', invoice_no: '', payment_date: '', note: '',
+    candidate_name: '', organization: '', designation: '', location: '', doj: '', offered_ctc: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -39,6 +40,12 @@ export function ResolveRowDialog({ row, onClose, onSaved }) {
       invoice_no: row.invoice_no || '',
       payment_date: row.payment_status === 'Payment Received' ? (row.payment_date || today()) : '',
       note: '',
+      candidate_name: row.candidate_name || '',
+      organization: row.organization || '',
+      designation: row.designation || '',
+      location: row.location || '',
+      doj: (row.doj || '').slice(0, 10),
+      offered_ctc: row.offered_ctc ?? '',
     });
   }, [row]);
 
@@ -61,6 +68,15 @@ export function ResolveRowDialog({ row, onClose, onSaved }) {
         ...(form.invoice_no !== (row.invoice_no || '') ? { invoice_no: form.invoice_no } : {}),
         ...(form.payment_date ? { payment_date: form.payment_date } : {}),
         ...(form.note ? { note: form.note } : {}),
+        ...(canEditAll ? {
+          ...(form.candidate_name !== (row.candidate_name || '') ? { candidate_name: form.candidate_name } : {}),
+          ...(form.organization !== (row.organization || '') ? { organization: form.organization } : {}),
+          ...(form.designation !== (row.designation || '') ? { designation: form.designation } : {}),
+          ...(form.location !== (row.location || '') ? { location: form.location } : {}),
+          ...(form.doj !== (row.doj || '').slice(0, 10) ? { doj: form.doj } : {}),
+          ...(String(form.offered_ctc) !== String(row.offered_ctc ?? '')
+            ? { offered_ctc: Number(form.offered_ctc || 0) } : {}),
+        } : {}),
       };
       if (!Object.keys(body).length) {
         toast.error('Nothing changed yet');
@@ -84,7 +100,9 @@ export function ResolveRowDialog({ row, onClose, onSaved }) {
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg" data-testid="resolve-row-dialog">
         <DialogHeader>
-          <DialogTitle>Resolve — {row.candidate_name || `row ${row.s_no}`}</DialogTitle>
+          <DialogTitle>
+            {canEditAll ? 'Edit' : 'Resolve'} — {row.candidate_name || `row ${row.s_no}`}
+          </DialogTitle>
           <DialogDescription className="text-xs">
             {row.branch} · {row.organization || 'client not recorded'} · currently {inr(row.revenue)}
             {' '}({row.payment_status || 'no status'})
@@ -96,6 +114,51 @@ export function ResolveRowDialog({ row, onClose, onSaved }) {
         </ul>
 
         <div className="space-y-3">
+          {canEditAll && (
+            <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                Admin / Accounts — the row itself
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-slate-500 mb-1 block">Candidate name</Label>
+                  <Input value={form.candidate_name}
+                         onChange={(e) => setForm({ ...form, candidate_name: e.target.value })}
+                         data-testid="resolve-candidate-name" />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500 mb-1 block">Client</Label>
+                  <Input value={form.organization}
+                         onChange={(e) => setForm({ ...form, organization: e.target.value })}
+                         data-testid="resolve-organization" />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500 mb-1 block">Designation</Label>
+                  <Input value={form.designation}
+                         onChange={(e) => setForm({ ...form, designation: e.target.value })}
+                         data-testid="resolve-designation" />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500 mb-1 block">Location</Label>
+                  <Input value={form.location}
+                         onChange={(e) => setForm({ ...form, location: e.target.value })}
+                         data-testid="resolve-location" />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500 mb-1 block">Date of joining</Label>
+                  <Input type="date" value={form.doj}
+                         onChange={(e) => setForm({ ...form, doj: e.target.value })}
+                         data-testid="resolve-doj" />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500 mb-1 block">Joining CTC (₹)</Label>
+                  <Input type="number" value={form.offered_ctc}
+                         onChange={(e) => setForm({ ...form, offered_ctc: e.target.value })}
+                         data-testid="resolve-ctc" />
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <Label className="text-xs text-slate-500 mb-1 block">Credit this placement to</Label>
             <Select value={form.recruiter_id} onValueChange={(v) => setForm({ ...form, recruiter_id: v })}>

@@ -131,6 +131,13 @@ class PlacementPatch(BaseModel):
     payment_date: Optional[str] = None
     note: Optional[str] = None
     dismiss_review: Optional[bool] = None
+    # Admin / Accounts can correct the row itself, not just the money
+    candidate_name: Optional[str] = None
+    organization: Optional[str] = None
+    designation: Optional[str] = None
+    location: Optional[str] = None
+    doj: Optional[str] = None
+    offered_ctc: Optional[float] = None
 
 
 async def _editable_row(placement_id: str, user: dict) -> dict:
@@ -155,6 +162,29 @@ async def update_placement(placement_id: str, payload: PlacementPatch,
     row = await _editable_row(placement_id, user)
     changes: dict = {}
     set_doc: dict = {}
+
+    # Candidate / client / designation / location / DOJ / CTC are the row
+    # itself rather than the money — Admin and Accounts own those.
+    identity = {
+        "candidate_name": payload.candidate_name,
+        "organization": payload.organization,
+        "designation": payload.designation,
+        "location": payload.location,
+        "doj": payload.doj[:10] if payload.doj else payload.doj,
+        "offered_ctc": None if payload.offered_ctc is None else round(float(payload.offered_ctc), 2),
+    }
+    identity = {k: v for k, v in identity.items() if v is not None}
+    if identity:
+        if user.get("role") not in ("admin", "accounts"):
+            raise HTTPException(status_code=403,
+                                detail="Only Admin and Accounts can correct the candidate, client, designation, DOJ or CTC.")
+        if "candidate_name" in identity and not identity["candidate_name"].strip():
+            raise HTTPException(status_code=400, detail="The candidate name cannot be blank.")
+        for k, v in identity.items():
+            set_doc[k] = v.strip() if isinstance(v, str) else v
+            changes[k] = [row.get(k), set_doc[k]]
+        if "doj" in identity:
+            set_doc["doj_raw"] = set_doc["doj"]
 
     if payload.payment_status is not None:
         if payload.payment_status not in br.BUCKET:

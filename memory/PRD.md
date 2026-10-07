@@ -342,3 +342,35 @@ Tracker rows (`scripts/import_placement_ledger.py`):
 In-app joinings (`book_joining_revenue`): the billing amount typed on the Joining List is booked
 **100% to the recruiter who created the application** (`created_by`). There is no support-recruiter
 field in-app yet — a shared in-app placement has to be split on the tracker side.
+
+### Full edit + duplicate removal + number sync (2026-10-07)
+**Admin / Accounts can now edit everything on a joining.** `PlacementPatch` gained
+`candidate_name`, `organization`, `designation`, `location`, `doj`, `offered_ctc` — gated to
+admin/accounts (an employer still gets recruiter / amount / invoice no / status / payment date on
+their own branch only, and a 403 on the identity fields). The Joining List now shows an **Edit**
+button on every tracker row (it needed `placement_id` on the row, which was missing, so the button
+never appeared), and the row editor opens with an "Admin / Accounts — the row itself" block.
+Every save is stamped into the row's `edits` audit trail.
+
+**Delete a duplicate** — `POST /api/joinings/remove-duplicate` with `placement_id` *or*
+`application_id`. Soft delete only: a tracker row is marked `void`, a platform joining goes to
+`stage/status = removed` and its booked revenue row is deleted so targets release the money.
+Admin and Accounts can remove any row; an Employer only their own team's (403 otherwise);
+a recruiter gets 403. UI: red bin on every row (`joining-remove-<key>`) with a confirm dialog
+(`remove-duplicate-dialog`).
+
+**Numbers now reconcile across every page — all 9 checks in
+`/api/branch-revenue/reconcile` pass.** Two real breaks were found and fixed:
+1. **12 hires were billed twice** (a tracker row *and* a platform revenue booking for the same
+   invoice) — ₹17,02,592 of double-counted revenue. The sheet is the source of truth, so the
+   platform bookings were deleted (the bill documents stay) and the applications carry
+   `revenue_superseded_by_tracker`. Removed rows are backed up in
+   `/app/memory/revenue_double_count_removed_20261005*.json`.
+2. The Joining List gross then matched the tracker exactly.
+
+Verified totals (calendar 2026, the window targets use): tracker gross ₹5,84,79,113 + platform-only
+₹4,84,001 = **Joining List gross ₹5,89,63,114**; received ₹4,14,48,947 identical on the Joining
+List and the revenue dashboard; company achieved ₹5,87,29,464 = tracker active ₹5,82,45,463 +
+platform ₹4,84,001; 562 placements; team achievement 74.2% of ₹7.75 Cr.
+**Any apparent mismatch between pages is the date window**: targets/analytics use calendar
+Jan–Dec, the Joining List filter defaults to the same, but an Apr–Mar view will read lower.
