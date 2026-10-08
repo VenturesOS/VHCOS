@@ -10,9 +10,11 @@ import asyncio
 import os
 import sys
 
+import pathlib
+
 from dotenv import load_dotenv
 
-load_dotenv("/app/backend/.env")
+load_dotenv(pathlib.Path(__file__).resolve().parents[1] / ".env")
 from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
 
 

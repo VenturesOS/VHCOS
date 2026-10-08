@@ -20,9 +20,11 @@ import uuid
 from collections import Counter
 from datetime import datetime, timezone
 
+import pathlib
+
 from dotenv import load_dotenv
 
-load_dotenv("/app/backend/.env")
+load_dotenv(pathlib.Path(__file__).resolve().parents[1] / ".env")
 from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
 
 sys.path.insert(0, "/app/backend")
