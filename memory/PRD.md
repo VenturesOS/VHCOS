@@ -409,3 +409,57 @@ without `--apply`.
   (₹2,33,650 this year, all Delhi) = ₹5,87,29,464. A footnote on My Analytics now says so.
 - Targets count placements as **credit** (a 75/25 split counts 0.75 + 0.25), so a team can read
   145.8 placements against 159 joining rows.
+
+### Extension capture was silently dropping every profile (fixed 2026-10-08)
+**Symptom:** nothing captured after 29 Sept reached the candidate bank. Daily bank inserts fell
+from ~550 to ~15 (only CV uploads and public applications), yet the extension reported success and
+the API logs showed 1,286 accepted captures on 7 Oct alone.
+
+**Root cause:** the 25 Sept identity-resolution port replaced the tail of
+`capture_profile()` in `routes/extension.py`. Where it used to dedup, merge or insert a bank row
+and create the `sourced` application, it now only wrote an `identity_observations` row and returned
+`action="pending_review", candidate_id=None`. A person could only be created by an admin opening
+Identity Review and typing a 10–2000 character reason, one at a time — so every capture from the
+28 Sept deploy onwards parked in that queue. The extension (v7.0.0.1, which only understands
+`created / updated / exists / failed`) showed nothing and its counters never moved.
+
+**Fix:** restored the known-good dedup → auto-merge → insert block, which also creates the
+application on the selected mandate in `sourced`. The observation is still written first, as an
+audit record, inside a 12 s timeout that only logs on failure — it can never again be the only
+write. Verified live: a fresh capture returns `created` with a bank row and a `sourced` pipeline row
+on the chosen mandate; re-capturing the same profile returns `updated` against the same id;
+`/capture/async` returns `auto_merged` for a near-identical profile.
+
+**Backlog recovered:** `scripts/recover_parked_observations.py` replayed all 9,204 parked
+observations oldest-first (the snapshot carries `mandate_id`, so pipeline position survived):
+3,932 new bank rows, 3,023 `sourced` applications, 5,272 matched to a record that already existed
+(phone 3,724 / naukri id 841 / email 677 / employer 30) so no duplicates were created, 4,967 had no
+mandate selected and went to the bank only. Dedup mirrors the live capture path and re-checks the
+bank after every insert. The script is idempotent — safe to re-run; it reports a dry run without
+`--apply`. Daily bank inserts are back to 500-600 extension captures a day.
+
+### Fresh captures: AI enrichment verified (2026-10-08)
+With the capture write path restored, a live capture was run end to end twice and confirmed:
+bank row created → NVIDIA chain enriched it (`nvidia_nemotron_super_120b`) → `sourced` row on the
+selected mandate. The enriched record carried normalised skills, structured experience and
+education, experience years, employer, designation, location and notice period (read from the
+nested `career_preferences` the extension sends), a cleaned summary in place of the raw Naukri page
+text, 12 smart tags, a talent-graph embedding and an auto-generated resume. Re-capture returns
+`updated` on the same id; `/capture/async` returns `auto_merged` for a near-identical profile.
+Stale "Emergent Haiku" labels were removed from the chain log lines — the chain is
+Nemotron Super 120B → Nemotron 550B → Mistral Nemotron.
+
+**Backlog enrichment (running).** The 3,923 recovered rows were replayed from a pre-enrichment
+snapshot, so they hold the scraped structured data but no AI pass.
+`scripts/enrich_unenriched_captures.py` composes the enrichment text from the structured fields
+(the same shape capture uses when the extension sends no raw text), writes it to
+`raw_text_for_enrichment` so the guarded enrichment write matches, then runs the live chain.
+Deliberately held to 3 workers so it does not starve same-day live captures; NIM latency is
+~1-2 min per profile, so the full set takes hours. Idempotent and resumable:
+
+    python3 -m scripts.enrich_unenriched_captures --count
+    python3 -m scripts.enrich_unenriched_captures --apply --recovered-only --workers=3
+    python3 -m scripts.enrich_unenriched_captures --apply --workers=3   # all 13.8k unenriched
+
+Also fixed in this pass: the login, register, forgot-password and reset screens read
+**Ventures HRD Centre**, matching the sidebar.

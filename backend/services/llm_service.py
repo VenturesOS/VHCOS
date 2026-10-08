@@ -1,4 +1,4 @@
-"""Shared completion interface: Nemotron → Nemotron Super 120B → Emergent Haiku."""
+"""Shared completion interface: Nemotron Super 120B → Nemotron 550B → Mistral Nemotron."""
 import asyncio
 import os
 from services.llm_fallback_service import call_llm_chain

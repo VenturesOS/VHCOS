@@ -1,4 +1,4 @@
-"""Provider adapters for Nemotron Ultra → Nemotron Super → Emergent Haiku."""
+"""Provider adapters for Nemotron Super 120B → Nemotron 550B → Mistral Nemotron."""
 import asyncio
 import logging
 import os
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 PROVIDER_TIMEOUT = 90.0
 # Mistral Nemotron on NVIDIA NIM is intermittent: warm calls return in ~1s, cold
 # calls hang. A short budget lets us use it when it is healthy without stalling
-# the chain when it is not — Emergent Haiku takes over immediately after.
+# the chain when it is not — it sits last, so a cold call just ends the chain.
 MISTRAL_TIMEOUT = 15.0
 
 

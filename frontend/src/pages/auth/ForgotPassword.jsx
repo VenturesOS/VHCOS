@@ -165,7 +165,7 @@ function Shell({ children }) {
       <div className="w-full max-w-md animate-fade-in">
         <div className="flex flex-col items-center mb-8">
           <img src={LOGO_URL} alt="Ventures HRD" className="h-16 w-auto mb-4" />
-          <h1 className="font-heading text-2xl font-bold text-slate-900">Ventures HRD</h1>
+          <h1 className="font-heading text-2xl font-bold text-slate-900">Ventures HRD Centre</h1>
         </div>
         {children}
       </div>
