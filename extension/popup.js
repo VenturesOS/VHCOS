@@ -42,15 +42,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
     }
-    // Show active job banner if set
-    const { vhc_active_job } = await chrome.storage.local.get(['vhc_active_job']);
-    if (vhc_active_job?.job_title) {
-      const jobBanner = document.getElementById('activeJobBanner');
-      if (jobBanner) {
-        jobBanner.textContent = `📎 Active job: ${vhc_active_job.job_title}${vhc_active_job.job_code ? ` (${vhc_active_job.job_code})` : ''}`;
-        jobBanner.style.display = 'block';
-      }
-    }
+  } catch (_) {}
+
+  // One version string for the whole popup, straight from the manifest —
+  // the header and footer used to be hardcoded and had drifted apart.
+  try {
+    const v = `v${chrome.runtime.getManifest().version}`;
+    const badge = document.getElementById('versionBadge');
+    const foot = document.getElementById('versionFooter');
+    if (badge) badge.textContent = v;
+    if (foot) foot.textContent = v;
   } catch (_) {}
 
   // ── Tab switching ─────────────────────────────────────────────────────────
@@ -277,16 +278,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (msg.action === 'sessionRefreshed') {
       // Token was silently refreshed — show a subtle indicator
       showQueueToast('🔒 Session renewed');
-    }
-    if (msg.action === 'activeJobUpdated') {
-      const jobBanner = document.getElementById('activeJobBanner');
-      if (!jobBanner) return;
-      if (msg.job?.job_title) {
-        jobBanner.textContent = `📎 Active job: ${msg.job.job_title}${msg.job.job_code ? ` (${msg.job.job_code})` : ''}`;
-        jobBanner.style.display = 'block';
-      } else {
-        jobBanner.style.display = 'none';
-      }
     }
   });
 

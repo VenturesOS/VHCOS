@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ventures HRD</title>
+  <title>Ventures HRD Centre</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -355,10 +355,10 @@
 <body>
   <div class="header">
     <div class="header-left">
-      <h1>Ventures HRD</h1>
+      <h1>Ventures HRD Centre</h1>
       <p>Naukri Auto Capture</p>
     </div>
-    <span class="version-badge">v6.0.1</span>
+    <span class="version-badge" id="versionBadge"></span>
   </div>
 
   <!-- Update-available banner (populated by popup.js when backend reports a newer version) -->
@@ -430,9 +430,6 @@
             </select>
             <div class="mandate-info" id="mandateInfo"></div>
           </div>
-
-          <!-- Active job banner — shown when recruiter has a job open in VHC -->
-          <div id="activeJobBanner" style="display:none;font-size:11px;padding:7px 10px;background:#e8f5e9;border-radius:6px;color:#2e7d32;margin-bottom:10px;border:1px solid #c8e6c9;"></div>
 
           <button id="manualCaptureBtn" class="btn btn-capture" style="width:100%;">
             Capture This Profile
@@ -564,7 +561,7 @@
     </div><!-- end dashboardSection -->
   </div>
 
-  <div class="footer">Powered by <a href="#">Ventures HRD</a> &nbsp;·&nbsp; v5.2.0</div>
+  <div class="footer">Powered by <a href="#">Ventures HRD Centre</a> &nbsp;·&nbsp; <span id="versionFooter"></span></div>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1908,21 +1908,6 @@
    * Set by background.js when a VHC job page is detected.
    * Returns: { job_id, job_title, job_code } or null
    */
-  async function getActiveJob() {
-    if (!isExtensionValid()) return null;
-    try {
-      return await new Promise((resolve, reject) => {
-        chrome.storage.local.get(['vhc_active_job'], (result) => {
-          if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
-          resolve(result.vhc_active_job || null);
-        });
-      });
-    } catch (e) {
-      console.warn(`[VHC v${VERSION}] Could not read active job:`, e);
-      return null;
-    }
-  }
-
   // ===================== LINKEDIN EXTRACTION =====================
 
   /**
@@ -2069,7 +2054,6 @@
     const profileId = extractLinkedInProfileId();
     const rawText = extractLinkedInPageText();
     const contacts = extractLinkedInContacts();
-    const activeJob = await getActiveJob();
     const recruiterCreds = await getRecruiterCredentials();
 
     if (rawText.length < 100) {
@@ -2092,8 +2076,6 @@
       scraped_at:         new Date().toISOString(),
       extension_version:  VERSION,
       source_platform:    'linkedin',
-      active_job_id:      activeJob?.job_id || null,
-      active_job_title:   activeJob?.job_title || null,
     };
 
     try {
@@ -2111,9 +2093,6 @@
       }
 
       updateProgress(100, `${name || 'Profile'} queued (#${result.queued} in queue)`);
-      if (activeJob?.job_title) {
-        setTimeout(() => showToast(`📎 Will auto-shortlist to: ${activeJob.job_title}`, 'info'), 1500);
-      }
       hideProgressBar(3500);
       return { success: true, action: 'queued', name, queued: result.queued };
     } catch (e) {
@@ -2230,7 +2209,6 @@
     const profileId = extractFounditProfileId();
     const rawText = extractFounditPageText();
     const cvUrl = extractFounditCVUrl();
-    const activeJob = await getActiveJob();
     const recruiterCreds = await getRecruiterCredentials();
 
     // Name from title: "CandidateName - Recruiter Profile | Foundit"
@@ -2271,8 +2249,6 @@
       scraped_at:         new Date().toISOString(),
       extension_version:  VERSION,
       source_platform:    'foundit',
-      active_job_id:      activeJob?.job_id || null,
-      active_job_title:   activeJob?.job_title || null,
     };
 
     try {
@@ -2290,9 +2266,6 @@
       }
 
       updateProgress(100, `${titleName || 'Profile'} queued (#${result.queued} in queue)`);
-      if (activeJob?.job_title) {
-        setTimeout(() => showToast(`📎 Will auto-shortlist to: ${activeJob.job_title}`, 'info'), 1500);
-      }
       hideProgressBar(3500);
       return { success: true, action: 'queued', name: titleName, queued: result.queued };
     } catch (e) {
@@ -3581,7 +3554,6 @@
 
     const naukriId = extractNaukriProfileId();
     const cvDownloadUrl = extractNaukriCVUrl();
-    const activeJob = await getActiveJob();
 
     // Build combined text (CV as primary, page text as secondary)
     let combinedText = '';
@@ -3614,8 +3586,6 @@
       scraped_at:           new Date().toISOString(),
       extension_version:    VERSION,
       source_platform:      'naukri',
-      active_job_id:        activeJob?.job_id || null,
-      active_job_title:     activeJob?.job_title || null,
       // ── 3-LAYER DOM fields (Layer 1) ──
       dom_fields:           domFields._dom_scraped ? domFields : null,
     };
@@ -3640,9 +3610,6 @@
       }
 
       updateProgress(100, `${domName || 'Profile'} queued (#${result.queued} in queue)`);
-      if (activeJob?.job_title) {
-        setTimeout(() => showToast(`📎 Will auto-shortlist to: ${activeJob.job_title}`, 'info'), 1500);
-      }
       hideProgressBar(3500);
       return { success: true, action: 'queued', name: domName, queued: result.queued };
 

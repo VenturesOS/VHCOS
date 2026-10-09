@@ -463,3 +463,25 @@ Deliberately held to 3 workers so it does not starve same-day live captures; NIM
 
 Also fixed in this pass: the login, register, forgot-password and reset screens read
 **Ventures HRD Centre**, matching the sidebar.
+
+### Extension: stuck "Active job" banner and auto-shortlist removed (2026-10-09)
+The green `📎 Active job: …` strip and the `Will auto-shortlist to: …` toast came from a second,
+hidden mandate mechanism. `background.js` watched every tab, and opening any VHC job page wrote
+`vhc_active_job` to `chrome.storage.local` — never cleared, so the popup stayed pinned to whatever
+job was last opened even with "No mandate selected" in the dropdown. Each capture then fired
+`/api/extension/shortlist` against it.
+
+Removed: `detectJobFromUrl`, `fetchJobDetails`, the set/clear/get `ActiveJob` message handlers,
+step 6 of the capture pipeline, `shortlistCandidate`, `getActiveJob`, the `active_job_id` payload
+fields, the three content-script toasts and the popup banner. `onStartup` now clears
+`vhc_active_job` so an older build's leftover cannot resurrect the strip. **The dropdown is the only
+thing that steers a capture.**
+
+`POST /api/matching/shortlist` — the extension hover card's "Add to Mandate" and Advanced Search's
+"Add applicant" — was creating applications at `stage="shortlisted"`, jumping two stages. It now
+enters at **sourced** with `source="manual_add"` and a stage_history entry; the hover card says
+"sourced". `/api/extension/shortlist` already wrote `sourced`, so stale installs are safe too.
+
+Also: the popup header read v6.0.1 while the footer read v5.2.0 — both now render
+`chrome.runtime.getManifest().version`. Manifest bumped to **7.1.0**, popup brand reads
+Ventures HRD Centre. Users must reload at `chrome://extensions` to pick up 7.1.0.

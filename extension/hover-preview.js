@@ -310,7 +310,7 @@
     });
     const listEl = card.querySelector('.vhc-hp-mlist');
     if (resp && resp.success) {
-      listEl.innerHTML = `<div class="vhc-hp-mnote vhc-hp-mok">✓ Added to ${esc(title)} — shortlisted</div>`;
+      listEl.innerHTML = `<div class="vhc-hp-mnote vhc-hp-mok">✓ Added to ${esc(title)} — sourced</div>`;
       setTimeout(() => {
         const panel = card.querySelector('.vhc-hp-mpanel');
         if (panel) panel.hidden = true;

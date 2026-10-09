@@ -3301,15 +3301,13 @@ async def extension_shortlist(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Auto-shortlist a captured candidate against the recruiter's active job.
+    Link a captured candidate to a mandate at the `sourced` stage.
 
-    Fired by the Chrome extension's background.js right after a successful
-    capture when `item.active_job_id` is set. Idempotent — a re-hit for the
-    same (candidate, job) pair simply reports `already_shortlisted` instead
-    of erroring.
-
-    Response shape (contract with `background.js.shortlistCandidate`):
-        { action: "shortlisted" | "already_shortlisted", application_id: str }
+    Kept for older extension builds still calling it. Nothing auto-shortlists
+    any more — v7.1 removed the silent "active job" binding, and entry is
+    always `sourced` so every stage move stays a deliberate act.
+    Idempotent: a re-hit for the same (candidate, job) pair reports
+    `already_shortlisted` rather than erroring.
     """
     # Verify both records exist. We use lightweight projections because this
     # is called in the extension's hot path and we don't want to drag full

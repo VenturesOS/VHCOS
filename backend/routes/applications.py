@@ -1781,8 +1781,9 @@ async def shortlist_candidate_from_screening(
     current_user: dict = Depends(require_role(["admin", "employer", "recruiter"]))
 ):
     """
-    Add a candidate from AI screening to a job's pipeline as a shortlisted applicant.
-    Creates an application record with stage='shortlisted' and source='ai_screening'.
+    Add a candidate to a mandate's pipeline. Entry is always at `sourced` —
+    every candidate walks the stages by hand, so nothing may jump straight to
+    shortlisted. (The extension hover card and Advanced Search both land here.)
     """
     # Validate job exists
     job = await db.jobs.find_one({"id": req.job_id}, {"_id": 0})
@@ -1822,11 +1823,13 @@ async def shortlist_candidate_from_screening(
         "company_name": company_name,
         "cover_letter": None,
         "status": "active",
-        "stage": "shortlisted",
-        "source": "ai_screening",
-        "shortlisted_by": current_user["id"],
-        "shortlisted_by_name": current_user.get("name", ""),
-        "shortlisted_by_role": current_user["role"],
+        "stage": "sourced",
+        "source": "manual_add",
+        "added_by": current_user["id"],
+        "added_by_name": current_user.get("name", ""),
+        "added_by_role": current_user["role"],
+        "stage_history": [{"stage": "sourced", "moved_by": current_user["id"],
+                           "moved_by_name": current_user.get("name", ""), "timestamp": now}],
         "notes": [{"text": req.notes, "by": current_user["name"], "at": now}] if req.notes else [],
         "edit_history": [],
         "current_salary": candidate.get("current_salary"),
@@ -1859,21 +1862,20 @@ async def shortlist_candidate_from_screening(
             "job_id": req.job_id,
             "job_title": job.get("title"),
             "company_name": company_name,
-            "source": "ai_screening",
-            "stage": "shortlisted",
+            "source": "manual_add",
+            "stage": "sourced",
             "applied_at": now,
         })
     except Exception:
         pass
 
-    # Log activity for shortlist
     await log_activity(
         candidate_id=req.candidate_id, action=ACTION_SHORTLISTED,
-        description=f"Shortlisted for {job.get('title', 'a job')} at {company_name}",
+        description=f"Sourced for {job.get('title', 'a job')} at {company_name}",
         performed_by=current_user.get("id"), performed_by_name=current_user.get("name"),
         performed_by_role=current_user.get("role"),
         candidate_name=candidate.get("name"),
-        details={"job_id": req.job_id, "application_id": app_id, "source": "ai_screening"},
+        details={"job_id": req.job_id, "application_id": app_id, "source": "manual_add"},
     )
 
     # LTR auto-capture — explicit shortlist is the strongest positive signal.
@@ -1889,11 +1891,11 @@ async def shortlist_candidate_from_screening(
         logger.debug(f"[applications] LTR auto-log skipped on shortlist: {_e}")
 
     return {
-        "message": "Candidate shortlisted successfully",
+        "message": "Candidate added to the mandate",
         "application_id": app_id,
         "candidate_name": candidate.get("name"),
         "job_title": job.get("title"),
-        "stage": "shortlisted",
+        "stage": "sourced",
     }
 
 

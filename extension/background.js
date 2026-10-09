@@ -13,7 +13,7 @@
  *     → offlineQueue drains when back online
  */
 
-const VERSION = '7.0.0';
+const VERSION = '7.1.0';
 
 // ═══ Background Tab Capture Tracking ═══
 // Tracks which tabs we've already kicked a background-capture on so we
@@ -931,17 +931,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       }
     }
 
-    // Section 3: Job binding from VHC dashboard tab
-    const detectedJob = detectJobFromUrl(tab.url);
-    if (detectedJob) {
-      const auth = await getAuth();
-      const details = await fetchJobDetails(detectedJob.job_id, auth);
-      if (details) {
-        await new Promise(r => chrome.storage.local.set({ vhc_active_job: details }, r));
-        console.log(`[VHC BG v${VERSION}] Active job set: ${details.job_title} (${details.job_id})`);
-        notifyPopup({ action: 'activeJobUpdated', job: details });
-      }
-    }
   } catch (err) {
     console.error(`[VHC BG v${VERSION}] Error in consolidated onUpdated listener:`, err.message);
   }
@@ -978,6 +967,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ─── Startup: ensure alarms are registered even after browser/extension restart ──
 chrome.runtime.onStartup.addListener(() => {
   console.log(`[VHC BG v${VERSION}] Startup — ensuring alarms`);
+  // v7.1: the auto-shortlist job binding is gone. Drop whatever an older
+  // build left behind, or the popup keeps showing a stale "Active job".
+  chrome.storage.local.remove(['vhc_active_job']);
   chrome.alarms.get('drainCaptureQueue', a => { if (!a) chrome.alarms.create('drainCaptureQueue', { periodInMinutes: CONFIG.SYNC_ALARM_MINUTES }); });
   chrome.alarms.get('syncOfflineQueue',  a => { if (!a) chrome.alarms.create('syncOfflineQueue',  { periodInMinutes: CONFIG.SYNC_ALARM_MINUTES }); });
   chrome.alarms.get('sessionPing',       a => { if (!a) chrome.alarms.create('sessionPing',       { periodInMinutes: CONFIG.SESSION_PING_MINUTES }); });
@@ -991,70 +983,6 @@ self.addEventListener('online', () => {
   drainCaptureQueue();
   processOfflineQueue();
 });
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// JOB BINDING — detect active job from VHC dashboard tab
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Watch all tabs for VHC job pages.
- * When a recruiter opens a job in the VHC dashboard, we store it as the
- * "active job" so that subsequent captures are automatically shortlisted to it.
- *
- * VHC job page URL patterns:
- *   https://*.vhc.in/jobs/123                 → job_id = 123
- *   https://*.vhc.in/requisitions/456          → job_id = 456
- *   https://*.emergentagent.com/jobs/789       → job_id = 789
- *   https://*.ventureshrd.com/jobs/101         → job_id = 101
- *   or any VHC URL with ?job_id= or #job/
- */
-function detectJobFromUrl(url) {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    // Only watch VHC/Emergent domains
-    const isVhcDomain = u.hostname.includes('vhc.in') ||
-                        u.hostname.includes('emergentagent.com') ||
-                        u.hostname.includes('emergent.host') ||
-                        u.hostname.includes('ventureshrd.com');
-    if (!isVhcDomain) return null;
-
-    // Pattern 1: /jobs/123 or /requisitions/123
-    const pathMatch = u.pathname.match(/\/(jobs|requisitions|job|req)\/(\d+)/i);
-    if (pathMatch) return { job_id: pathMatch[2], source: 'path' };
-
-    // Pattern 2: ?job_id=123 or ?req_id=123 or ?jobId=123
-    const jobIdParam = u.searchParams.get('job_id') || u.searchParams.get('jobId') ||
-                       u.searchParams.get('req_id') || u.searchParams.get('reqId');
-    if (jobIdParam) return { job_id: jobIdParam, source: 'param' };
-
-    // Pattern 3: hash fragment #job/123
-    const hashMatch = u.hash.match(/#(?:job|req)\/(\d+)/i);
-    if (hashMatch) return { job_id: hashMatch[1], source: 'hash' };
-
-  } catch (_) {}
-  return null;
-}
-
-async function fetchJobDetails(jobId, auth) {
-  if (!auth || !jobId) return null;
-  try {
-    const res = await fetch(`${auth.apiUrl}/api/extension/job-info?job_id=${jobId}`, {
-      headers: { 'Authorization': `Bearer ${auth.token}` }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      job_id:    data.job_id || jobId,
-      job_title: data.title || data.job_title || `Job #${jobId}`,
-      job_code:  data.code  || data.job_code  || null,
-    };
-  } catch (_) {
-    // Graceful fallback: store just the ID
-    return { job_id: jobId, job_title: `Job #${jobId}`, job_code: null };
-  }
-}
 
 
 // ─── Message Router ───────────────────────────────────────────────────────────
@@ -1400,29 +1328,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  if (request.action === 'setActiveJob') {
-    chrome.storage.local.set({ vhc_active_job: request.data }, () => {
-      sendResponse({ success: true });
-      notifyPopup({ action: 'activeJobUpdated', job: request.data });
-    });
-    return true;
-  }
-
-  if (request.action === 'clearActiveJob') {
-    chrome.storage.local.remove(['vhc_active_job'], () => {
-      sendResponse({ success: true });
-      notifyPopup({ action: 'activeJobUpdated', job: null });
-    });
-    return true;
-  }
-
-  if (request.action === 'getActiveJob') {
-    chrome.storage.local.get(['vhc_active_job'], (r) => {
-      sendResponse({ job: r.vhc_active_job || null });
-    });
-    return true;
-  }
-
   // ── Fetch recruiter's assigned mandates for dropdown ──
   if (request.action === 'fetchMandates') {
     fetchMandates().then(sendResponse).catch(e => sendResponse({ mandates: [] }));
@@ -1721,7 +1626,6 @@ async function processSingleCapture(item, auth) {
         page_text:             (item.raw_text || '').substring(0, 3000),
         extension_version:     VERSION,
         source_platform:       item.source_platform || 'naukri',
-        active_job_id:         item.active_job_id || null,
         mandate_id:            item._mandate_id || null,
       };
 
@@ -1829,7 +1733,6 @@ async function processSingleCapture(item, auth) {
         raw_profile_text:      (item.raw_text || '').substring(0, 8000),
         extension_version:     VERSION,
         source_platform:       item.source_platform || 'naukri',
-        active_job_id:         item.active_job_id || null,
         mandate_id:            item._mandate_id || null,
       };
     }
@@ -1875,13 +1778,6 @@ async function processSingleCapture(item, auth) {
     if (candidateId && item.cv_download_url) {
       uploadCVFile(item.cv_download_url, candidateId, auth).catch(err => {
         console.warn(`[VHC BG v${VERSION}] CV upload failed for ${finalName}:`, err.message);
-      });
-    }
-
-    // ── Step 6: Job shortlist (if recruiter has an active job open) ──
-    if (candidateId && item.active_job_id && captureResult.action !== 'exists') {
-      shortlistCandidate(candidateId, item.active_job_id, auth).catch(err => {
-        console.warn(`[VHC BG v${VERSION}] Shortlist failed for ${finalName}:`, err.message);
       });
     }
 
@@ -2008,43 +1904,6 @@ async function uploadCVFile(cvUrl, candidateId, auth) {
   const uploadResult = await uploadResponse.json();
   console.log(`[VHC BG v${VERSION}] CV uploaded successfully for candidate ${candidateId}:`, uploadResult.filename || 'ok');
   return uploadResult;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// JOB SHORTLIST
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Shortlist a captured candidate against the recruiter's active job.
- * Called after successful capture when item.active_job_id is set.
- *
- * Non-fatal: if the shortlist call fails, capture still succeeds.
- * This allows captures to work even if the job no longer exists.
- */
-async function shortlistCandidate(candidateId, jobId, auth) {
-  console.log(`[VHC BG v${VERSION}] Shortlisting candidate ${candidateId} to job ${jobId}...`);
-
-  const response = await fetch(`${auth.apiUrl}/api/extension/shortlist`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${auth.token}`
-    },
-    body: JSON.stringify({
-      candidate_id: candidateId,
-      job_id:       jobId,
-    })
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Shortlist HTTP ${response.status}: ${errText.substring(0, 100)}`);
-  }
-
-  const result = await response.json();
-  const action = result.action || 'shortlisted';
-  console.log(`[VHC BG v${VERSION}] Shortlist ${action}: candidate ${candidateId} → job ${jobId}`);
-  return result;
 }
 
 /**
