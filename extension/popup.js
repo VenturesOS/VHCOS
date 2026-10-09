@@ -98,8 +98,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLogin();
   });
 
+  // ── Mandate reminder ──────────────────────────────────────────────────────
+  // Capturing with the dropdown on "No mandate selected" drops the profile in
+  // the bank with no Sourced row, which is almost never what someone meant.
+  // Ask once per popup, then remember the answer for this session only.
+  let noMandateAck = false;
+  let pendingCapture = null;
+
+  function mandateMissing() {
+    const dd = document.getElementById('mandateDropdown');
+    return !dd || !dd.value;
+  }
+
+  function remindMandate(onProceed) {
+    if (!mandateMissing() || noMandateAck) return false;
+    const warn = document.getElementById('noMandateWarn');
+    warn.style.display = 'block';
+    warn.dataset.pending = '1';
+    warn.scrollIntoView({ block: 'nearest' });
+    pendingCapture = onProceed;
+    return true;
+  }
+
+  document.getElementById('pickMandateBtn').addEventListener('click', () => {
+    document.getElementById('noMandateWarn').style.display = 'none';
+    pendingCapture = null;
+    const dd = document.getElementById('mandateDropdown');
+    dd.focus();
+    try { dd.showPicker ? dd.showPicker() : dd.click(); } catch (_) {}
+  });
+
+  document.getElementById('captureAnywayBtn').addEventListener('click', () => {
+    noMandateAck = true;
+    document.getElementById('noMandateWarn').style.display = 'none';
+    const go = pendingCapture;
+    pendingCapture = null;
+    if (go) go();
+  });
+
   // ── Manual capture ────────────────────────────────────────────────────────
   document.getElementById('manualCaptureBtn').addEventListener('click', async () => {
+    if (remindMandate(() => document.getElementById('manualCaptureBtn').click())) return;
     const btn = document.getElementById('manualCaptureBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="loading"></span> Capturing...';
@@ -177,6 +216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ── Bulk capture handler ──────────────────────────────────────────────────
   document.getElementById('bulkCaptureBtn').addEventListener('click', async () => {
+    if (remindMandate(() => document.getElementById('bulkCaptureBtn').click())) return;
     const btn = document.getElementById('bulkCaptureBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="loading"></span> Scanning page...';
@@ -373,6 +413,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Save selection
     chrome.storage.sync.set({ vhc_active_mandate: dropdown.value });
+    const warn = document.getElementById('noMandateWarn');
+    if (warn) warn.style.display = 'none';
   }
 
   document.getElementById('mandateDropdown').addEventListener('change', updateMandateInfo);
